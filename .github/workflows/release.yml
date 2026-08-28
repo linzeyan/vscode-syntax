@@ -142,6 +142,9 @@ jobs:
           cp extensions/syntax/poly-syntax-*.vsix dist/
           cp extensions/lint/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-cli.md
           cp extensions/syntax/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-grammars.md
+          # The bare binaries are downloaded on their own, and MIT asks for the
+          # notice to travel with the copy. The VSIX carry their own.
+          cp LICENSE dist/LICENSE
           cd dist && sha256sum -- * > SHA256SUMS && ls -l
       - name: Sanity-check asset counts
         run: |
