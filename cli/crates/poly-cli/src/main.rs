@@ -45,17 +45,18 @@ fn run() -> Result<i32> {
     let rest: Vec<String> = args.into_iter().skip(1).collect();
     match cmd.as_str() {
         "fmt" => {
-            let (paths, flags) = split_flags(&rest)?;
+            let (paths, flags) = split_flags("fmt", &rest)?;
             cmd_fmt(
                 &paths,
                 flags.contains(&"--check"),
+                flags.contains(&"--strict"),
                 flags.contains(&"--changed"),
                 flags.contains(&"--compact"),
                 walk_options(&flags),
             )
         }
         "check" => {
-            let (paths, flags) = split_flags(&rest)?;
+            let (paths, flags) = split_flags("check", &rest)?;
             cmd_check(
                 &paths,
                 flags.contains(&"--strict"),
@@ -88,19 +89,28 @@ fn run() -> Result<i32> {
     }
 }
 
-fn split_flags<'a>(rest: &'a [String]) -> Result<(Vec<PathBuf>, Vec<&'a str>)> {
+/// Split `rest` into paths and the flags `cmd` actually reads.
+///
+/// `--check` only means anything to `fmt`, which used to accept it for `check`
+/// too and ignore it. `poly check --check .` then looked like a dry run, did
+/// the real thing, and exited 0 -- a flag that is spelled right and silently
+/// does nothing is worse than one that is rejected.
+fn split_flags<'a>(cmd: &str, rest: &'a [String]) -> Result<(Vec<PathBuf>, Vec<&'a str>)> {
     let mut paths = Vec::new();
     let mut flags = Vec::new();
     for arg in rest {
-        if let Some(flag) = arg.strip_prefix("--").map(|_| arg.as_str()) {
-            match flag {
-                "--check" | "--strict" | "--changed" | "--compact" | "--no-ignore" | "--hidden" => {
-                    flags.push(flag)
-                }
-                other => bail!("unknown flag: {other}"),
-            }
-        } else {
+        let Some(flag) = arg.strip_prefix("--").map(|_| arg.as_str()) else {
             paths.push(PathBuf::from(arg));
+            continue;
+        };
+        match flag {
+            "--strict" | "--changed" | "--compact" | "--no-ignore" | "--hidden" => flags.push(flag),
+            "--check" if cmd == "fmt" => flags.push(flag),
+            "--check" => bail!(
+                "--check is a `poly fmt` flag: `poly check` never writes, so it is \
+                 always a dry run"
+            ),
+            other => bail!("unknown flag: {other}"),
         }
     }
     if paths.is_empty() {
@@ -198,6 +208,7 @@ fn format_failure(file: PathBuf, error: &str) -> FileIssue {
 fn cmd_fmt(
     paths: &[PathBuf],
     check: bool,
+    strict: bool,
     changed: bool,
     compact: bool,
     walk: Walk,
@@ -233,8 +244,9 @@ fn cmd_fmt(
             render_issue(&format_failure(shown(path), err), compact)
         );
     }
+    let missing = crate::fmt::missing_formatters();
     eprintln!(
-        "{} files: {} {}, {} unchanged, {} errors",
+        "{} files: {} {}, {} unchanged, {} errors{}",
         tally.total,
         tally.changed.len(),
         if check {
@@ -244,8 +256,19 @@ fn cmd_fmt(
         },
         tally.unchanged,
         tally.errors.len(),
+        if missing.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ", {} formatters missing ({})",
+                missing.len(),
+                missing.join(", ")
+            )
+        }
     );
-    if !tally.errors.is_empty() {
+    // Same rule as `check --strict`: an absent tool is a skipped file, and a
+    // skipped file is the CI/editor split poly exists to close.
+    if !tally.errors.is_empty() || (strict && !missing.is_empty()) {
         return Ok(2);
     }
     Ok(if check && !tally.changed.is_empty() {

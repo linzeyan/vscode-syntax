@@ -70,8 +70,8 @@ usage:
   poly bench <file> [iters]             time the formatter on one file
 
 flags:
-  --check       report what would change, write nothing (fmt)
-  --strict      a missing tool is an error, not a skip (check)
+  --check       report what would change, write nothing (fmt only)
+  --strict      a missing tool is an error, not a skipped file
   --changed     only the files git reports as changed
   --compact     one line per issue, dropping the fix and docs lines
   --no-ignore   also visit files .gitignore and friends exclude
@@ -96,8 +96,8 @@ language: POLY_LANG=en or POLY_LANG=zh-TW (defaults to the system locale).
   poly bench <檔案> [次數]              量單一檔案的格式化耗時
 
 旗標：
-  --check       只回報會改什麼，不寫檔（fmt）
-  --strict      工具缺席視為錯誤，而不是跳過（check）
+  --check       只回報會改什麼，不寫檔（限 fmt）
+  --strict      工具缺席視為錯誤，而不是跳過該檔
   --changed     只處理 git 回報有變更的檔案
   --compact     每個問題只印一行，不印 fix 與 docs
   --no-ignore   連 .gitignore 這類忽略檔排除的檔案也處理

@@ -65,6 +65,26 @@ fn a_wrong_command_prints_usage_to_stderr_and_fails() {
     assert!(stderr.contains("usage:"), "{stderr}");
 }
 
+/// `poly check --check .` used to look like a dry run, do the real thing, and
+/// exit 0. A flag that is spelled right and silently does nothing is worse
+/// than one that is rejected, because nothing tells the reader it was ignored.
+#[test]
+fn check_rejects_the_fmt_only_flag() {
+    let (code, stdout, stderr) = poly(&[], &["check", "--check", "."]);
+    assert_eq!(code, 2, "silently accepting it is the bug being fixed");
+    assert!(stdout.is_empty(), "{stdout}");
+    assert!(stderr.contains("--check is a `poly fmt` flag"), "{stderr}");
+
+    // --strict is not the same case: fmt now implements it, so both take it.
+    for cmd in ["fmt", "check"] {
+        let (_, _, stderr) = poly(&[], &[cmd, "--strict", "--help"]);
+        assert!(
+            stderr.is_empty(),
+            "poly {cmd} --strict was rejected: {stderr}"
+        );
+    }
+}
+
 /// POLY_LANG has to beat the ambient locale, or a CI job on a zh_TW runner
 /// could not pin its logs to one language.
 #[test]

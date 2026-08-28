@@ -3,7 +3,7 @@
 //! tools. Used by both the CLI batch path and the LSP daemon so editor
 //! formatting and `poly fmt` always agree.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -121,7 +121,9 @@ fn dispatch(
 /// Project-tool detection walks directories upward; memoize per (tool, parent
 /// dir) so a large batch doesn't re-stat the chain for every file.
 pub fn cached_project_tool(tool: &str, path: &Path) -> Option<PathBuf> {
-    static CACHE: Mutex<Option<HashMap<(String, PathBuf), Option<PathBuf>>>> = Mutex::new(None);
+    /// (tool name, directory searched from) -> where it was found, if at all.
+    type ProjectToolCache = HashMap<(String, PathBuf), Option<PathBuf>>;
+    static CACHE: Mutex<Option<ProjectToolCache>> = Mutex::new(None);
     // A bare relative filename has an empty parent; that means "here".
     let dir = match path.parent() {
         Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
@@ -143,6 +145,23 @@ pub fn cached_project_tool(tool: &str, path: &Path) -> Option<PathBuf> {
     found
 }
 
+/// Formatters this run could not resolve. Skipping their files is the right
+/// default -- almost no repo has every toolchain installed -- but the skip is
+/// silent in the exit code, so a CI job can pass while leaving Go and Swift
+/// unformatted. `--strict` reads this to fail instead, and it is collected
+/// rather than raised per file so one absent formatter reports once, not once
+/// for each of the two hundred files it would have handled.
+static MISSING: Mutex<Option<BTreeSet<String>>> = Mutex::new(None);
+
+pub fn missing_formatters() -> Vec<String> {
+    MISSING
+        .lock()
+        .expect("missing formatter lock")
+        .clone()
+        .map(|names| names.into_iter().collect())
+        .unwrap_or_default()
+}
+
 /// Managed-tool resolution can download; memoize for the process lifetime.
 fn cached_tool(name: &str, config: &poly_core::Config) -> Option<PathBuf> {
     static CACHE: Mutex<Option<HashMap<String, Option<PathBuf>>>> = Mutex::new(None);
@@ -155,6 +174,11 @@ fn cached_tool(name: &str, config: &poly_core::Config) -> Option<PathBuf> {
     let path = resolved.command().map(Path::to_path_buf);
     if path.is_none() {
         eprintln!("[poly] formatter {name}: unavailable, skipping its files");
+        MISSING
+            .lock()
+            .expect("missing formatter lock")
+            .get_or_insert_with(BTreeSet::new)
+            .insert(name.to_string());
     }
     cache.insert(name.to_string(), path.clone());
     path

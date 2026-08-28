@@ -291,3 +291,30 @@ fn check_without_shell_files_is_clean() {
     let (code, _, _) = poly(dir.path(), &["check", "."]);
     assert_eq!(code, 0);
 }
+
+/// A formatter poly cannot resolve means its files are silently skipped, and
+/// the exit code says nothing: CI passes with Go left unformatted. `--strict`
+/// is the same promise `poly check --strict` makes, applied to the half of the
+/// product that writes files. `tools.gofumpt = "off"` stands in for the
+/// tool being absent, because that is the same resolution outcome.
+#[test]
+fn strict_turns_an_unavailable_formatter_into_a_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("poly.toml"), "[tools]\ngofumpt = \"off\"\n").unwrap();
+    std::fs::write(root.join("a.go"), "package main\nfunc  main()  {}\n").unwrap();
+
+    // The default stays a skip: a repo without every toolchain installed is
+    // normal, and failing by default would make poly unusable in most of them.
+    let (code, _, stderr) = poly(root, &["fmt", "--check", "."]);
+    assert_eq!(code, 0, "default must not fail on a missing formatter");
+    assert!(
+        stderr.contains("gofumpt"),
+        "the skip must still be said: {stderr}"
+    );
+    assert!(stderr.contains("1 formatters missing"), "{stderr}");
+
+    let (code, _, stderr) = poly(root, &["fmt", "--check", "--strict", "."]);
+    assert_eq!(code, 2, "--strict must fail: {stderr}");
+    assert!(stderr.contains("gofumpt"), "{stderr}");
+}

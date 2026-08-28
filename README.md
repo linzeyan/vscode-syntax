@@ -100,7 +100,7 @@ poly fmt --check .  # 對整個 repo 做 dry-run
 poly fmt <paths...>            # 就地格式化
 poly fmt --check <paths...>    # 只回報，不改檔（CI 用）
 poly check <paths...>          # 跑 lint
-poly check --strict <paths...> # 工具缺席時視為錯誤，而不是跳過
+poly check --strict <paths...> # 工具缺席時視為錯誤，而不是跳過（fmt 也吃）
 poly fmt --changed             # 只處理 git 變更的檔案（pre-commit 用）
 poly tools list                # 工具解析狀態
 poly tools install [tool...]   # 預先抓好受管工具（離線環境先在有網路的機器跑）
@@ -109,8 +109,14 @@ poly --help                    # 完整說明
 poly --version                 # 版本（確認 PATH 上是哪一支）
 ```
 
-`fmt` 與 `check` 共用三個旗標：`--compact` 每個問題只印一行（給 CI parser），
-`--no-ignore` 連 git 忽略的檔案也處理，`--hidden` 連點開頭的檔案／目錄也處理。
+`fmt` 與 `check` 共用四個旗標：`--compact` 每個問題只印一行（給 CI parser），
+`--no-ignore` 連 git 忽略的檔案也處理，`--hidden` 連點開頭的檔案／目錄也處理，
+`--strict` 讓「工具找不到」變成錯誤而不是跳過該檔。`--check` 只有 `fmt` 認得——
+`check` 本來就不寫檔，給它 `--check` 會直接報錯而不是靜默忽略。
+
+`--strict` 值得特別說：預設情況下 gofumpt 或 swift-format 沒裝，poly 會在 stderr
+說一聲然後跳過那些檔案，exit code 不受影響。這對「不是每台機器都裝了每套
+toolchain」是對的預設，但 CI 需要的是相反的答案——`--strict` 就是那個開關。
 
 Exit code：`0` 乾淨、`1` 有差異或違規、`2` 執行錯誤。`--help` 與 `--version` 放在
 哪個位置都認得（`poly fmt --help` 跟 `poly --help` 一樣）；`--help` 走 stdout、
