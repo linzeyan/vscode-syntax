@@ -56,25 +56,55 @@ runs:
             exit 1 ;;
         esac
 
+        # "latest" is the newest release that ships binaries, which is not the
+        # same as `/releases/latest`. The `v0` tag is where the Marketplace
+        # listing lives, and a listing is a release with no assets; GitHub is
+        # perfectly happy to call that one latest, and every consumer then
+        # downloads a binary that is not there. Version-shaped tags (vX.Y.Z)
+        # are the ones a build publishes, so those are what "latest" scans.
         api=https://api.github.com/repos/linzeyan/vscode-syntax/releases
         if [ "$REQUESTED" = latest ]; then
-          url="$api/latest"
+          url="$api?per_page=30"
         else
           url="$api/tags/v${REQUESTED#v}"
         fi
         # A missing tag otherwise surfaces as a download 404 several steps
         # later, pointing at the asset rather than at the version that does
         # not exist.
-        if ! release=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "$url"); then
+        if ! payload=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "$url"); then
           echo "::error title=setup-poly::no release for version '$REQUESTED'"
           exit 1
         fi
-        # Take the asset list from the release rather than composing a download
-        # URL and hoping. A release published without assets -- which is what a
-        # stray tag matching release.yml's filter produces -- otherwise shows up
-        # as a bare `curl` 404 several steps later, naming the asset and saying
-        # nothing about which release did not have it.
-        read -r version missing <<<"$(printf '%s' "$release" | python3 -c 'import json,sys; r=json.load(sys.stdin); n={a["name"] for a in r["assets"]}; m=sorted({sys.argv[1],"SHA256SUMS"}-n); print(r["tag_name"], ",".join(m) or "-")' "$asset")"
+        # Prints "<tag> <missing assets, or ->", so one parse covers both the
+        # list and the single-release shapes. Taking the asset names from the
+        # release beats composing a URL and hoping: a release that does not
+        # carry this platform's binary then says so, instead of surfacing as a
+        # bare `curl` 404 that names the asset and not the release.
+        resolved=$(printf '%s' "$payload" | python3 -c '
+        import json, sys
+
+        payload = json.load(sys.stdin)
+        if isinstance(payload, list):
+            shipped = [
+                r
+                for r in payload
+                if not r["draft"]
+                and not r["prerelease"]
+                and len(r["tag_name"].lstrip("v").split(".")) == 3
+            ]
+            if not shipped:
+                print("- -")
+                raise SystemExit
+            payload = shipped[0]
+        names = {a["name"] for a in payload["assets"]}
+        missing = sorted({sys.argv[1], "SHA256SUMS"} - names)
+        print(payload["tag_name"], ",".join(missing) or "-")
+        ' "$asset")
+        read -r version missing <<<"$resolved"
+        if [ "$version" = "-" ]; then
+          echo "::error title=setup-poly::no published release ships binaries yet"
+          exit 1
+        fi
         if [ "$missing" != "-" ]; then
           echo "::error title=setup-poly::release $version is missing $missing (asked for '$REQUESTED')"
           exit 1
