@@ -62,8 +62,8 @@
 選檔案 → 重新載入視窗。或用命令列：
 
 ```sh
-code --install-extension poly-syntax-0.1.0.vsix
-code --install-extension poly-lint-darwin-arm64-0.1.0.vsix
+code --install-extension poly-syntax-0.2.0.vsix
+code --install-extension poly-lint-darwin-arm64-0.2.0.vsix
 ```
 
 之後的版本由 poly-lint 自己提示更新，不必再手動抓。
