@@ -191,10 +191,10 @@ shellcheck = "C:/tools/shellcheck.exe"
 tflint = "off"
 ```
 
-`[format.<lang>]` 只認 `line-width`／`indent-width`／`use-tabs` 三個鍵，拼錯會直接
-讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部工具的語言請用該工具自己的設定
-檔。VSCode settings 只放個人偏好（`poly.serverPath`、`poly.lintOnSave`、
-`poly.updateCheck.*`）。
+`[format.<lang>]` 只認 `line-width`（1–1000）／`indent-width`（1–16）／`use-tabs`
+三個鍵，拼錯或超出範圍都會直接讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部
+工具的語言請用該工具自己的設定檔。VSCode settings 只放個人偏好
+（`poly.serverPath`、`poly.lintOnSave`、`poly.updateCheck.*`）。
 
 完整的鍵、可填的值、每個引擎的預設值都寫在
 [poly.example.toml](poly.example.toml) 裡——那份檔案有測試綁著，不會跟程式碼走散。

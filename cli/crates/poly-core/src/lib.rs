@@ -139,10 +139,48 @@ pub struct FormatOptions {
     pub use_tabs: Option<bool>,
 }
 
+/// Widest line poly will format to. Around what an 8K display fits at a small
+/// font, so it is past any real preference and still short of the values that
+/// are only ever typos. `u16` alone would accept 65535, which is not a line.
+pub const LINE_WIDTH: std::ops::RangeInclusive<u16> = 1..=1000;
+
+/// Deepest single indent. Eight is the widest anyone actually uses (Linux
+/// kernel C); sixteen leaves room to be wrong about that without accepting the
+/// 200-space indent a stray keystroke produces.
+pub const INDENT_WIDTH: std::ops::RangeInclusive<u8> = 1..=16;
+
 impl FormatOptions {
     /// Nothing set: engines can keep using their cached default configuration.
     pub fn is_default(&self) -> bool {
         *self == FormatOptions::default()
+    }
+
+    /// Reject values no formatter could act on.
+    ///
+    /// Checked here rather than left to the engine because the failure is
+    /// otherwise invisible: a `line-width = 1000` meant as `100` produces a
+    /// file that is technically formatted and looks nothing like the rest of
+    /// the repo, and nothing in the run says why. Same reasoning as
+    /// `deny_unknown_fields` — a setting that cannot do what it says should
+    /// stop the run, not quietly change the output.
+    fn check(&self, lang: &str) -> Result<()> {
+        if let Some(width) = self.line_width {
+            anyhow::ensure!(
+                LINE_WIDTH.contains(&width),
+                "[format.{lang}] line-width = {width}: must be {}..={}",
+                LINE_WIDTH.start(),
+                LINE_WIDTH.end()
+            );
+        }
+        if let Some(width) = self.indent_width {
+            anyhow::ensure!(
+                INDENT_WIDTH.contains(&width),
+                "[format.{lang}] indent-width = {width}: must be {}..={}",
+                INDENT_WIDTH.start(),
+                INDENT_WIDTH.end()
+            );
+        }
+        Ok(())
     }
 }
 
@@ -205,6 +243,9 @@ impl Config {
         let raw: RawConfig = merged
             .try_into()
             .with_context(|| format!("invalid poly.toml (chain from {})", start.display()))?;
+        for (lang, options) in &raw.format.languages {
+            options.check(lang)?;
+        }
         let mut map = Vec::new();
         for (pattern, lang) in &raw.languages.map {
             let glob = Glob::new(pattern)
@@ -548,6 +589,39 @@ mod tests {
             Ok(_) => panic!("a misspelled option must not be silently ignored"),
         };
         assert!(err.contains("poly.toml"), "{err}");
+    }
+
+    /// A width outside these bounds is a typo, not a preference, and the way it
+    /// fails otherwise is the worst kind: the file formats, looks nothing like
+    /// the rest of the repo, and nothing in the run says why.
+    #[test]
+    fn widths_outside_the_usable_range_fail_the_parse() {
+        let parse = |body: &str| {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(dir.path().join("poly.toml"), body).unwrap();
+            Config::discover(dir.path())
+                .map(|_| ())
+                .map_err(|e| format!("{e:#}"))
+        };
+
+        let err = parse("[format.python]\nline-width = 5000\n").unwrap_err();
+        assert!(err.contains("line-width = 5000"), "{err}");
+        assert!(
+            err.contains("1..=1000"),
+            "the message must name the range: {err}"
+        );
+
+        // Zero is in range for the type and meaningless for a formatter.
+        assert!(parse("[format.json]\nline-width = 0\n").is_err());
+        assert!(parse("[format.json]\nindent-width = 0\n").is_err());
+
+        let err = parse("[format.json]\nindent-width = 17\n").unwrap_err();
+        assert!(err.contains("1..=16"), "{err}");
+
+        // The edges themselves stay legal: the bound is on the absurd, not on
+        // anyone's taste.
+        assert!(parse("[format.json]\nline-width = 1000\nindent-width = 16\n").is_ok());
+        assert!(parse("[format.json]\nline-width = 1001\n").is_err());
     }
 
     #[test]

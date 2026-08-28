@@ -68,9 +68,14 @@ exclude = ["vendor/**", "**/*.generated.ts"]
 #
 # sql is sqruff's: it owns its layout rules, so configure it in .sqruff rather
 # than half-applying poly's on top.
+#
+# Values outside the ranges below fail the parse. They are bounded well past
+# anyone's taste and well short of the values that are only ever typos: 1000
+# columns is roughly what an 8K display fits at a small font, and 16 is twice
+# the widest indent in real use.
 [format.python]
-line-width = 100 # 1..=65535
-indent-width = 4 # 1..=255
+line-width = 100 # 1..=1000
+indent-width = 4 # 1..=16
 use-tabs = false # true | false
 
 [format.typescript]
