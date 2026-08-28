@@ -518,7 +518,9 @@ fn run_format_paths(arg: Option<&serde_json::Value>) -> Result<serde_json::Value
         }
         other => anyhow::bail!("unknown mode {other:?}"),
     };
-    let summary = crate::batch::format_paths(&targets, false)?;
+    // No editor-side `--no-ignore`: A4 says the editor and CI must agree on
+    // which files exist, and an escape hatch only one of them has breaks that.
+    let summary = crate::batch::format_paths(&targets, false, poly_core::Ignores::Respect)?;
     Ok(serde_json::json!({
         "total": summary.total,
         "changed": summary.changed.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),

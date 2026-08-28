@@ -329,7 +329,23 @@ fn merge(base: &mut toml::Value, incoming: toml::Value) {
 
 // ── file walking ───────────────────────────────────────────────────────────
 
-/// Collect files under `paths`, respecting .gitignore plus `exclude` globs.
+/// Whether the walk honors the ignore files git honors: `.gitignore`,
+/// `.ignore`, `.git/info/exclude` and the global excludes file (`core.
+/// excludesFile`, else `$XDG_CONFIG_HOME/git/ignore`) — the ancestors' copies
+/// of each included.
+///
+/// poly.toml's own `exclude` is not one of these and stays in force either way:
+/// it is the project saying "never touch this", not the VCS saying "do not
+/// track this". The two answer different questions and a file can need both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ignores {
+    Respect,
+    /// `--no-ignore`: the file you need to check is sometimes the generated,
+    /// vendored or built one that git was told to leave alone.
+    Disregard,
+}
+
+/// Collect files under `paths`, respecting [`Ignores`] plus `exclude` globs.
 /// Explicit file arguments always pass through.
 ///
 /// `anchor` is the directory the patterns are relative to — the config's own
@@ -341,6 +357,7 @@ pub fn walk_files(
     paths: &[PathBuf],
     exclude: &[String],
     anchor: Option<&Path>,
+    ignores: Ignores,
 ) -> Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     for root in paths {
@@ -362,7 +379,18 @@ pub fn walk_files(
         if github.is_dir() {
             builder.add(github);
         }
-        let walker = builder.overrides(overrides.build()?).hidden(true).build();
+        let respect = ignores == Ignores::Respect;
+        let walker = builder
+            .overrides(overrides.build()?)
+            .hidden(true)
+            .ignore(respect)
+            .git_ignore(respect)
+            .git_global(respect)
+            .git_exclude(respect)
+            // Without this, `--no-ignore` inside a subdirectory would still
+            // obey the repo-root .gitignore above it.
+            .parents(respect)
+            .build();
         for entry in walker {
             let entry = entry?;
             if entry.file_type().is_some_and(|t| t.is_file()) {
@@ -520,13 +548,25 @@ mod tests {
         // inside a repo, so create the marker.
         std::fs::create_dir_all(root.join(".git")).unwrap();
 
-        let files = walk_files(&[root.to_path_buf()], &["vendor/**".into()], None).unwrap();
-        let names: Vec<_> = files
-            .iter()
-            .map(|p| p.strip_prefix(root).unwrap().to_str().unwrap().to_string())
-            .collect();
+        let walk = |ignores| {
+            let files =
+                walk_files(&[root.to_path_buf()], &["vendor/**".into()], None, ignores).unwrap();
+            files
+                .iter()
+                .map(|p| p.strip_prefix(root).unwrap().to_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        };
+
+        let names = walk(Ignores::Respect);
         assert!(names.contains(&"src/keep.ts".to_string()), "{names:?}");
         assert!(!names.iter().any(|n| n.contains("ignored")), "{names:?}");
+        assert!(!names.iter().any(|n| n.contains("vendor")), "{names:?}");
+
+        // --no-ignore reaches the ignored file, but poly.toml's exclude is the
+        // project's own decision and survives.
+        let names = walk(Ignores::Disregard);
+        assert!(names.contains(&"ignored.ts".to_string()), "{names:?}");
+        assert!(names.contains(&"src/keep.ts".to_string()), "{names:?}");
         assert!(!names.iter().any(|n| n.contains("vendor")), "{names:?}");
     }
 }

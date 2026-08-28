@@ -153,6 +153,52 @@ fn an_option_the_engine_cannot_honor_is_an_error() {
     );
 }
 
+/// poly.toml is optional. A repo that never writes one has to get a working
+/// run out of the defaults alone — built-in language detection, .gitignore
+/// honored, no "missing config" anywhere.
+#[test]
+fn a_repo_with_no_config_formats_on_defaults() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    std::fs::write(root.join(".gitignore"), "generated.json\n").unwrap();
+    std::fs::write(root.join("a.json"), "{\"b\":1,  \"a\":2}").unwrap();
+    std::fs::write(root.join("generated.json"), "{\"b\":1,  \"a\":2}").unwrap();
+
+    let (code, stdout, stderr) = poly(root, &["fmt", "."]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.contains("a.json"), "{stdout}");
+    assert_eq!(
+        std::fs::read_to_string(root.join("generated.json")).unwrap(),
+        "{\"b\":1,  \"a\":2}",
+        "gitignored file must be untouched without any config saying so"
+    );
+}
+
+/// The ignored file is sometimes the one you need to check — generated code, a
+/// vendored tree, build output. poly.toml's own exclude is a different
+/// statement and must survive the escape hatch.
+#[test]
+fn no_ignore_reaches_gitignored_files_but_not_excluded_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    std::fs::create_dir_all(root.join("vendor")).unwrap();
+    std::fs::write(
+        root.join("poly.toml"),
+        "[format]\nexclude = [\"vendor/**\"]\n",
+    )
+    .unwrap();
+    std::fs::write(root.join(".gitignore"), "generated.json\n").unwrap();
+    std::fs::write(root.join("generated.json"), "{\"b\":1,  \"a\":2}").unwrap();
+    std::fs::write(root.join("vendor/skip.json"), "{\"b\":1,  \"a\":2}").unwrap();
+
+    let (code, stdout, _) = poly(root, &["fmt", "--check", "--no-ignore", "."]);
+    assert_eq!(code, 1, "{stdout}");
+    assert!(stdout.contains("generated.json"), "{stdout}");
+    assert!(!stdout.contains("vendor"), "exclude must outrank: {stdout}");
+}
+
 #[test]
 fn check_without_shell_files_is_clean() {
     let dir = tempfile::tempdir().unwrap();

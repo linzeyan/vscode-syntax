@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use poly_core::{Config, ConfigCache, Scope};
+use poly_core::{Config, ConfigCache, Ignores, Scope};
 use rayon::prelude::*;
 
 #[derive(Debug, Default)]
@@ -31,6 +31,7 @@ pub struct FmtSummary {
 pub fn resolve_targets(
     paths: &[PathBuf],
     scope: Scope,
+    ignores: Ignores,
     keep: impl Fn(&str) -> bool,
 ) -> Result<Vec<(PathBuf, String, Arc<Config>)>> {
     let start = paths.first().context("no paths given")?;
@@ -39,7 +40,7 @@ pub fn resolve_targets(
         Scope::Format => &top.format_exclude,
         Scope::Lint => &top.lint_exclude,
     };
-    let files = poly_core::walk_files(paths, exclude, top.root.as_deref())?;
+    let files = poly_core::walk_files(paths, exclude, top.root.as_deref(), ignores)?;
     // Naming a file on the command line beats any exclude, same as the walk.
     let explicit: HashSet<&Path> = paths
         .iter()
@@ -63,8 +64,8 @@ pub fn resolve_targets(
 /// Walk `paths`, format every supported file in place (or dry-run with
 /// `check`), honoring the poly.toml nearest each file. Parallelism uses the
 /// caller's rayon pool configuration.
-pub fn format_paths(paths: &[PathBuf], check: bool) -> Result<FmtSummary> {
-    let targets = resolve_targets(paths, Scope::Format, crate::fmt::formattable)?;
+pub fn format_paths(paths: &[PathBuf], check: bool, ignores: Ignores) -> Result<FmtSummary> {
+    let targets = resolve_targets(paths, Scope::Format, ignores, crate::fmt::formattable)?;
 
     let mut summary = targets
         .par_iter()

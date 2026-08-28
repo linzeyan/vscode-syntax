@@ -101,7 +101,9 @@ poly fmt <paths...>            # 就地格式化
 poly fmt --check <paths...>    # 只回報，不改檔（CI 用）
 poly check <paths...>          # 跑 lint
 poly check --strict <paths...> # 工具缺席時視為錯誤，而不是跳過
+poly check --compact <paths...># 每個問題只印一行，給 CI parser 用
 poly fmt --changed             # 只處理 git 變更的檔案（pre-commit 用）
+poly fmt --no-ignore <paths...># 連 git 忽略的檔案也處理
 poly tools list                # 工具解析狀態
 poly tools install [tool...]   # 預先抓好受管工具（離線環境先在有網路的機器跑）
 poly lsp                       # 給編輯器用的 LSP daemon
@@ -111,8 +113,18 @@ Exit code：`0` 乾淨、`1` 有差異或違規、`2` 執行錯誤。
 
 ## 設定
 
-專案層的真相放 repo 根目錄的 `poly.toml`，CLI 與 extension 都讀它，保證編輯器與
-CI 行為一致：
+`poly.toml` 是選用的。完全沒有設定檔時，語言用內建副檔名表判斷，格式化用各引擎
+預設值，走訪檔案時尊重 git 會尊重的忽略檔——`.gitignore`、`.ignore`、
+`.git/info/exclude`，以及 `core.excludesFile`（沒設就是
+`$XDG_CONFIG_HOME/git/ignore`），沿路每一層祖先目錄的都算。跟 git 一樣，全域忽略
+檔只在 git repo 裡生效。
+
+`--no-ignore` 關掉上面這些，用在要檢查的正好是被忽略的產物（generated code、
+vendored tree、build output）。`poly.toml` 的 `exclude` 不受影響——那是專案自己說
+「別碰」，跟 VCS 說「別追蹤」是兩件事。
+
+要覆蓋預設值時，專案層的真相放 repo 根目錄的 `poly.toml`，CLI 與 extension 都讀
+它，保證編輯器與 CI 行為一致：
 
 ```toml
 [languages.map] # 副檔名 ↔ 語言

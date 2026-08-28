@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use poly_core::diag::{Fix, Severity};
-use poly_core::Scope;
+use poly_core::{Ignores, Scope};
 use poly_tools::run::FileIssue;
 use rayon::prelude::*;
 
@@ -38,6 +38,7 @@ fn run() -> Result<i32> {
                 &paths,
                 flags.contains(&"--check"),
                 flags.contains(&"--changed"),
+                ignores(&flags),
             )
         }
         "check" => {
@@ -47,6 +48,7 @@ fn run() -> Result<i32> {
                 flags.contains(&"--strict"),
                 flags.contains(&"--changed"),
                 flags.contains(&"--compact"),
+                ignores(&flags),
             )
         }
         "tools" => cmd_tools(&rest),
@@ -63,7 +65,7 @@ fn run() -> Result<i32> {
         _ => {
             bail!(
                 "usage: poly <fmt|check|tools|bench|lsp> [paths...] \
-                 [--check|--strict|--changed|--compact]"
+                 [--check|--strict|--changed|--compact|--no-ignore]"
             )
         }
     }
@@ -75,7 +77,9 @@ fn split_flags<'a>(rest: &'a [String]) -> Result<(Vec<PathBuf>, Vec<&'a str>)> {
     for arg in rest {
         if let Some(flag) = arg.strip_prefix("--").map(|_| arg.as_str()) {
             match flag {
-                "--check" | "--strict" | "--changed" | "--compact" => flags.push(flag),
+                "--check" | "--strict" | "--changed" | "--compact" | "--no-ignore" => {
+                    flags.push(flag)
+                }
                 other => bail!("unknown flag: {other}"),
             }
         } else {
@@ -86,6 +90,16 @@ fn split_flags<'a>(rest: &'a [String]) -> Result<(Vec<PathBuf>, Vec<&'a str>)> {
         paths.push(PathBuf::from("."));
     }
     Ok((paths, flags))
+}
+
+/// `--no-ignore` is spelled the way ripgrep and fd spell it, and means the same
+/// thing here: walk the files git was told to leave alone.
+fn ignores(flags: &[&str]) -> Ignores {
+    if flags.contains(&"--no-ignore") {
+        Ignores::Disregard
+    } else {
+        Ignores::Respect
+    }
 }
 
 /// 4C machines keep one core for the editor (02 §3.5).
@@ -109,7 +123,7 @@ fn changed_scope(paths: &[PathBuf]) -> Result<Option<Vec<PathBuf>>> {
     Ok(Some(files))
 }
 
-fn cmd_fmt(paths: &[PathBuf], check: bool, changed: bool) -> Result<i32> {
+fn cmd_fmt(paths: &[PathBuf], check: bool, changed: bool, ignores: Ignores) -> Result<i32> {
     init_thread_pool();
     let paths: Vec<PathBuf> = if changed {
         match changed_scope(paths)? {
@@ -119,7 +133,7 @@ fn cmd_fmt(paths: &[PathBuf], check: bool, changed: bool) -> Result<i32> {
     } else {
         paths.to_vec()
     };
-    let tally = crate::batch::format_paths(&paths, check)?;
+    let tally = crate::batch::format_paths(&paths, check, ignores)?;
 
     for path in &tally.changed {
         println!(
@@ -249,7 +263,13 @@ fn render_issue(found: &FileIssue, compact: bool) -> String {
     out
 }
 
-fn cmd_check(paths: &[PathBuf], strict: bool, changed: bool, compact: bool) -> Result<i32> {
+fn cmd_check(
+    paths: &[PathBuf],
+    strict: bool,
+    changed: bool,
+    compact: bool,
+    ignores: Ignores,
+) -> Result<i32> {
     // Tool binaries resolve against the top-level config: one run invokes each
     // linter once over a batch, so there is no per-file choice to make.
     // Language mapping and excludes are per file (batch::resolve_targets).
@@ -262,7 +282,7 @@ fn cmd_check(paths: &[PathBuf], strict: bool, changed: bool, compact: bool) -> R
     } else {
         paths.to_vec()
     };
-    let files = crate::batch::resolve_targets(&scope, Scope::Lint, |_| true)?;
+    let files = crate::batch::resolve_targets(&scope, Scope::Lint, ignores, |_| true)?;
 
     // (tool, files-it-lints) groups; typos runs repo-wide over the roots.
     let group = |lang: &str| -> Vec<PathBuf> {
