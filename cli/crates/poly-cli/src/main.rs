@@ -6,6 +6,7 @@
 mod batch;
 mod fmt;
 mod lsp;
+mod report;
 mod usage;
 
 use std::path::{Path, PathBuf};
@@ -16,6 +17,7 @@ use poly_core::diag::{FailOn, Fix, Severity};
 use poly_core::{Hidden, Ignores, Scope, Walk};
 use poly_tools::run::FileIssue;
 use rayon::prelude::*;
+use report::Format;
 
 fn main() {
     let code = match run() {
@@ -44,29 +46,8 @@ fn run() -> Result<i32> {
     let cmd = args.first().cloned().unwrap_or_default();
     let rest: Vec<String> = args.into_iter().skip(1).collect();
     match cmd.as_str() {
-        "fmt" => {
-            let (paths, flags, fail_on) = split_flags("fmt", &rest)?;
-            cmd_fmt(
-                &paths,
-                flags.contains(&"--check"),
-                flags.contains(&"--strict"),
-                flags.contains(&"--changed"),
-                flags.contains(&"--compact"),
-                walk_options(&flags),
-                fail_on,
-            )
-        }
-        "check" => {
-            let (paths, flags, fail_on) = split_flags("check", &rest)?;
-            cmd_check(
-                &paths,
-                flags.contains(&"--strict"),
-                flags.contains(&"--changed"),
-                flags.contains(&"--compact"),
-                walk_options(&flags),
-                fail_on,
-            )
-        }
+        "fmt" => cmd_fmt(&split_flags("fmt", &rest)?),
+        "check" => cmd_check(&split_flags("check", &rest)?),
         "tools" => cmd_tools(&rest),
         "bench" => {
             let path = rest.first().context("usage: poly bench <file> [iters]")?;
@@ -91,27 +72,67 @@ fn run() -> Result<i32> {
     }
 }
 
+/// One `poly fmt` or `poly check` invocation, after parsing.
+struct Invocation<'a> {
+    paths: Vec<PathBuf>,
+    flags: Vec<&'a str>,
+    /// `None` leaves the decision to poly.toml; the flag beats the file.
+    fail_on: Option<FailOn>,
+    format: Format,
+}
+
+impl Invocation<'_> {
+    fn has(&self, flag: &str) -> bool {
+        self.flags.contains(&flag)
+    }
+
+    /// `--no-ignore` and `--hidden` are spelled the way ripgrep and fd spell
+    /// them, and mean the same things here: walk the files git was told to
+    /// leave alone, and walk the dotted ones.
+    fn walk(&self) -> Walk {
+        Walk {
+            ignores: if self.has("--no-ignore") {
+                Ignores::Disregard
+            } else {
+                Ignores::Respect
+            },
+            hidden: if self.has("--hidden") {
+                Hidden::Include
+            } else {
+                Hidden::Skip
+            },
+        }
+    }
+}
+
 /// Split `rest` into paths and the flags `cmd` actually reads.
 ///
 /// `--check` only means anything to `fmt`, which used to accept it for `check`
 /// too and ignore it. `poly check --check .` then looked like a dry run, did
 /// the real thing, and exited 0 -- a flag that is spelled right and silently
 /// does nothing is worse than one that is rejected.
-fn split_flags<'a>(
-    cmd: &str,
-    rest: &'a [String],
-) -> Result<(Vec<PathBuf>, Vec<&'a str>, Option<FailOn>)> {
+fn split_flags<'a>(cmd: &str, rest: &'a [String]) -> Result<Invocation<'a>> {
     let mut paths = Vec::new();
     let mut flags = Vec::new();
     let mut fail_on = None;
-    let mut expecting_severity = false;
+    let mut format = Format::default();
+    // Which flag ate the previous argument, so the error names the one the
+    // user typed rather than whichever check happens to run first.
+    let mut expecting: Option<&str> = None;
     for arg in rest {
         // `--fail-on error` and `--fail-on=error` both work; the separated
         // form is what people type, the joined form is what scripts generate.
-        if expecting_severity {
-            fail_on = Some(FailOn::parse(arg).map_err(|e| anyhow::anyhow!(e))?);
-            expecting_severity = false;
-            continue;
+        match expecting.take() {
+            Some("--fail-on") => {
+                fail_on = Some(FailOn::parse(arg).map_err(|e| anyhow::anyhow!(e))?);
+                continue;
+            }
+            Some("--format") => {
+                format = Format::parse(arg)?;
+                continue;
+            }
+            Some(other) => unreachable!("{other} takes no value"),
+            None => {}
         }
         let Some(flag) = arg.strip_prefix("--").map(|_| arg.as_str()) else {
             paths.push(PathBuf::from(arg));
@@ -121,8 +142,12 @@ fn split_flags<'a>(
             fail_on = Some(FailOn::parse(value).map_err(|e| anyhow::anyhow!(e))?);
             continue;
         }
+        if let Some(value) = flag.strip_prefix("--format=") {
+            format = Format::parse(value)?;
+            continue;
+        }
         match flag {
-            "--fail-on" => expecting_severity = true,
+            "--fail-on" | "--format" => expecting = Some(flag),
             "--strict" | "--changed" | "--compact" | "--no-ignore" | "--hidden" => flags.push(flag),
             "--check" if cmd == "fmt" => flags.push(flag),
             "--check" => bail!(
@@ -132,31 +157,28 @@ fn split_flags<'a>(
             other => bail!("unknown flag: {other}"),
         }
     }
-    if expecting_severity {
-        bail!("--fail-on needs a severity: error, warning, info, hint or never");
+    match expecting {
+        Some("--fail-on") => {
+            bail!("--fail-on needs a severity: error, warning, info, hint or never")
+        }
+        Some("--format") => bail!("--format needs a shape: text, json, table or table_markdown"),
+        _ => {}
+    }
+    // Same reasoning as `poly check --check`: a flag that is spelled right and
+    // silently does nothing is worse than one that is rejected. --compact
+    // trims the text record; the other shapes have no record to trim.
+    if flags.contains(&"--compact") && format != Format::Text {
+        bail!("--compact shapes `--format text`: the other shapes carry every field already");
     }
     if paths.is_empty() {
         paths.push(PathBuf::from("."));
     }
-    Ok((paths, flags, fail_on))
-}
-
-/// `--no-ignore` and `--hidden` are spelled the way ripgrep and fd spell them,
-/// and mean the same things here: walk the files git was told to leave alone,
-/// and walk the dotted ones.
-fn walk_options(flags: &[&str]) -> Walk {
-    Walk {
-        ignores: if flags.contains(&"--no-ignore") {
-            Ignores::Disregard
-        } else {
-            Ignores::Respect
-        },
-        hidden: if flags.contains(&"--hidden") {
-            Hidden::Include
-        } else {
-            Hidden::Skip
-        },
-    }
+    Ok(Invocation {
+        paths,
+        flags,
+        fail_on,
+        format,
+    })
 }
 
 /// 4C machines keep one core for the editor (02 §3.5).
@@ -195,7 +217,7 @@ fn unformatted(file: PathBuf) -> FileIssue {
             col: 0,
             end_line: 0,
             end_col: 0,
-            severity: Severity::Warning,
+            severity: report::UNFORMATTED,
             code: "unformatted".to_string(),
             message: "file is not formatted".to_string(),
             source: "poly",
@@ -227,53 +249,74 @@ fn format_failure(file: PathBuf, error: &str) -> FileIssue {
     }
 }
 
-fn cmd_fmt(
-    paths: &[PathBuf],
-    check: bool,
-    strict: bool,
-    changed: bool,
-    compact: bool,
-    walk: Walk,
-    fail_on: Option<FailOn>,
-) -> Result<i32> {
+fn cmd_fmt(inv: &Invocation) -> Result<i32> {
     init_thread_pool();
+    let (check, strict, compact) = (
+        inv.has("--check"),
+        inv.has("--strict"),
+        inv.has("--compact"),
+    );
     // The flag beats poly.toml: a policy belongs in the file so the editor and
     // CI share it, but one run wanting a different answer is why flags exist.
-    let fail_on = match fail_on {
+    let fail_on = match inv.fail_on {
         Some(explicit) => explicit,
-        None => poly_core::Config::discover(&paths[0])?.format_fail_on,
+        None => poly_core::Config::discover(&inv.paths[0])?.format_fail_on,
     };
-    let paths: Vec<PathBuf> = if changed {
-        match changed_scope(paths)? {
+    let paths: Vec<PathBuf> = if inv.has("--changed") {
+        match changed_scope(&inv.paths)? {
             Some(files) => files,
             None => return Ok(0),
         }
     } else {
-        paths.to_vec()
+        inv.paths.clone()
     };
-    let tally = crate::batch::format_paths(&paths, check, walk)?;
+    let tally = crate::batch::format_paths(&paths, check, inv.walk())?;
 
     let base = std::env::current_dir().and_then(|d| d.canonicalize()).ok();
     let shown = |path: &Path| match &base {
         Some(base) => relative_to_base(path, base),
         None => path.to_path_buf(),
     };
-    for path in &tally.changed {
-        if check {
-            print!("{}", render_issue(&unformatted(shown(path)), compact));
-        } else {
-            // Not an issue: the file was fixed. A log line, and the only thing
-            // on stdout that is not a record.
-            println!("formatted {}", shown(path).display());
-        }
-    }
-    for (path, err) in &tally.errors {
-        print!(
-            "{}",
-            render_issue(&format_failure(shown(path), err), compact)
-        );
-    }
+    // Under --check an unformatted file is a finding; otherwise it was fixed,
+    // which is a log line rather than something to report.
+    let mut issues: Vec<FileIssue> = if check {
+        tally
+            .changed
+            .iter()
+            .map(|p| unformatted(shown(p)))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    issues.extend(
+        tally
+            .errors
+            .iter()
+            .map(|(path, err)| format_failure(shown(path), err)),
+    );
+    let formatted: Vec<String> = if check {
+        Vec::new()
+    } else {
+        tally
+            .changed
+            .iter()
+            .map(|p| shown(p).display().to_string())
+            .collect()
+    };
     let missing = crate::fmt::missing_formatters();
+    print!(
+        "{}",
+        report::Fmt {
+            issues: &issues,
+            formatted: &formatted,
+            fail_on,
+            total: tally.total,
+            unchanged: tally.unchanged,
+            missing: &missing,
+            check,
+        }
+        .render(inv.format, compact)
+    );
     eprintln!(
         "{} files: {} {}, {} unchanged, {} errors{}",
         tally.total,
@@ -303,7 +346,7 @@ fn cmd_fmt(
     // An unformatted file is a warning, so fail-on decides whether it is
     // fatal. The files are still listed either way: the report is useful even
     // when the pipeline is gated on something stricter.
-    let fatal = check && !tally.changed.is_empty() && fail_on.fails(Severity::Warning);
+    let fatal = check && !tally.changed.is_empty() && fail_on.fails(report::UNFORMATTED);
     Ok(if fatal { 1 } else { 0 })
 }
 
@@ -350,87 +393,23 @@ fn relative_to_base(file: &Path, base: &Path) -> PathBuf {
     }
 }
 
-/// One record shape for everything poly reports, whichever tool found it:
-///
-/// ```text
-/// lint.py:1:8: warning [ruff/F401] `os` imported but unused
-///     fix   Remove unused import: `os`
-///     docs  https://docs.astral.sh/ruff/rules/unused-import
-/// ```
-///
-/// The first line stays single and prefix-anchored so `rg`, CI annotation
-/// scripts and the terminal's file-link detection keep working. The
-/// continuations only appear when the tool actually supplied something —
-/// most linters report what is wrong and leave the remedy to their docs, and
-/// poly does not invent the difference. `--compact` drops them for parsers
-/// that want exactly one line per issue.
-///
-/// A message that spans lines (the code frames the format engines draw) keeps
-/// its first line in the record and the rest as indented detail, so one issue
-/// is still one anchored line however verbose the tool was.
-fn render_issue(found: &FileIssue, compact: bool) -> String {
-    let FileIssue { file, issue } = found;
-    let severity = match issue.severity {
-        Severity::Error => "error",
-        Severity::Warning => "warning",
-        Severity::Info => "info",
-        Severity::Hint => "hint",
-    };
-    let (head, detail) = issue
-        .message
-        .split_once('\n')
-        .unwrap_or((&issue.message, ""));
-    let mut out = format!(
-        "{}:{}:{}: {severity} [{}/{}] {}\n",
-        file.display(),
-        issue.line + 1,
-        issue.col + 1,
-        issue.source,
-        issue.code,
-        head.trim_end()
-    );
-    if compact {
-        return out;
-    }
-    for line in detail.lines() {
-        let line = line.trim_end();
-        if line.is_empty() {
-            out.push('\n');
-        } else {
-            out.push_str(&format!("    {line}\n"));
-        }
-    }
-    if let Some(fix) = &issue.fix {
-        out.push_str(&format!("    fix   {}\n", fix.describe(issue.source)));
-    }
-    if let Some(url) = &issue.url {
-        out.push_str(&format!("    docs  {url}\n"));
-    }
-    out
-}
-
-fn cmd_check(
-    paths: &[PathBuf],
-    strict: bool,
-    changed: bool,
-    compact: bool,
-    walk: Walk,
-    fail_on: Option<FailOn>,
-) -> Result<i32> {
+fn cmd_check(inv: &Invocation) -> Result<i32> {
+    let (strict, compact) = (inv.has("--strict"), inv.has("--compact"));
+    let paths = &inv.paths;
     // Tool binaries resolve against the top-level config: one run invokes each
     // linter once over a batch, so there is no per-file choice to make.
     // Language mapping and excludes are per file (batch::resolve_targets).
     let config = poly_core::Config::discover(paths.first().unwrap())?;
-    let fail_on = fail_on.unwrap_or(config.lint_fail_on);
-    let scope: Vec<PathBuf> = if changed {
+    let fail_on = inv.fail_on.unwrap_or(config.lint_fail_on);
+    let scope: Vec<PathBuf> = if inv.has("--changed") {
         match changed_scope(paths)? {
             Some(files) => files,
             None => return Ok(0),
         }
     } else {
-        paths.to_vec()
+        paths.clone()
     };
-    let files = crate::batch::resolve_targets(&scope, Scope::Lint, walk, |_| true)?;
+    let files = crate::batch::resolve_targets(&scope, Scope::Lint, inv.walk(), |_| true)?;
 
     // (tool, files-it-lints) groups; typos runs repo-wide over the roots.
     let group = |lang: &str| -> Vec<PathBuf> {
@@ -636,16 +615,18 @@ fn cmd_check(
     issues.sort_by(|a, b| {
         (&a.file, a.issue.line, a.issue.col).cmp(&(&b.file, b.issue.line, b.issue.col))
     });
-    for issue in &issues {
-        print!("{}", render_issue(issue, compact));
-    }
+    let report = report::Check {
+        issues: &issues,
+        fail_on,
+        ran,
+        missing: &missing,
+        failed: &failed,
+    };
+    print!("{}", report.render(inv.format, compact));
     // Every issue is still printed; fail-on only decides the exit code. The
     // count of what is below the line is spelled out so a green run with
     // visible findings does not read as a bug.
-    let fatal = issues
-        .iter()
-        .filter(|i| fail_on.fails(i.issue.severity))
-        .count();
+    let fatal = report.fatal();
     eprintln!(
         "{} tools ran, {} issues{}{}{}",
         ran,
@@ -752,68 +733,6 @@ fn bench(path: &Path, iters: usize) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn issue(fix: Option<Fix>, url: Option<&str>) -> FileIssue {
-        FileIssue {
-            file: PathBuf::from("lint.py"),
-            issue: poly_core::diag::Issue {
-                line: 0,
-                col: 7,
-                end_line: 0,
-                end_col: 9,
-                severity: Severity::Warning,
-                code: "F401".to_string(),
-                message: "`os` imported but unused".to_string(),
-                source: "ruff",
-                fix,
-                url: url.map(str::to_string),
-            },
-        }
-    }
-
-    #[test]
-    fn an_issue_renders_what_where_and_how_to_fix() {
-        let full = issue(
-            Some(Fix::Described {
-                what: "Remove unused import: `os`".to_string(),
-                safe: true,
-            }),
-            Some("https://docs.astral.sh/ruff/rules/unused-import"),
-        );
-        assert_eq!(
-            render_issue(&full, false),
-            "lint.py:1:8: warning [ruff/F401] `os` imported but unused\n\
-             \x20   fix   Remove unused import: `os`\n\
-             \x20   docs  https://docs.astral.sh/ruff/rules/unused-import\n"
-        );
-
-        // CI parsers want exactly one line per issue, and the first line alone
-        // is the whole record: everything after it is advice.
-        assert_eq!(
-            render_issue(&full, true),
-            "lint.py:1:8: warning [ruff/F401] `os` imported but unused\n"
-        );
-
-        // A tool that supplied nothing gets nothing invented on its behalf.
-        assert_eq!(
-            render_issue(&issue(None, None), false),
-            "lint.py:1:8: warning [ruff/F401] `os` imported but unused\n"
-        );
-
-        // ruff's own word for an edit that can change behavior has to survive.
-        let risky = issue(
-            Some(Fix::Described {
-                what: "Remove assignment".to_string(),
-                safe: false,
-            }),
-            None,
-        );
-        assert!(render_issue(&risky, false).contains("(unsafe: review it)"));
-
-        // Naming the tool keeps "automatic" honest: poly check does not run it.
-        let auto = issue(Some(Fix::Automatic), None);
-        assert!(render_issue(&auto, false).contains("ruff can rewrite this"));
-    }
 
     #[test]
     fn issue_paths_collapse_to_one_shape() {

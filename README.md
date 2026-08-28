@@ -62,8 +62,8 @@
 選檔案 → 重新載入視窗。或用命令列：
 
 ```sh
-code --install-extension poly-syntax-0.4.0.vsix
-code --install-extension poly-lint-darwin-arm64-0.4.0.vsix
+code --install-extension poly-syntax-0.4.1.vsix
+code --install-extension poly-lint-darwin-arm64-0.4.1.vsix
 ```
 
 之後的版本由 poly-lint 自己提示更新，不必再手動抓。
@@ -90,7 +90,7 @@ SmartScreen 擋，處理方式見
 - run: poly check --strict .
 ```
 
-`@v0` 會跟著最新的 release 走。要釘死版本就寫 `with: { version: "0.4.0" }`——poly
+`@v0` 會跟著最新的 release 走。要釘死版本就寫 `with: { version: "0.4.1" }`——poly
 會改寫檔案，所以新版本自己跑進來有可能把綠的分支變紅。
 
 Action 做三件事：抓對應平台的 binary、對 `SHA256SUMS` 驗 sha256、放進 PATH。順便
@@ -103,7 +103,7 @@ Action 做三件事：抓對應平台的 binary、對 `SHA256SUMS` 驗 sha256、
 docker run --rm -v "$PWD:/work" ghcr.io/linzeyan/poly check --strict .
 ```
 
-`linux/amd64` 與 `linux/arm64` 都有。tag 有 `latest`、`0.4.0`、`0.4`；pre-release
+`linux/amd64` 與 `linux/arm64` 都有。tag 有 `latest`、`0.4.1`、`0.4`；pre-release
 不會動到 `latest`。image 裡的 binary 就是 release 附的那一支，不是另外編的。
 
 外部 linter 快取在 `/cache`，CI 裡掛個 volume 上去就不用每次重抓：
@@ -138,10 +138,10 @@ poly --help                    # 完整說明
 poly --version                 # 版本（確認 PATH 上是哪一支）
 ```
 
-`fmt` 與 `check` 共用四個旗標：`--compact` 每個問題只印一行（給 CI parser），
-`--no-ignore` 連 git 忽略的檔案也處理，`--hidden` 連點開頭的檔案／目錄也處理，
-`--strict` 讓「工具找不到」變成錯誤而不是跳過該檔。`--check` 只有 `fmt` 認得——
-`check` 本來就不寫檔，給它 `--check` 會直接報錯而不是靜默忽略。
+`fmt` 與 `check` 共用五個旗標：`--format` 決定 stdout 的形狀（見下），`--compact`
+每個問題只印一行，`--no-ignore` 連 git 忽略的檔案也處理，`--hidden` 連點開頭的
+檔案／目錄也處理，`--strict` 讓「工具找不到」變成錯誤而不是跳過該檔。`--check`
+只有 `fmt` 認得——`check` 本來就不寫檔，給它 `--check` 會直接報錯而不是靜默忽略。
 
 `--strict` 值得特別說：預設情況下 gofumpt 或 swift-format 沒裝，poly 會在 stderr
 說一聲然後跳過那些檔案，exit code 不受影響。這對「不是每台機器都裝了每套
@@ -210,6 +210,73 @@ schema.sql:1:1: warning [poly/unformatted] file is not formatted
 錯誤（parse 失敗、工具缺席、引擎不接受的設定）也是同一種紀錄，嚴重度 `error`、規則
 `poly/format`，位置指在 parser 停下來的地方；引擎畫的 code frame 縮排接在後面，一個
 問題仍然只佔一行有錨點的輸出。
+
+### 換個形狀：`--format`
+
+`--format` 只改 stdout 的形狀，**不改判定結果**——exit code 與 stderr 的 summary
+在四種形狀下完全一樣。
+
+| 值               | 用途                                   |
+| ---------------- | -------------------------------------- |
+| `text`           | 上面那種紀錄，預設                     |
+| `json`           | 單一份文件，欄位齊全，不必再從文字解析 |
+| `table`          | 對齊的欄位，掃過去用                   |
+| `table_markdown` | 貼進 PR 留言或 `$GITHUB_STEP_SUMMARY`  |
+
+```sh
+poly check --format table .
+```
+
+```text
+FILE         SEVERITY  RULE               MESSAGE
+lint.py:1:8  warning   ruff/F401          `os` imported but unused
+run.sh:2:6   info      shellcheck/SC2086  Double quote to prevent globbing and word splitting.
+```
+
+`json` 是給 pipeline 的。位置是 1-based（跟紀錄一致），`message` 完整保留（含引擎畫的
+code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`fatal` 直接告訴你這一筆在
+當前 `--fail-on` 下算不算擋——消費端不用重寫嚴重度排序：
+
+```jsonc
+{
+  "version": 1,
+  "command": "check",
+  "issues": [
+    {
+      "file": "lint.py",
+      "line": 1,
+      "col": 8,
+      "end_line": 1,
+      "end_col": 10,
+      "severity": "warning",
+      "tool": "ruff",
+      "rule": "F401",
+      "message": "`os` imported but unused",
+      "fix": "Remove unused import: `os`",
+      "docs": "https://docs.astral.sh/ruff/rules/unused-import",
+      "fatal": true
+    }
+  ],
+  "summary": { "issues": 1, "fatal": 1, "tools_ran": 6, "tools_missing": [], "tools_failed": [] }
+}
+```
+
+`version` 只在欄位改變意義或消失時才加，新增欄位不動它。stdout 只有這份文件，
+`poly check --format json . | jq` 不會被 stderr 的 summary 弄髒。
+
+兩種 table 只有四欄，不含 `fix`／`docs`——一列必須是一行，而一整欄的 URL 比其他三欄
+加起來還寬。`table_markdown` 把 docs 連結掛在規則名上，不多佔寬度。要完整資訊用
+`text` 或 `json`。`--compact` 只對 `text` 有意義，配其他形狀會直接報錯。
+
+放進 GitHub Actions：
+
+```yaml
+- run: poly check --format table_markdown . >> "$GITHUB_STEP_SUMMARY"
+```
+
+poly 自己的 CI 就是這樣做的：`--format json` 餵給 [`tools/ci-annotate.py`](tools/ci-annotate.py)
+產生逐行的 annotation，`--format table_markdown` 直接進 job summary。兩者都是公開可見的，
+不像 job log 需要 token。
 
 ## 設定
 

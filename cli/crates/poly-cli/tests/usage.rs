@@ -151,6 +151,71 @@ fn fail_on_sets_the_severity_floor_for_the_exit_code() {
     assert!(stderr.contains("needs a severity"), "{stderr}");
 }
 
+/// `--format` decides the shape of stdout, and stdout only. Whatever the shape,
+/// the exit code and the stderr summary say the same thing -- a pipeline that
+/// switches format to get better annotations must not also change its verdict.
+#[test]
+fn every_format_reports_the_same_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("a.md"), "# teh titel\n").unwrap();
+    let at = |args: &[&str]| {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_poly"))
+            .args(args)
+            .current_dir(root)
+            .output()
+            .expect("spawn poly");
+        (
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    };
+
+    // The text run is the reference; the others have to agree with it on
+    // everything except the bytes on stdout.
+    let (want_code, _, want_summary) = at(&["check", "--format", "text", "."]);
+    assert_eq!(want_code, 1, "the fixture has to produce findings");
+    for shape in ["json", "table", "table_markdown"] {
+        let (code, stdout, stderr) = at(&["check", "--format", shape, "."]);
+        assert_eq!(code, want_code, "{shape} changed the verdict: {stderr}");
+        assert_eq!(stderr, want_summary, "{shape} changed the summary");
+        assert!(
+            stdout.contains("typo"),
+            "{shape} lost the finding: {stdout}"
+        );
+    }
+
+    // stdout is the document and nothing else, or `poly check --format json |
+    // jq` breaks the moment a tool is missing and says so.
+    let (_, stdout, _) = at(&["check", "--format=json", "."]);
+    let doc: serde_json::Value =
+        serde_json::from_str(&stdout).expect("stdout is one JSON document");
+    assert_eq!(doc["issues"][0]["tool"], "typos");
+    assert_eq!(doc["issues"][0]["fatal"], true);
+
+    // The markdown table is pasted into a PR or a job summary, so its first
+    // line has to be the header row rather than anything conversational.
+    let (_, stdout, _) = at(&["check", "--format", "table_markdown", "."]);
+    assert!(stdout.starts_with("| File |"), "{stdout}");
+
+    // A misspelled shape fails rather than silently falling back to text,
+    // which would look exactly like the flag having no effect.
+    let (code, _, stderr) = at(&["check", "--format", "yaml", "."]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("unknown --format value"), "{stderr}");
+    let (code, _, stderr) = at(&["check", "--format"]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("needs a shape"), "{stderr}");
+
+    // --compact trims the text record; there is no record to trim in the
+    // others, so accepting it there would be accepting a no-op.
+    let (code, _, stderr) = at(&["check", "--compact", "--format", "json", "."]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("--compact shapes"), "{stderr}");
+    assert_eq!(at(&["check", "--compact", "."]).0, 1, "still fine on text");
+}
+
 /// The same floor applies to formatting, and separately: "unformatted files
 /// fail the build, spelling suggestions do not" is a coherent policy.
 #[test]

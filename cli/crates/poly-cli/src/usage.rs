@@ -74,8 +74,13 @@ flags:
   --strict      a missing tool is an error, not a skipped file
   --fail-on S   exit non-zero only at severity S or above
                 (error | warning | info | hint | never; default hint)
+  --format F    shape of stdout, not of the verdict
+                text            one anchored record per issue (default)
+                json            one document; every field, nothing to parse
+                table           aligned columns, for reading
+                table_markdown  for a PR comment or $GITHUB_STEP_SUMMARY
   --changed     only the files git reports as changed
-  --compact     one line per issue, dropping the fix and docs lines
+  --compact     one line per issue, dropping the fix and docs lines (text)
   --no-ignore   also visit files .gitignore and friends exclude
   --hidden      also visit dot-files and dot-directories (.git never)
   --version     print the version
@@ -102,8 +107,13 @@ language: POLY_LANG=en or POLY_LANG=zh-TW (defaults to the system locale).
   --strict      工具缺席視為錯誤，而不是跳過該檔
   --fail-on S   只有嚴重度 S 以上才非零離開
                 （error｜warning｜info｜hint｜never，預設 hint）
+  --format F    決定 stdout 的形狀，不影響判定結果
+                text            每個問題一行可定位的記錄（預設）
+                json            單一份文件；欄位齊全，不必再解析
+                table           對齊的欄位，給人看的
+                table_markdown  貼進 PR 留言或 $GITHUB_STEP_SUMMARY
   --changed     只處理 git 回報有變更的檔案
-  --compact     每個問題只印一行，不印 fix 與 docs
+  --compact     每個問題只印一行，不印 fix 與 docs（限 text）
   --no-ignore   連 .gitignore 這類忽略檔排除的檔案也處理
   --hidden      連點開頭的檔案與目錄也處理（.git 一律不進）
   --version     印出版本
@@ -184,6 +194,8 @@ mod tests {
             "--no-ignore",
             "--hidden",
             "--fail-on",
+            "--format",
+            "table_markdown",
             "--version",
             "--help",
             "poly.toml",
