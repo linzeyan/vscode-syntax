@@ -40,9 +40,10 @@
 - **內嵌引擎**（免安裝、離線可用）：TypeScript／JavaScript、JSON／JSONC、
   Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
   Python、SQL、XML、GraphQL、Dockerfile。
-- **外部工具**（受管下載，sha256 寫入 lock 驗證）：shellcheck、shfmt、hadolint、
-  actionlint、typos、ruff、tflint、gofumpt、golangci-lint、stylua、selene、
-  swiftlint。
+- **外部工具**（受管下載）：shellcheck、shfmt、hadolint、actionlint、typos、
+  ruff、tflint、gofumpt、golangci-lint、stylua、selene、swiftlint。版本釘死，
+  每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
+  信任第一次抓到的東西。上游有新版時由 weekly 的 `tool-sync.yml` 開 PR。
 - **只用專案 toolchain、不代裝**：rustfmt／clippy、clang-format／clang-tidy、
   swift-format、terraform fmt。
 - 工具解析順序：`poly.toml` 指定 → 專案內工具 → 內嵌引擎 → 受管下載 → PATH。
@@ -70,12 +71,35 @@ code --install-extension poly-lint-darwin-arm64-0.4.1.vsix
 
 ### 只要 CLI
 
-Release 另附獨立 binary（`poly-darwin-arm64`、`poly-linux-x64`、
-`poly-win32-arm64.exe` …），不需要裝 extension：
+不必裝 extension。macOS／Linux：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/linzeyan/vscode-syntax/main/install.sh | sh
+```
+
+Windows（PowerShell）：
+
+```powershell
+irm https://raw.githubusercontent.com/linzeyan/vscode-syntax/main/install.ps1 | iex
+```
+
+腳本挑對平台、對 `SHA256SUMS` 驗 sha256、把 binary 放進 `~/.local/bin`
+（Windows 是 `%LOCALAPPDATA%\Programs\poly`，並寫進使用者 PATH）。要換位置或釘
+版本就設環境變數——`irm | iex` 沒辦法傳參數，所以兩邊都認得：
+
+```sh
+POLY_VERSION=0.4.1 POLY_INSTALL_DIR=~/bin sh install.sh
+```
+
+Windows on ARM 上會裝 arm64 版，即使腳本本身跑在 x64 模擬層裡（從 ssh 或某些
+終端機啟動時會發生，此時 `PROCESSOR_ARCHITECTURE` 說的是 process 不是機器）。
+
+要自己來的話，Release 另附獨立 binary（`poly-darwin-arm64`、`poly-linux-x64`、
+`poly-win32-arm64.exe` …）：
 
 ```sh
 curl -fsSLO https://github.com/linzeyan/vscode-syntax/releases/latest/download/poly-darwin-arm64
-xattr -d com.apple.quarantine ./poly-darwin-arm64   # macOS 才需要
+xattr -d com.apple.quarantine ./poly-darwin-arm64   # 瀏覽器下載才需要
 chmod +x poly-darwin-arm64 && mv poly-darwin-arm64 /usr/local/bin/poly
 ```
 
@@ -344,6 +368,8 @@ cargo build --release --manifest-path cli/Cargo.toml   # → cli/target/release/
 (cd extensions/lint && pnpm install && pnpm run build) # extension bundle
 (cd extensions/lint && pnpm test)                      # 真 extension host E2E
 pip install pyyaml && python tools/grammar-sync.py     # 重新同步文法
+python tools/tool-sync.py --check                      # 驗證外部工具 pin（離線）
+python tools/tool-sync.py --update                     # 跟上游對一次版本（需網路）
 ```
 
 `.vscode/settings.json` 已把 `poly.serverPath` 指向 `cli/target/release/poly`，
@@ -351,7 +377,8 @@ pip install pyyaml && python tools/grammar-sync.py     # 重新同步文法
 
 ## 授權
 
-poly 自身的程式碼為 MIT。內嵌文法與相依套件各自保留上游授權，完整清單見兩份
+poly 自身的程式碼為 MIT，全文見 [LICENSE](LICENSE)（一併附在每個 release、兩個
+VSIX 與 container image 裡）。內嵌文法與相依套件各自保留上游授權，完整清單見兩份
 `THIRD-PARTY-NOTICES.md`（由同步管線自動產生，含 pinned 版本）。授權允許清單由
 `tools/grammar-sync.py` 與 `tools/third-party-notices.py` 在 CI 強制執行：
 permissive 授權加 MPL-2.0，GPL／AGPL／SSPL 與無 permissive 選項的 LGPL 一律擋下。
