@@ -6,6 +6,7 @@
 mod batch;
 mod fmt;
 mod lsp;
+mod usage;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -28,9 +29,20 @@ fn main() {
 }
 
 fn run() -> Result<i32> {
-    let mut args = std::env::args().skip(1);
-    let cmd = args.next().unwrap_or_default();
-    let rest: Vec<String> = args.collect();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // Answered wherever they appear. Someone typing `poly fmt --help` is
+    // asking the same question as `poly --help`, and split_flags rejecting it
+    // as an unknown flag would be a joke at their expense.
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        print!("{}", usage::text(usage::detect()));
+        return Ok(0);
+    }
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("poly {}", env!("CARGO_PKG_VERSION"));
+        return Ok(0);
+    }
+    let cmd = args.first().cloned().unwrap_or_default();
+    let rest: Vec<String> = args.into_iter().skip(1).collect();
     match cmd.as_str() {
         "fmt" => {
             let (paths, flags) = split_flags(&rest)?;
@@ -63,11 +75,15 @@ fn run() -> Result<i32> {
             lsp::run()?;
             Ok(0)
         }
-        _ => {
-            bail!(
-                "usage: poly <fmt|check|tools|bench|lsp> [paths...] \
-                 [--check|--strict|--changed|--compact|--no-ignore|--hidden]"
-            )
+        // Usage is the answer here too, but this is a mistake rather than a
+        // question: stderr and a non-zero exit, so a script that typo'd the
+        // subcommand fails instead of quietly succeeding.
+        other => {
+            if !other.is_empty() {
+                eprintln!("error: unknown command: {other}");
+            }
+            eprint!("{}", usage::text(usage::detect()));
+            Ok(2)
         }
     }
 }

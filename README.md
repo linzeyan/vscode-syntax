@@ -105,12 +105,21 @@ poly fmt --changed             # 只處理 git 變更的檔案（pre-commit 用�
 poly tools list                # 工具解析狀態
 poly tools install [tool...]   # 預先抓好受管工具（離線環境先在有網路的機器跑）
 poly lsp                       # 給編輯器用的 LSP daemon
+poly --help                    # 完整說明
+poly --version                 # 版本（確認 PATH 上是哪一支）
 ```
 
 `fmt` 與 `check` 共用三個旗標：`--compact` 每個問題只印一行（給 CI parser），
 `--no-ignore` 連 git 忽略的檔案也處理，`--hidden` 連點開頭的檔案／目錄也處理。
 
-Exit code：`0` 乾淨、`1` 有差異或違規、`2` 執行錯誤。
+Exit code：`0` 乾淨、`1` 有差異或違規、`2` 執行錯誤。`--help` 與 `--version` 放在
+哪個位置都認得（`poly fmt --help` 跟 `poly --help` 一樣）；`--help` 走 stdout、
+exit 0，指令打錯則是同一份說明走 stderr、exit 2。
+
+說明文字有英文與正體中文兩版，看系統 locale（`LC_ALL`／`LC_MESSAGES`／`LANG`），
+`POLY_LANG=en` 或 `POLY_LANG=zh-TW` 可強制指定——CI 要讓 log 語言固定時用它。只有
+說明文字翻譯：診斷紀錄的格式是給 script 解析的契約，而且訊息有一半來自只講英文的
+上游工具，翻譯嚴重度只會弄壞所有消費端。
 
 ### 輸出格式
 
