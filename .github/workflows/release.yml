@@ -3,9 +3,15 @@ name: Release
 # Tag vX.Y.Z (or vX.Y.Z-rc.N for a pre-release) -> 6-platform build ->
 # 7 VSIX (6 platform poly-lint + 1 universal poly-syntax) + 6 binaries
 # + SHA256SUMS + third-party notices, uploaded to a GitHub Release.
+#
+# Three dot-separated parts, not `v*`: the last step of this workflow force-
+# pushes the moving major tag (`v0`), which `v*` also matched. That published
+# an assetless release named `v0`, and because GitHub picks "latest" by release
+# rather than by tag shape, `/releases/latest` then resolved to it -- so
+# `uses: linzeyan/vscode-syntax@v0` downloaded a binary that was not there.
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*.*.*"]
 
 permissions:
   contents: write

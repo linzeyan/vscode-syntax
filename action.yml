@@ -69,7 +69,16 @@ runs:
           echo "::error title=setup-poly::no release for version '$REQUESTED'"
           exit 1
         fi
-        version=$(printf '%s' "$release" | python3 -c 'import json,sys;print(json.load(sys.stdin)["tag_name"])')
+        # Take the asset list from the release rather than composing a download
+        # URL and hoping. A release published without assets -- which is what a
+        # stray tag matching release.yml's filter produces -- otherwise shows up
+        # as a bare `curl` 404 several steps later, naming the asset and saying
+        # nothing about which release did not have it.
+        read -r version missing <<<"$(printf '%s' "$release" | python3 -c 'import json,sys; r=json.load(sys.stdin); n={a["name"] for a in r["assets"]}; m=sorted({sys.argv[1],"SHA256SUMS"}-n); print(r["tag_name"], ",".join(m) or "-")' "$asset")"
+        if [ "$missing" != "-" ]; then
+          echo "::error title=setup-poly::release $version is missing $missing (asked for '$REQUESTED')"
+          exit 1
+        fi
         base="https://github.com/linzeyan/vscode-syntax/releases/download/$version"
 
         dir="$RUNNER_TOOL_CACHE/poly/$version"
