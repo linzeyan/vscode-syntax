@@ -253,6 +253,23 @@ struct ActionlintItem {
     message: String,
 }
 
+/// actionlint has no rule pages -- its `kind` is a category, not a rule -- but
+/// the checks that need a reference carry one inline, always as a trailing
+/// `see <url> ...` clause. Lifting it into the docs slot keeps the record's
+/// first line to one readable line and puts the link where every other tool's
+/// link is; leaving it in would print the same URL twice.
+fn actionlint_docs(message: &str) -> (String, Option<String>) {
+    let Some(at) = message.find(" see http") else {
+        return (message.to_string(), None);
+    };
+    let url = message[at + " see ".len()..]
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(['.', ',', ')']);
+    (message[..at].to_string(), Some(url.to_string()))
+}
+
 fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
     let items: Vec<ActionlintItem> =
         serde_json::from_slice(stdout).context("parsing actionlint output")?;
@@ -261,6 +278,7 @@ fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
         .map(|i| {
             let line = i.line.saturating_sub(1);
             let col = i.column.saturating_sub(1);
+            let (message, url) = actionlint_docs(&i.message);
             FileIssue {
                 file: PathBuf::from(i.filepath),
                 issue: Issue {
@@ -270,10 +288,10 @@ fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     end_col: col + 1,
                     severity: Severity::Error,
                     code: i.kind,
-                    message: i.message,
+                    message,
                     source: "actionlint",
                     fix: None,
-                    url: None,
+                    url,
                 },
             }
         })
@@ -1289,6 +1307,29 @@ mod tests {
         let issues = biome_parse(old, Path::new("/w")).unwrap();
         assert_eq!(issues[0].file, PathBuf::from("/abs/a.ts"));
         assert_eq!(issues[0].issue.severity, Severity::Error);
+    }
+
+    /// actionlint's reference lives inside the prose, so the docs slot is
+    /// filled by moving it rather than by deriving anything. Sampled from
+    /// actionlint 1.7.12.
+    #[test]
+    fn actionlint_moves_its_inline_reference_into_the_docs_slot() {
+        let raw = br#"[{"message":"\"github.event.issue.title\" is potentially untrusted. avoid using it directly in inline scripts. see https://docs.github.com/en/actions/reference/security/secure-use#good-practices for more details","filepath":".github/workflows/w.yml","line":12,"column":15,"kind":"expression"},
+          {"message":"the runner of \"actions/checkout@v1\" action is too old to run on GitHub Actions. update the action's version to fix this issue","filepath":".github/workflows/w.yml","line":9,"column":9,"kind":"action"}]"#;
+        let issues = actionlint_parse(raw).unwrap();
+        assert_eq!(
+            issues[0].issue.url.as_deref(),
+            Some("https://docs.github.com/en/actions/reference/security/secure-use#good-practices")
+        );
+        // The clause is moved, not copied: no URL survives in the message.
+        assert!(
+            issues[0].issue.message.ends_with("inline scripts."),
+            "{:?}",
+            issues[0].issue.message
+        );
+        // Most checks have no reference at all, and their prose is untouched.
+        assert_eq!(issues[1].issue.url, None);
+        assert!(issues[1].issue.message.ends_with("to fix this issue"));
     }
 
     /// These three tools name their rules well enough that the documentation

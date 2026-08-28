@@ -52,7 +52,12 @@ fn lint_toml(text: &str) -> Vec<Issue> {
             .join(" "),
         source: "toml",
         fix: None,
-        url: None,
+        // There is no rule to link, only the grammar the parser is enforcing.
+        // The version matters: the `toml` crate implements 1.0.0, and 1.1.0
+        // legalises things (newlines in inline tables, unicode escapes in bare
+        // keys) that this parser rejects, so linking the current spec would
+        // point at a document that disagrees with the error.
+        url: Some("https://toml.io/en/v1.0.0".to_string()),
     }]
 }
 
@@ -123,6 +128,9 @@ mod tests {
         // Points into the file, not at 0:0, and stays on one line.
         assert!(issues[0].line > 0, "{:?}", issues[0]);
         assert!(!issues[0].message.contains('\n'), "{:?}", issues[0]);
+        // Pinned to the spec version the parser implements, not to whatever
+        // toml.io currently serves.
+        assert_eq!(issues[0].url.as_deref(), Some("https://toml.io/en/v1.0.0"));
 
         assert!(lint("toml", Path::new("a.toml"), "a = 1\n")
             .unwrap()
