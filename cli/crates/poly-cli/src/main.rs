@@ -161,6 +161,37 @@ fn is_workflow_file(path: &Path) -> bool {
         && comps.next().is_some_and(|c| c.as_os_str() == ".github")
 }
 
+/// One path shape for every tool, anchored at `base`.
+///
+/// Each linter reports paths its own way — ruff absolutizes, shellcheck echoes
+/// back the `./x` it was handed, typos prints a bare name — so a single run
+/// printed three different shapes for files sitting in the same directory, and
+/// anything parsing the output (CI annotations, editor terminal links) had to
+/// cope with all of them. Applied before the sort, so issues for one file also
+/// stay together instead of splitting by whichever tool found them.
+///
+/// `base` is the caller's canonicalized cwd: on macOS that reads as /tmp while
+/// ruff reports /private/tmp, and comparing the two unresolved would match
+/// nothing. Anything that fails to resolve (a stdin buffer, a file deleted
+/// mid-run) keeps the form the tool gave, which still beats an empty path.
+fn relative_to_base(file: &Path, base: &Path) -> PathBuf {
+    let stripped = file.strip_prefix("./").unwrap_or(file);
+    // A relative report is resolved against `base`, not the process cwd. The
+    // two are the same directory in production; saying so explicitly is what
+    // keeps this a pure function instead of one reading ambient state.
+    let absolute = if stripped.is_absolute() {
+        stripped.to_path_buf()
+    } else {
+        base.join(stripped)
+    };
+    match absolute.canonicalize() {
+        Ok(abs) => abs
+            .strip_prefix(base)
+            .map_or(abs.clone(), Path::to_path_buf),
+        Err(_) => stripped.to_path_buf(),
+    }
+}
+
 fn cmd_check(paths: &[PathBuf], strict: bool, changed: bool) -> Result<i32> {
     // Tool binaries resolve against the top-level config: one run invokes each
     // linter once over a batch, so there is no per-file choice to make.
@@ -367,6 +398,11 @@ fn cmd_check(paths: &[PathBuf], strict: bool, changed: bool) -> Result<i32> {
         }
     }
 
+    if let Ok(base) = std::env::current_dir().and_then(|d| d.canonicalize()) {
+        for issue in &mut issues {
+            issue.file = relative_to_base(&issue.file, &base);
+        }
+    }
     issues.sort_by(|a, b| {
         (&a.file, a.issue.line, a.issue.col).cmp(&(&b.file, b.issue.line, b.issue.col))
     });
@@ -483,4 +519,43 @@ fn bench(path: &Path, iters: usize) -> Result<()> {
         pct(0.95),
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn issue_paths_collapse_to_one_shape() {
+        // A real directory, because the normalization resolves symlinks; the
+        // cwd stays untouched so this cannot race other tests in the process.
+        let base = std::env::temp_dir()
+            .join("poly-relpath-test")
+            .canonicalize()
+            .or_else(|_| {
+                let d = std::env::temp_dir().join("poly-relpath-test");
+                std::fs::create_dir_all(&d).and_then(|()| d.canonicalize())
+            })
+            .unwrap();
+        std::fs::create_dir_all(base.join("sub")).unwrap();
+        std::fs::write(base.join("sub").join("a.py"), "").unwrap();
+
+        // The three shapes real tools hand back for one and the same file.
+        let want = PathBuf::from("sub/a.py");
+        let abs = base.join("sub/a.py");
+        assert_eq!(relative_to_base(&abs, &base), want, "ruff, absolute");
+        let dotted = Path::new("./sub/a.py");
+        assert_eq!(relative_to_base(dotted, &base), want, "shellcheck, ./x");
+        let bare = Path::new("sub/a.py");
+        assert_eq!(relative_to_base(bare, &base), want, "typos, bare");
+
+        // Outside the base there is no relative form worth printing, and a path
+        // that does not resolve keeps whatever the tool said minus the "./".
+        let outside = base.parent().unwrap().to_path_buf();
+        assert_eq!(relative_to_base(&outside, &base), outside);
+        assert_eq!(
+            relative_to_base(Path::new("./gone.py"), &base),
+            PathBuf::from("gone.py")
+        );
+    }
 }
