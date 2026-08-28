@@ -68,7 +68,7 @@ fn line_col(text: &str, offset: usize) -> (u32, u32) {
 fn lint_sql(text: &str) -> Result<Vec<Issue>> {
     let linted = crate::sql_linter()?
         .lint_string(text, None, false)
-        .map_err(|e| anyhow!("sqruff error: {e:?}"))?;
+        .map_err(|e| anyhow!("sqruff error: {e}"))?;
     Ok(linted
         .violations()
         .iter()

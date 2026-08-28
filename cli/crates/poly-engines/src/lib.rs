@@ -241,8 +241,7 @@ fn format_css(text: &str, lang: &str, opts: FormatOptions) -> Result<Option<Stri
     if let Some(tabs) = opts.use_tabs {
         options.layout.use_tabs = tabs;
     }
-    let result = malva::format_text(text, syntax, &options)
-        .map_err(|e| anyhow!("css format error: {e:?}"))?;
+    let result = malva::format_text(text, syntax, &options).map_err(|e| anyhow!("css {e}"))?;
     Ok((result != text).then_some(result))
 }
 
@@ -254,9 +253,33 @@ fn format_yaml(text: &str, opts: FormatOptions) -> Result<Option<String>> {
     if let Some(width) = opts.indent_width {
         options.layout.indent_width = width.into();
     }
-    let result = pretty_yaml::format_text(text, &options)
-        .map_err(|e| anyhow!("yaml format error: {e:?}"))?;
+    // Display is the parser's code frame -- "parse error at line 2, column 4"
+    // plus the offending line and a caret, the same shape the dprint engines
+    // produce. Debug printed the struct instead, which buried the position in
+    // an escaped string and carried a copy of the whole input along with it.
+    // The frame already opens with "parse error at line N, column M", so the
+    // prefix is just the language.
+    let result = pretty_yaml::format_text(text, &options).map_err(|e| anyhow!("yaml {e}"))?;
     Ok((result != text).then_some(result))
+}
+
+/// Byte offset to a 1-based line and column.
+///
+/// Columns count characters, not bytes, so a message about a line with
+/// non-ASCII text before the error points where an editor puts its cursor.
+fn line_col(text: &str, offset: usize) -> (usize, usize) {
+    let mut offset = offset.min(text.len());
+    // A parser can hand back an offset mid-character; walking back to the
+    // boundary keeps the slice below from panicking.
+    while offset > 0 && !text.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    let before = &text[..offset];
+    let line_start = before.rfind('\n').map_or(before, |i| &before[i + 1..]);
+    (
+        before.matches('\n').count() + 1,
+        line_start.chars().count() + 1,
+    )
 }
 
 fn format_python(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<String>> {
@@ -283,9 +306,27 @@ fn format_python(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<
         });
     }
     let printed = ruff_python_formatter::format_module_source(text, options)
-        .map_err(|e| anyhow!("python format error: {e}"))?;
+        .map_err(|e| python_error(text, &e))?;
     let result = printed.into_code();
     Ok((result != text).then_some(result))
+}
+
+/// ruff's own Display ends in "at byte range 6..7", which no editor and no
+/// human can act on. The parse error carries the range, so translate it and
+/// use the inner message, which is the same text minus that suffix.
+fn python_error(text: &str, err: &ruff_python_formatter::FormatModuleError) -> anyhow::Error {
+    match err {
+        ruff_python_formatter::FormatModuleError::ParseError(parse) => {
+            let (line, col) = line_col(text, usize::from(parse.location.start()));
+            anyhow!(
+                "python parse error at line {line}, column {col}: {}",
+                parse.error
+            )
+        }
+        // Formatting and printing failures are internal to ruff and carry no
+        // source position at all; there is nothing to translate.
+        other => anyhow!("python format error: {other}"),
+    }
 }
 
 /// Shared warm sqruff instance (construction loads the rule set; lint_string
@@ -309,15 +350,17 @@ pub(crate) fn sql_linter() -> Result<&'static sqruff_lib::core::linter::core::Li
 fn format_sql(text: &str) -> Result<Option<String>> {
     let linted = sql_linter()?
         .lint_string(text, None, true)
-        .map_err(|e| anyhow!("sql format error: {e:?}"))?;
+        .map_err(|e| anyhow!("sql format error: {e}"))?;
     let result = linted.fix_string();
     Ok((result != text).then_some(result))
 }
 
 fn format_xml(text: &str, opts: FormatOptions) -> Result<Option<String>> {
-    let doc: xmlem::Document = text
-        .parse()
-        .map_err(|e| anyhow!("xml parse error: {e:?}"))?;
+    // Display, not Debug: Debug printed the raw variant tree
+    // ("Parse(IllFormed(MismatchedEndTag { .. }))") at the user. No position
+    // either way — xmlem drops the reader offset when it wraps the quick_xml
+    // error, so the message can only say what is wrong, not where.
+    let doc: xmlem::Document = text.parse().map_err(|e| anyhow!("xml parse error: {e}"))?;
     let mut result = match opts.indent_width {
         Some(width) => doc.to_string_pretty_with_config(
             &xmlem::display::Config::default_pretty().indent(width.into()),
@@ -357,7 +400,7 @@ fn format_markup(text: &str, lang: &str, opts: FormatOptions) -> Result<Option<S
             _ => Ok(code.into()),
         }
     })
-    .map_err(|e| anyhow!("markup format error: {e:?}"))?;
+    .map_err(|e| anyhow!("{lang} {e}"))?;
     Ok((result != text).then_some(result))
 }
 
@@ -372,8 +415,7 @@ fn format_graphql(text: &str, opts: FormatOptions) -> Result<Option<String>> {
     if let Some(tabs) = opts.use_tabs {
         options.layout.use_tabs = tabs;
     }
-    let result = pretty_graphql::format_text(text, &options)
-        .map_err(|e| anyhow!("graphql format error: {e:?}"))?;
+    let result = pretty_graphql::format_text(text, &options).map_err(|e| anyhow!("graphql {e}"))?;
     Ok((result != text).then_some(result))
 }
 
@@ -422,6 +464,48 @@ mod tests {
             let out = format_file(Path::new(name), input).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert!(out.is_some(), "{name}: expected a formatting change");
         }
+    }
+
+    #[test]
+    fn byte_offsets_become_line_and_column() {
+        let text = "ab\ncde\n";
+        assert_eq!(line_col(text, 0), (1, 1));
+        assert_eq!(line_col(text, 2), (1, 3), "end of the first line");
+        assert_eq!(line_col(text, 3), (2, 1), "just past the newline");
+        assert_eq!(line_col(text, 5), (2, 3));
+
+        // Columns count characters: a byte count would put the error three
+        // columns past where the editor draws the cursor.
+        assert_eq!(line_col("中文x", 9), (1, 4));
+        // A parser may hand back an offset inside a character, or past the end.
+        assert_eq!(line_col("中", 1), (1, 1));
+        assert_eq!(line_col("ab", 99), (1, 3));
+    }
+
+    /// A parse failure has to name the line. Engines report positions in
+    /// whatever unit suits them -- ruff hands back a byte range, and printing
+    /// that raw ("at byte range 6..7") gave the user nothing to act on.
+    #[test]
+    fn parse_failures_report_a_position() {
+        let cases: &[(&str, &str, &str)] = &[
+            ("a.py", "x = 1\ndef f(:\n    pass\n", "line 2, column 7"),
+            ("a.yaml", "a: 1\n  b: 2\n", "line 2, column 4"),
+            ("a.graphql", "query { a b\n", "line 2, col 1"),
+            ("a.html", "<div><span></div>\n", "line 1, column 13"),
+        ];
+        for (name, broken, want) in cases {
+            let err = format_file(Path::new(name), broken)
+                .expect_err(&format!("{name}: expected a parse failure"))
+                .to_string();
+            assert!(err.contains(want), "{name}: {err:?} lacks {want:?}");
+        }
+
+        // xmlem discards the reader offset, so XML can only say what is wrong.
+        // It must at least be a sentence rather than a Debug variant dump.
+        let err = format_file(Path::new("a.xml"), "<root><a></root>\n")
+            .expect_err("expected a parse failure")
+            .to_string();
+        assert!(!err.contains("IllFormed("), "raw Debug leaked: {err:?}");
     }
 
     #[test]
