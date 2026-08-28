@@ -78,11 +78,8 @@ fn serve(connection: Connection) -> Result<()> {
         format_errors: HashMap::new(),
     };
 
-    loop {
-        let message = match server.connection.receiver.recv() {
-            Ok(message) => message,
-            Err(_) => break,
-        };
+    // A receive error means the editor closed the pipe: nothing left to serve.
+    while let Ok(message) = server.connection.receiver.recv() {
         match message {
             Message::Request(request) => {
                 if server.connection.handle_shutdown(&request)? {

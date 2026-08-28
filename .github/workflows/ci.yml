@@ -49,10 +49,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: cli
           cache-on-failure: true
+      # rustfmt first: it needs no build, so a formatting slip fails in seconds
+      # instead of after the workspace compiles.
+      - name: Rust formatting
+        working-directory: cli
+        run: cargo fmt --all --check
+      - name: Clippy
+        working-directory: cli
+        run: cargo clippy --all-targets -- -D warnings
       - name: Test
         working-directory: cli
         run: cargo test --workspace --release
@@ -64,6 +74,19 @@ jobs:
         run: |
           cargo build --release --manifest-path cli/Cargo.toml
           python tools/lsp-smoke.py cli/target/release/poly
+      # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
+      # two commands the README tells users to put in their CI. This was a
+      # documented gate that was never actually wired, so every dogfood run was
+      # whatever a human remembered to type locally.
+      #
+      # --strict because a runner missing a toolchain must fail here rather
+      # than quietly format less than a developer's machine does: R5/A4 is the
+      # whole point, and a gate that only checks the files it happens to
+      # resolve is not a gate.
+      - name: Dogfood (poly formats and lints its own repo)
+        run: |
+          cli/target/release/poly fmt --check --strict .
+          cli/target/release/poly check --strict .
       - uses: actions/setup-node@v4
         with:
           node-version: 22

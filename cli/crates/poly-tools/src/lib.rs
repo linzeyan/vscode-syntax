@@ -521,7 +521,7 @@ fn ensure_installed(
         }
     }
 
-    extract(&body, asset.kind, &tool.name, &target)?;
+    extract(&body, asset.kind, tool.name, &target)?;
     Ok(Some(target))
 }
 
@@ -563,7 +563,7 @@ fn extract(body: &[u8], kind: Kind, name: &str, target: &Path) -> Result<()> {
                             .next()
                             .unwrap_or("")
                             .to_string();
-                        exe_names.iter().any(|n| *n == base)
+                        exe_names.contains(&base)
                     })
                     .unwrap_or(false)
                 })
