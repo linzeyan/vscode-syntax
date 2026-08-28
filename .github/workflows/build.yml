@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths: ["cli/**", ".github/workflows/build.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest }
+          - { target: aarch64-apple-darwin, os: macos-14 }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          # win-arm64 has no official prebuilts for many tools (spec §4.3);
+          # poly building here is exactly why it's in the matrix.
+          - { target: aarch64-pc-windows-msvc, os: windows-11-arm }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
+          key: ${{ matrix.target }}
+          # A 10-minute Windows build that trips the size gate still leaves a
+          # usable dependency cache behind.
+          cache-on-failure: true
+      - name: Build
+        working-directory: cli
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Smoke test (binary runs on this runner)
+        working-directory: cli
+        shell: bash
+        run: |
+          BIN=target/${{ matrix.target }}/release/poly
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          "$BIN" fmt --check . || test $? -le 1
+      - name: Binary size budget (02 §9)
+        working-directory: cli
+        shell: bash
+        run: |
+          BIN=target/${{ matrix.target }}/release/poly
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          bytes=$(wc -c < "$BIN")
+          mb=$(( bytes / 1048576 ))
+          # Annotation, not just a log line: job logs need admin rights, so
+          # the number has to survive into the publicly readable check run.
+          echo "::notice title=binary size::${{ matrix.target }} ${mb}MB ($bytes bytes)"
+          test "$bytes" -lt $(( 40 * 1048576 )) || {
+            echo "::error title=binary size::${{ matrix.target }} ${mb}MB exceeds the 40MB budget (02 §9)"
+            exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poly-${{ matrix.target }}
+          path: |
+            cli/target/${{ matrix.target }}/release/poly
+            cli/target/${{ matrix.target }}/release/poly.exe
+          if-no-files-found: error

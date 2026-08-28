@@ -1,0 +1,72 @@
+{
+  "name": "SSH Config",
+  "scopeName": "source.ssh-config",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#section"
+    },
+    {
+      "include": "#directive"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.ssh-config"
+    },
+    "section": {
+      "begin": "(?i)^\\s*(Host|Match)\\b",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.ssh-config"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "match": "[^\\s#]+",
+          "name": "entity.name.section.ssh-config"
+        }
+      ]
+    },
+    "directive": {
+      "begin": "^\\s*([A-Za-z][A-Za-z0-9]*)\\s*(=)?",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.ssh-config"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.ssh-config"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "match": "%[%CdhijkLlnprTu]",
+          "name": "constant.character.escape.ssh-config"
+        },
+        {
+          "match": "\"[^\"]*\"",
+          "name": "string.quoted.double.ssh-config"
+        },
+        {
+          "match": "(?i)\\b(yes|no|ask|confirm|auto|none|any|default|force|autoask)\\b",
+          "name": "constant.language.ssh-config"
+        },
+        {
+          "match": "\\b\\d+\\b",
+          "name": "constant.numeric.ssh-config"
+        }
+      ]
+    }
+  }
+}

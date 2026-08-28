@@ -1,0 +1,16 @@
+pick c7b4bdf M6a: take over JS/TS/JSON/CSS/SCSS/Less/HTML/Python grammars
+reword aa39812 ci: one dependency build instead of two
+squash 498eb86 grammar-sync: refresh pinned upstream shas
+fixup 964a210 grammar-sync: never write aggregates after a failed source
+edit 950e992 opt-level="s": binary 28.9MB -> 14.7MB
+drop ab996d2 Build(deps-dev): Bump esbuild from 0.23.1 to 0.28.1
+exec cargo test --workspace --release
+
+# Rebase c4367eb..c7b4bdf onto c4367eb (7 commands)
+#
+# Commands:
+#  p, pick <commit> = use commit
+#  r, reword <commit> = use commit, but edit the commit message
+#  s, squash <commit> = use commit, but meld into previous commit
+#
+# These lines can be re-ordered; they are executed from top to bottom.

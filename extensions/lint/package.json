@@ -1,0 +1,144 @@
+{
+  "name": "poly-lint",
+  "displayName": "Poly Lint",
+  "description": "Unified lint/format via the poly daemon: format-on-save, lint-on-save diagnostics, batch commands.",
+  "version": "0.1.0",
+  "publisher": "ricky",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Formatters",
+    "Linters"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:json",
+    "onLanguage:jsonc",
+    "onLanguage:markdown",
+    "onLanguage:toml",
+    "onLanguage:css",
+    "onLanguage:scss",
+    "onLanguage:less",
+    "onLanguage:yaml",
+    "onLanguage:python",
+    "onLanguage:sql",
+    "onLanguage:xml",
+    "onLanguage:html",
+    "onLanguage:vue",
+    "onLanguage:svelte",
+    "onLanguage:astro",
+    "onLanguage:graphql",
+    "onLanguage:dockerfile",
+    "onLanguage:shellscript",
+    "onLanguage:rust",
+    "onLanguage:go",
+    "onLanguage:lua",
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:terraform",
+    "onLanguage:swift"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "poly.formatFile",
+        "title": "Poly: Format File"
+      },
+      {
+        "command": "poly.formatPath",
+        "title": "Poly: Format Folder"
+      },
+      {
+        "command": "poly.formatWorkspace",
+        "title": "Poly: Format Workspace"
+      },
+      {
+        "command": "poly.formatGitRepo",
+        "title": "Poly: Format Git Repo"
+      },
+      {
+        "command": "poly.formatGitChanged",
+        "title": "Poly: Format Git Changed Files"
+      },
+      {
+        "command": "poly.lintPath",
+        "title": "Poly: Lint (poly check)"
+      },
+      {
+        "command": "poly.checkForUpdates",
+        "title": "Poly: Check for Updates"
+      },
+      {
+        "command": "poly.showOutput",
+        "title": "Poly: Show Log"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "poly.formatPath",
+          "group": "7_modification@10"
+        },
+        {
+          "command": "poly.lintPath",
+          "group": "7_modification@11"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Poly",
+      "properties": {
+        "poly.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the poly binary. Relative paths resolve against the first workspace folder; empty uses the bundled binary, then `poly` from PATH."
+        },
+        "poly.lintOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish lint diagnostics when a supported file is opened or saved."
+        },
+        "poly.promptFormatOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offer once to enable format-on-save for Poly-supported languages."
+        },
+        "poly.updateCheck.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Periodically check GitHub Releases for new Poly versions (also covers poly-syntax)."
+        },
+        "poly.updateCheck.intervalDays": {
+          "type": "number",
+          "default": 7,
+          "minimum": 0,
+          "description": "Days between automatic update checks; 0 checks on every startup."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "typecheck": "tsc --noEmit",
+    "test:build": "npm run build && tsc -p tsconfig.test.json",
+    "test": "npm run test:build && node out/runTest.js"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.23.0",
+    "mocha": "^10.7.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,1792 @@
+{
+  "name": "poly-syntax",
+  "displayName": "Poly Syntax",
+  "description": "Unified syntax highlighting pack: every VSCode built-in grammar plus additions, synced from pinned upstreams.",
+  "version": "0.1.0",
+  "publisher": "ricky",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "markdown",
+        "configuration": "./language-configuration/markdown.json"
+      },
+      {
+        "id": "hcl",
+        "extensions": [
+          ".hcl"
+        ],
+        "aliases": [
+          "HCL"
+        ],
+        "configuration": "./language-configuration/hcl.json"
+      },
+      {
+        "id": "terraform",
+        "extensions": [
+          ".tf",
+          ".tfvars"
+        ],
+        "aliases": [
+          "Terraform"
+        ],
+        "configuration": "./language-configuration/hcl.json"
+      },
+      {
+        "id": "nginx",
+        "extensions": [
+          ".nginx"
+        ],
+        "filenames": [
+          "nginx.conf"
+        ],
+        "filenamePatterns": [
+          "**/nginx/*.conf",
+          "**/nginx/**/*.conf"
+        ],
+        "aliases": [
+          "NGINX Conf"
+        ],
+        "configuration": "./language-configuration/nginx.json"
+      },
+      {
+        "id": "zig",
+        "extensions": [
+          ".zig",
+          ".zon"
+        ],
+        "aliases": [
+          "Zig"
+        ],
+        "configuration": "./language-configuration/zig.json"
+      },
+      {
+        "id": "toml",
+        "extensions": [
+          ".toml"
+        ],
+        "filenames": [
+          "Cargo.lock",
+          "uv.lock",
+          "Pipfile",
+          "pdm.lock"
+        ],
+        "aliases": [
+          "TOML"
+        ],
+        "configuration": "./language-configuration/toml.json"
+      },
+      {
+        "id": "gotmpl",
+        "extensions": [
+          ".gotmpl",
+          ".go.tmpl",
+          ".gohtml",
+          ".tmpl",
+          ".gtpl"
+        ],
+        "aliases": [
+          "Go Template"
+        ],
+        "configuration": "./language-configuration/gotmpl.json"
+      },
+      {
+        "id": "dotenv",
+        "extensions": [
+          ".env"
+        ],
+        "filenamePatterns": [
+          ".env*",
+          "**/.env.*"
+        ],
+        "aliases": [
+          "dotenv"
+        ],
+        "configuration": "./language-configuration/dotenv.json"
+      },
+      {
+        "id": "protobuf",
+        "extensions": [
+          ".proto"
+        ],
+        "aliases": [
+          "Protocol Buffers"
+        ],
+        "configuration": "./language-configuration/protobuf.json"
+      },
+      {
+        "id": "mermaid",
+        "extensions": [
+          ".mmd",
+          ".mermaid"
+        ],
+        "aliases": [
+          "Mermaid"
+        ],
+        "configuration": "./language-configuration/mermaid.json"
+      },
+      {
+        "id": "svelte",
+        "extensions": [
+          ".svelte"
+        ],
+        "aliases": [
+          "Svelte"
+        ],
+        "configuration": "./language-configuration/svelte.json"
+      },
+      {
+        "id": "graphql",
+        "extensions": [
+          ".graphql",
+          ".gql",
+          ".graphqls"
+        ],
+        "aliases": [
+          "GraphQL"
+        ],
+        "configuration": "./language-configuration/graphql.json"
+      },
+      {
+        "id": "csv",
+        "extensions": [
+          ".csv"
+        ],
+        "aliases": [
+          "CSV"
+        ],
+        "configuration": "./language-configuration/csv.json"
+      },
+      {
+        "id": "tsv",
+        "extensions": [
+          ".tsv"
+        ],
+        "aliases": [
+          "TSV"
+        ],
+        "configuration": "./language-configuration/csv.json"
+      },
+      {
+        "id": "ssh_config",
+        "filenames": [
+          "ssh_config",
+          "sshd_config"
+        ],
+        "filenamePatterns": [
+          "**/.ssh/config",
+          "**/.ssh/config.d/*",
+          "**/ssh/ssh_config.d/*.conf",
+          "**/ssh/sshd_config.d/*.conf"
+        ],
+        "aliases": [
+          "SSH Config"
+        ],
+        "configuration": "./language-configuration/ssh-config.json"
+      },
+      {
+        "id": "vue",
+        "extensions": [
+          ".vue"
+        ],
+        "aliases": [
+          "Vue"
+        ],
+        "configuration": "./language-configuration/vue.json"
+      },
+      {
+        "id": "kotlin",
+        "extensions": [
+          ".kt",
+          ".kts"
+        ],
+        "aliases": [
+          "Kotlin"
+        ],
+        "configuration": "./language-configuration/kotlin.json"
+      },
+      {
+        "id": "cmake",
+        "extensions": [
+          ".cmake"
+        ],
+        "filenames": [
+          "CMakeLists.txt"
+        ],
+        "aliases": [
+          "CMake"
+        ],
+        "configuration": "./language-configuration/cmake.json"
+      },
+      {
+        "id": "cmake-cache",
+        "filenames": [
+          "CMakeCache.txt"
+        ],
+        "aliases": [
+          "CMake Cache"
+        ],
+        "configuration": "./language-configuration/cmake.json"
+      },
+      {
+        "id": "jsonnet",
+        "extensions": [
+          ".jsonnet",
+          ".libsonnet"
+        ],
+        "aliases": [
+          "Jsonnet"
+        ],
+        "configuration": "./language-configuration/jsonnet.json"
+      },
+      {
+        "id": "just",
+        "extensions": [
+          ".just",
+          ".justfile"
+        ],
+        "filenames": [
+          "justfile",
+          "Justfile",
+          ".justfile"
+        ],
+        "aliases": [
+          "Just"
+        ],
+        "configuration": "./language-configuration/just.json"
+      },
+      {
+        "id": "nix",
+        "extensions": [
+          ".nix"
+        ],
+        "aliases": [
+          "Nix"
+        ],
+        "configuration": "./language-configuration/nix.json"
+      },
+      {
+        "id": "caddyfile",
+        "extensions": [
+          ".caddyfile",
+          ".Caddyfile"
+        ],
+        "filenames": [
+          "Caddyfile",
+          "caddyfile"
+        ],
+        "filenamePatterns": [
+          "Caddyfile.*",
+          "caddyfile.*"
+        ],
+        "aliases": [
+          "Caddyfile",
+          "Caddy"
+        ],
+        "configuration": "./language-configuration/caddyfile.json"
+      },
+      {
+        "id": "systemd-conf",
+        "extensions": [
+          ".service",
+          ".socket",
+          ".device",
+          ".mount",
+          ".automount",
+          ".swap",
+          ".target",
+          ".path",
+          ".timer",
+          ".slice",
+          ".scope",
+          ".netdev",
+          ".network",
+          ".link",
+          ".nspawn",
+          ".container",
+          ".volume",
+          ".pod",
+          ".kube"
+        ],
+        "filenamePatterns": [
+          "**/systemd/*.conf",
+          "**/systemd/*.conf.d/*.conf",
+          "**/*.{service,slice,scope}.d/*.conf"
+        ],
+        "aliases": [
+          "systemd unit file",
+          "Systemd Configuration"
+        ],
+        "configuration": "./language-configuration/systemd.json"
+      },
+      {
+        "id": "scala",
+        "extensions": [
+          ".scala",
+          ".sbt",
+          ".sc",
+          ".mill"
+        ],
+        "aliases": [
+          "Scala"
+        ],
+        "configuration": "./language-configuration/scala.json"
+      },
+      {
+        "id": "apacheconf",
+        "extensions": [
+          ".htaccess",
+          ".htgroups",
+          ".htpasswd"
+        ],
+        "filenames": [
+          "httpd.conf",
+          "apache2.conf",
+          ".htaccess",
+          "htaccess",
+          "envvars"
+        ],
+        "filenamePatterns": [
+          "**/apache2/**/*.conf",
+          "**/httpd/**/*.conf",
+          "**/sites-{available,enabled}/*",
+          "**/conf.d/*.conf"
+        ],
+        "aliases": [
+          "Apache Conf"
+        ],
+        "configuration": "./language-configuration/apacheconf.json"
+      },
+      {
+        "id": "elixir",
+        "extensions": [
+          ".ex",
+          ".exs"
+        ],
+        "filenames": [
+          "mix.lock"
+        ],
+        "aliases": [
+          "Elixir"
+        ],
+        "configuration": "./language-configuration/elixir.json"
+      },
+      {
+        "id": "erlang",
+        "extensions": [
+          ".erl",
+          ".hrl",
+          ".escript",
+          ".es",
+          ".xrl",
+          ".yrl"
+        ],
+        "filenames": [
+          "rebar.config"
+        ],
+        "aliases": [
+          "Erlang"
+        ],
+        "configuration": "./language-configuration/erlang.json"
+      },
+      {
+        "id": "haskell",
+        "extensions": [
+          ".hs",
+          ".hsig",
+          ".hs-boot"
+        ],
+        "aliases": [
+          "Haskell"
+        ],
+        "configuration": "./language-configuration/haskell.json"
+      },
+      {
+        "id": "cabal",
+        "extensions": [
+          ".cabal"
+        ],
+        "aliases": [
+          "Cabal"
+        ],
+        "configuration": "./language-configuration/cabal.json"
+      },
+      {
+        "id": "ocaml",
+        "extensions": [
+          ".ml",
+          ".eliom",
+          ".ocamlinit"
+        ],
+        "aliases": [
+          "OCaml"
+        ],
+        "configuration": "./language-configuration/ocaml.json"
+      },
+      {
+        "id": "ocaml.interface",
+        "extensions": [
+          ".mli",
+          ".eliomi"
+        ],
+        "aliases": [
+          "OCaml Interface"
+        ],
+        "configuration": "./language-configuration/ocaml.json"
+      },
+      {
+        "id": "dune",
+        "filenames": [
+          "dune",
+          "jbuild"
+        ],
+        "aliases": [
+          "dune"
+        ],
+        "configuration": "./language-configuration/dune.json"
+      },
+      {
+        "id": "dune-project",
+        "filenames": [
+          "dune-project"
+        ],
+        "aliases": [
+          "dune project"
+        ],
+        "configuration": "./language-configuration/dune.json"
+      },
+      {
+        "id": "ocaml.opam",
+        "extensions": [
+          ".opam",
+          ".opam.locked",
+          ".opam.template"
+        ],
+        "filenames": [
+          "opam"
+        ],
+        "aliases": [
+          "opam"
+        ],
+        "configuration": "./language-configuration/ocaml.json"
+      },
+      {
+        "id": "jinja",
+        "aliases": [
+          "jinja"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-html",
+        "extensions": [
+          ".jinja",
+          ".jinja2",
+          ".j2",
+          ".html.j2"
+        ],
+        "aliases": [
+          "jinja-html"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-yaml",
+        "extensions": [
+          ".yml.j2",
+          ".yaml.j2",
+          ".yml.jinja",
+          ".yaml.jinja",
+          ".yml.jinja2",
+          ".yaml.jinja2",
+          ".sls"
+        ],
+        "aliases": [
+          "jinja-yaml"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-json",
+        "extensions": [
+          ".json.j2",
+          ".json.jinja",
+          ".json.jinja2"
+        ],
+        "aliases": [
+          "jinja-json"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-toml",
+        "extensions": [
+          ".toml.j2",
+          ".toml.jinja",
+          ".toml.jinja2"
+        ],
+        "aliases": [
+          "jinja-toml"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-py",
+        "extensions": [
+          "py.j2",
+          "py.jinja",
+          "py.jinja2"
+        ],
+        "aliases": [
+          "jinja-py"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-shell",
+        "extensions": [
+          ".sh.j2",
+          ".bash.j2",
+          ".zsh.j2",
+          ".ksh.j2",
+          ".profile.j2",
+          ".env.j2",
+          ".env.jinja",
+          ".env.jinja2"
+        ],
+        "aliases": [
+          "jinja-shell"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-dockerfile",
+        "extensions": [
+          ".dockerfile.j2",
+          ".dockerfile.jinja",
+          ".dockerfile.jinja2"
+        ],
+        "filenames": [
+          "Dockerfile.j2",
+          "Dockerfile.jinja",
+          "Dockerfile.jinja2"
+        ],
+        "aliases": [
+          "jinja-dockerfile"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-sql",
+        "extensions": [
+          ".sql.j2",
+          ".sql.jinja",
+          ".sql.jinja2"
+        ],
+        "aliases": [
+          "jinja-sql"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      },
+      {
+        "id": "jinja-nginx",
+        "extensions": [
+          ".conf.j2",
+          ".conf.jinja",
+          ".conf.jinja2"
+        ],
+        "aliases": [
+          "jinja-nginx"
+        ],
+        "configuration": "./language-configuration/jinja.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rust",
+        "scopeName": "source.rust",
+        "path": "./syntaxes/rust.tmLanguage.json"
+      },
+      {
+        "language": "swift",
+        "scopeName": "source.swift",
+        "path": "./syntaxes/swift.tmLanguage.json"
+      },
+      {
+        "language": "csharp",
+        "scopeName": "source.cs",
+        "path": "./syntaxes/csharp.tmLanguage.json",
+        "tokenTypes": {
+          "meta.interpolation": "other"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational.cs",
+          "keyword.operator.arrow.cs",
+          "punctuation.accessor.pointer.cs",
+          "keyword.operator.bitwise.shift.cs",
+          "keyword.operator.assignment.compound.bitwise.cs"
+        ]
+      },
+      {
+        "language": "lua",
+        "scopeName": "source.lua",
+        "path": "./syntaxes/lua.tmLanguage.json",
+        "tokenTypes": {
+          "comment.line.double-dash.doc.lua": "other"
+        }
+      },
+      {
+        "language": "go",
+        "scopeName": "source.go",
+        "path": "./syntaxes/go.tmLanguage.json"
+      },
+      {
+        "language": "c",
+        "scopeName": "source.c",
+        "path": "./syntaxes/c.tmLanguage.json"
+      },
+      {
+        "language": "cpp",
+        "scopeName": "source.cpp",
+        "path": "./syntaxes/cpp.tmLanguage.json"
+      },
+      {
+        "language": "cpp",
+        "scopeName": "source.cpp.embedded.macro",
+        "path": "./syntaxes/cpp.embedded.macro.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.c.platform",
+        "path": "./syntaxes/platform.tmLanguage.json"
+      },
+      {
+        "language": "cuda-cpp",
+        "scopeName": "source.cuda-cpp",
+        "path": "./syntaxes/cuda-cpp.tmLanguage.json"
+      },
+      {
+        "language": "xml",
+        "scopeName": "text.xml",
+        "path": "./syntaxes/xml.tmLanguage.json"
+      },
+      {
+        "language": "xsl",
+        "scopeName": "text.xml.xsl",
+        "path": "./syntaxes/xsl.tmLanguage.json"
+      },
+      {
+        "language": "yaml",
+        "scopeName": "source.yaml",
+        "path": "./syntaxes/yaml.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "invalid.illegal",
+          "meta.scalar.yaml",
+          "storage.type.tag.shorthand.yaml",
+          "keyword.control.flow"
+        ]
+      },
+      {
+        "language": "dockercompose",
+        "scopeName": "source.yaml",
+        "path": "./syntaxes/yaml.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "invalid.illegal",
+          "meta.scalar.yaml",
+          "storage.type.tag.shorthand.yaml",
+          "keyword.control.flow"
+        ]
+      },
+      {
+        "scopeName": "source.yaml.1.3",
+        "path": "./syntaxes/yaml-1.3.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.yaml.1.2",
+        "path": "./syntaxes/yaml-1.2.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.yaml.1.1",
+        "path": "./syntaxes/yaml-1.1.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.yaml.1.0",
+        "path": "./syntaxes/yaml-1.0.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.yaml.embedded",
+        "path": "./syntaxes/yaml-embedded.tmLanguage.json"
+      },
+      {
+        "language": "markdown",
+        "scopeName": "text.html.markdown",
+        "path": "./syntaxes/markdown.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.html": "html",
+          "source.js": "javascript",
+          "source.css": "css",
+          "meta.embedded.block.frontmatter": "yaml",
+          "meta.embedded.block.css": "css",
+          "meta.embedded.block.ini": "ini",
+          "meta.embedded.block.java": "java",
+          "meta.embedded.block.lua": "lua",
+          "meta.embedded.block.makefile": "makefile",
+          "meta.embedded.block.perl": "perl",
+          "meta.embedded.block.r": "r",
+          "meta.embedded.block.ruby": "ruby",
+          "meta.embedded.block.php": "php",
+          "meta.embedded.block.sql": "sql",
+          "meta.embedded.block.vs_net": "vs_net",
+          "meta.embedded.block.xml": "xml",
+          "meta.embedded.block.xsl": "xsl",
+          "meta.embedded.block.yaml": "yaml",
+          "meta.embedded.block.dosbatch": "dosbatch",
+          "meta.embedded.block.clojure": "clojure",
+          "meta.embedded.block.coffee": "coffee",
+          "meta.embedded.block.c": "c",
+          "meta.embedded.block.cpp": "cpp",
+          "meta.embedded.block.diff": "diff",
+          "meta.embedded.block.dockerfile": "dockerfile",
+          "meta.embedded.block.go": "go",
+          "meta.embedded.block.groovy": "groovy",
+          "meta.embedded.block.pug": "jade",
+          "meta.embedded.block.ignore": "ignore",
+          "meta.embedded.block.javascript": "javascript",
+          "meta.embedded.block.json": "json",
+          "meta.embedded.block.jsonc": "jsonc",
+          "meta.embedded.block.jsonl": "jsonl",
+          "meta.embedded.block.latex": "latex",
+          "meta.embedded.block.less": "less",
+          "meta.embedded.block.objc": "objc",
+          "meta.embedded.block.scss": "scss",
+          "meta.embedded.block.perl6": "perl6",
+          "meta.embedded.block.powershell": "powershell",
+          "meta.embedded.block.python": "python",
+          "meta.embedded.block.restructuredtext": "restructuredtext",
+          "meta.embedded.block.rust": "rust",
+          "meta.embedded.block.scala": "scala",
+          "meta.embedded.block.shellscript": "shellscript",
+          "meta.embedded.block.typescript": "typescript",
+          "meta.embedded.block.typescriptreact": "typescriptreact",
+          "meta.embedded.block.csharp": "csharp",
+          "meta.embedded.block.fsharp": "fsharp"
+        },
+        "unbalancedBracketScopes": [
+          "markup.underline.link.markdown",
+          "punctuation.definition.list.begin.markdown",
+          "keyword.operator.relational.cs",
+          "keyword.operator.arrow.cs",
+          "punctuation.accessor.pointer.cs",
+          "keyword.operator.bitwise.shift.cs",
+          "keyword.operator.assignment.compound.bitwise.cs",
+          "keyword.operator.relational.ts",
+          "storage.type.function.arrow.ts",
+          "keyword.operator.bitwise.shift.ts",
+          "keyword.operator.assignment.compound.bitwise.ts",
+          "keyword.operator.relational.tsx",
+          "storage.type.function.arrow.tsx",
+          "keyword.operator.bitwise.shift.tsx",
+          "keyword.operator.assignment.compound.bitwise.tsx"
+        ]
+      },
+      {
+        "language": "sql",
+        "scopeName": "source.sql",
+        "path": "./syntaxes/sql.tmLanguage.json"
+      },
+      {
+        "language": "dockerfile",
+        "scopeName": "source.dockerfile",
+        "path": "./syntaxes/docker.tmLanguage.json"
+      },
+      {
+        "language": "shellscript",
+        "scopeName": "source.shell",
+        "path": "./syntaxes/shell-unix-bash.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "meta.scope.case-pattern.shell"
+        ]
+      },
+      {
+        "language": "hcl",
+        "scopeName": "source.hcl",
+        "path": "./syntaxes/hcl.tmLanguage.json"
+      },
+      {
+        "language": "terraform",
+        "scopeName": "source.hcl.terraform",
+        "path": "./syntaxes/terraform.tmLanguage.json"
+      },
+      {
+        "language": "nginx",
+        "scopeName": "source.nginx",
+        "path": "./syntaxes/nginx.tmLanguage.json"
+      },
+      {
+        "language": "zig",
+        "scopeName": "source.zig",
+        "path": "./syntaxes/zig.tmLanguage.json"
+      },
+      {
+        "language": "toml",
+        "scopeName": "source.toml",
+        "path": "./syntaxes/toml.tmLanguage.json"
+      },
+      {
+        "language": "gotmpl",
+        "scopeName": "source.go-template",
+        "path": "./syntaxes/go-template.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.go.injection.double.go-template",
+        "path": "./syntaxes/go-double.go-template.tmLanguage.json",
+        "injectTo": [
+          "source.go"
+        ]
+      },
+      {
+        "scopeName": "source.go.injection.raw.go-template",
+        "path": "./syntaxes/go-raw.go-template.tmLanguage.json",
+        "injectTo": [
+          "source.go"
+        ]
+      },
+      {
+        "scopeName": "text.injection.go-template",
+        "path": "./syntaxes/injection.go-template.tmLanguage.json",
+        "injectTo": [
+          "source.css",
+          "source.js",
+          "source.json",
+          "text.html.derivative",
+          "text.xml"
+        ]
+      },
+      {
+        "scopeName": "text.markdown.go-template.codeblock",
+        "path": "./syntaxes/markdown.go-template.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.go-template": "gotmpl"
+        }
+      },
+      {
+        "language": "dotenv",
+        "scopeName": "source.env",
+        "path": "./syntaxes/env.tmLanguage.json"
+      },
+      {
+        "language": "protobuf",
+        "scopeName": "source.proto",
+        "path": "./syntaxes/proto3.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.codeblock.proto",
+        "path": "./syntaxes/proto3.codeblock.json",
+        "injectTo": [
+          "text.html.markdown"
+        ]
+      },
+      {
+        "language": "mermaid",
+        "scopeName": "source.mermaid",
+        "path": "./syntaxes/mermaid.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.mermaid.codeblock",
+        "path": "./syntaxes/mermaid.markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.mermaid": "mermaid"
+        }
+      },
+      {
+        "language": "svelte",
+        "scopeName": "source.svelte",
+        "path": "./syntaxes/svelte.tmLanguage.json"
+      },
+      {
+        "language": "graphql",
+        "scopeName": "source.graphql",
+        "path": "./syntaxes/graphql.tmLanguage.json"
+      },
+      {
+        "scopeName": "inline.graphql",
+        "path": "./syntaxes/graphql.js.tmLanguage.json",
+        "injectTo": [
+          "source.js",
+          "source.ts",
+          "source.js.jsx",
+          "source.tsx",
+          "source.vue",
+          "source.svelte",
+          "source.astro",
+          "text.html.markdown",
+          "text.html.derivative",
+          "text.html.vue"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.graphql": "graphql"
+        }
+      },
+      {
+        "scopeName": "inline.graphql.python",
+        "path": "./syntaxes/graphql.python.tmLanguage.json",
+        "injectTo": [
+          "source.python",
+          "text.html.markdown",
+          "text.html.derivative"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.graphql": "graphql"
+        }
+      },
+      {
+        "scopeName": "inline.graphql.markdown.codeblock",
+        "path": "./syntaxes/graphql.markdown.codeblock.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown",
+          "text.html.derivative"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.graphql": "graphql"
+        }
+      },
+      {
+        "language": "csv",
+        "scopeName": "source.csv",
+        "path": "./syntaxes/csv.tmLanguage.json"
+      },
+      {
+        "language": "tsv",
+        "scopeName": "source.tsv",
+        "path": "./syntaxes/tsv.tmLanguage.json"
+      },
+      {
+        "language": "ssh_config",
+        "scopeName": "source.ssh-config",
+        "path": "./syntaxes/ssh-config.tmLanguage.json"
+      },
+      {
+        "language": "javascript",
+        "scopeName": "source.js",
+        "path": "./syntaxes/javascript.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.tag.js": "jsx-tags",
+          "meta.tag.without-attributes.js": "jsx-tags",
+          "meta.tag.attributes.js": "javascript",
+          "meta.embedded.expression.js": "javascript"
+        },
+        "tokenTypes": {
+          "punctuation.definition.template-expression": "other",
+          "entity.name.type.instance.jsdoc": "other",
+          "entity.name.function.tagged-template": "other",
+          "meta.import string.quoted": "other",
+          "variable.other.jsdoc": "other"
+        }
+      },
+      {
+        "language": "javascriptreact",
+        "scopeName": "source.js.jsx",
+        "path": "./syntaxes/javascriptreact.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.tag.js": "jsx-tags",
+          "meta.tag.without-attributes.js": "jsx-tags",
+          "meta.tag.attributes.js.jsx": "javascriptreact",
+          "meta.embedded.expression.js": "javascriptreact"
+        },
+        "tokenTypes": {
+          "punctuation.definition.template-expression": "other",
+          "entity.name.type.instance.jsdoc": "other",
+          "entity.name.function.tagged-template": "other",
+          "meta.import string.quoted": "other",
+          "variable.other.jsdoc": "other"
+        }
+      },
+      {
+        "scopeName": "source.js.regexp",
+        "path": "./syntaxes/javascript.regexp.tmLanguage.json"
+      },
+      {
+        "language": "typescript",
+        "scopeName": "source.ts",
+        "path": "./syntaxes/typescript.tmLanguage.json",
+        "tokenTypes": {
+          "punctuation.definition.template-expression": "other",
+          "entity.name.type.instance.jsdoc": "other",
+          "entity.name.function.tagged-template": "other",
+          "meta.import string.quoted": "other",
+          "variable.other.jsdoc": "other"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational",
+          "storage.type.function.arrow",
+          "keyword.operator.bitwise.shift",
+          "meta.brace.angle",
+          "punctuation.definition.tag",
+          "keyword.operator.assignment.compound.bitwise.ts"
+        ]
+      },
+      {
+        "language": "typescriptreact",
+        "scopeName": "source.tsx",
+        "path": "./syntaxes/typescriptreact.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.tag.tsx": "jsx-tags",
+          "meta.tag.without-attributes.tsx": "jsx-tags",
+          "meta.tag.attributes.tsx": "typescriptreact",
+          "meta.embedded.expression.tsx": "typescriptreact"
+        },
+        "tokenTypes": {
+          "punctuation.definition.template-expression": "other",
+          "entity.name.type.instance.jsdoc": "other",
+          "entity.name.function.tagged-template": "other",
+          "meta.import string.quoted": "other",
+          "variable.other.jsdoc": "other"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational",
+          "storage.type.function.arrow",
+          "keyword.operator.bitwise.shift",
+          "punctuation.definition.tag",
+          "keyword.operator.assignment.compound.bitwise.ts"
+        ]
+      },
+      {
+        "scopeName": "documentation.injection.ts",
+        "path": "./syntaxes/jsdoc.ts.injection.tmLanguage.json",
+        "injectTo": [
+          "source.ts",
+          "source.tsx"
+        ]
+      },
+      {
+        "scopeName": "documentation.injection.js.jsx",
+        "path": "./syntaxes/jsdoc.js.injection.tmLanguage.json",
+        "injectTo": [
+          "source.js",
+          "source.js.jsx"
+        ]
+      },
+      {
+        "language": "json",
+        "scopeName": "source.json",
+        "path": "./syntaxes/json.tmLanguage.json"
+      },
+      {
+        "language": "jsonc",
+        "scopeName": "source.json.comments",
+        "path": "./syntaxes/jsonc.tmLanguage.json"
+      },
+      {
+        "language": "jsonl",
+        "scopeName": "source.json.lines",
+        "path": "./syntaxes/jsonl.tmLanguage.json"
+      },
+      {
+        "language": "snippets",
+        "scopeName": "source.json.comments.snippets",
+        "path": "./syntaxes/snippets.tmLanguage.json"
+      },
+      {
+        "language": "css",
+        "scopeName": "source.css",
+        "path": "./syntaxes/css.tmLanguage.json",
+        "tokenTypes": {
+          "meta.function.url string.quoted": "other"
+        }
+      },
+      {
+        "language": "scss",
+        "scopeName": "source.css.scss",
+        "path": "./syntaxes/scss.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.sassdoc",
+        "path": "./syntaxes/sassdoc.tmLanguage.json"
+      },
+      {
+        "language": "less",
+        "scopeName": "source.css.less",
+        "path": "./syntaxes/less.tmLanguage.json"
+      },
+      {
+        "scopeName": "text.html.basic",
+        "path": "./syntaxes/html.tmLanguage.json",
+        "embeddedLanguages": {
+          "text.html": "html",
+          "source.css": "css",
+          "source.js": "javascript",
+          "source.python": "python",
+          "source.smarty": "smarty"
+        },
+        "tokenTypes": {
+          "meta.tag string.quoted": "other"
+        }
+      },
+      {
+        "language": "html",
+        "scopeName": "text.html.derivative",
+        "path": "./syntaxes/html-derivative.tmLanguage.json",
+        "embeddedLanguages": {
+          "text.html": "html",
+          "source.css": "css",
+          "source.js": "javascript",
+          "source.python": "python",
+          "source.smarty": "smarty"
+        },
+        "tokenTypes": {
+          "meta.tag string.quoted": "other"
+        }
+      },
+      {
+        "language": "python",
+        "scopeName": "source.python",
+        "path": "./syntaxes/python.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.regexp.python",
+        "path": "./syntaxes/python.regexp.tmLanguage.json"
+      },
+      {
+        "language": "java",
+        "scopeName": "source.java",
+        "path": "./syntaxes/java.tmLanguage.json"
+      },
+      {
+        "language": "php",
+        "scopeName": "source.php",
+        "path": "./syntaxes/php.tmLanguage.json"
+      },
+      {
+        "language": "php",
+        "scopeName": "text.html.php",
+        "path": "./syntaxes/php-html.tmLanguage.json",
+        "embeddedLanguages": {
+          "text.html": "html",
+          "source.php": "php",
+          "source.sql": "sql",
+          "text.xml": "xml",
+          "source.js": "javascript",
+          "source.json": "json",
+          "source.css": "css"
+        }
+      },
+      {
+        "language": "ruby",
+        "scopeName": "source.ruby",
+        "path": "./syntaxes/ruby.tmLanguage.json"
+      },
+      {
+        "language": "powershell",
+        "scopeName": "source.powershell",
+        "path": "./syntaxes/powershell.tmLanguage.json"
+      },
+      {
+        "language": "ini",
+        "scopeName": "source.ini",
+        "path": "./syntaxes/ini.tmLanguage.json"
+      },
+      {
+        "language": "properties",
+        "scopeName": "source.ini",
+        "path": "./syntaxes/ini.tmLanguage.json"
+      },
+      {
+        "language": "bat",
+        "scopeName": "source.batchfile",
+        "path": "./syntaxes/batchfile.tmLanguage.json"
+      },
+      {
+        "language": "makefile",
+        "scopeName": "source.makefile",
+        "path": "./syntaxes/make.tmLanguage.json",
+        "tokenTypes": {
+          "string.interpolated": "other"
+        }
+      },
+      {
+        "language": "perl",
+        "scopeName": "source.perl",
+        "path": "./syntaxes/perl.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "variable.other.predefined.perl"
+        ]
+      },
+      {
+        "language": "raku",
+        "scopeName": "source.perl.6",
+        "path": "./syntaxes/perl6.tmLanguage.json"
+      },
+      {
+        "language": "r",
+        "scopeName": "source.r",
+        "path": "./syntaxes/r.tmLanguage.json"
+      },
+      {
+        "language": "julia",
+        "scopeName": "source.julia",
+        "path": "./syntaxes/julia.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.inline.cpp": "cpp",
+          "meta.embedded.inline.javascript": "javascript",
+          "meta.embedded.inline.python": "python",
+          "meta.embedded.inline.r": "r",
+          "meta.embedded.inline.sql": "sql"
+        }
+      },
+      {
+        "language": "tex",
+        "scopeName": "text.tex",
+        "path": "./syntaxes/tex.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "keyword.control.ifnextchar.tex",
+          "punctuation.math.operator.tex"
+        ]
+      },
+      {
+        "language": "latex",
+        "scopeName": "text.tex.latex",
+        "path": "./syntaxes/latex.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.cpp": "cpp_embedded_latex",
+          "source.css": "css",
+          "text.html": "html",
+          "source.java": "java",
+          "source.js": "javascript",
+          "source.julia": "julia",
+          "source.lua": "lua",
+          "source.python": "python",
+          "source.ruby": "ruby",
+          "source.ts": "typescript",
+          "text.xml": "xml",
+          "source.yaml": "yaml",
+          "meta.embedded.markdown_latex_combined": "markdown_latex_combined"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.control.ifnextchar.tex",
+          "punctuation.math.operator.tex"
+        ]
+      },
+      {
+        "language": "bibtex",
+        "scopeName": "text.bibtex",
+        "path": "./syntaxes/bibtex.tmLanguage.json"
+      },
+      {
+        "language": "markdown_latex_combined",
+        "scopeName": "text.tex.markdown_latex_combined",
+        "path": "./syntaxes/markdown-latex-combined.tmLanguage.json"
+      },
+      {
+        "language": "cpp_embedded_latex",
+        "scopeName": "source.cpp.embedded.latex",
+        "path": "./syntaxes/cpp-grammar-bailout.tmLanguage.json"
+      },
+      {
+        "language": "markdown-math",
+        "scopeName": "text.html.markdown.math",
+        "path": "./syntaxes/md-math.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.math.block",
+        "path": "./syntaxes/md-math-block.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.math.markdown": "latex"
+        }
+      },
+      {
+        "scopeName": "markdown.math.inline",
+        "path": "./syntaxes/md-math-inline.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.math.markdown": "latex",
+          "punctuation.definition.math.end.markdown": "latex"
+        }
+      },
+      {
+        "scopeName": "markdown.math.codeblock",
+        "path": "./syntaxes/md-math-fence.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.math.markdown": "latex"
+        }
+      },
+      {
+        "language": "objective-c",
+        "scopeName": "source.objc",
+        "path": "./syntaxes/objective-c.tmLanguage.json"
+      },
+      {
+        "language": "objective-cpp",
+        "scopeName": "source.objcpp",
+        "path": "./syntaxes/objective-c++.tmLanguage.json"
+      },
+      {
+        "language": "jade",
+        "scopeName": "text.pug",
+        "path": "./syntaxes/pug.tmLanguage.json"
+      },
+      {
+        "language": "handlebars",
+        "scopeName": "text.html.handlebars",
+        "path": "./syntaxes/handlebars.tmLanguage.json"
+      },
+      {
+        "language": "diff",
+        "scopeName": "source.diff",
+        "path": "./syntaxes/diff.tmLanguage.json"
+      },
+      {
+        "language": "git-commit",
+        "scopeName": "text.git-commit",
+        "path": "./syntaxes/git-commit.tmLanguage.json"
+      },
+      {
+        "language": "git-rebase",
+        "scopeName": "text.git-rebase",
+        "path": "./syntaxes/git-rebase.tmLanguage.json"
+      },
+      {
+        "language": "ignore",
+        "scopeName": "source.ignore",
+        "path": "./syntaxes/ignore.tmLanguage.json"
+      },
+      {
+        "language": "log",
+        "scopeName": "text.log",
+        "path": "./syntaxes/log.tmLanguage.json"
+      },
+      {
+        "language": "dart",
+        "scopeName": "source.dart",
+        "path": "./syntaxes/dart.tmLanguage.json"
+      },
+      {
+        "language": "groovy",
+        "scopeName": "source.groovy",
+        "path": "./syntaxes/groovy.tmLanguage.json"
+      },
+      {
+        "language": "clojure",
+        "scopeName": "source.clojure",
+        "path": "./syntaxes/clojure.tmLanguage.json"
+      },
+      {
+        "language": "coffeescript",
+        "scopeName": "source.coffee",
+        "path": "./syntaxes/coffeescript.tmLanguage.json"
+      },
+      {
+        "language": "fsharp",
+        "scopeName": "source.fsharp",
+        "path": "./syntaxes/fsharp.tmLanguage.json"
+      },
+      {
+        "language": "vb",
+        "scopeName": "source.asp.vb.net",
+        "path": "./syntaxes/asp-vb-net.tmLanguage.json"
+      },
+      {
+        "language": "hlsl",
+        "scopeName": "source.hlsl",
+        "path": "./syntaxes/hlsl.tmLanguage.json"
+      },
+      {
+        "language": "shaderlab",
+        "scopeName": "source.shaderlab",
+        "path": "./syntaxes/shaderlab.tmLanguage.json"
+      },
+      {
+        "language": "razor",
+        "scopeName": "text.html.cshtml",
+        "path": "./syntaxes/cshtml.tmLanguage.json",
+        "embeddedLanguages": {
+          "section.embedded.source.cshtml": "csharp",
+          "source.css": "css",
+          "source.js": "javascript"
+        }
+      },
+      {
+        "language": "restructuredtext",
+        "scopeName": "source.rst",
+        "path": "./syntaxes/rst.tmLanguage.json"
+      },
+      {
+        "language": "prompt",
+        "scopeName": "text.html.markdown.prompt",
+        "path": "./syntaxes/prompt.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "markup.underline.link.markdown",
+          "punctuation.definition.list.begin.markdown"
+        ]
+      },
+      {
+        "language": "instructions",
+        "scopeName": "text.html.markdown.prompt",
+        "path": "./syntaxes/prompt.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "markup.underline.link.markdown",
+          "punctuation.definition.list.begin.markdown"
+        ]
+      },
+      {
+        "language": "chatagent",
+        "scopeName": "text.html.markdown.prompt",
+        "path": "./syntaxes/prompt.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "markup.underline.link.markdown",
+          "punctuation.definition.list.begin.markdown"
+        ]
+      },
+      {
+        "language": "skill",
+        "scopeName": "text.html.markdown.prompt",
+        "path": "./syntaxes/prompt.tmLanguage.json",
+        "unbalancedBracketScopes": [
+          "markup.underline.link.markdown",
+          "punctuation.definition.list.begin.markdown"
+        ]
+      },
+      {
+        "language": "vue",
+        "scopeName": "text.html.vue",
+        "path": "./syntaxes/vue.tmLanguage.json",
+        "embeddedLanguages": {
+          "text.html.vue": "vue",
+          "text": "plaintext",
+          "text.html.derivative": "html",
+          "text.html.markdown": "markdown",
+          "text.pug": "jade",
+          "source.css": "css",
+          "source.css.scss": "scss",
+          "source.css.less": "less",
+          "source.sass": "sass",
+          "source.stylus": "stylus",
+          "source.postcss": "postcss",
+          "source.js": "javascript",
+          "source.ts": "typescript",
+          "source.js.jsx": "javascriptreact",
+          "source.tsx": "typescriptreact",
+          "source.coffee": "coffeescript",
+          "meta.tag.js": "jsx-tags",
+          "meta.tag.tsx": "jsx-tags",
+          "meta.tag.without-attributes.js": "jsx-tags",
+          "meta.tag.without-attributes.tsx": "jsx-tags",
+          "source.json": "json",
+          "source.json.comments": "jsonc",
+          "source.json5": "json5",
+          "source.yaml": "yaml",
+          "source.toml": "toml",
+          "source.graphql": "graphql"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational",
+          "storage.type.function.arrow",
+          "keyword.operator.bitwise.shift",
+          "meta.brace.angle",
+          "punctuation.definition.tag"
+        ]
+      },
+      {
+        "scopeName": "markdown.vue.codeblock",
+        "path": "./syntaxes/vue-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.vue": "vue",
+          "text.html.vue": "vue",
+          "text": "plaintext",
+          "text.html.derivative": "html",
+          "text.html.markdown": "markdown",
+          "text.pug": "jade",
+          "source.css": "css",
+          "source.css.scss": "scss",
+          "source.css.less": "less",
+          "source.sass": "sass",
+          "source.stylus": "stylus",
+          "source.postcss": "postcss",
+          "source.js": "javascript",
+          "source.ts": "typescript",
+          "source.js.jsx": "javascriptreact",
+          "source.tsx": "typescriptreact",
+          "source.coffee": "coffeescript",
+          "meta.tag.js": "jsx-tags",
+          "meta.tag.tsx": "jsx-tags",
+          "meta.tag.without-attributes.js": "jsx-tags",
+          "meta.tag.without-attributes.tsx": "jsx-tags",
+          "source.json": "json",
+          "source.json.comments": "jsonc",
+          "source.json5": "json5",
+          "source.yaml": "yaml",
+          "source.toml": "toml",
+          "source.graphql": "graphql"
+        }
+      },
+      {
+        "scopeName": "vue.directives",
+        "path": "./syntaxes/vue-directives.tmLanguage.json",
+        "injectTo": [
+          "text.html.vue",
+          "text.html.markdown",
+          "text.html.derivative",
+          "text.pug"
+        ]
+      },
+      {
+        "scopeName": "vue.interpolations",
+        "path": "./syntaxes/vue-interpolations.tmLanguage.json",
+        "injectTo": [
+          "text.html.vue",
+          "text.html.markdown",
+          "text.html.derivative",
+          "text.pug"
+        ]
+      },
+      {
+        "scopeName": "vue.sfc.script.leading-operator-fix",
+        "path": "./syntaxes/vue-sfc-script-leading-operator-fix.tmLanguage.json",
+        "injectTo": [
+          "text.html.vue"
+        ]
+      },
+      {
+        "scopeName": "vue.sfc.style.variable.injection",
+        "path": "./syntaxes/vue-sfc-style-variable-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.vue"
+        ]
+      },
+      {
+        "language": "kotlin",
+        "scopeName": "source.kotlin",
+        "path": "./syntaxes/kotlin.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.kotlin.codeblock",
+        "path": "./syntaxes/kotlin-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.kotlin": "kotlin"
+        }
+      },
+      {
+        "language": "cmake",
+        "scopeName": "source.cmake",
+        "path": "./syntaxes/cmake.tmLanguage.json"
+      },
+      {
+        "language": "cmake-cache",
+        "scopeName": "source.cmakecache",
+        "path": "./syntaxes/cmakecache.tmLanguage.json"
+      },
+      {
+        "language": "jsonnet",
+        "scopeName": "source.jsonnet",
+        "path": "./syntaxes/jsonnet.tmLanguage.json"
+      },
+      {
+        "language": "just",
+        "scopeName": "source.just",
+        "path": "./syntaxes/just.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.js": "javascript",
+          "source.ts": "typescript",
+          "source.perl": "perl",
+          "source.python": "python",
+          "source.ruby": "ruby",
+          "source.shell": "shell"
+        }
+      },
+      {
+        "language": "nix",
+        "scopeName": "source.nix",
+        "path": "./syntaxes/nix.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.nix.codeblock",
+        "path": "./syntaxes/nix-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.nix": "nix"
+        }
+      },
+      {
+        "language": "caddyfile",
+        "scopeName": "source.Caddyfile",
+        "path": "./syntaxes/caddyfile.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.markdown.caddy.codeblock",
+        "path": "./syntaxes/caddy-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.caddy": "caddyfile"
+        }
+      },
+      {
+        "language": "systemd-conf",
+        "scopeName": "source.systemd",
+        "path": "./syntaxes/systemd.tmLanguage.json"
+      },
+      {
+        "language": "scala",
+        "scopeName": "source.scala",
+        "path": "./syntaxes/scala.tmLanguage.json"
+      },
+      {
+        "language": "apacheconf",
+        "scopeName": "source.apacheconf",
+        "path": "./syntaxes/apache.tmLanguage.json"
+      },
+      {
+        "language": "elixir",
+        "scopeName": "source.elixir",
+        "path": "./syntaxes/elixir.tmLanguage.json"
+      },
+      {
+        "language": "erlang",
+        "scopeName": "source.erlang",
+        "path": "./syntaxes/erlang.tmLanguage.json"
+      },
+      {
+        "language": "haskell",
+        "scopeName": "source.haskell",
+        "path": "./syntaxes/haskell.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.haskell.codeblock",
+        "path": "./syntaxes/haskell-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.haskell": "haskell"
+        }
+      },
+      {
+        "language": "cabal",
+        "scopeName": "source.cabal",
+        "path": "./syntaxes/cabal.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.cabal.codeblock",
+        "path": "./syntaxes/cabal-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.cabal": "cabal"
+        }
+      },
+      {
+        "language": "ocaml",
+        "scopeName": "source.ocaml",
+        "path": "./syntaxes/ocaml.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.ocaml.codeblock",
+        "path": "./syntaxes/ocaml-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.ocaml": "ocaml"
+        }
+      },
+      {
+        "language": "ocaml.interface",
+        "scopeName": "source.ocaml.interface",
+        "path": "./syntaxes/ocaml-interface.tmLanguage.json"
+      },
+      {
+        "language": "dune",
+        "scopeName": "source.dune",
+        "path": "./syntaxes/dune.tmLanguage.json"
+      },
+      {
+        "language": "dune-project",
+        "scopeName": "source.dune-project",
+        "path": "./syntaxes/dune-project.tmLanguage.json"
+      },
+      {
+        "language": "ocaml.opam",
+        "scopeName": "source.ocaml.opam",
+        "path": "./syntaxes/opam.tmLanguage.json"
+      },
+      {
+        "language": "jinja",
+        "scopeName": "source.jinja",
+        "path": "./syntaxes/jinja.tmLanguage.json"
+      },
+      {
+        "language": "jinja-html",
+        "scopeName": "text.html.jinja",
+        "path": "./syntaxes/jinja-html.tmLanguage.json"
+      },
+      {
+        "language": "jinja-yaml",
+        "scopeName": "text.yaml.jinja",
+        "path": "./syntaxes/jinja-yaml.tmLanguage.json"
+      },
+      {
+        "language": "jinja-json",
+        "scopeName": "text.json.jinja",
+        "path": "./syntaxes/jinja-json.tmLanguage.json"
+      },
+      {
+        "language": "jinja-toml",
+        "scopeName": "text.toml.jinja",
+        "path": "./syntaxes/jinja-toml.tmLanguage.json"
+      },
+      {
+        "language": "jinja-py",
+        "scopeName": "source.python.jinja",
+        "path": "./syntaxes/jinja-py.tmLanguage.json"
+      },
+      {
+        "language": "jinja-shell",
+        "scopeName": "source.shell.jinja",
+        "path": "./syntaxes/jinja-shell.tmLanguage.json"
+      },
+      {
+        "language": "jinja-dockerfile",
+        "scopeName": "source.dockerfile.jinja",
+        "path": "./syntaxes/jinja-dockerfile.tmLanguage.json"
+      },
+      {
+        "language": "jinja-sql",
+        "scopeName": "source.sql.jinja",
+        "path": "./syntaxes/jinja-sql.tmLanguage.json"
+      },
+      {
+        "language": "jinja-nginx",
+        "scopeName": "source.nginx.jinja",
+        "path": "./syntaxes/jinja-nginx.tmLanguage.json"
+      }
+    ]
+  }
+}

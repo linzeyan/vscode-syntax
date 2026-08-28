@@ -1,0 +1,8 @@
+{{/* render a user list */}}
+{{- define "users" -}}
+{{ range .Users }}
+  {{ .Name | printf "%-10s" }} {{ if .Admin }}(admin){{ end }}
+{{ else }}
+  no users
+{{ end }}
+{{- end -}}

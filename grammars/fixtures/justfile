@@ -1,0 +1,37 @@
+# Recipes for the poly workspace.
+set shell := ["bash", "-uc"]
+set dotenv-load := true
+
+target := env_var_or_default("TARGET", "x86_64-unknown-linux-gnu")
+outdir := justfile_directory() / "dist"
+
+default: check
+
+# Run the full gate: format, test, grammars.
+check: fmt test grammars
+
+fmt:
+    cd cli && cargo fmt --check
+
+test:
+    cd cli && cargo test --workspace --release
+
+grammars:
+    python3 tools/grammar-sync.py
+    git diff --exit-code
+    node tools/tokenize-check.mjs /tmp/tokdeps/node_modules
+
+build:
+    cargo build --release --locked --target {{ target }}
+    mkdir -p {{ outdir }}
+    cp cli/target/{{ target }}/release/poly {{ outdir }}/
+
+# Print the shipped binary size in MB.
+size: build
+    #!/usr/bin/env python3
+    import os
+    n = os.path.getsize("{{ outdir }}/poly")
+    print(f"{n / 1048576:.1f} MB")
+
+clean:
+    rm -rf {{ outdir }} cli/target

@@ -1,0 +1,4 @@
+id,name,email,age,city,active
+1,Alice,alice@example.com,30,Taipei,true
+2,Bob,"Bob, Jr.",25,Kaohsiung,false
+3,Carol,carol@example.com,41,"Taichung, TW",true

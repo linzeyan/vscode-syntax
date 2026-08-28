@@ -1,0 +1,37 @@
+# Caddy site config for the poly release mirror.
+{
+	email ops@example.com
+	admin off
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+(compress) {
+	encode zstd gzip
+}
+
+releases.example.com {
+	import compress
+	root * /srv/poly/releases
+
+	@vsix path *.vsix
+	header @vsix Content-Type application/octet-stream
+
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:9257 {
+			health_uri /healthz
+			health_interval 10s
+		}
+	}
+
+	file_server browse
+	log {
+		output file /var/log/caddy/releases.log
+		format json
+	}
+}
+
+http://legacy.example.com {
+	redir https://releases.example.com{uri} permanent
+}

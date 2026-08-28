@@ -1,0 +1,653 @@
+//! External tool management: pinned registry, resolution order (02 §3.4),
+//! managed downloads with sha256 recorded in poly-tools.lock, and lint
+//! runners producing poly_core::diag::Issue.
+//!
+//! Resolution per tool: poly.toml `[tools]` entry (version pin / "off" /
+//! explicit path) -> managed download cache -> PATH. Project-local tool
+//! detection (node_modules/.bin, rustfmt) is M4 backlog.
+
+pub mod project;
+pub mod run;
+
+use std::path::{Path, PathBuf};
+
+use anyhow::{anyhow, bail, Context, Result};
+use sha2::Digest;
+
+// ── registry ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Kind {
+    Raw,
+    TarGz,
+    Zip,
+}
+
+pub struct Asset {
+    pub url: String,
+    pub kind: Kind,
+}
+
+pub struct Tool {
+    pub name: &'static str,
+    pub version: &'static str,
+    /// Repo-wide tools (typos) have no language; per-language linters list
+    /// the poly-core language id they cover.
+    pub language: Option<&'static str>,
+    asset: fn(version: &str, platform: &str) -> Option<Asset>,
+}
+
+/// Platform keys: darwin-arm64, darwin-x64, linux-x64, linux-arm64,
+/// win-x64, win-arm64.
+pub fn current_platform() -> &'static str {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "darwin-arm64",
+        ("macos", _) => "darwin-x64",
+        ("linux", "aarch64") => "linux-arm64",
+        ("linux", _) => "linux-x64",
+        ("windows", "aarch64") => "win-arm64",
+        _ => "win-x64",
+    }
+}
+
+pub const TOOLS: &[Tool] = &[
+    Tool {
+        name: "shellcheck",
+        version: "0.11.0",
+        language: Some("shellscript"),
+        // v0.11.0 dropped Windows builds entirely; Windows resolves via PATH.
+        asset: |v, p| {
+            let triple = match p {
+                "darwin-arm64" => "darwin.aarch64",
+                "darwin-x64" => "darwin.x86_64",
+                "linux-arm64" => "linux.aarch64",
+                "linux-x64" => "linux.x86_64",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/koalaman/shellcheck/releases/download/v{v}/shellcheck-v{v}.{triple}.tar.gz"
+                ),
+                kind: Kind::TarGz,
+            })
+        },
+    },
+    Tool {
+        name: "hadolint",
+        version: "2.15.1",
+        language: Some("dockerfile"),
+        // Windows builds are x86_64-only; win-arm64 runs them via emulation.
+        asset: |v, p| {
+            let suffix = match p {
+                "darwin-arm64" => "macos-arm64",
+                "darwin-x64" => "macos-x86_64",
+                "linux-arm64" => "linux-arm64",
+                "linux-x64" => "linux-x86_64",
+                "win-x64" | "win-arm64" => "windows-x86_64.exe",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/hadolint/hadolint/releases/download/v{v}/hadolint-{suffix}"
+                ),
+                kind: Kind::Raw,
+            })
+        },
+    },
+    Tool {
+        name: "actionlint",
+        version: "1.7.12",
+        language: Some("github-actions"),
+        asset: |v, p| {
+            let (suffix, kind) = match p {
+                "darwin-arm64" => ("darwin_arm64.tar.gz", Kind::TarGz),
+                "darwin-x64" => ("darwin_amd64.tar.gz", Kind::TarGz),
+                "linux-arm64" => ("linux_arm64.tar.gz", Kind::TarGz),
+                "linux-x64" => ("linux_amd64.tar.gz", Kind::TarGz),
+                "win-x64" => ("windows_amd64.zip", Kind::Zip),
+                "win-arm64" => ("windows_arm64.zip", Kind::Zip),
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/rhysd/actionlint/releases/download/v{v}/actionlint_{v}_{suffix}"
+                ),
+                kind,
+            })
+        },
+    },
+    Tool {
+        name: "typos",
+        version: "1.49.0",
+        language: None,
+        asset: |v, p| {
+            let (triple, kind) = match p {
+                "darwin-arm64" => ("aarch64-apple-darwin.tar.gz", Kind::TarGz),
+                "darwin-x64" => ("x86_64-apple-darwin.tar.gz", Kind::TarGz),
+                "linux-arm64" => ("aarch64-unknown-linux-musl.tar.gz", Kind::TarGz),
+                "linux-x64" => ("x86_64-unknown-linux-musl.tar.gz", Kind::TarGz),
+                "win-x64" | "win-arm64" => ("x86_64-pc-windows-msvc.zip", Kind::Zip),
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/crate-ci/typos/releases/download/v{v}/typos-v{v}-{triple}"
+                ),
+                kind,
+            })
+        },
+    },
+    Tool {
+        name: "shfmt",
+        version: "3.13.1",
+        language: Some("shellscript"),
+        // Bare binaries; Windows is amd64-only (arm64 emulates).
+        asset: |v, p| {
+            let suffix = match p {
+                "darwin-arm64" => "darwin_arm64",
+                "darwin-x64" => "darwin_amd64",
+                "linux-arm64" => "linux_arm64",
+                "linux-x64" => "linux_amd64",
+                "win-x64" | "win-arm64" => "windows_amd64.exe",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/mvdan/sh/releases/download/v{v}/shfmt_v{v}_{suffix}"
+                ),
+                kind: Kind::Raw,
+            })
+        },
+    },
+    Tool {
+        name: "ruff",
+        version: "0.16.4",
+        language: Some("python"),
+        asset: |v, p| {
+            let (triple, kind) = match p {
+                "darwin-arm64" => ("aarch64-apple-darwin.tar.gz", Kind::TarGz),
+                "darwin-x64" => ("x86_64-apple-darwin.tar.gz", Kind::TarGz),
+                "linux-arm64" => ("aarch64-unknown-linux-gnu.tar.gz", Kind::TarGz),
+                "linux-x64" => ("x86_64-unknown-linux-gnu.tar.gz", Kind::TarGz),
+                "win-x64" => ("x86_64-pc-windows-msvc.zip", Kind::Zip),
+                "win-arm64" => ("aarch64-pc-windows-msvc.zip", Kind::Zip),
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/astral-sh/ruff/releases/download/{v}/ruff-{triple}"
+                ),
+                kind,
+            })
+        },
+    },
+    Tool {
+        name: "tflint",
+        version: "0.64.0",
+        language: Some("terraform"),
+        asset: |v, p| {
+            let suffix = match p {
+                "darwin-arm64" => "darwin_arm64",
+                "darwin-x64" => "darwin_amd64",
+                "linux-arm64" => "linux_arm64",
+                "linux-x64" => "linux_amd64",
+                "win-x64" | "win-arm64" => "windows_amd64",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/terraform-linters/tflint/releases/download/v{v}/tflint_{suffix}.zip"
+                ),
+                kind: Kind::Zip,
+            })
+        },
+    },
+    Tool {
+        name: "gofumpt",
+        version: "0.11.0",
+        language: Some("go"),
+        asset: |v, p| {
+            let suffix = match p {
+                "darwin-arm64" => "darwin_arm64",
+                "darwin-x64" => "darwin_amd64",
+                "linux-arm64" => "linux_arm64",
+                "linux-x64" => "linux_amd64",
+                "win-x64" | "win-arm64" => "windows_amd64.exe",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/mvdan/gofumpt/releases/download/v{v}/gofumpt_v{v}_{suffix}"
+                ),
+                kind: Kind::Raw,
+            })
+        },
+    },
+    Tool {
+        name: "golangci-lint",
+        version: "2.13.1",
+        language: Some("go"),
+        asset: |v, p| {
+            let (suffix, kind) = match p {
+                "darwin-arm64" => ("darwin-arm64.tar.gz", Kind::TarGz),
+                "darwin-x64" => ("darwin-amd64.tar.gz", Kind::TarGz),
+                "linux-arm64" => ("linux-arm64.tar.gz", Kind::TarGz),
+                "linux-x64" => ("linux-amd64.tar.gz", Kind::TarGz),
+                "win-x64" => ("windows-amd64.zip", Kind::Zip),
+                "win-arm64" => ("windows-arm64.zip", Kind::Zip),
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/golangci/golangci-lint/releases/download/v{v}/golangci-lint-{v}-{suffix}"
+                ),
+                kind,
+            })
+        },
+    },
+    Tool {
+        name: "stylua",
+        version: "2.5.2",
+        language: Some("lua"),
+        asset: |v, p| {
+            let suffix = match p {
+                "darwin-arm64" => "macos-aarch64",
+                "darwin-x64" => "macos-x86_64",
+                "linux-arm64" => "linux-aarch64",
+                "linux-x64" => "linux-x86_64",
+                "win-x64" | "win-arm64" => "windows-x86_64",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/JohnnyMorganz/StyLua/releases/download/v{v}/stylua-{suffix}.zip"
+                ),
+                kind: Kind::Zip,
+            })
+        },
+    },
+    Tool {
+        name: "selene",
+        version: "0.31.0",
+        language: Some("lua"),
+        // Upstream ships un-arched zips: macos is x86_64 (Rosetta on arm),
+        // linux is x86_64 only.
+        asset: |v, p| {
+            let os = match p {
+                "darwin-arm64" | "darwin-x64" => "macos",
+                "linux-x64" => "linux",
+                "win-x64" | "win-arm64" => "windows",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/Kampfkarren/selene/releases/download/{v}/selene-{v}-{os}.zip"
+                ),
+                kind: Kind::Zip,
+            })
+        },
+    },
+    Tool {
+        name: "swiftlint",
+        version: "0.65.1",
+        language: Some("swift"),
+        // Only the macOS build stands alone (portable_swiftlint.zip, and the
+        // Swift runtime ships with macOS). The Linux and Windows builds link
+        // against a runtime that arrives with the Swift toolchain, so
+        // downloading them would install something that cannot run; those
+        // platforms resolve from PATH, which is where brew/mint/scoop put it
+        // anyway. Same shape as shellcheck's missing Windows build.
+        asset: |v, p| {
+            if !matches!(p, "darwin-arm64" | "darwin-x64") {
+                return None;
+            }
+            Some(Asset {
+                url: format!(
+                    "https://github.com/realm/SwiftLint/releases/download/{v}/portable_swiftlint.zip"
+                ),
+                kind: Kind::Zip,
+            })
+        },
+    },
+    // Toolchain-only tools (never downloaded, spec §4.3): registry entries so
+    // poly.toml [tools] can still pin/disable them; resolution lands on PATH.
+    Tool {
+        name: "terraform",
+        version: "system",
+        language: Some("terraform"),
+        asset: |_, _| None,
+    },
+    Tool {
+        name: "clang-format",
+        version: "system",
+        language: Some("cpp"),
+        asset: |_, _| None,
+    },
+    Tool {
+        name: "swift-format",
+        version: "system",
+        language: Some("swift"),
+        asset: |_, _| None,
+    },
+];
+
+pub fn tool(name: &str) -> Option<&'static Tool> {
+    TOOLS.iter().find(|t| t.name == name)
+}
+
+// ── resolution ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, PartialEq)]
+pub enum Resolved {
+    /// Managed download (cache path).
+    Managed(PathBuf),
+    /// Found on PATH.
+    Path(PathBuf),
+    /// Explicit path from poly.toml.
+    Pinned(PathBuf),
+    /// poly.toml says "off".
+    Disabled,
+    /// Nowhere to get it (and how to fix that).
+    Missing(String),
+}
+
+impl Resolved {
+    pub fn command(&self) -> Option<&Path> {
+        match self {
+            Resolved::Managed(p) | Resolved::Path(p) | Resolved::Pinned(p) => Some(p),
+            _ => None,
+        }
+    }
+}
+
+/// Resolve `name` per 02 §3.4. `offline` skips downloads (A10: report,
+/// don't pretend).
+pub fn resolve(name: &str, config: &poly_core::Config, offline: bool) -> Resolved {
+    let setting = config.tools.get(name).map(String::as_str);
+    match setting {
+        Some("off") => return Resolved::Disabled,
+        Some(s) if s.contains('/') || s.contains('\\') => {
+            let p = PathBuf::from(s);
+            let p = match (&config.root, p.is_absolute()) {
+                (Some(root), false) => root.join(p),
+                _ => p,
+            };
+            return if p.is_file() {
+                Resolved::Pinned(p)
+            } else {
+                Resolved::Missing(format!(
+                    "poly.toml points {name} at {} (not found)",
+                    p.display()
+                ))
+            };
+        }
+        _ => {}
+    }
+    let Some(tool) = tool(name) else {
+        return Resolved::Missing(format!("unknown tool {name:?}"));
+    };
+    // A version pin overrides the registry default.
+    let version = setting.unwrap_or(tool.version);
+    match ensure_installed(tool, version, config, offline) {
+        Ok(Some(path)) => return Resolved::Managed(path),
+        Ok(None) => {} // no asset for this platform: fall through to PATH
+        Err(e) => {
+            // Download failed (offline, checksum, ...): fall back to PATH but
+            // remember why in case PATH misses too.
+            if let Some(path) = find_on_path(name) {
+                return Resolved::Path(path);
+            }
+            return Resolved::Missing(format!("{e:#}"));
+        }
+    }
+    match find_on_path(name) {
+        Some(path) => Resolved::Path(path),
+        None => Resolved::Missing(format!(
+            "{name} has no managed build for {} and is not on PATH",
+            current_platform()
+        )),
+    }
+}
+
+pub(crate) fn find_on_path(name: &str) -> Option<PathBuf> {
+    let exe = if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    };
+    std::env::var_os("PATH")?.to_str().map(|paths| {
+        std::env::split_paths(paths)
+            .map(|d| d.join(&exe))
+            .find(|p| p.is_file())
+    })?
+}
+
+// ── managed download ───────────────────────────────────────────────────────
+
+pub fn cache_dir() -> PathBuf {
+    if cfg!(windows) {
+        std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("poly")
+            .join("tools")
+    } else {
+        std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+            .unwrap_or_else(std::env::temp_dir)
+            .join("poly")
+            .join("tools")
+    }
+}
+
+fn lock_path(config: &poly_core::Config) -> PathBuf {
+    config
+        .root
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("poly-tools.lock")
+}
+
+/// Download+verify+extract `tool` into the cache; returns None when the
+/// platform has no asset. Already-cached binaries return immediately.
+/// First download records the sha256 in poly-tools.lock (trust on first
+/// use); later downloads must match it.
+fn ensure_installed(
+    tool: &Tool,
+    version: &str,
+    config: &poly_core::Config,
+    offline: bool,
+) -> Result<Option<PathBuf>> {
+    let platform = current_platform();
+    let Some(asset) = (tool.asset)(version, platform) else {
+        return Ok(None);
+    };
+    let exe = if cfg!(windows) {
+        format!("{}.exe", tool.name)
+    } else {
+        tool.name.to_string()
+    };
+    let target = cache_dir()
+        .join(format!("{}-{}", tool.name, version))
+        .join(&exe);
+    if target.is_file() {
+        return Ok(Some(target));
+    }
+    if offline {
+        bail!(
+            "{} {} not cached and downloads are disabled",
+            tool.name,
+            version
+        );
+    }
+
+    eprintln!(
+        "[poly] downloading {} {} for {platform}...",
+        tool.name, version
+    );
+    let body = ureq::get(&asset.url)
+        .call()
+        .with_context(|| format!("downloading {}", asset.url))?
+        .body_mut()
+        .with_config()
+        .limit(512 * 1024 * 1024)
+        .read_to_vec()
+        .context("reading download body")?;
+    let digest = format!("{:x}", sha2::Sha256::digest(&body));
+
+    let lock_file = lock_path(config);
+    let mut lock: toml::Table = std::fs::read_to_string(&lock_file)
+        .ok()
+        .and_then(|t| t.parse().ok())
+        .unwrap_or_default();
+    let key = format!("{}-{}", version, platform);
+    let entry = lock
+        .entry(tool.name.to_string())
+        .or_insert_with(|| toml::Value::Table(Default::default()));
+    match entry.get(&key).and_then(|v| v.as_str()) {
+        Some(expected) if expected != digest => bail!(
+            "{} {} sha256 mismatch: lock has {expected}, download is {digest} — upstream re-tagged or download corrupted",
+            tool.name,
+            version
+        ),
+        Some(_) => {}
+        None => {
+            if let Some(table) = entry.as_table_mut() {
+                table.insert(key, toml::Value::String(digest.clone()));
+            }
+            std::fs::write(&lock_file, toml::to_string_pretty(&lock)?)
+                .with_context(|| format!("writing {}", lock_file.display()))?;
+        }
+    }
+
+    extract(&body, asset.kind, &tool.name, &target)?;
+    Ok(Some(target))
+}
+
+/// Pull the tool binary out of the payload and land it at `target`
+/// atomically (temp file + rename) so a crashed download never half-installs.
+fn extract(body: &[u8], kind: Kind, name: &str, target: &Path) -> Result<()> {
+    let dir = target.parent().expect("cache target has parent");
+    std::fs::create_dir_all(dir)?;
+    let tmp = target.with_extension("tmp");
+    let exe_names = [name.to_string(), format!("{name}.exe")];
+    match kind {
+        Kind::Raw => std::fs::write(&tmp, body)?,
+        Kind::TarGz => {
+            let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(body));
+            let mut found = false;
+            for entry in archive.entries()? {
+                let mut entry = entry?;
+                let path = entry.path()?;
+                let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if exe_names.iter().any(|n| n == file_name) {
+                    entry.unpack(&tmp)?;
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                bail!("{name} not found inside tar.gz");
+            }
+        }
+        Kind::Zip => {
+            let mut archive = zip::ZipArchive::new(std::io::Cursor::new(body))?;
+            let index = (0..archive.len())
+                .find(|&i| {
+                    let file = archive.by_index(i);
+                    file.map(|f| {
+                        let base = f
+                            .name()
+                            .rsplit(['/', '\\'])
+                            .next()
+                            .unwrap_or("")
+                            .to_string();
+                        exe_names.iter().any(|n| *n == base)
+                    })
+                    .unwrap_or(false)
+                })
+                .ok_or_else(|| anyhow!("{name} not found inside zip"))?;
+            let mut file = archive.by_index(index)?;
+            let mut out = std::fs::File::create(&tmp)?;
+            std::io::copy(&mut file, &mut out)?;
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
+    }
+    std::fs::rename(&tmp, target)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_with_tools(entries: &[(&str, &str)]) -> poly_core::Config {
+        let dir = tempfile::tempdir().unwrap();
+        let mut body = String::from("[tools]\n");
+        for (k, v) in entries {
+            body.push_str(&format!("{k} = \"{v}\"\n"));
+        }
+        std::fs::write(dir.path().join("poly.toml"), body).unwrap();
+        let config = poly_core::Config::discover(dir.path()).unwrap();
+        // Keep tempdir alive long enough; leak it (tests only).
+        std::mem::forget(dir);
+        config
+    }
+
+    #[test]
+    fn off_disables() {
+        let config = config_with_tools(&[("shellcheck", "off")]);
+        assert_eq!(resolve("shellcheck", &config, true), Resolved::Disabled);
+    }
+
+    #[test]
+    fn explicit_path_must_exist() {
+        let config = config_with_tools(&[("shellcheck", "/nonexistent/bin/shellcheck")]);
+        assert!(matches!(
+            resolve("shellcheck", &config, true),
+            Resolved::Missing(_)
+        ));
+    }
+
+    #[test]
+    fn unknown_tool_is_missing() {
+        let config = poly_core::Config::empty();
+        assert!(matches!(
+            resolve("nosuch", &config, true),
+            Resolved::Missing(_)
+        ));
+    }
+
+    #[test]
+    fn offline_uncached_falls_back_to_path_or_missing() {
+        let config = poly_core::Config::empty();
+        // With offline=true and (presumably) no cache in CI, resolution must
+        // not panic — it lands on Path (dev machines) or Missing (bare CI).
+        match resolve("actionlint", &config, true) {
+            Resolved::Managed(_) | Resolved::Path(_) | Resolved::Missing(_) => {}
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn registry_covers_all_platforms_or_declares_gap() {
+        for tool in TOOLS {
+            for platform in [
+                "darwin-arm64",
+                "darwin-x64",
+                "linux-x64",
+                "linux-arm64",
+                "win-x64",
+                "win-arm64",
+            ] {
+                // Must not panic; None (documented gap) is acceptable.
+                let _ = (tool.asset)(tool.version, platform);
+            }
+        }
+    }
+}

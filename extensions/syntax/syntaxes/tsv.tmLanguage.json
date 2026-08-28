@@ -1,0 +1,104 @@
+{
+  "name": "TSV",
+  "scopeName": "source.tsv",
+  "patterns": [
+    {
+      "match": "^(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*)(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?(?:(\\t)(\"(?:[^\"]|\"\")*\"|[^\\t\\n]*))?",
+      "captures": {
+        "1": {
+          "name": "keyword.rainbow1.tsv"
+        },
+        "3": {
+          "name": "string.rainbow2.tsv"
+        },
+        "2": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "5": {
+          "name": "constant.numeric.rainbow3.tsv"
+        },
+        "4": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "7": {
+          "name": "entity.name.function.rainbow4.tsv"
+        },
+        "6": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "9": {
+          "name": "entity.name.type.rainbow5.tsv"
+        },
+        "8": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "11": {
+          "name": "variable.language.rainbow6.tsv"
+        },
+        "10": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "13": {
+          "name": "comment.rainbow7.tsv"
+        },
+        "12": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "15": {
+          "name": "support.constant.rainbow8.tsv"
+        },
+        "14": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "17": {
+          "name": "keyword.rainbow9.tsv"
+        },
+        "16": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "19": {
+          "name": "string.rainbow10.tsv"
+        },
+        "18": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "21": {
+          "name": "constant.numeric.rainbow11.tsv"
+        },
+        "20": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "23": {
+          "name": "entity.name.function.rainbow12.tsv"
+        },
+        "22": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "25": {
+          "name": "entity.name.type.rainbow13.tsv"
+        },
+        "24": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "27": {
+          "name": "variable.language.rainbow14.tsv"
+        },
+        "26": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "29": {
+          "name": "comment.rainbow15.tsv"
+        },
+        "28": {
+          "name": "punctuation.separator.tab.tsv"
+        },
+        "31": {
+          "name": "support.constant.rainbow16.tsv"
+        },
+        "30": {
+          "name": "punctuation.separator.tab.tsv"
+        }
+      }
+    }
+  ]
+}

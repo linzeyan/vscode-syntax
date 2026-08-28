@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package poly.v1;
+
+option go_package = "github.com/ricky/poly/gen/v1";
+
+message User {
+  int64 id = 1;
+  string name = 2;
+  repeated string tags = 3;
+}
+
+service UserService {
+  rpc GetUser(User) returns (User);
+}

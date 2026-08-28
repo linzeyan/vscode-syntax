@@ -1,0 +1,11 @@
+# typos discovers files itself, so this is the only place it can be told that
+# a "misspelling" is load-bearing. Mapping a word to itself allows it.
+[default.extend-words]
+# Deliberate misspellings inside parser test fixtures — correcting them would
+# mean the tests no longer exercise what they claim to.
+teh = "teh"
+varialbles = "varialbles"
+# Field name in biome's JSON diagnostics; we deserialize what biome emits.
+advices = "advices"
+# HashiCorp, in grammar source rationales.
+Hashi = "Hashi"

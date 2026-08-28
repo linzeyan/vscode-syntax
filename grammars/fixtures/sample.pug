@@ -1,0 +1,21 @@
+doctype html
+html(lang="zh-Hant")
+  head
+    meta(charset="utf-8")
+    title= pageTitle
+    style.
+      body { margin: 0; font-family: system-ui, sans-serif; }
+  body
+    main#app(data-count=releases.length)
+      h1 Releases
+      if releases.length
+        ul.list
+          each release in releases
+            li(class=release.prerelease ? "pre" : "stable")
+              a(href=`/releases/${release.tag}`)= release.tag
+              span  — #{release.assets} assets
+      else
+        p.empty Nothing published yet.
+      //- comment that must not render
+      script.
+        document.getElementById("app").dataset.ready = "true";

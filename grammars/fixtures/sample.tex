@@ -1,0 +1,33 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,listings,hyperref}
+
+\title{Grammar Takeover Coverage}
+\author{poly}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Budget}
+\label{sec:budget}
+
+The p95 latency must satisfy
+\begin{equation}
+  \label{eq:budget}
+  t_{95} = \max_{f \in F} \operatorname{p95}(f) \leq 200\,\mathrm{ms},
+\end{equation}
+where inline math such as $|F| = 33$ also has to tokenize.
+
+\begin{itemize}
+  \item Grammars are pinned by SHA, see Section~\ref{sec:budget}.
+  \item Embedded code keeps its own grammar:
+\end{itemize}
+
+\begin{lstlisting}[language=Python]
+def budget_ok(samples, limit=200):
+    return sorted(samples)[int(0.95 * len(samples))] <= limit
+\end{lstlisting}
+
+\bibliographystyle{plain}
+\end{document}

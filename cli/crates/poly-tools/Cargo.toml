@@ -1,0 +1,20 @@
+[package]
+name = "poly-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+flate2 = "1"
+poly-core = { path = "../poly-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tar = "0.4"
+toml.workspace = true
+ureq = "3"
+zip = { version = "8", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"

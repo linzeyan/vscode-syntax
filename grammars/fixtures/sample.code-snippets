@@ -1,0 +1,23 @@
+{
+  // VSCode snippet files are jsonc with a dedicated grammar for placeholders.
+  "Rust test module": {
+    "scope": "rust",
+    "prefix": "tmod",
+    "body": [
+      "#[cfg(test)]",
+      "mod tests {",
+      "\tuse super::*;",
+      "",
+      "\t#[test]",
+      "\tfn ${1:name}() {",
+      "\t\tassert_eq!(${2:left}, ${3:right});",
+      "\t}",
+      "}"
+    ],
+    "description": "Inline #[cfg(test)] module"
+  },
+  "Timestamped log": {
+    "prefix": "logts",
+    "body": ["console.log(`[${CURRENT_HOUR}:${CURRENT_MINUTE}] $0`);"]
+  }
+}

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="poly" default="build">
+  <!-- build configuration -->
+  <property name="version" value="0.1.0"/>
+  <target name="build" depends="clean">
+    <echo message="building ${version}"/>
+  </target>
+</project>

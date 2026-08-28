@@ -1,0 +1,19 @@
+<div class="release-list">
+  <h1>{{title}}</h1>
+
+  {{#if releases.length}}
+    <ul>
+      {{#each releases as |release index|}}
+        <li class="{{if release.prerelease 'pre' 'stable'}}">
+          <a href="/releases/{{release.tag}}">{{release.tag}}</a>
+          <span>{{release.assets.length}} assets</span>
+          {{#unless @last}}<hr>{{/unless}}
+        </li>
+      {{/each}}
+    </ul>
+  {{else}}
+    <p>{{! nothing published yet }}No releases.</p>
+  {{/if}}
+
+  {{{rawFooterHtml}}}
+</div>

@@ -1,0 +1,15 @@
+# Build output
+/cli/target/
+node_modules/
+*.vsix
+
+# Logs, but keep the checked-in evidence
+*.log
+!.logs/**/*.log
+
+# Editor state
+.vscode/settings.json
+.idea/
+**/.DS_Store
+
+# Generated grammars are committed on purpose (drift gate), so nothing here.

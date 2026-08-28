@@ -1,0 +1,5 @@
+# Shell scripts must stay LF even where git's Windows default (core.autocrlf)
+# would rewrite them: a CRLF shebang line is a syntax error, and shellcheck
+# reports SC1017 on every line of the file. Found by running `poly check` on a
+# CRLF checkout of this repo (M6 acceptance): 40 issues, all of them CRLF.
+*.sh text eol=lf

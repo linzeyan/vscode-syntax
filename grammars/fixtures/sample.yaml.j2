@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+server:
+  host: {{ poly_bind_address | default('127.0.0.1') }}
+  port: {{ poly_port | int }}
+  idle_timeout: {{ poly_idle_timeout | default(300) }}
+
+tools:
+{% for name, path in poly_tools.items() %}
+  {{ name }}: {{ path | quote }}
+{% endfor %}
+
+logging:
+  level: {% if poly_debug %}debug{% else %}info{% endif %}
+
+  file: /var/log/poly/daemon.log
+
+{% if poly_managed_tools %}
+managed:
+  enabled: true
+  cache_dir: {{ poly_cache_dir }}
+  checksums:
+{% for tool in poly_managed_tools %}
+    - name: {{ tool.name }}
+      sha256: {{ tool.sha256 }}
+{% endfor %}
+{% endif %}

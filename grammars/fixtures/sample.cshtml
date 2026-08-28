@@ -1,0 +1,36 @@
+@page "/releases"
+@model Poly.Pages.ReleasesModel
+@using System.Linq
+@{
+    ViewData["Title"] = "Releases";
+    var stable = Model.Releases.Where(r => !r.Prerelease).ToList();
+}
+
+<h1>@ViewData["Title"]</h1>
+
+@if (stable.Any())
+{
+    <ul class="release-list">
+        @foreach (var release in stable)
+        {
+            <li data-tag="@release.Tag">
+                <a asp-page="/Release" asp-route-tag="@release.Tag">@release.Tag</a>
+                <span>@release.Assets.Count assets</span>
+            </li>
+        }
+    </ul>
+}
+else
+{
+    <p>No stable release yet.</p>
+}
+
+<style>
+  .release-list li { display: flex; gap: 0.5rem; }
+</style>
+
+<script>
+  document.querySelectorAll("[data-tag]").forEach((el) => {
+    el.title = `release ${el.dataset.tag}`;
+  });
+</script>

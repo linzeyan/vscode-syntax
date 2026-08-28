@@ -1,0 +1,13 @@
+{
+  // Line comment: jsonc must scope this as a comment, plain json must not.
+  "editor.tabSize": 2,
+  /* Block comment spanning
+     more than one line. */
+  "files.associations": {
+    "*.gotmpl": "gotmpl",
+    "*.env.local": "dotenv"
+  },
+  "poly.updateCheck.intervalDays": 7,
+  // Trailing comma below is legal in jsonc.
+  "poly.trace.server": "off"
+}

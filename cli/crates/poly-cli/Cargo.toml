@@ -1,0 +1,22 @@
+[package]
+name = "poly-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "poly"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+poly-core = { path = "../poly-core" }
+poly-engines = { path = "../poly-engines" }
+poly-tools = { path = "../poly-tools" }
+rayon.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,82 @@
+name: Grammar Sync
+
+# Weekly upstream refresh: bump pinned shas, re-sync grammars, verify
+# fixtures still tokenize, open a PR with the diff. Note: PRs opened with
+# GITHUB_TOKEN do not trigger CI — close/reopen the PR (or push to its
+# branch) to run checks before merging.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sync grammars against upstream HEAD
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          pip install pyyaml
+          python tools/grammar-sync.py --update
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+      - name: Tokenize fixtures
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          npm install --prefix /tmp/tokdeps --no-save vscode-textmate vscode-oniguruma
+          node tools/tokenize-check.mjs /tmp/tokdeps/node_modules | tee /tmp/tokenize.log
+      - name: Open PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="grammar-sync/$(date +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          # -A, not commit -a: a newly added language brings untracked
+          # grammar files that -a would silently leave out of the PR.
+          git add -A
+          git status --short
+          git commit -m "grammar-sync: refresh pinned upstream shas"
+          # Job logs need admin rights to read, so each failure mode names
+          # itself in an annotation instead of a bare exit code.
+          if ! git push -f origin "$BRANCH"; then
+            echo "::error title=push rejected::GITHUB_TOKEN could not push $BRANCH — check Settings > Actions > General > Workflow permissions"
+            exit 1
+          fi
+          {
+            echo "Automated weekly grammar sync. Tokenize check passed on this runner:"
+            echo
+            echo '```'
+            tail -30 /tmp/tokenize.log
+            echo '```'
+            echo
+            echo "CI does not auto-run on token-created PRs — close/reopen to trigger."
+          } > /tmp/pr-body.md
+          if ! gh pr create --title "grammar-sync: weekly upstream refresh" \
+               --body-file /tmp/pr-body.md --base main --head "$BRANCH"; then
+            if ! gh pr edit "$BRANCH" --body-file /tmp/pr-body.md; then
+              echo "::error title=pr create failed::Branch $BRANCH is pushed, but opening the PR failed — 'Allow GitHub Actions to create and approve pull requests' defaults to off in Settings > Actions > General"
+              exit 1
+            fi
+          fi

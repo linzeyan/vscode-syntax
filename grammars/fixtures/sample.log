@@ -1,0 +1,9 @@
+2026-08-27 09:03:32.114 [info] poly daemon 0.2.0 starting (pid 4821)
+2026-08-27 09:03:32.230 [debug] resolved rustfmt -> /usr/local/bin/rustfmt (project)
+2026-08-27 09:03:32.231 [debug] resolved shfmt -> managed:0.10.0 (sha256 tofu ok)
+2026-08-27 09:03:33.008 [warning] tflint not found on PATH, terraform lint disabled
+2026-08-27 09:03:41.552 [info] textDocument/formatting src/main.rs in 11.3ms
+2026-08-27 09:04:02.917 [error] format failed for src/broken.ts: unexpected token at 12:5
+	at poly_cli::fmt::dispatch (cli/crates/poly-cli/src/fmt.rs:184)
+	at poly_lsp::server::on_formatting (cli/crates/poly-lsp/src/server.rs:96)
+2026-08-27 09:10:00.000 [info] idle 300s, shutting down

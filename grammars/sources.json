@@ -1,0 +1,1036 @@
+{
+  "$comment": "Single source of truth for poly-syntax grammars. Verified 2026-08-24 (all paths HTTP-checked, licenses from GitHub API). tools/grammar-sync.py consumes this. Two built-in extensions are deliberately left alone despite D5: search-result (the Search Editor's own result view, not a file format users open) and dotenv (poly already ships a community .env grammar as source.env; adding VSCode's source.dotenv would leave two grammars competing for the dotenv language id).",
+  "languages": [
+    {
+      "id": "rust",
+      "override": true,
+      "rationale": "Community grammar with richer operator/punctuation scopes than built-in (Ricky already used this extension).",
+      "repo": "dustypomerleau/rust-syntax",
+      "license": "MIT",
+      "files": [
+        { "src": "syntaxes/rust.tmLanguage.json", "out": "rust.tmLanguage.json", "scopeName": "source.rust", "language": "rust" }
+      ]
+    },
+    {
+      "id": "swift",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/swift/syntaxes/swift.tmLanguage.json", "out": "swift.tmLanguage.json", "scopeName": "source.swift", "language": "swift" }
+      ]
+    },
+    {
+      "id": "csharp",
+      "override": true,
+      "rationale": "Same upstream as built-in, including the tokenTypes and unbalancedBracketScopes the built-in declares.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/csharp/syntaxes/csharp.tmLanguage.json", "out": "csharp.tmLanguage.json", "scopeName": "source.cs", "language": "csharp", "contributesFrom": "extensions/csharp/package.json" }
+      ]
+    },
+    {
+      "id": "lua",
+      "override": true,
+      "rationale": "Same upstream as built-in.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/lua/syntaxes/lua.tmLanguage.json", "out": "lua.tmLanguage.json", "scopeName": "source.lua", "language": "lua", "contributesFrom": "extensions/lua/package.json" }
+      ]
+    },
+    {
+      "id": "go",
+      "override": true,
+      "rationale": "Same upstream as built-in.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/go/syntaxes/go.tmLanguage.json", "out": "go.tmLanguage.json", "scopeName": "source.go", "language": "go" }
+      ]
+    },
+    {
+      "id": "cpp",
+      "override": true,
+      "rationale": "Same upstream as built-in; all 5 grammar files the cpp extension ships (c, cpp, embedded macro, platform support, cuda).",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/cpp/syntaxes/c.tmLanguage.json", "out": "c.tmLanguage.json", "scopeName": "source.c", "language": "c" },
+        { "src": "extensions/cpp/syntaxes/cpp.tmLanguage.json", "out": "cpp.tmLanguage.json", "scopeName": "source.cpp", "language": "cpp" },
+        { "src": "extensions/cpp/syntaxes/cpp.embedded.macro.tmLanguage.json", "out": "cpp.embedded.macro.tmLanguage.json", "scopeName": "source.cpp.embedded.macro", "language": "cpp" },
+        { "src": "extensions/cpp/syntaxes/platform.tmLanguage.json", "out": "platform.tmLanguage.json", "scopeName": "source.c.platform" },
+        { "src": "extensions/cpp/syntaxes/cuda-cpp.tmLanguage.json", "out": "cuda-cpp.tmLanguage.json", "scopeName": "source.cuda-cpp", "language": "cuda-cpp" }
+      ]
+    },
+    {
+      "id": "xml",
+      "override": true,
+      "rationale": "Same upstream as built-in; xsl is a separate language contributed by the same extension.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/xml/syntaxes/xml.tmLanguage.json", "out": "xml.tmLanguage.json", "scopeName": "text.xml", "language": "xml" },
+        { "src": "extensions/xml/syntaxes/xsl.tmLanguage.json", "out": "xsl.tmLanguage.json", "scopeName": "text.xml.xsl", "language": "xsl" }
+      ]
+    },
+    {
+      "id": "yaml",
+      "override": true,
+      "rationale": "Same upstream as built-in. Main grammar is a dispatcher including source.yaml.1.2 and source.yaml.embedded; all version grammars shipped alongside.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/yaml/syntaxes/yaml.tmLanguage.json", "out": "yaml.tmLanguage.json", "scopeName": "source.yaml", "language": "yaml", "contributesFrom": "extensions/yaml/package.json" },
+        { "src": "extensions/yaml/syntaxes/yaml.tmLanguage.json", "out": "yaml.tmLanguage.json", "scopeName": "source.yaml", "language": "dockercompose" },
+        { "src": "extensions/yaml/syntaxes/yaml-1.3.tmLanguage.json", "out": "yaml-1.3.tmLanguage.json", "scopeName": "source.yaml.1.3" },
+        { "src": "extensions/yaml/syntaxes/yaml-1.2.tmLanguage.json", "out": "yaml-1.2.tmLanguage.json", "scopeName": "source.yaml.1.2" },
+        { "src": "extensions/yaml/syntaxes/yaml-1.1.tmLanguage.json", "out": "yaml-1.1.tmLanguage.json", "scopeName": "source.yaml.1.1" },
+        { "src": "extensions/yaml/syntaxes/yaml-1.0.tmLanguage.json", "out": "yaml-1.0.tmLanguage.json", "scopeName": "source.yaml.1.0" },
+        { "src": "extensions/yaml/syntaxes/yaml-embedded.tmLanguage.json", "out": "yaml-embedded.tmLanguage.json", "scopeName": "source.yaml.embedded" }
+      ]
+    },
+    {
+      "id": "markdown",
+      "override": true,
+      "rationale": "Same upstream as built-in; embeddedLanguages map copied from upstream package.json so fenced blocks keep editor behavior. Adds onEnterRules list continuation via configuration.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "language": { "configuration": "markdown.json" },
+      "files": [
+        { "src": "extensions/markdown-basics/syntaxes/markdown.tmLanguage.json", "out": "markdown.tmLanguage.json", "scopeName": "text.html.markdown", "language": "markdown", "contributesFrom": "extensions/markdown-basics/package.json" }
+      ]
+    },
+    {
+      "id": "sql",
+      "override": true,
+      "rationale": "Same upstream as built-in.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/sql/syntaxes/sql.tmLanguage.json", "out": "sql.tmLanguage.json", "scopeName": "source.sql", "language": "sql" }
+      ]
+    },
+    {
+      "id": "dockerfile",
+      "override": true,
+      "rationale": "Same upstream as built-in (extensions/docker folder, language id dockerfile).",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/docker/syntaxes/docker.tmLanguage.json", "out": "docker.tmLanguage.json", "scopeName": "source.dockerfile", "language": "dockerfile" }
+      ]
+    },
+    {
+      "id": "shellscript",
+      "override": true,
+      "rationale": "Same upstream as built-in.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/shellscript/syntaxes/shell-unix-bash.tmLanguage.json", "out": "shell-unix-bash.tmLanguage.json", "scopeName": "source.shell", "language": "shellscript", "contributesFrom": "extensions/shellscript/package.json" }
+      ]
+    },
+    {
+      "id": "hcl",
+      "override": false,
+      "rationale": "Authoritative HashiCorp grammar. MPL-2.0, ratified by N5: the vendored file is itself the source form and lives in a public repo, which is what MPL-2.0 §3.1 asks for even though sync reserializes it. Keep it unpatched -- a local fix would make us the one owing a source release.",
+      "repo": "hashicorp/syntax",
+      "license": "MPL-2.0",
+      "language": { "extensions": [".hcl"], "aliases": ["HCL"], "configuration": "hcl.json" },
+      "files": [
+        { "src": "syntaxes/hcl.tmGrammar.json", "out": "hcl.tmLanguage.json", "scopeName": "source.hcl", "language": "hcl" }
+      ]
+    },
+    {
+      "id": "terraform",
+      "override": false,
+      "rationale": "Authoritative HashiCorp grammar. MPL-2.0, ratified by N5: the vendored file is itself the source form and lives in a public repo, which is what MPL-2.0 §3.1 asks for even though sync reserializes it. Keep it unpatched -- a local fix would make us the one owing a source release.",
+      "repo": "hashicorp/syntax",
+      "license": "MPL-2.0",
+      "language": { "extensions": [".tf", ".tfvars"], "aliases": ["Terraform"], "configuration": "hcl.json" },
+      "files": [
+        { "src": "syntaxes/terraform.tmGrammar.json", "out": "terraform.tmLanguage.json", "scopeName": "source.hcl.terraform", "language": "terraform" }
+      ]
+    },
+    {
+      "id": "nginx",
+      "override": false,
+      "rationale": "SublimeText org grammar (MIT). Initial candidate ahmadalli/vscode-nginx-conf rejected: GPL-3.0.",
+      "repo": "SublimeText/nginx",
+      "license": "MIT",
+      "language": { "extensions": [".nginx"], "filenames": ["nginx.conf"], "filenamePatterns": ["**/nginx/*.conf", "**/nginx/**/*.conf"], "aliases": ["NGINX Conf"], "configuration": "nginx.json" },
+      "files": [
+        { "src": "Syntaxes/nginx.tmLanguage", "out": "nginx.tmLanguage.json", "scopeName": "source.nginx", "language": "nginx" }
+      ]
+    },
+    {
+      "id": "zig",
+      "override": false,
+      "rationale": "Official ziglang extension grammar.",
+      "repo": "ziglang/vscode-zig",
+      "license": "MIT",
+      "language": { "extensions": [".zig", ".zon"], "aliases": ["Zig"], "configuration": "zig.json" },
+      "files": [
+        { "src": "syntaxes/zig.tmLanguage.json", "out": "zig.tmLanguage.json", "scopeName": "source.zig", "language": "zig" }
+      ]
+    },
+    {
+      "id": "toml",
+      "override": false,
+      "rationale": "No built-in TOML in VSCode (verified: extensions/toml absent on main). Even Better TOML source grammar (taplo, MIT).",
+      "repo": "tamasfe/taplo",
+      "license": "MIT",
+      "language": { "extensions": [".toml"], "filenames": ["Cargo.lock", "uv.lock", "Pipfile", "pdm.lock"], "aliases": ["TOML"], "configuration": "toml.json" },
+      "files": [
+        { "src": "editors/vscode/toml.tmLanguage.json", "out": "toml.tmLanguage.json", "scopeName": "source.toml", "language": "toml" }
+      ]
+    },
+    {
+      "id": "gotmpl",
+      "override": false,
+      "rationale": "Replaces jinliming2.vscode-go-template; injections into go/html/markdown etc. kept, but never contributed with a language id (injectTo drives them). The main grammar is bound to our own id, not upstream's 'go-template': we declare the language, so a grammar pointing at an id nobody contributes would leave .gotmpl files with no highlighting at all.",
+      "repo": "jinliming2/vscode-go-template",
+      "license": "MIT",
+      "language": { "extensions": [".gotmpl", ".go.tmpl", ".gohtml", ".tmpl", ".gtpl"], "aliases": ["Go Template"], "configuration": "gotmpl.json" },
+      "files": [
+        { "src": "syntaxes/go-template.tmLanguage.json", "out": "go-template.tmLanguage.json", "scopeName": "source.go-template", "language": "gotmpl" },
+        { "src": "syntaxes/go-double.go-template.tmLanguage.json", "out": "go-double.go-template.tmLanguage.json", "scopeName": "source.go.injection.double.go-template", "injectTo": ["source.go"] },
+        { "src": "syntaxes/go-raw.go-template.tmLanguage.json", "out": "go-raw.go-template.tmLanguage.json", "scopeName": "source.go.injection.raw.go-template", "injectTo": ["source.go"] },
+        { "src": "syntaxes/injection.go-template.tmLanguage.json", "out": "injection.go-template.tmLanguage.json", "scopeName": "text.injection.go-template", "injectTo": ["source.css", "source.js", "source.json", "text.html.derivative", "text.xml"] },
+        { "src": "syntaxes/markdown.go-template.tmLanguage.json", "out": "markdown.go-template.tmLanguage.json", "scopeName": "text.markdown.go-template.codeblock", "injectTo": ["text.html.markdown"], "embeddedLanguages": { "meta.embedded.block.go-template": "gotmpl" } }
+      ]
+    },
+    {
+      "id": "dotenv",
+      "override": false,
+      "rationale": "mikestead/vscode-dotenv: clean MIT, self-contained plist grammar (converted to JSON by sync).",
+      "repo": "mikestead/vscode-dotenv",
+      "license": "MIT",
+      "language": { "extensions": [".env"], "filenamePatterns": [".env*", "**/.env.*"], "aliases": ["dotenv"], "configuration": "dotenv.json" },
+      "files": [
+        { "src": "syntaxes/env.tmLanguage", "out": "env.tmLanguage.json", "scopeName": "source.env", "language": "dotenv" }
+      ]
+    },
+    {
+      "id": "protobuf",
+      "override": false,
+      "rationale": "zxh0/vscode-proto3 (MIT; note: marketplace publisher id is zxh404 but repo owner is zxh0). Bound to our own id rather than upstream's 'proto3' — see the gotmpl entry for what a dangling grammar language id costs.",
+      "repo": "zxh0/vscode-proto3",
+      "license": "MIT",
+      "language": { "extensions": [".proto"], "aliases": ["Protocol Buffers"], "configuration": "protobuf.json" },
+      "files": [
+        { "src": "syntaxes/proto3.tmLanguage.json", "out": "proto3.tmLanguage.json", "scopeName": "source.proto", "language": "protobuf" },
+        { "src": "syntaxes/proto3.codeblock.json", "out": "proto3.codeblock.json", "scopeName": "markdown.codeblock.proto", "injectTo": ["text.html.markdown"] }
+      ]
+    },
+    {
+      "id": "mermaid",
+      "override": false,
+      "rationale": "Replaces bpruitt-goddard.mermaid-markdown-syntax-highlighting. Repo only commits YAML sources with custom !!import tags, so the built JSON is taken from the marketplace VSIX (version-pinned). mdx injection skipped (no mdx here).",
+      "repo": "bpruitt-goddard/vscode-mermaid-syntax-highlight",
+      "license": "MIT",
+      "vsix": { "publisher": "bpruitt-goddard", "name": "mermaid-markdown-syntax-highlighting" },
+      "language": { "extensions": [".mmd", ".mermaid"], "aliases": ["Mermaid"], "configuration": "mermaid.json" },
+      "files": [
+        { "src": "extension/out/mermaid.tmLanguage.json", "out": "mermaid.tmLanguage.json", "scopeName": "source.mermaid", "language": "mermaid" },
+        { "src": "extension/out/mermaid.tmLanguage-markdown.json", "out": "mermaid.markdown.tmLanguage.json", "scopeName": "markdown.mermaid.codeblock", "injectTo": ["text.html.markdown"], "embeddedLanguages": { "meta.embedded.block.mermaid": "mermaid" } }
+      ]
+    },
+    {
+      "id": "svelte",
+      "override": false,
+      "rationale": "Official sveltejs/language-tools grammar. Only YAML source exists in-repo (built JSON generated at package time); sync converts .src.yaml directly — verified via tools/tokenize-check.mjs (96% tokens scoped on fixture). postcss/pug/markdown extras skipped.",
+      "repo": "sveltejs/language-tools",
+      "license": "MIT",
+      "language": { "extensions": [".svelte"], "aliases": ["Svelte"], "configuration": "svelte.json" },
+      "files": [
+        { "src": "packages/svelte-vscode/syntaxes/svelte.tmLanguage.src.yaml", "out": "svelte.tmLanguage.json", "scopeName": "source.svelte", "language": "svelte" }
+      ]
+    },
+    {
+      "id": "graphql",
+      "override": false,
+      "rationale": "Official graphql/graphiql monorepo (vscode-graphql-syntax package). Injections kept for js/ts/jsx/tsx/vue/svelte/python + markdown codeblocks; re/rescript/php/scala skipped.",
+      "repo": "graphql/graphiql",
+      "license": "MIT",
+      "language": { "extensions": [".graphql", ".gql", ".graphqls"], "aliases": ["GraphQL"], "configuration": "graphql.json" },
+      "files": [
+        { "src": "packages/vscode-graphql-syntax/grammars/graphql.json", "out": "graphql.tmLanguage.json", "scopeName": "source.graphql", "language": "graphql" },
+        { "src": "packages/vscode-graphql-syntax/grammars/graphql.js.json", "out": "graphql.js.tmLanguage.json", "scopeName": "inline.graphql", "injectTo": ["source.js", "source.ts", "source.js.jsx", "source.tsx", "source.vue", "source.svelte", "source.astro", "text.html.markdown", "text.html.derivative", "text.html.vue"], "embeddedLanguages": { "meta.embedded.block.graphql": "graphql" } },
+        { "src": "packages/vscode-graphql-syntax/grammars/graphql.python.json", "out": "graphql.python.tmLanguage.json", "scopeName": "inline.graphql.python", "injectTo": ["source.python", "text.html.markdown", "text.html.derivative"], "embeddedLanguages": { "meta.embedded.block.graphql": "graphql" } },
+        { "src": "packages/vscode-graphql-syntax/grammars/graphql.markdown.codeblock.json", "out": "graphql.markdown.codeblock.tmLanguage.json", "scopeName": "inline.graphql.markdown.codeblock", "injectTo": ["text.html.markdown", "text.html.derivative"], "embeddedLanguages": { "meta.embedded.block.graphql": "graphql" } }
+      ]
+    },
+    {
+      "id": "csv",
+      "override": false,
+      "generated": true,
+      "rationale": "Generated locally: 16 columns cycling 8 standard scopes (rainbow-csv concept, zero upstream/config dependencies).",
+      "language": { "extensions": [".csv"], "aliases": ["CSV"], "configuration": "csv.json" },
+      "files": [
+        { "generator": "csv", "out": "csv.tmLanguage.json", "scopeName": "source.csv", "language": "csv" }
+      ]
+    },
+    {
+      "id": "tsv",
+      "override": false,
+      "generated": true,
+      "rationale": "Generated locally, tab-separated variant.",
+      "language": { "extensions": [".tsv"], "aliases": ["TSV"], "configuration": "csv.json" },
+      "files": [
+        { "generator": "tsv", "out": "tsv.tmLanguage.json", "scopeName": "source.tsv", "language": "tsv" }
+      ]
+    },
+    {
+      "id": "ssh_config",
+      "override": false,
+      "generated": true,
+      "rationale": "Generated locally. The only upstream grammar is textmate/ssh-config.tmbundle, which carries no license file at all, so vendoring it would put an unlicensed file in our notices; the format is small enough to own outright. Any first word is a keyword rather than a closed list, because OpenSSH keeps adding directives and a stale list would silently stop coloring new ones. crontab was considered alongside this and dropped: crontab -e edits a temp file no editor associates anyway.",
+      "language": { "filenames": ["ssh_config", "sshd_config"], "filenamePatterns": ["**/.ssh/config", "**/.ssh/config.d/*", "**/ssh/ssh_config.d/*.conf", "**/ssh/sshd_config.d/*.conf"], "aliases": ["SSH Config"], "configuration": "ssh-config.json" },
+      "files": [
+        { "generator": "ssh-config", "out": "ssh-config.tmLanguage.json", "scopeName": "source.ssh-config", "language": "ssh_config" }
+      ]
+    },
+    {
+      "id": "javascript",
+      "override": true,
+      "rationale": "Same upstream as built-in. Ships the regexp sub-grammar the JS grammar includes, and copies contribution metadata so template expressions and JSX keep their editor behavior.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/javascript/syntaxes/JavaScript.tmLanguage.json", "out": "javascript.tmLanguage.json", "scopeName": "source.js", "language": "javascript", "contributesFrom": "extensions/javascript/package.json" },
+        { "src": "extensions/javascript/syntaxes/JavaScriptReact.tmLanguage.json", "out": "javascriptreact.tmLanguage.json", "scopeName": "source.js.jsx", "language": "javascriptreact", "contributesFrom": "extensions/javascript/package.json" },
+        { "src": "extensions/javascript/syntaxes/Regular Expressions (JavaScript).tmLanguage", "out": "javascript.regexp.tmLanguage.json", "scopeName": "source.js.regexp" }
+      ]
+    },
+    {
+      "id": "typescript",
+      "override": true,
+      "rationale": "Same upstream as built-in (grammar itself is generated from microsoft/TypeScript-TmLanguage). JSDoc injections cover both TS and JS scopes, matching upstream.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/typescript-basics/syntaxes/TypeScript.tmLanguage.json", "out": "typescript.tmLanguage.json", "scopeName": "source.ts", "language": "typescript", "contributesFrom": "extensions/typescript-basics/package.json" },
+        { "src": "extensions/typescript-basics/syntaxes/TypeScriptReact.tmLanguage.json", "out": "typescriptreact.tmLanguage.json", "scopeName": "source.tsx", "language": "typescriptreact", "contributesFrom": "extensions/typescript-basics/package.json" },
+        { "src": "extensions/typescript-basics/syntaxes/jsdoc.ts.injection.tmLanguage.json", "out": "jsdoc.ts.injection.tmLanguage.json", "scopeName": "documentation.injection.ts", "injectTo": ["source.ts", "source.tsx"] },
+        { "src": "extensions/typescript-basics/syntaxes/jsdoc.js.injection.tmLanguage.json", "out": "jsdoc.js.injection.tmLanguage.json", "scopeName": "documentation.injection.js.jsx", "injectTo": ["source.js", "source.js.jsx"] }
+      ]
+    },
+    {
+      "id": "json",
+      "override": true,
+      "rationale": "Same upstream as built-in, including JSONL and the snippets flavor so .code-snippets files keep their highlighting.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/json/syntaxes/JSON.tmLanguage.json", "out": "json.tmLanguage.json", "scopeName": "source.json", "language": "json" },
+        { "src": "extensions/json/syntaxes/JSONC.tmLanguage.json", "out": "jsonc.tmLanguage.json", "scopeName": "source.json.comments", "language": "jsonc" },
+        { "src": "extensions/json/syntaxes/JSONL.tmLanguage.json", "out": "jsonl.tmLanguage.json", "scopeName": "source.json.lines", "language": "jsonl" },
+        { "src": "extensions/json/syntaxes/snippets.tmLanguage.json", "out": "snippets.tmLanguage.json", "scopeName": "source.json.comments.snippets", "language": "snippets" }
+      ]
+    },
+    {
+      "id": "css",
+      "override": true,
+      "rationale": "Same upstream as built-in.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/css/syntaxes/css.tmLanguage.json", "out": "css.tmLanguage.json", "scopeName": "source.css", "language": "css", "contributesFrom": "extensions/css/package.json" }
+      ]
+    },
+    {
+      "id": "scss",
+      "override": true,
+      "rationale": "Same upstream as built-in; sassdoc is a separate grammar the scss grammar includes.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/scss/syntaxes/scss.tmLanguage.json", "out": "scss.tmLanguage.json", "scopeName": "source.css.scss", "language": "scss" },
+        { "src": "extensions/scss/syntaxes/sassdoc.tmLanguage.json", "out": "sassdoc.tmLanguage.json", "scopeName": "source.sassdoc" }
+      ]
+    },
+    {
+      "id": "less",
+      "override": true,
+      "rationale": "Same upstream as built-in.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/less/syntaxes/less.tmLanguage.json", "out": "less.tmLanguage.json", "scopeName": "source.css.less", "language": "less" }
+      ]
+    },
+    {
+      "id": "html",
+      "override": true,
+      "rationale": "Same upstream as built-in. text.html.basic is the base grammar other grammars include; the html language itself binds to text.html.derivative, so both ship.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/html/syntaxes/html.tmLanguage.json", "out": "html.tmLanguage.json", "scopeName": "text.html.basic", "contributesFrom": "extensions/html/package.json" },
+        { "src": "extensions/html/syntaxes/html-derivative.tmLanguage.json", "out": "html-derivative.tmLanguage.json", "scopeName": "text.html.derivative", "language": "html", "contributesFrom": "extensions/html/package.json" }
+      ]
+    },
+    {
+      "id": "python",
+      "override": true,
+      "rationale": "Same upstream as built-in (MagicPython), with the regexp sub-grammar it includes.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/python/syntaxes/MagicPython.tmLanguage.json", "out": "python.tmLanguage.json", "scopeName": "source.python", "language": "python" },
+        { "src": "extensions/python/syntaxes/MagicRegExp.tmLanguage.json", "out": "python.regexp.tmLanguage.json", "scopeName": "source.regexp.python" }
+      ]
+    },
+    {
+      "id": "java",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/java/syntaxes/java.tmLanguage.json", "out": "java.tmLanguage.json", "scopeName": "source.java", "language": "java" }
+      ]
+    },
+    {
+      "id": "php",
+      "override": true,
+      "rationale": "Same upstream as built-in. text.html.php embeds html/js/css/json/sql/xml — all now shipped by poly, so the embedded regions resolve against our grammars.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/php/syntaxes/php.tmLanguage.json", "out": "php.tmLanguage.json", "scopeName": "source.php", "language": "php" },
+        { "src": "extensions/php/syntaxes/html.tmLanguage.json", "out": "php-html.tmLanguage.json", "scopeName": "text.html.php", "language": "php", "contributesFrom": "extensions/php/package.json" }
+      ]
+    },
+    {
+      "id": "ruby",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/ruby/syntaxes/ruby.tmLanguage.json", "out": "ruby.tmLanguage.json", "scopeName": "source.ruby", "language": "ruby" }
+      ]
+    },
+    {
+      "id": "powershell",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/powershell/syntaxes/powershell.tmLanguage.json", "out": "powershell.tmLanguage.json", "scopeName": "source.powershell", "language": "powershell" }
+      ]
+    },
+    {
+      "id": "ini",
+      "override": true,
+      "rationale": "Same upstream as built-in. One grammar serves both ini and properties, as upstream declares.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/ini/syntaxes/ini.tmLanguage.json", "out": "ini.tmLanguage.json", "scopeName": "source.ini", "language": "ini" },
+        { "src": "extensions/ini/syntaxes/ini.tmLanguage.json", "out": "ini.tmLanguage.json", "scopeName": "source.ini", "language": "properties" }
+      ]
+    },
+    {
+      "id": "bat",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/bat/syntaxes/batchfile.tmLanguage.json", "out": "batchfile.tmLanguage.json", "scopeName": "source.batchfile", "language": "bat" }
+      ]
+    },
+    {
+      "id": "makefile",
+      "override": true,
+      "rationale": "Same upstream as built-in; tokenTypes downgrades string.interpolated so $(shell ...) is not treated as a string.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/make/syntaxes/make.tmLanguage.json", "out": "make.tmLanguage.json", "scopeName": "source.makefile", "language": "makefile", "contributesFrom": "extensions/make/package.json" }
+      ]
+    },
+    {
+      "id": "perl",
+      "override": true,
+      "rationale": "Same upstream as built-in; unbalancedBracketScopes keeps $) and friends from breaking bracket matching.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/perl/syntaxes/perl.tmLanguage.json", "out": "perl.tmLanguage.json", "scopeName": "source.perl", "language": "perl", "contributesFrom": "extensions/perl/package.json" },
+        { "src": "extensions/perl/syntaxes/perl6.tmLanguage.json", "out": "perl6.tmLanguage.json", "scopeName": "source.perl.6", "language": "raku" }
+      ]
+    },
+    {
+      "id": "r",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/r/syntaxes/r.tmLanguage.json", "out": "r.tmLanguage.json", "scopeName": "source.r", "language": "r" }
+      ]
+    },
+    {
+      "id": "julia",
+      "override": true,
+      "rationale": "Same upstream as built-in; embeds cpp/javascript/python/r/sql in non-standard string literals.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/julia/syntaxes/julia.tmLanguage.json", "out": "julia.tmLanguage.json", "scopeName": "source.julia", "language": "julia", "contributesFrom": "extensions/julia/package.json" }
+      ]
+    },
+    {
+      "id": "latex",
+      "override": true,
+      "rationale": "Same upstream as built-in. Five grammars: tex, latex, bibtex, the markdown+latex combination used by markdown-math, and a cpp bailout grammar for listings.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/latex/syntaxes/TeX.tmLanguage.json", "out": "tex.tmLanguage.json", "scopeName": "text.tex", "language": "tex", "contributesFrom": "extensions/latex/package.json" },
+        { "src": "extensions/latex/syntaxes/LaTeX.tmLanguage.json", "out": "latex.tmLanguage.json", "scopeName": "text.tex.latex", "language": "latex", "contributesFrom": "extensions/latex/package.json" },
+        { "src": "extensions/latex/syntaxes/Bibtex.tmLanguage.json", "out": "bibtex.tmLanguage.json", "scopeName": "text.bibtex", "language": "bibtex" },
+        { "src": "extensions/latex/syntaxes/markdown-latex-combined.tmLanguage.json", "out": "markdown-latex-combined.tmLanguage.json", "scopeName": "text.tex.markdown_latex_combined", "language": "markdown_latex_combined" },
+        { "src": "extensions/latex/syntaxes/cpp-grammar-bailout.tmLanguage.json", "out": "cpp-grammar-bailout.tmLanguage.json", "scopeName": "source.cpp.embedded.latex", "language": "cpp_embedded_latex" }
+      ]
+    },
+    {
+      "id": "markdown-math",
+      "override": true,
+      "rationale": "Math injections for markdown ($..$, $$..$$, ```math). Pairs with the markdown grammar poly already ships.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/markdown-math/syntaxes/md-math.tmLanguage.json", "out": "md-math.tmLanguage.json", "scopeName": "text.html.markdown.math", "language": "markdown-math" },
+        { "src": "extensions/markdown-math/syntaxes/md-math-block.tmLanguage.json", "out": "md-math-block.tmLanguage.json", "scopeName": "markdown.math.block", "injectTo": ["text.html.markdown"], "contributesFrom": "extensions/markdown-math/package.json" },
+        { "src": "extensions/markdown-math/syntaxes/md-math-inline.tmLanguage.json", "out": "md-math-inline.tmLanguage.json", "scopeName": "markdown.math.inline", "injectTo": ["text.html.markdown"], "contributesFrom": "extensions/markdown-math/package.json" },
+        { "src": "extensions/markdown-math/syntaxes/md-math-fence.tmLanguage.json", "out": "md-math-fence.tmLanguage.json", "scopeName": "markdown.math.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "extensions/markdown-math/package.json" }
+      ]
+    },
+    {
+      "id": "objective-c",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/objective-c/syntaxes/objective-c.tmLanguage.json", "out": "objective-c.tmLanguage.json", "scopeName": "source.objc", "language": "objective-c" },
+        { "src": "extensions/objective-c/syntaxes/objective-c++.tmLanguage.json", "out": "objective-c++.tmLanguage.json", "scopeName": "source.objcpp", "language": "objective-cpp" }
+      ]
+    },
+    {
+      "id": "pug",
+      "override": true,
+      "rationale": "Same upstream as built-in; upstream language id is jade.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/pug/syntaxes/pug.tmLanguage.json", "out": "pug.tmLanguage.json", "scopeName": "text.pug", "language": "jade" }
+      ]
+    },
+    {
+      "id": "handlebars",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/handlebars/syntaxes/Handlebars.tmLanguage.json", "out": "handlebars.tmLanguage.json", "scopeName": "text.html.handlebars", "language": "handlebars" }
+      ]
+    },
+    {
+      "id": "diff",
+      "override": true,
+      "rationale": "Same upstream as built-in; used constantly when reviewing patches.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/diff/syntaxes/diff.tmLanguage.json", "out": "diff.tmLanguage.json", "scopeName": "source.diff", "language": "diff" }
+      ]
+    },
+    {
+      "id": "git",
+      "override": true,
+      "rationale": "Same upstream as built-in: commit message, interactive rebase and .gitignore.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/git-base/syntaxes/git-commit.tmLanguage.json", "out": "git-commit.tmLanguage.json", "scopeName": "text.git-commit", "language": "git-commit" },
+        { "src": "extensions/git-base/syntaxes/git-rebase.tmLanguage.json", "out": "git-rebase.tmLanguage.json", "scopeName": "text.git-rebase", "language": "git-rebase" },
+        { "src": "extensions/git-base/syntaxes/ignore.tmLanguage.json", "out": "ignore.tmLanguage.json", "scopeName": "source.ignore", "language": "ignore" }
+      ]
+    },
+    {
+      "id": "log",
+      "override": true,
+      "rationale": "Same upstream as built-in; covers the generic log viewer highlighting (01 §4.1 batch 2).",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/log/syntaxes/log.tmLanguage.json", "out": "log.tmLanguage.json", "scopeName": "text.log", "language": "log" }
+      ]
+    },
+    {
+      "id": "dart",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/dart/syntaxes/dart.tmLanguage.json", "out": "dart.tmLanguage.json", "scopeName": "source.dart", "language": "dart" }
+      ]
+    },
+    {
+      "id": "groovy",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/groovy/syntaxes/groovy.tmLanguage.json", "out": "groovy.tmLanguage.json", "scopeName": "source.groovy", "language": "groovy" }
+      ]
+    },
+    {
+      "id": "clojure",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/clojure/syntaxes/clojure.tmLanguage.json", "out": "clojure.tmLanguage.json", "scopeName": "source.clojure", "language": "clojure" }
+      ]
+    },
+    {
+      "id": "coffeescript",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/coffeescript/syntaxes/coffeescript.tmLanguage.json", "out": "coffeescript.tmLanguage.json", "scopeName": "source.coffee", "language": "coffeescript" }
+      ]
+    },
+    {
+      "id": "fsharp",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/fsharp/syntaxes/fsharp.tmLanguage.json", "out": "fsharp.tmLanguage.json", "scopeName": "source.fsharp", "language": "fsharp" }
+      ]
+    },
+    {
+      "id": "vb",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/vb/syntaxes/asp-vb-net.tmLanguage.json", "out": "asp-vb-net.tmLanguage.json", "scopeName": "source.asp.vb.net", "language": "vb" }
+      ]
+    },
+    {
+      "id": "hlsl",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/hlsl/syntaxes/hlsl.tmLanguage.json", "out": "hlsl.tmLanguage.json", "scopeName": "source.hlsl", "language": "hlsl" }
+      ]
+    },
+    {
+      "id": "shaderlab",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/shaderlab/syntaxes/shaderlab.tmLanguage.json", "out": "shaderlab.tmLanguage.json", "scopeName": "source.shaderlab", "language": "shaderlab" }
+      ]
+    },
+    {
+      "id": "razor",
+      "override": true,
+      "rationale": "Same upstream as built-in; embeds csharp/css/javascript.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/razor/syntaxes/cshtml.tmLanguage.json", "out": "cshtml.tmLanguage.json", "scopeName": "text.html.cshtml", "language": "razor", "contributesFrom": "extensions/razor/package.json" }
+      ]
+    },
+    {
+      "id": "restructuredtext",
+      "override": true,
+      "rationale": "Same upstream as built-in; poly controls update cadence.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/restructuredtext/syntaxes/rst.tmLanguage.json", "out": "rst.tmLanguage.json", "scopeName": "source.rst", "language": "restructuredtext" }
+      ]
+    },
+    {
+      "id": "prompt",
+      "override": true,
+      "rationale": "Same upstream as built-in; markdown-derived grammar shared by prompt, instructions, chatagent and skill files.",
+      "repo": "microsoft/vscode",
+      "license": "MIT",
+      "files": [
+        { "src": "extensions/prompt-basics/syntaxes/prompt.tmLanguage.json", "out": "prompt.tmLanguage.json", "scopeName": "text.html.markdown.prompt", "language": "prompt", "contributesFrom": "extensions/prompt-basics/package.json" },
+        { "src": "extensions/prompt-basics/syntaxes/prompt.tmLanguage.json", "out": "prompt.tmLanguage.json", "scopeName": "text.html.markdown.prompt", "language": "instructions", "contributesFrom": "extensions/prompt-basics/package.json" },
+        { "src": "extensions/prompt-basics/syntaxes/prompt.tmLanguage.json", "out": "prompt.tmLanguage.json", "scopeName": "text.html.markdown.prompt", "language": "chatagent", "contributesFrom": "extensions/prompt-basics/package.json" },
+        { "src": "extensions/prompt-basics/syntaxes/prompt.tmLanguage.json", "out": "prompt.tmLanguage.json", "scopeName": "text.html.markdown.prompt", "language": "skill", "contributesFrom": "extensions/prompt-basics/package.json" }
+      ]
+    },
+    {
+      "id": "vue",
+      "override": false,
+      "rationale": "Official grammar from the Vue tooling team. The SFC grammar plus the directive/interpolation injections; the mdx codeblock injection is skipped because poly ships no source.mdx for it to inject into.",
+      "repo": "vuejs/language-tools",
+      "license": "MIT",
+      "language": { "extensions": [".vue"], "aliases": ["Vue"], "configuration": "vue.json" },
+      "files": [
+        { "src": "extensions/vscode/syntaxes/vue.tmLanguage.json", "out": "vue.tmLanguage.json", "scopeName": "text.html.vue", "language": "vue", "contributesFrom": "extensions/vscode/package.json" },
+        { "src": "extensions/vscode/syntaxes/markdown-vue.json", "out": "vue-markdown.tmLanguage.json", "scopeName": "markdown.vue.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "extensions/vscode/package.json" },
+        { "src": "extensions/vscode/syntaxes/vue-directives.json", "out": "vue-directives.tmLanguage.json", "scopeName": "vue.directives", "injectTo": ["text.html.vue", "text.html.markdown", "text.html.derivative", "text.pug"] },
+        { "src": "extensions/vscode/syntaxes/vue-interpolations.json", "out": "vue-interpolations.tmLanguage.json", "scopeName": "vue.interpolations", "injectTo": ["text.html.vue", "text.html.markdown", "text.html.derivative", "text.pug"] },
+        { "src": "extensions/vscode/syntaxes/vue-sfc-script-leading-operator-fix.json", "out": "vue-sfc-script-leading-operator-fix.tmLanguage.json", "scopeName": "vue.sfc.script.leading-operator-fix", "injectTo": ["text.html.vue"] },
+        { "src": "extensions/vscode/syntaxes/vue-sfc-style-variable-injection.json", "out": "vue-sfc-style-variable-injection.tmLanguage.json", "scopeName": "vue.sfc.style.variable.injection", "injectTo": ["text.html.vue"] }
+      ]
+    },
+    {
+      "id": "kotlin",
+      "override": false,
+      "rationale": "Grammar from the vscode-kotlin extension, plus its markdown fenced-block injection.",
+      "repo": "fwcd/vscode-kotlin",
+      "license": "MIT",
+      "language": { "extensions": [".kt", ".kts"], "aliases": ["Kotlin"], "configuration": "kotlin.json" },
+      "files": [
+        { "src": "syntaxes/kotlin.tmLanguage.json", "out": "kotlin.tmLanguage.json", "scopeName": "source.kotlin", "language": "kotlin" },
+        { "src": "syntaxes/kotlin-codeblock.json", "out": "kotlin-markdown.tmLanguage.json", "scopeName": "markdown.kotlin.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "package.json" }
+      ]
+    },
+    {
+      "id": "cmake",
+      "override": false,
+      "rationale": "From CMake Tools, which Microsoft actively maintains; the older twxs.cmake grammar everyone links to has been dormant since 2019. Upstream's filenames entry says CMakelists.txt, which never matches on a case-sensitive filesystem, so the real spelling is used here.",
+      "repo": "microsoft/vscode-cmake-tools",
+      "license": "MIT",
+      "language": { "extensions": [".cmake"], "filenames": ["CMakeLists.txt"], "aliases": ["CMake"], "configuration": "cmake.json" },
+      "files": [
+        { "src": "syntaxes/CMake.tmLanguage.json", "out": "cmake.tmLanguage.json", "scopeName": "source.cmake", "language": "cmake" }
+      ]
+    },
+    {
+      "id": "cmake-cache",
+      "override": false,
+      "rationale": "Same source as cmake; CMakeCache.txt is a distinct language upstream because its syntax is key:TYPE=value, not CMake script.",
+      "repo": "microsoft/vscode-cmake-tools",
+      "license": "MIT",
+      "language": { "filenames": ["CMakeCache.txt"], "aliases": ["CMake Cache"], "configuration": "cmake.json" },
+      "files": [
+        { "src": "syntaxes/CMakeCache.tmLanguage.json", "out": "cmakecache.tmLanguage.json", "scopeName": "source.cmakecache", "language": "cmake-cache" }
+      ]
+    },
+    {
+      "id": "jsonnet",
+      "override": false,
+      "rationale": "Grafana's Jsonnet extension is the maintained one.",
+      "repo": "grafana/vscode-jsonnet",
+      "license": "Apache-2.0",
+      "language": { "extensions": [".jsonnet", ".libsonnet"], "aliases": ["Jsonnet"], "configuration": "jsonnet.json" },
+      "files": [
+        { "src": "language/jsonnet.tmLanguage.json", "out": "jsonnet.tmLanguage.json", "scopeName": "source.jsonnet", "language": "jsonnet" }
+      ]
+    },
+    {
+      "id": "just",
+      "override": false,
+      "rationale": "Recipe bodies embed shell/python/js, and the grammar declares those embeddings, so poly's own grammars light them up.",
+      "repo": "nefrob/vscode-just",
+      "license": "MIT",
+      "language": { "extensions": [".just", ".justfile"], "filenames": ["justfile", "Justfile", ".justfile"], "aliases": ["Just"], "configuration": "just.json" },
+      "files": [
+        { "src": "syntaxes/just.tmLanguage.json", "out": "just.tmLanguage.json", "scopeName": "source.just", "language": "just", "contributesFrom": "package.json" }
+      ]
+    },
+    {
+      "id": "nix",
+      "override": false,
+      "rationale": "Grammar shipped by the Nix IDE extension, plus its markdown fenced-block injection.",
+      "repo": "jnoortheen/vscode-nix-ide",
+      "license": "MIT",
+      "language": { "extensions": [".nix"], "aliases": ["Nix"], "configuration": "nix.json" },
+      "files": [
+        { "src": "dist/nix.tmLanguage.json", "out": "nix.tmLanguage.json", "scopeName": "source.nix", "language": "nix" },
+        { "src": "dist/injection.json", "out": "nix-markdown.tmLanguage.json", "scopeName": "markdown.nix.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "package.json" }
+      ]
+    },
+    {
+      "id": "caddyfile",
+      "override": false,
+      "rationale": "Official Caddy grammar. The caddyfile-test language is a Caddy-internal fixture format and is left out. Upstream puts globs in the extensions array where VSCode only does suffix matching, so the associations are restated as filenames and filenamePatterns.",
+      "repo": "caddyserver/vscode-caddyfile",
+      "license": "MIT",
+      "language": { "extensions": [".caddyfile", ".Caddyfile"], "filenames": ["Caddyfile", "caddyfile"], "filenamePatterns": ["Caddyfile.*", "caddyfile.*"], "aliases": ["Caddyfile", "Caddy"], "configuration": "caddyfile.json" },
+      "files": [
+        { "src": "syntaxes/caddyfile.tmLanguage.json", "out": "caddyfile.tmLanguage.json", "scopeName": "source.Caddyfile", "language": "caddyfile" },
+        { "src": "syntaxes/caddy-markdown.tmLanguage.json", "out": "caddy-markdown.tmLanguage.json", "scopeName": "source.markdown.caddy.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "package.json" }
+      ]
+    },
+    {
+      "id": "systemd-conf",
+      "override": false,
+      "rationale": "The section-name alternation is regenerated from systemd docs upstream, which is exactly the churn D4 wants poly to track. The sibling mkosi grammar is left out as too niche. Upstream commits the plist source, not the built JSON.",
+      "repo": "hangxingliu/vscode-systemd",
+      "license": "MIT",
+      "language": { "extensions": [".service", ".socket", ".device", ".mount", ".automount", ".swap", ".target", ".path", ".timer", ".slice", ".scope", ".netdev", ".network", ".link", ".nspawn", ".container", ".volume", ".pod", ".kube"], "filenamePatterns": ["**/systemd/*.conf", "**/systemd/*.conf.d/*.conf", "**/*.{service,slice,scope}.d/*.conf"], "aliases": ["systemd unit file", "Systemd Configuration"], "configuration": "systemd.json" },
+      "files": [
+        { "src": "src/syntax/systemd.tmLanguage", "out": "systemd.tmLanguage.json", "scopeName": "source.systemd", "language": "systemd-conf" }
+      ]
+    },
+    {
+      "id": "scala",
+      "override": false,
+      "rationale": "Maintained by the Scala organisation itself; also used by Metals.",
+      "repo": "scala/vscode-scala-syntax",
+      "license": "MIT",
+      "language": { "extensions": [".scala", ".sbt", ".sc", ".mill"], "aliases": ["Scala"], "configuration": "scala.json" },
+      "files": [
+        { "src": "syntaxes/Scala.tmLanguage.json", "out": "scala.tmLanguage.json", "scopeName": "source.scala", "language": "scala" }
+      ]
+    },
+    {
+      "id": "apacheconf",
+      "override": false,
+      "rationale": "Upstream claims every .conf file, which would fight nginx and systemd for the same files. Narrowed to htaccess-style names and files that live under an apache2/httpd directory.",
+      "repo": "mrmlnc/vscode-apache",
+      "license": "MIT",
+      "language": { "extensions": [".htaccess", ".htgroups", ".htpasswd"], "filenames": ["httpd.conf", "apache2.conf", ".htaccess", "htaccess", "envvars"], "filenamePatterns": ["**/apache2/**/*.conf", "**/httpd/**/*.conf", "**/sites-{available,enabled}/*", "**/conf.d/*.conf"], "aliases": ["Apache Conf"], "configuration": "apacheconf.json" },
+      "files": [
+        { "src": "syntaxes/Apache.tmLanguage", "out": "apache.tmLanguage.json", "scopeName": "source.apacheconf", "language": "apacheconf" }
+      ]
+    },
+    {
+      "id": "elixir",
+      "override": false,
+      "rationale": "The Elixir team's own TextMate bundle, which every editor's Elixir support derives from. EEx and HEEx are separate languages upstream and are not taken on yet.",
+      "repo": "elixir-lang/elixir-tmbundle",
+      "license": "Apache-2.0",
+      "language": { "extensions": [".ex", ".exs"], "filenames": ["mix.lock"], "aliases": ["Elixir"], "configuration": "elixir.json" },
+      "files": [
+        { "src": "Syntaxes/Elixir.tmLanguage", "out": "elixir.tmLanguage.json", "scopeName": "source.elixir", "language": "elixir" }
+      ]
+    },
+    {
+      "id": "erlang",
+      "override": false,
+      "rationale": "Maintained by the erlang-ls project. The grammar is read from the repo root; Syntaxes/Erlang.plist is a symlink to it and would sync as 15 bytes of path text.",
+      "repo": "erlang-ls/grammar",
+      "license": "Apache-2.0",
+      "language": { "extensions": [".erl", ".hrl", ".escript", ".es", ".xrl", ".yrl"], "filenames": ["rebar.config"], "aliases": ["Erlang"], "configuration": "erlang.json" },
+      "files": [
+        { "src": "Erlang.plist", "out": "erlang.tmLanguage.json", "scopeName": "source.erlang", "language": "erlang" }
+      ]
+    },
+    {
+      "id": "haskell",
+      "override": false,
+      "rationale": "The grammar every Haskell editor plugin derives from. Read from the YAML source: the syntaxes/*.json that upstream's package.json points at is build output and is not committed.",
+      "repo": "justusadam/language-haskell",
+      "license": "BSD-3-Clause",
+      "language": { "extensions": [".hs", ".hsig", ".hs-boot"], "aliases": ["Haskell"], "configuration": "haskell.json" },
+      "files": [
+        { "src": "syntaxes/haskell.YAML-tmLanguage", "out": "haskell.tmLanguage.json", "scopeName": "source.haskell", "language": "haskell" },
+        { "src": "syntaxes/codeblock-haskell.json", "out": "haskell-markdown.tmLanguage.json", "scopeName": "markdown.haskell.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "package.json" }
+      ]
+    },
+    {
+      "id": "cabal",
+      "override": false,
+      "rationale": "Same source as haskell; .cabal package descriptions are a separate language upstream. Its own language-configuration, not haskell.json: cabal has no {- -} block comments, and offering one made Ctrl+Shift+/ insert something cabal rejects.",
+      "repo": "justusadam/language-haskell",
+      "license": "BSD-3-Clause",
+      "language": { "extensions": [".cabal"], "aliases": ["Cabal"], "configuration": "cabal.json" },
+      "files": [
+        { "src": "syntaxes/cabal.YAML-tmLanguage", "out": "cabal.tmLanguage.json", "scopeName": "source.cabal", "language": "cabal" },
+        { "src": "syntaxes/codeblock-cabal.json", "out": "cabal-markdown.tmLanguage.json", "scopeName": "markdown.cabal.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "package.json" }
+      ]
+    },
+    {
+      "id": "ocaml",
+      "override": false,
+      "rationale": "From the official OCaml Platform extension. It ships 22 grammars; poly takes the ones an OCaml project actually opens and leaves reason, atd, menhir, cram and the rest.",
+      "repo": "ocamllabs/vscode-ocaml-platform",
+      "license": "ISC",
+      "language": { "extensions": [".ml", ".eliom", ".ocamlinit"], "aliases": ["OCaml"], "configuration": "ocaml.json" },
+      "files": [
+        { "src": "syntaxes/ocaml.json", "out": "ocaml.tmLanguage.json", "scopeName": "source.ocaml", "language": "ocaml" },
+        { "src": "syntaxes/ocaml-markdown-codeblock.json", "out": "ocaml-markdown.tmLanguage.json", "scopeName": "markdown.ocaml.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "package.json" }
+      ]
+    },
+    {
+      "id": "ocaml.interface",
+      "override": false,
+      "rationale": "Same source as ocaml; .mli interfaces get their own grammar upstream.",
+      "repo": "ocamllabs/vscode-ocaml-platform",
+      "license": "ISC",
+      "language": { "extensions": [".mli", ".eliomi"], "aliases": ["OCaml Interface"], "configuration": "ocaml.json" },
+      "files": [
+        { "src": "syntaxes/ocaml.interface.json", "out": "ocaml-interface.tmLanguage.json", "scopeName": "source.ocaml.interface", "language": "ocaml.interface" }
+      ]
+    },
+    {
+      "id": "dune",
+      "override": false,
+      "rationale": "Same source as ocaml; dune build files are s-expressions, not OCaml.",
+      "repo": "ocamllabs/vscode-ocaml-platform",
+      "license": "ISC",
+      "language": { "filenames": ["dune", "jbuild"], "aliases": ["dune"], "configuration": "dune.json" },
+      "files": [
+        { "src": "syntaxes/dune.json", "out": "dune.tmLanguage.json", "scopeName": "source.dune", "language": "dune" }
+      ]
+    },
+    {
+      "id": "dune-project",
+      "override": false,
+      "rationale": "Same source as ocaml; dune-project has its own dialect of the dune syntax.",
+      "repo": "ocamllabs/vscode-ocaml-platform",
+      "license": "ISC",
+      "language": { "filenames": ["dune-project"], "aliases": ["dune project"], "configuration": "dune.json" },
+      "files": [
+        { "src": "syntaxes/dune-project.json", "out": "dune-project.tmLanguage.json", "scopeName": "source.dune-project", "language": "dune-project" }
+      ]
+    },
+    {
+      "id": "ocaml.opam",
+      "override": false,
+      "rationale": "Same source as ocaml; opam package metadata.",
+      "repo": "ocamllabs/vscode-ocaml-platform",
+      "license": "ISC",
+      "language": { "extensions": [".opam", ".opam.locked", ".opam.template"], "filenames": ["opam"], "aliases": ["opam"], "configuration": "ocaml.json" },
+      "files": [
+        { "src": "syntaxes/opam.json", "out": "opam.tmLanguage.json", "scopeName": "source.ocaml.opam", "language": "ocaml.opam" }
+      ]
+    },
+    {
+      "id": "jinja",
+      "override": false,
+      "rationale": "Jinja templates keep the host language's grammar and add the template delimiters on top, so each host needs its own variant. Poly takes the infrastructure-facing subset of the 28 upstream variants.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "aliases": ["jinja"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja.tmLanguage.json", "out": "jinja.tmLanguage.json", "scopeName": "source.jinja", "language": "jinja" }
+      ]
+    },
+    {
+      "id": "jinja-html",
+      "override": false,
+      "rationale": "See the jinja entry; same upstream, host language html.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": [".jinja", ".jinja2", ".j2", ".html.j2"], "aliases": ["jinja-html"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-html.tmLanguage.json", "out": "jinja-html.tmLanguage.json", "scopeName": "text.html.jinja", "language": "jinja-html" }
+      ]
+    },
+    {
+      "id": "jinja-yaml",
+      "override": false,
+      "rationale": "Host highlighting only: the yaml grammar opens a document-wide rule (begin \\\\A / while ^), so the jinja delimiters this variant layers on top never get a turn. Still worth shipping -- without it these files get no language at all.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": [".yml.j2", ".yaml.j2", ".yml.jinja", ".yaml.jinja", ".yml.jinja2", ".yaml.jinja2", ".sls"], "aliases": ["jinja-yaml"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-yaml.tmLanguage.json", "out": "jinja-yaml.tmLanguage.json", "scopeName": "text.yaml.jinja", "language": "jinja-yaml" }
+      ]
+    },
+    {
+      "id": "jinja-json",
+      "override": false,
+      "rationale": "See the jinja entry; same upstream, host language json.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": [".json.j2", ".json.jinja", ".json.jinja2"], "aliases": ["jinja-json"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-json.tmLanguage.json", "out": "jinja-json.tmLanguage.json", "scopeName": "text.json.jinja", "language": "jinja-json" }
+      ]
+    },
+    {
+      "id": "jinja-toml",
+      "override": false,
+      "rationale": "See the jinja entry; same upstream, host language toml.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": [".toml.j2", ".toml.jinja", ".toml.jinja2"], "aliases": ["jinja-toml"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-toml.tmLanguage.json", "out": "jinja-toml.tmLanguage.json", "scopeName": "text.toml.jinja", "language": "jinja-toml" }
+      ]
+    },
+    {
+      "id": "jinja-py",
+      "override": false,
+      "rationale": "See the jinja entry; same upstream, host language py.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": ["py.j2", "py.jinja", "py.jinja2"], "aliases": ["jinja-py"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-python.tmLanguage.json", "out": "jinja-py.tmLanguage.json", "scopeName": "source.python.jinja", "language": "jinja-py" }
+      ]
+    },
+    {
+      "id": "jinja-shell",
+      "override": false,
+      "rationale": "See the jinja entry; same upstream, host language shell.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": [".sh.j2", ".bash.j2", ".zsh.j2", ".ksh.j2", ".profile.j2", ".env.j2", ".env.jinja", ".env.jinja2"], "aliases": ["jinja-shell"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-shell.tmLanguage.json", "out": "jinja-shell.tmLanguage.json", "scopeName": "source.shell.jinja", "language": "jinja-shell" }
+      ]
+    },
+    {
+      "id": "jinja-dockerfile",
+      "override": false,
+      "rationale": "See the jinja entry; same upstream, host language dockerfile.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": [".dockerfile.j2", ".dockerfile.jinja", ".dockerfile.jinja2"], "filenames": ["Dockerfile.j2", "Dockerfile.jinja", "Dockerfile.jinja2"], "aliases": ["jinja-dockerfile"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-dockerfile.tmLanguage.json", "out": "jinja-dockerfile.tmLanguage.json", "scopeName": "source.dockerfile.jinja", "language": "jinja-dockerfile" }
+      ]
+    },
+    {
+      "id": "jinja-sql",
+      "override": false,
+      "rationale": "See the jinja entry; same upstream, host language sql.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": [".sql.j2", ".sql.jinja", ".sql.jinja2"], "aliases": ["jinja-sql"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-sql.tmLanguage.json", "out": "jinja-sql.tmLanguage.json", "scopeName": "source.sql.jinja", "language": "jinja-sql" }
+      ]
+    },
+    {
+      "id": "jinja-nginx",
+      "override": false,
+      "rationale": "Host highlighting only: the nginx grammar opens a document-wide rule (begin \\\\A / while ^), so the jinja delimiters this variant layers on top never get a turn. Still worth shipping -- without it these files get no language at all.",
+      "repo": "samuelcolvin/jinjahtml-vscode",
+      "license": "MIT",
+      "language": { "extensions": [".conf.j2", ".conf.jinja", ".conf.jinja2"], "aliases": ["jinja-nginx"], "configuration": "jinja.json" },
+      "files": [
+        { "src": "syntaxes/jinja-nginx.tmLanguage.json", "out": "jinja-nginx.tmLanguage.json", "scopeName": "source.nginx.jinja", "language": "jinja-nginx" }
+      ]
+    }
+  ]
+}

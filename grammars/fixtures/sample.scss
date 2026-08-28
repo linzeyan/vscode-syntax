@@ -1,0 +1,52 @@
+// SCSS fixture: modules, mixins, nesting, control flow, sassdoc injection.
+@use "sass:math";
+@use "./tokens" as tokens;
+
+$breakpoints: (
+  "sm": 480px,
+  "md": 768px,
+  "lg": 1200px,
+);
+
+/// Emit a min-width media query for a named breakpoint.
+/// @param {String} $name - key of $breakpoints
+/// @content styles applied inside the query
+@mixin respond-to($name) {
+  $width: map-get($breakpoints, $name);
+
+  @if $width == null {
+    @error "unknown breakpoint: #{$name}";
+  } @else {
+    @media (min-width: $width) {
+      @content;
+    }
+  }
+}
+
+@function rem($px, $base: 16px) {
+  @return math.div($px, $base) * 1rem;
+}
+
+.panel {
+  padding: rem(24px);
+  color: tokens.$fg;
+
+  &__title {
+    font-weight: 600;
+
+    &:hover {
+      color: darken(tokens.$fg, 10%);
+    }
+  }
+
+  @include respond-to("md") {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @each $name, $size in $breakpoints {
+    &--#{$name} {
+      max-width: $size;
+    }
+  }
+}

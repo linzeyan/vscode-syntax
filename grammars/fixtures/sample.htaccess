@@ -1,0 +1,28 @@
+# Release mirror rules.
+ServerSignature Off
+Options -Indexes +FollowSymLinks
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    <FilesMatch "\.vsix$">
+        Header set Content-Type "application/octet-stream"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^api/(.*)$ http://127.0.0.1:9257/$1 [P,QSA]
+</IfModule>
+
+<Directory "/srv/poly/releases">
+    AllowOverride None
+    Require all granted
+</Directory>
+
+ErrorDocument 404 /404.html
+AddType application/octet-stream .vsix

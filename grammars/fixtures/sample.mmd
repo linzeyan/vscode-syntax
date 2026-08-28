@@ -1,0 +1,6 @@
+sequenceDiagram
+    participant E as Editor
+    participant D as Daemon
+    E->>D: textDocument/formatting
+    D-->>E: edits
+    Note over D: engines stay warm

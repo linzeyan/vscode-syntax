@@ -1,0 +1,11 @@
+[package]
+name = "poly"
+version = "0.1.0"
+authors = ["ricky"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "poly"
+path = "src/main.rs"

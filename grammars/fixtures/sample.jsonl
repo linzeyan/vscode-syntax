@@ -1,0 +1,4 @@
+{"level":"info","msg":"daemon started","pid":4821,"ts":1735689600}
+{"level":"warn","msg":"tool not found","tool":"tflint","fallback":"managed"}
+{"level":"error","msg":"format failed","file":"src/main.rs","code":2,"retry":false}
+{"level":"debug","msg":"cache hit","key":"sha256:9f86d0","bytes":1024,"ratio":0.87}

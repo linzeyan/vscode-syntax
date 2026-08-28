@@ -1,0 +1,38 @@
+// Less fixture: variables, guarded mixins, operations, escaping.
+@brand: #3b82f6;
+@space: 8px;
+@min-tablet: ~"(min-width: 768px)";
+
+.rounded(@radius: 4px) {
+  border-radius: @radius;
+}
+
+.text-contrast(@bg) when (lightness(@bg) >= 50%) {
+  color: black;
+}
+.text-contrast(@bg) when (lightness(@bg) < 50%) {
+  color: white;
+}
+
+#header {
+  .rounded(6px);
+  .text-contrast(@brand);
+  background-color: @brand;
+  padding: (@space * 2) @space;
+
+  .nav > li {
+    display: inline-block;
+
+    &:not(:last-child) {
+      margin-right: @space;
+    }
+  }
+
+  @media @min-tablet {
+    padding: (@space * 3);
+  }
+}
+
+.button:extend(#header .nav > li) {
+  border: 1px solid fade(@brand, 40%);
+}

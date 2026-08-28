@@ -1,0 +1,23 @@
+; Library and tests for poly-release.
+(library
+ (name poly_release)
+ (public_name poly-release)
+ (libraries str unix)
+ (flags
+  (:standard -w +a-4-9-40-42 -strict-sequence)))
+
+(test
+ (name spec)
+ (modules spec)
+ (libraries poly_release alcotest)
+ (deps
+  (glob_files fixtures/*.json)))
+
+(rule
+ (targets version.ml)
+ (deps
+  (:script gen_version.sh))
+ (action
+  (with-stdout-to
+   %{targets}
+   (run bash %{script} %{version:poly-release}))))

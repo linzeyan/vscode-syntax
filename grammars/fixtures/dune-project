@@ -1,0 +1,22 @@
+(lang dune 3.11)
+(name poly-release)
+(version 0.2.0)
+
+(generate_opam_files true)
+
+(source
+ (github linzeyan/vscode-syntax))
+
+(authors "Ricky")
+(maintainers "Ricky")
+(license BSD-3-Clause)
+
+(package
+ (name poly-release)
+ (synopsis "Parse and rank release tags")
+ (description "Semver parsing plus asset bookkeeping for poly releases.")
+ (depends
+  (ocaml
+   (>= 4.14))
+  (alcotest :with-test)
+  dune))

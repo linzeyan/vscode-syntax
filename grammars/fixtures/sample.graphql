@@ -1,0 +1,17 @@
+"""A registered user."""
+type User {
+  id: ID!
+  name: String!
+  orders(first: Int = 10): [Order!]
+}
+
+query GetUser($id: ID!) {
+  user(id: $id) {
+    ...UserFields
+  }
+}
+
+fragment UserFields on User {
+  id
+  name
+}

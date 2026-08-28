@@ -1,0 +1,104 @@
+{
+  "name": "CSV",
+  "scopeName": "source.csv",
+  "patterns": [
+    {
+      "match": "^(\"(?:[^\"]|\"\")*\"|[^,\\n]*)(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?(?:(,)(\"(?:[^\"]|\"\")*\"|[^,\\n]*))?",
+      "captures": {
+        "1": {
+          "name": "keyword.rainbow1.csv"
+        },
+        "3": {
+          "name": "string.rainbow2.csv"
+        },
+        "2": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "5": {
+          "name": "constant.numeric.rainbow3.csv"
+        },
+        "4": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "7": {
+          "name": "entity.name.function.rainbow4.csv"
+        },
+        "6": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "9": {
+          "name": "entity.name.type.rainbow5.csv"
+        },
+        "8": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "11": {
+          "name": "variable.language.rainbow6.csv"
+        },
+        "10": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "13": {
+          "name": "comment.rainbow7.csv"
+        },
+        "12": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "15": {
+          "name": "support.constant.rainbow8.csv"
+        },
+        "14": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "17": {
+          "name": "keyword.rainbow9.csv"
+        },
+        "16": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "19": {
+          "name": "string.rainbow10.csv"
+        },
+        "18": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "21": {
+          "name": "constant.numeric.rainbow11.csv"
+        },
+        "20": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "23": {
+          "name": "entity.name.function.rainbow12.csv"
+        },
+        "22": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "25": {
+          "name": "entity.name.type.rainbow13.csv"
+        },
+        "24": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "27": {
+          "name": "variable.language.rainbow14.csv"
+        },
+        "26": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "29": {
+          "name": "comment.rainbow15.csv"
+        },
+        "28": {
+          "name": "punctuation.separator.comma.csv"
+        },
+        "31": {
+          "name": "support.constant.rainbow16.csv"
+        },
+        "30": {
+          "name": "punctuation.separator.comma.csv"
+        }
+      }
+    }
+  ]
+}

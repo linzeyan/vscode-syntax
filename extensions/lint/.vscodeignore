@@ -1,0 +1,9 @@
+# The extension ships only the esbuild bundle; sources and deps stay out.
+node_modules/**
+src/**
+tsconfig.json
+package-lock.json
+*.vsix
+out/**
+tsconfig.test.json
+.vscode-test/**

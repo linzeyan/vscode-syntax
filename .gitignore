@@ -1,0 +1,9 @@
+target/
+node_modules/
+.logs/
+*.vsix
+.DS_Store
+/docs
+extensions/lint/bin/
+extensions/lint/out/
+extensions/lint/.vscode-test/

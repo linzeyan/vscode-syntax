@@ -1,0 +1,160 @@
+# Poly
+
+用「兩個 VSCode extension ＋ 一個 CLI」取代為了各語言 highlight／lint／format 而
+安裝的一大堆零散 extension。編輯器與 CI 共用同一個 binary、同一份設定，所以本機存
+檔跟 pipeline 的結果一定一致。
+
+| 產出物        | 職責                                                         |
+| ------------- | ------------------------------------------------------------ |
+| `poly-syntax` | 多語言 syntax highlighting，**接管全部 VSCode 內建語言文法** |
+| `poly-lint`   | 存檔即時 lint／format，批次命令；背後是 `poly lsp` daemon    |
+| `poly`        | 單一 binary CLI，供 CI、pre-commit、終端批次使用             |
+
+## 功能
+
+### poly-syntax — highlighting
+
+- **151 個文法**：接管 49 個 VSCode 內建語言，另加 44 個內建沒有的語言
+  （HCL／Terraform、nginx、zig、dotenv、protobuf、mermaid、caddyfile、systemd
+  unit、jsonnet、just、nix、cabal、dune、ssh_config、CSV/TSV rainbow…）。
+- 來源共 93 條、27 個 pinned 上游 repo；只有 CSV／TSV／ssh_config 三個是自產的
+  （上游要嘛不存在，要嘛沒有授權檔）。
+- 輸出標準 TextMate scope，**任何現有 color theme 直接生效**，不自帶配色。
+- 部分語言改採比內建更好的社群文法（如 rust 用 dustypomerleau/rust-syntax）。
+- 文法一律由 `tools/grammar-sync.py` 從上游 repo／marketplace VSIX 以 pinned
+  commit 同步，`grammars/sources.json` 是單一真相；CI 有 drift gate 擋手改。
+- **零執行期程式碼**，不佔 extension host 資源。
+
+### poly-lint — 編輯器整合
+
+- **Format**：Format Document／`editor.formatOnSave`，加上批次命令 Format
+  File／Folder／Workspace／Git Repo／Git Changed Files。
+- **Lint**：存檔即時 diagnostics 進 Problems panel；`Poly: Lint (poly check)`
+  在終端跑完整 CLI。
+- **專案內工具優先**：偵測到專案的 biome／prettier／eslint／rustfmt 就用它們，
+  避免和團隊 CI 結果不一致。
+- 背景檢查 GitHub Releases（預設 7 天一次，可調可關），一鍵同時更新兩個 extension。
+
+### poly — CLI
+
+- **內嵌引擎**（免安裝、離線可用）：TypeScript／JavaScript、JSON／JSONC、
+  Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
+  Python、SQL、XML、GraphQL、Dockerfile。
+- **外部工具**（受管下載，sha256 寫入 lock 驗證）：shellcheck、shfmt、hadolint、
+  actionlint、typos、ruff、tflint、gofumpt、golangci-lint、stylua、selene、
+  swiftlint。
+- **只用專案 toolchain、不代裝**：rustfmt／clippy、clang-format／clang-tidy、
+  swift-format、terraform fmt。
+- 工具解析順序：`poly.toml` 指定 → 專案內工具 → 內嵌引擎 → 受管下載 → PATH。
+
+## 安裝
+
+需要 VSCode 1.85 以上。從
+[Releases](https://github.com/linzeyan/vscode-syntax/releases/latest) 下載，
+兩個 VSIX 都裝：
+
+1. `poly-syntax-<版本>.vsix` — 通用，不分平台。
+2. `poly-lint-<平台>-<版本>.vsix` — **要挑對平台**，內含對應的 poly binary：
+   `darwin-arm64`、`darwin-x64`、`linux-arm64`、`linux-x64`、`win32-arm64`、
+   `win32-x64`。
+
+安裝方式：VSCode 側邊欄 Extensions → 右上角 `...` → **Install from VSIX...** →
+選檔案 → 重新載入視窗。或用命令列：
+
+```sh
+code --install-extension poly-syntax-0.1.0.vsix
+code --install-extension poly-lint-darwin-arm64-0.1.0.vsix
+```
+
+之後的版本由 poly-lint 自己提示更新，不必再手動抓。
+
+### 只要 CLI
+
+Release 另附獨立 binary（`poly-darwin-arm64`、`poly-linux-x64`、
+`poly-win32-arm64.exe` …），不需要裝 extension：
+
+```sh
+curl -fsSLO https://github.com/linzeyan/vscode-syntax/releases/latest/download/poly-darwin-arm64
+xattr -d com.apple.quarantine ./poly-darwin-arm64   # macOS 才需要
+chmod +x poly-darwin-arm64 && mv poly-darwin-arm64 /usr/local/bin/poly
+```
+
+`SHA256SUMS` 一併發佈，可先驗再用。Windows 上未簽章的 `poly.exe` 可能被
+SmartScreen 擋，處理方式見
+[extensions/lint/README.md](extensions/lint/README.md#疑難排解)。
+
+### 驗證裝好了
+
+```sh
+poly tools          # 列出每個外部工具解析到哪裡
+poly fmt --check .  # 對整個 repo 做 dry-run
+```
+
+在編輯器裡開一個 `.rs` 檔，`Developer: Inspect Editor Tokens and Scopes`，把游標
+放在 `->` 上——scope 含 `keyword.operator.arrow.skinny.rust` 就代表 poly 的文法
+生效了（內建文法沒有這個 scope）。
+
+## CLI 用法
+
+```sh
+poly fmt <paths...>            # 就地格式化
+poly fmt --check <paths...>    # 只回報，不改檔（CI 用）
+poly check <paths...>          # 跑 lint
+poly check --strict <paths...> # 工具缺席時視為錯誤，而不是跳過
+poly fmt --changed             # 只處理 git 變更的檔案（pre-commit 用）
+poly tools list                # 工具解析狀態
+poly tools install [tool...]   # 預先抓好受管工具（離線環境先在有網路的機器跑）
+poly lsp                       # 給編輯器用的 LSP daemon
+```
+
+Exit code：`0` 乾淨、`1` 有差異或違規、`2` 執行錯誤。
+
+## 設定
+
+專案層的真相放 repo 根目錄的 `poly.toml`，CLI 與 extension 都讀它，保證編輯器與
+CI 行為一致：
+
+```toml
+[languages.map] # 副檔名 ↔ 語言
+"*.tpl" = "gotmpl"
+
+[format]
+exclude = ["vendor/**", "**/*.generated.ts"]
+
+[format.python] # 每語言可調的三個選項
+line-width = 100
+indent-width = 4
+use-tabs = false
+
+[lint]
+exclude = ["third_party/**"]
+
+[tools] # 指定路徑，或設 "off" 關掉
+shellcheck = "C:/tools/shellcheck.exe"
+tflint = "off"
+```
+
+`[format.<lang>]` 只認 `line-width`／`indent-width`／`use-tabs` 三個鍵，拼錯會直接
+讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部工具的語言請用該工具自己的設定
+檔。VSCode settings 只放個人偏好（`poly.serverPath`、`poly.lintOnSave`、
+`poly.updateCheck.*`）。
+
+## 從原始碼建置
+
+```sh
+cargo build --release --manifest-path cli/Cargo.toml   # → cli/target/release/poly
+(cd extensions/lint && npm ci && npm run build)        # extension bundle
+(cd extensions/lint && npm test)                       # 真 extension host E2E
+pip install pyyaml && python tools/grammar-sync.py     # 重新同步文法
+```
+
+`.vscode/settings.json` 已把 `poly.serverPath` 指向 `cli/target/release/poly`，
+所以在本 repo 裡按 F5 就會用剛建好的 binary。
+
+## 授權
+
+poly 自身的程式碼為 MIT。內嵌文法與相依套件各自保留上游授權，完整清單見兩份
+`THIRD-PARTY-NOTICES.md`（由同步管線自動產生，含 pinned 版本）。授權允許清單
+（A9）由 `tools/grammar-sync.py` 與 `tools/third-party-notices.py` 在 CI 強制
+執行：permissive 授權加 MPL-2.0，GPL／AGPL／SSPL 與無 permissive 選項的 LGPL
+一律擋下。

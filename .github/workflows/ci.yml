@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  grammars:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sync grammars from pinned sources
+        run: |
+          pip install pyyaml
+          python tools/grammar-sync.py
+      - name: Verify sync output is committed (no drift)
+        run: git diff --exit-code
+      - name: Tokenize fixtures
+        run: |
+          npm install --prefix /tmp/tokdeps --no-save vscode-textmate vscode-oniguruma
+          node tools/tokenize-check.mjs /tmp/tokdeps/node_modules
+      - name: Package VSIX
+        working-directory: extensions/syntax
+        run: npx --yes @vscode/vsce package --allow-missing-repository
+
+  cli:
+    runs-on: ubuntu-latest
+    env:
+      # This job checks behavior, not the artifact — build.yml compiles the
+      # shipped profile on every platform and gates its size. Dropping fat LTO
+      # here lets the tests and the smoke binary share one dependency build
+      # instead of compiling the tree twice (dev, then release).
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
+          cache-on-failure: true
+      - name: Test
+        working-directory: cli
+        run: cargo test --workspace --release
+      - name: Third-party notices are current (A9)
+        run: |
+          python3 tools/third-party-notices.py --self-test
+          python3 tools/third-party-notices.py --check
+      - name: LSP smoke test
+        run: |
+          cargo build --release --manifest-path cli/Cargo.toml
+          python tools/lsp-smoke.py cli/target/release/poly
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Runs here rather than in its own job so it can reuse the binary the
+      # smoke test just built; a separate job would compile the workspace twice.
+      # xvfb: the extension host needs a display even with no window on screen.
+      - name: Editor end-to-end (real extension host)
+        working-directory: extensions/lint
+        env:
+          POLY_BIN: ${{ github.workspace }}/cli/target/release/poly
+        run: |
+          npm ci
+          npm run typecheck
+          xvfb-run -a npm test

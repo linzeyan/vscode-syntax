@@ -1,0 +1,27 @@
+{# Release listing rendered by Ansible. #}
+<!doctype html>
+<html lang="{{ site_lang | default('en') }}">
+  <head>
+    <meta charset="utf-8" />
+    <title>{% block title %}{{ project }} releases{% endblock %}</title>
+  </head>
+  <body>
+    <h1>{{ project | title }}</h1>
+
+    {% if releases %}
+      <ul class="releases">
+        {% for release in releases if not release.prerelease %}
+          <li data-tag="{{ release.tag }}">
+            <a href="{{ base_url }}/{{ release.tag }}">{{ release.tag }}</a>
+            <span>{{ release.assets | length }} assets</span>
+            {%- if loop.last %} <em>latest</em>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>Nothing published yet.</p>
+    {% endif %}
+
+    {% include "footer.html.j2" %}
+  </body>
+</html>

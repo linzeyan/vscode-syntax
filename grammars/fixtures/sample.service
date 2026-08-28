@@ -1,0 +1,28 @@
+[Unit]
+Description=poly LSP daemon
+Documentation=https://github.com/linzeyan/vscode-syntax
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/poly lsp --listen 127.0.0.1:9257
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+User=poly
+Group=poly
+Environment=POLY_LOG=info
+EnvironmentFile=-/etc/default/poly
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

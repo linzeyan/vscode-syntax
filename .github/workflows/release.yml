@@ -1,0 +1,144 @@
+name: Release
+
+# Tag vX.Y.Z (or vX.Y.Z-rc.N for a pre-release) -> 6-platform build ->
+# 7 VSIX (6 platform poly-lint + 1 universal poly-syntax) + 6 binaries
+# + SHA256SUMS + third-party notices, uploaded to a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.vsce }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-latest,
+              vsce: linux-x64,
+            }
+          - {
+              target: aarch64-unknown-linux-gnu,
+              os: ubuntu-24.04-arm,
+              vsce: linux-arm64,
+            }
+          - { target: aarch64-apple-darwin, os: macos-14, vsce: darwin-arm64 }
+          # arm64 runner runs the x64 smoke test through Rosetta.
+          - { target: x86_64-apple-darwin, os: macos-14, vsce: darwin-x64 }
+          - {
+              target: x86_64-pc-windows-msvc,
+              os: windows-latest,
+              vsce: win32-x64,
+            }
+          - {
+              target: aarch64-pc-windows-msvc,
+              os: windows-11-arm,
+              vsce: win32-arm64,
+            }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
+          key: ${{ matrix.target }}
+          cache-on-failure: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build
+        working-directory: cli
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Smoke test
+        working-directory: cli
+        shell: bash
+        run: |
+          BIN=target/${{ matrix.target }}/release/poly
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          "$BIN" fmt --check . || test $? -le 1
+          bytes=$(wc -c < "$BIN")
+          mb=$(( bytes / 1048576 ))
+          echo "::notice title=binary size::${{ matrix.target }} ${mb}MB ($bytes bytes)"
+          test "$bytes" -lt $(( 40 * 1048576 )) || {
+            echo "::error title=binary size::${{ matrix.target }} ${mb}MB exceeds the 40MB budget (02 §9)"
+            exit 1; }
+      - name: Package platform VSIX
+        shell: bash
+        run: |
+          BIN=cli/target/${{ matrix.target }}/release/poly
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          npm ci --prefix extensions/lint
+          tools/package-lint.sh ${{ matrix.vsce }} "$BIN"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.vsce }}
+          path: |
+            cli/target/${{ matrix.target }}/release/poly
+            cli/target/${{ matrix.target }}/release/poly.exe
+            extensions/lint/poly-lint-*.vsix
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify tag matches extension versions
+        run: |
+          BASE="${GITHUB_REF_NAME#v}"; BASE="${BASE%%-*}"
+          for f in extensions/lint/package.json extensions/syntax/package.json; do
+            v=$(node -p "require('./$f').version")
+            if [ "$v" != "$BASE" ]; then
+              echo "version mismatch: $f has $v, tag implies $BASE" >&2
+              exit 1
+            fi
+          done
+      - name: Package universal syntax VSIX
+        working-directory: extensions/syntax
+        run: npx --yes @vscode/vsce package --allow-missing-repository
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: artifacts
+      - name: Assemble release assets
+        run: |
+          mkdir dist
+          for d in artifacts/release-*; do
+            vsce="${d#artifacts/release-}"
+            find "$d" -name 'poly-lint-*.vsix' -exec cp {} dist/ \;
+            # Artifacts keep repo-relative nesting; locate binaries by name.
+            exe=$(find "$d" -name poly.exe -type f | head -1)
+            if [ -n "$exe" ]; then
+              cp "$exe" "dist/poly-$vsce.exe"
+            else
+              find "$d" -name poly -type f -exec cp {} "dist/poly-$vsce" \;
+            fi
+          done
+          cp extensions/syntax/poly-syntax-*.vsix dist/
+          cp extensions/lint/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-cli.md
+          cp extensions/syntax/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-grammars.md
+          cd dist && sha256sum -- * > SHA256SUMS && ls -l
+      - name: Sanity-check asset counts
+        run: |
+          lint=$(ls dist/poly-lint-*.vsix | wc -l)
+          bins=$(ls dist/poly-* | grep -cv '\.vsix\|\.md\|SUMS' || true)
+          test "$lint" -eq 6 || { echo "expected 6 lint VSIX, got $lint" >&2; exit 1; }
+          test "$bins" -eq 6 || { echo "expected 6 binaries, got $bins" >&2; exit 1; }
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$GITHUB_REF_NAME" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
+          gh release create "$GITHUB_REF_NAME" $PRE --generate-notes \
+            --title "$GITHUB_REF_NAME" dist/*

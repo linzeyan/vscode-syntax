@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>poly-syntax</title>
+    <!-- Embedded CSS must tokenize with source.css. -->
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app" data-ready="false">
+      <h1>Hello &amp; welcome</h1>
+      <p>Grammar coverage for <code>text.html.derivative</code>.</p>
+      <button type="button" onclick="refresh()">Refresh</button>
+    </main>
+
+    <!-- Embedded JS must tokenize with source.js. -->
+    <script type="module">
+      const app = document.getElementById("app");
+
+      async function refresh() {
+        const res = await fetch("/api/status", { headers: { accept: "application/json" } });
+        const { ready } = await res.json();
+        app.dataset.ready = String(ready);
+      }
+
+      window.addEventListener("DOMContentLoaded", () => refresh());
+    </script>
+  </body>
+</html>
