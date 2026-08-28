@@ -6,7 +6,7 @@
     }
   },
   "microsoft/vscode": {
-    "sha": "68d9c228eaa295e171eac93c04d7503a94dc73b7",
+    "sha": "2a058e8844367ffdeda372134e6d41ea9313dd10",
     "files": {
       "extensions/swift/syntaxes/swift.tmLanguage.json": "acd12f33c06092e1",
       "extensions/csharp/syntaxes/csharp.tmLanguage.json": "152d4586a2ddf518",
@@ -90,59 +90,32 @@
       "extensions/restructuredtext/syntaxes/rst.tmLanguage.json": "9ec7e7ec40cb50d7",
       "extensions/prompt-basics/syntaxes/prompt.tmLanguage.json": "be756e8792823908"
     },
-    "embedded": {
-      "text.html.markdown": {
-        "meta.embedded.block.html": "html",
-        "source.js": "javascript",
-        "source.css": "css",
-        "meta.embedded.block.frontmatter": "yaml",
-        "meta.embedded.block.css": "css",
-        "meta.embedded.block.ini": "ini",
-        "meta.embedded.block.java": "java",
-        "meta.embedded.block.lua": "lua",
-        "meta.embedded.block.makefile": "makefile",
-        "meta.embedded.block.perl": "perl",
-        "meta.embedded.block.r": "r",
-        "meta.embedded.block.ruby": "ruby",
-        "meta.embedded.block.php": "php",
-        "meta.embedded.block.sql": "sql",
-        "meta.embedded.block.vs_net": "vs_net",
-        "meta.embedded.block.xml": "xml",
-        "meta.embedded.block.xsl": "xsl",
-        "meta.embedded.block.yaml": "yaml",
-        "meta.embedded.block.dosbatch": "dosbatch",
-        "meta.embedded.block.clojure": "clojure",
-        "meta.embedded.block.coffee": "coffee",
-        "meta.embedded.block.c": "c",
-        "meta.embedded.block.cpp": "cpp",
-        "meta.embedded.block.diff": "diff",
-        "meta.embedded.block.dockerfile": "dockerfile",
-        "meta.embedded.block.go": "go",
-        "meta.embedded.block.groovy": "groovy",
-        "meta.embedded.block.pug": "jade",
-        "meta.embedded.block.ignore": "ignore",
-        "meta.embedded.block.javascript": "javascript",
-        "meta.embedded.block.json": "json",
-        "meta.embedded.block.jsonc": "jsonc",
-        "meta.embedded.block.jsonl": "jsonl",
-        "meta.embedded.block.latex": "latex",
-        "meta.embedded.block.less": "less",
-        "meta.embedded.block.objc": "objc",
-        "meta.embedded.block.scss": "scss",
-        "meta.embedded.block.perl6": "perl6",
-        "meta.embedded.block.powershell": "powershell",
-        "meta.embedded.block.python": "python",
-        "meta.embedded.block.restructuredtext": "restructuredtext",
-        "meta.embedded.block.rust": "rust",
-        "meta.embedded.block.scala": "scala",
-        "meta.embedded.block.shellscript": "shellscript",
-        "meta.embedded.block.typescript": "typescript",
-        "meta.embedded.block.typescriptreact": "typescriptreact",
-        "meta.embedded.block.csharp": "csharp",
-        "meta.embedded.block.fsharp": "fsharp"
-      }
-    },
     "contributes": {
+      "source.cs": {
+        "tokenTypes": {
+          "meta.interpolation": "other"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational.cs",
+          "keyword.operator.arrow.cs",
+          "punctuation.accessor.pointer.cs",
+          "keyword.operator.bitwise.shift.cs",
+          "keyword.operator.assignment.compound.bitwise.cs"
+        ]
+      },
+      "source.lua": {
+        "tokenTypes": {
+          "comment.line.double-dash.doc.lua": "other"
+        }
+      },
+      "source.yaml": {
+        "unbalancedBracketScopes": [
+          "invalid.illegal",
+          "meta.scalar.yaml",
+          "storage.type.tag.shorthand.yaml",
+          "keyword.control.flow"
+        ]
+      },
       "text.html.markdown": {
         "embeddedLanguages": {
           "meta.embedded.block.html": "html",
@@ -210,6 +183,11 @@
           "storage.type.function.arrow.tsx",
           "keyword.operator.bitwise.shift.tsx",
           "keyword.operator.assignment.compound.bitwise.tsx"
+        ]
+      },
+      "source.shell": {
+        "unbalancedBracketScopes": [
+          "meta.scope.case-pattern.shell"
         ]
       },
       "source.js": {
@@ -395,36 +373,6 @@
           "markup.underline.link.markdown",
           "punctuation.definition.list.begin.markdown"
         ]
-      },
-      "source.cs": {
-        "tokenTypes": {
-          "meta.interpolation": "other"
-        },
-        "unbalancedBracketScopes": [
-          "keyword.operator.relational.cs",
-          "keyword.operator.arrow.cs",
-          "punctuation.accessor.pointer.cs",
-          "keyword.operator.bitwise.shift.cs",
-          "keyword.operator.assignment.compound.bitwise.cs"
-        ]
-      },
-      "source.lua": {
-        "tokenTypes": {
-          "comment.line.double-dash.doc.lua": "other"
-        }
-      },
-      "source.yaml": {
-        "unbalancedBracketScopes": [
-          "invalid.illegal",
-          "meta.scalar.yaml",
-          "storage.type.tag.shorthand.yaml",
-          "keyword.control.flow"
-        ]
-      },
-      "source.shell": {
-        "unbalancedBracketScopes": [
-          "meta.scope.case-pattern.shell"
-        ]
       }
     }
   },
@@ -499,7 +447,7 @@
     }
   },
   "vuejs/language-tools": {
-    "sha": "04954ddb380b459be3d3cd593b092511bb6531af",
+    "sha": "f4b17caaecddf5edfa076d31d6a2af7ea3c1ccdb",
     "contributes": {
       "text.html.vue": {
         "embeddedLanguages": {
@@ -594,7 +542,7 @@
     }
   },
   "microsoft/vscode-cmake-tools": {
-    "sha": "f75933e6ae7b325710e9151bb565d32ebdcf5056",
+    "sha": "09dd68b54de06469bd1b81d84d6b8666aa2dce1d",
     "files": {
       "syntaxes/CMake.tmLanguage.json": "d0affda1b82d2261",
       "syntaxes/CMakeCache.tmLanguage.json": "fbbfecaf5ba5584b"
