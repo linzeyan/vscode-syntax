@@ -120,6 +120,29 @@ suite("poly-lint in a real editor", () => {
     assert.ok(diagnostics[0].message.length > 0, "empty diagnostic message");
   });
 
+  // A parse failure used to come back as an LSP error, which VSCode shows as a
+  // toast that names no line and cannot be clicked. Only the real editor can
+  // prove it now lands in Problems instead.
+  test("reports a parse failure as a diagnostic, not a popup", async () => {
+    const uri = writeFile("broken.yaml", "a: 1\n  b: 2\n");
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document);
+    await vscode.commands.executeCommand(
+      "vscode.executeFormatDocumentProvider",
+      uri,
+      { tabSize: 2, insertSpaces: true },
+    );
+    const diagnostic = await eventually(
+      "the format error",
+      () => vscode.languages.getDiagnostics(uri).find((d) => d.source === "poly"),
+    );
+    assert.strictEqual(diagnostic.range.start.line, 1, "points at line 2");
+    assert.ok(
+      diagnostic.range.end.character > diagnostic.range.start.character,
+      "a zero-width range draws no squiggle",
+    );
+  });
+
   // The batch commands go through workspace/executeCommand rather than the
   // document APIs, so they exercise a path no formatting test touches.
   test("Format Folder rewrites files on disk", async () => {
