@@ -138,7 +138,7 @@
     "@types/node": "^20",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^3.1.0",
-    "esbuild": "^0.23.0",
+    "esbuild": "^0.28.1",
     "mocha": "^10.7.0",
     "typescript": "^5.4.0"
   }
