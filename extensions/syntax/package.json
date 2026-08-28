@@ -2,7 +2,7 @@
   "name": "poly-syntax",
   "displayName": "Poly Syntax",
   "description": "Unified syntax highlighting pack: every VSCode built-in grammar plus additions, synced from pinned upstreams.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "ricky",
   "license": "MIT",
   "engines": {
