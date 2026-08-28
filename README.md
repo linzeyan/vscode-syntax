@@ -101,15 +101,44 @@ poly fmt <paths...>            # 就地格式化
 poly fmt --check <paths...>    # 只回報，不改檔（CI 用）
 poly check <paths...>          # 跑 lint
 poly check --strict <paths...> # 工具缺席時視為錯誤，而不是跳過
-poly check --compact <paths...># 每個問題只印一行，給 CI parser 用
 poly fmt --changed             # 只處理 git 變更的檔案（pre-commit 用）
-poly fmt --no-ignore <paths...># 連 git 忽略的檔案也處理
 poly tools list                # 工具解析狀態
 poly tools install [tool...]   # 預先抓好受管工具（離線環境先在有網路的機器跑）
 poly lsp                       # 給編輯器用的 LSP daemon
 ```
 
+`fmt` 與 `check` 共用兩個旗標：`--compact` 每個問題只印一行（給 CI parser），
+`--no-ignore` 連 git 忽略的檔案也處理。
+
 Exit code：`0` 乾淨、`1` 有差異或違規、`2` 執行錯誤。
+
+### 輸出格式
+
+不管問題是哪個 linter 或 formatter 找到的，`fmt` 與 `check` 都印同一種紀錄，走
+stdout：
+
+```text
+src/app.py:1:8: warning [ruff/F401] `os` imported but unused
+    fix   Remove unused import: `os`
+    docs  https://docs.astral.sh/ruff/rules/unused-import
+deploy.sh:4:8: info [shellcheck/SC2086] Double quote to prevent globbing and word splitting.
+    fix   shellcheck can rewrite this automatically
+    docs  https://www.shellcheck.net/wiki/SC2086
+schema.sql:1:1: warning [poly/unformatted] file is not formatted
+    fix   run `poly fmt`
+```
+
+第一行是完整紀錄：`路徑:行:欄: 嚴重度 [工具/規則] 說明`，永遠只有一行且前綴固定，
+所以 `rg`、CI annotation script、終端機的檔案連結都吃得下。後面縮排的 `fix`／`docs`
+只在該工具真的有給時才出現——多數 linter 只說哪裡錯、把怎麼修留給文件，poly 不替它
+們編造。`--compact` 會把縮排行全部拿掉。
+
+編輯器裡是同一份資訊：`fix` 併進 Problems 的訊息（LSP 沒有對應欄位），`docs` 變成
+規則代碼上的超連結，用字與 CLI 完全相同。
+
+錯誤（parse 失敗、工具缺席、引擎不接受的設定）也是同一種紀錄，嚴重度 `error`、規則
+`poly/format`，位置指在 parser 停下來的地方；引擎畫的 code frame 縮排接在後面，一個
+問題仍然只佔一行有錨點的輸出。
 
 ## 設定
 
