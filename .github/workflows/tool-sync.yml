@@ -1,0 +1,107 @@
+name: Tool Sync
+
+# The other half of R1. Grammar Sync has kept the grammars current since M5;
+# the twelve external linters were pinned in Rust and bumped by hand, so poly
+# reported whatever ruff said the day someone last remembered.
+#
+# Monday 08:00 UTC: after Grammar Sync (06:00) so the two do not open PRs on
+# top of each other, and after Action tag (07:00), which is the other Monday
+# job. Note: PRs opened with GITHUB_TOKEN do not trigger CI -- close/reopen the
+# PR (or push to its branch) to run checks before merging.
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bump pins to upstream latest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/tool-sync.py --update
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+      # The lock is only worth what a real download says it is. This proves the
+      # linux-x64 digests byte for byte; the other five platforms come from the
+      # same API response for the same release, so they stand or fall with it.
+      - name: The new pins survive an actual download
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          cargo build --release --manifest-path cli/Cargo.toml
+          cargo test --manifest-path cli/Cargo.toml -p poly-tools --release
+          cli/target/release/poly tools install
+          python tools/tool-sync.py --check
+      # A linter upgrade can find things the old one did not, which is the
+      # entire point and also the thing most likely to make this PR fail CI.
+      # Running it here puts that in the PR body instead of leaving it as a red
+      # check with the reason buried in a log only admins can read.
+      - name: What the new versions report on this repo
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          cli/target/release/poly check --format table_markdown . >/tmp/dogfood.md || true
+          cli/target/release/poly tools list >/tmp/tools.txt || true
+      - name: Open PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="tool-sync/$(date +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git status --short
+          git commit -m "tool-sync: bump external linters to upstream latest"
+          # Job logs need admin rights to read, so each failure mode names
+          # itself in an annotation instead of a bare exit code.
+          if ! git push -f origin "$BRANCH"; then
+            echo "::error title=push rejected::GITHUB_TOKEN could not push $BRANCH — check Settings > Actions > General > Workflow permissions"
+            exit 1
+          fi
+          {
+            echo "Automated weekly external tool refresh. Every pinned"
+            echo "(version, platform) sha256 came from the release API and was"
+            echo "verified by downloading on this runner."
+            echo
+            echo "### poly check with the new versions"
+            echo
+            cat /tmp/dogfood.md
+            echo
+            echo "<details><summary>poly tools list</summary>"
+            echo
+            echo '```'
+            cat /tmp/tools.txt
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "CI does not auto-run on token-created PRs — close/reopen to trigger."
+          } > /tmp/pr-body.md
+          if ! gh pr create --title "tool-sync: weekly external linter refresh" \
+               --body-file /tmp/pr-body.md --base main --head "$BRANCH"; then
+            if ! gh pr edit "$BRANCH" --body-file /tmp/pr-body.md; then
+              echo "::error title=pr create failed::Branch $BRANCH is pushed, but opening the PR failed — 'Allow GitHub Actions to create and approve pull requests' defaults to off in Settings > Actions > General"
+              exit 1
+            fi
+          fi

@@ -135,6 +135,12 @@ jobs:
         run: |
           python3 tools/third-party-notices.py --self-test
           python3 tools/third-party-notices.py --check
+      # Offline on purpose: it compares the lock against the registry, nothing
+      # upstream. A hand-edited version bump that skips tool-sync.py leaves
+      # every platform but the editor's on trust-on-first-use, which looks
+      # exactly like a pin until someone else downloads.
+      - name: External tool pins are locked
+        run: python3 tools/tool-sync.py --check
       - name: LSP smoke test
         run: |
           cargo build --release --manifest-path cli/Cargo.toml

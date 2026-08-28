@@ -37,6 +37,30 @@ pub struct Tool {
     asset: fn(version: &str, platform: &str) -> Option<Asset>,
 }
 
+impl Tool {
+    /// The download for `version` on `platform`, or None where upstream ships
+    /// no build for it (each such gap is commented on the tool below).
+    ///
+    /// Public because the asset naming is only written here, and the sync
+    /// pipeline needs the same URLs to look upstream digests up; see
+    /// `examples/manifest.rs`.
+    pub fn asset(&self, version: &str, platform: &str) -> Option<Asset> {
+        (self.asset)(version, platform)
+    }
+}
+
+/// Every platform key the registry knows. Shared with the tests and the sync
+/// pipeline so a platform cannot be added to `current_platform` and forgotten
+/// in the coverage check.
+pub const PLATFORMS: &[&str] = &[
+    "darwin-arm64",
+    "darwin-x64",
+    "linux-arm64",
+    "linux-x64",
+    "win-x64",
+    "win-arm64",
+];
+
 /// Platform keys: darwin-arm64, darwin-x64, linux-x64, linux-arm64,
 /// win-x64, win-arm64.
 pub fn current_platform() -> &'static str {
@@ -118,7 +142,7 @@ pub const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "typos",
-        version: "1.49.0",
+        version: "1.49.1",
         language: None,
         asset: |v, p| {
             let (triple, kind) = match p {
@@ -161,7 +185,7 @@ pub const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "ruff",
-        version: "0.16.4",
+        version: "0.16.5",
         language: Some("python"),
         asset: |v, p| {
             let (triple, kind) = match p {
@@ -225,7 +249,7 @@ pub const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "golangci-lint",
-        version: "2.13.1",
+        version: "2.13.2",
         language: Some("go"),
         asset: |v, p| {
             let (suffix, kind) = match p {
@@ -637,16 +661,9 @@ mod tests {
     #[test]
     fn registry_covers_all_platforms_or_declares_gap() {
         for tool in TOOLS {
-            for platform in [
-                "darwin-arm64",
-                "darwin-x64",
-                "linux-x64",
-                "linux-arm64",
-                "win-x64",
-                "win-arm64",
-            ] {
+            for platform in PLATFORMS {
                 // Must not panic; None (documented gap) is acceptable.
-                let _ = (tool.asset)(tool.version, platform);
+                let _ = tool.asset(tool.version, platform);
             }
         }
     }
