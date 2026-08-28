@@ -45,14 +45,19 @@ const LANGUAGES = [
 ];
 
 // Format-on-save is declared, not written: contributes.configurationDefaults
-// in package.json covers this list minus the toolchain languages (rust, go, c,
-// cpp, swift, terraform). Adding a language here means adding it there too.
+// in package.json covers every language in this list. Adding one here means
+// adding it there too, and a test compares the two.
 //
-// Toolchain languages are deliberately left out: rust-analyzer, gopls and
-// clangd already format them, silently taking that over would change output
-// (gofumpt is not gofmt), and poly returns nothing at all when the toolchain
-// binary is missing since it never auto-installs those. Poly stays reachable
-// there through "Format Document With...".
+// That includes the toolchain languages. They were held back on the theory
+// that rust-analyzer, gopls and clangd already own them, but poly formats
+// rust, c, cpp, swift and terraform by calling the very same binary those
+// servers call, so the output is identical -- and holding them back meant a
+// .rs file in an editor with no rust-analyzer simply never formatted.
+//
+// go is the one real trade-off, taken deliberately: poly formats it with
+// gofumpt where gopls uses gofmt. gofumpt is a strict superset, so a repo
+// whose CI checks gofmt still passes, but a diff will show edits gofmt would
+// not have made.
 
 let client: LanguageClient | undefined;
 let status: vscode.StatusBarItem | undefined;

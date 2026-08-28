@@ -18,11 +18,6 @@ const COMMANDS = [
   "poly.showOutput",
 ];
 
-// Languages poly formats but deliberately does not take over: rust-analyzer,
-// gopls and clangd already own them, and poly returns nothing when the
-// toolchain binary is missing since it never installs those itself (A8).
-const TOOLCHAIN_FORMATTERS = ["rust", "go", "c", "cpp", "swift", "terraform"];
-
 function workspaceRoot(): string {
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, "the test host opened no workspace folder");
@@ -210,17 +205,23 @@ suite("poly-lint in a real editor", () => {
     assert.strictEqual(editor.get<string>("defaultFormatter"), EXTENSION_ID);
   });
 
-  test("format-on-save leaves the toolchain languages alone", () => {
-    for (const languageId of TOOLCHAIN_FORMATTERS) {
+  // The toolchain languages were held back on the theory that rust-analyzer,
+  // gopls and clangd own them. poly formats rust, c, cpp, swift and terraform
+  // by calling the same binary those servers call, so the output is identical,
+  // and holding them back meant a .rs file in an editor with no rust-analyzer
+  // never formatted at all -- which is how this was reported.
+  test("format-on-save covers the toolchain languages too", () => {
+    for (const languageId of ["rust", "go", "c", "cpp", "swift", "terraform"]) {
       const editor = vscode.workspace.getConfiguration("editor", {
         uri: vscode.Uri.file(join(workspaceRoot(), `x.${languageId}`)),
         languageId,
       });
-      assert.notStrictEqual(
+      assert.strictEqual(
         editor.get<string>("defaultFormatter"),
         EXTENSION_ID,
-        `${languageId} must keep its own formatter`,
+        `${languageId} should format with poly`,
       );
+      assert.strictEqual(editor.get<boolean>("formatOnSave"), true, languageId);
     }
   });
 
@@ -232,8 +233,7 @@ suite("poly-lint in a real editor", () => {
     const pkg = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON;
     const activated = (pkg.activationEvents as string[])
       .filter((event) => event.startsWith("onLanguage:"))
-      .map((event) => event.slice("onLanguage:".length))
-      .filter((language) => !TOOLCHAIN_FORMATTERS.includes(language));
+      .map((event) => event.slice("onLanguage:".length));
     const declared = Object.keys(pkg.contributes.configurationDefaults)
       .map((section) => section.slice(1, -1));
     assert.deepStrictEqual(
