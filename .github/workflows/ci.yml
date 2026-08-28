@@ -75,6 +75,33 @@ jobs:
           docker run --rm -v "$PWD:/work" poly:ci --version
           docker run --rm -v "$PWD:/work" poly:ci check --strict .
 
+  # Same reason as the docker job: an action only exercised by whoever adopts
+  # it is an action that breaks for whoever adopts it. `uses: ./` runs the
+  # working tree's action.yml, so a change is tested before it is tagged.
+  # The matrix is the platform-detection case statement, which is the only
+  # part that cannot be checked by reading it.
+  action:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./
+      # Running the binary at all is the signal that matters here: a wrong
+      # asset for the platform fails as "cannot execute", which is exactly the
+      # bug the case statement can have. Linting the repo is left to the cli
+      # and docker jobs -- doing it on three OSes would trade a real gate for
+      # three chances to download a linter from a flaky mirror.
+      - name: poly is on PATH, and the outputs describe it
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(poly --version)" = "poly ${{ steps.setup.outputs.version }}"
+          test -x "${{ steps.setup.outputs.path }}"
+
   cli:
     runs-on: ubuntu-latest
     env:
