@@ -170,7 +170,7 @@ include-hidden = true
 
 ```toml
 [languages.map] # 副檔名 ↔ 語言
-"*.tpl" = "gotmpl"
+"*.tpl" = "jinja"
 
 [format]
 exclude = ["vendor/**", "**/*.generated.ts"]
@@ -186,7 +186,7 @@ exclude = ["third_party/**"]
 [walk]
 include-hidden = false # 預設；true 會連點開頭的路徑一起走（.git/ 仍然跳過）
 
-[tools] # 指定路徑，或設 "off" 關掉
+[tools] # 指定路徑、釘版本，或設 "off" 關掉
 shellcheck = "C:/tools/shellcheck.exe"
 tflint = "off"
 ```
@@ -195,6 +195,9 @@ tflint = "off"
 讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部工具的語言請用該工具自己的設定
 檔。VSCode settings 只放個人偏好（`poly.serverPath`、`poly.lintOnSave`、
 `poly.updateCheck.*`）。
+
+完整的鍵、可填的值、每個引擎的預設值都寫在
+[poly.example.toml](poly.example.toml) 裡——那份檔案有測試綁著，不會跟程式碼走散。
 
 ## 從原始碼建置
 

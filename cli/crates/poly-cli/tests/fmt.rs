@@ -257,6 +257,33 @@ fn hidden_files_need_asking_for_by_flag_or_config() {
     );
 }
 
+/// poly.example.toml is documentation, and documentation about configuration
+/// goes stale in the one way nobody notices: silently. Feeding it back through
+/// the parser proves every key in it is still a key, and requiring each managed
+/// tool to be named in it means a tool added to the registry cannot ship as a
+/// setting no one knows exists.
+#[test]
+fn the_example_config_parses_and_names_every_tool() {
+    let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../poly.example.toml");
+    let text = std::fs::read_to_string(&example).expect("poly.example.toml at the repo root");
+
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("poly.toml"), &text).unwrap();
+    std::fs::write(root.join("a.json"), "{ \"a\": 1 }\n").unwrap();
+
+    let (code, stdout, stderr) = poly(root, &["fmt", "--check", "."]);
+    assert_eq!(code, 0, "the example config was rejected: {stdout}{stderr}");
+
+    for tool in poly_tools::TOOLS {
+        assert!(
+            text.contains(tool.name),
+            "{} is in the registry but not in poly.example.toml",
+            tool.name
+        );
+    }
+}
+
 #[test]
 fn check_without_shell_files_is_clean() {
     let dir = tempfile::tempdir().unwrap();

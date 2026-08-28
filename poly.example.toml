@@ -1,0 +1,132 @@
+# poly.example.toml — every key poly understands, with its default.
+#
+# poly.toml is optional; everything below is already in effect without one.
+# Copy this file to poly.toml and delete what you do not need. Unknown keys and
+# misspellings fail the parse rather than being ignored, so a setting that
+# survives startup is a setting that is doing something.
+#
+# Configs merge upward: poly reads every poly.toml from the file's directory to
+# the filesystem root, with the nearest one winning field by field. Arrays
+# replace rather than append, so a package that sets its own `exclude` drops the
+# repo-root list rather than adding to it.
+#
+# Both the CLI and the editor read this file. That is the point: a setting only
+# CI sees means the editor is working from a different picture of the project.
+
+# ── [languages.map] ────────────────────────────────────────────────────────
+# Glob -> language id, for files poly's built-in table gets wrong or has never
+# heard of. Patterns match the file name (`*.tpl`); one containing a `/` matches
+# the whole path. Order in the file is the order they are tried.
+#
+# Default: empty. Built-in detection covers rust, typescript, json, markdown,
+# toml, css, scss, less, yaml, python, jupyter, sql, xml, html, vue, svelte,
+# astro, jinja, graphql, shellscript, go, lua, swift, c, cpp, terraform, hcl and
+# dockerfile; those ids are the values this table accepts. Mapping to an id poly
+# has no formatter or linter for is not an error -- the file is simply skipped.
+[languages.map]
+"*.tpl" = "jinja"
+"deploy/*.conf" = "yaml"
+
+# ── [format] ───────────────────────────────────────────────────────────────
+[format]
+# Paths `poly fmt` must never rewrite, as gitignore-style globs anchored at
+# *this* file's directory. Applies on top of .gitignore, and unlike it survives
+# --no-ignore: this is the project saying "never touch", not the VCS saying
+# "do not track". Naming a file directly on the command line still formats it.
+#
+# Default: [].
+exclude = ["vendor/**", "**/*.generated.ts"]
+
+# ── [format.<lang>] ────────────────────────────────────────────────────────
+# Three knobs, and deliberately only three: the ones every formatter agrees on.
+# Anything engine-specific belongs in that engine's own config file, which poly
+# defers to when the project has one.
+#
+# These reach the embedded engines only. Languages that dispatch to an external
+# tool (rust, go, shellscript, lua, swift, c, cpp, terraform, jupyter) are
+# configured by that tool -- rustfmt.toml, .editorconfig, and so on.
+#
+# Setting a knob the engine does not have fails the run and names the key,
+# rather than applying two of three and leaving you to diff the output.
+#
+# Defaults are each engine's own, applied when the key is absent:
+#
+#   language                      line-width  indent-width  use-tabs
+#   typescript                    120         2             false
+#   json                          120         2             false
+#   toml                          120         2             false
+#   dockerfile                    120         2             (rejected)
+#   markdown                      80          (rejected)    (rejected)
+#   css / scss / less             80          2             false
+#   html / vue / svelte /         80          2             false
+#     astro / jinja
+#   graphql                       80          2             false
+#   yaml                          80          2             (rejected)
+#   python                        88          4             false
+#   xml                           (rejected)  2             (rejected)
+#   sql                           (rejected)  (rejected)    (rejected)
+#
+# sql is sqruff's: it owns its layout rules, so configure it in .sqruff rather
+# than half-applying poly's on top.
+[format.python]
+line-width = 100 # 1..=65535
+indent-width = 4 # 1..=255
+use-tabs = false # true | false
+
+[format.typescript]
+line-width = 100
+
+# ── [lint] ─────────────────────────────────────────────────────────────────
+[lint]
+# Same shape and same anchoring as [format].exclude, and a separate list: the
+# generated file you refuse to reformat is often one you still want linted.
+#
+# Default: [].
+exclude = ["third_party/**"]
+
+# ── [walk] ─────────────────────────────────────────────────────────────────
+[walk]
+# Walk paths beginning with a dot. Off by default, because a dot prefix is how a
+# tree says "machinery, not source", and most of what it hides is enormous
+# (.venv, .terraform, editor state). `.github` is walked either way -- workflows
+# are source. `.git` is walked under no setting at all.
+#
+# The CLI's --hidden does the same for one run. This key exists for the project
+# whose sources genuinely live under a dotted directory, because that has to
+# hold for the editor too, and a flag only the CLI can pass would leave the
+# editor seeing a smaller project than CI does.
+#
+# Default: false.
+include-hidden = false
+
+# ── [tools] ────────────────────────────────────────────────────────────────
+# Where an external tool comes from, per tool. Three kinds of value:
+#
+#   "off"             never run it; poly stays quiet about it being absent
+#   "<path>"          use this binary (anything containing a / or \, absolute
+#                     or relative to this file's directory)
+#   "<version>"       download this version instead of poly's pinned one
+#
+# Default: absent, i.e. poly's own pinned version, downloaded on first use into
+# ~/.cache/poly/tools and verified against a recorded sha256. If there is no
+# managed build for the platform, PATH is tried before poly reports it missing.
+# `poly tools list` prints what each name resolved to and why.
+#
+# The names below are the whole set; anything else is an error. Pinned versions
+# as of poly 0.1.0 -- "system" means there is no managed download and poly uses
+# what is on PATH.
+#
+#   shellcheck 0.11.0     hadolint 2.15.1      actionlint 1.7.12
+#   typos 1.49.0          shfmt 3.13.1         ruff 0.16.4
+#   tflint 0.64.0         gofumpt 0.11.0       golangci-lint 2.13.1
+#   stylua 2.5.2          selene 0.31.0        swiftlint 0.65.1
+#   terraform system      clang-format system  swift-format system
+#
+# prettier, biome, eslint and rustfmt are not listed here on purpose: poly uses
+# them only when it finds them installed in the project alongside their own
+# config, and never downloads them. Removing the config is how you turn those
+# off.
+[tools]
+shellcheck = "C:/tools/shellcheck.exe"
+tflint = "off"
+ruff = "0.16.4"
