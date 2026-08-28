@@ -107,8 +107,8 @@ poly tools install [tool...]   # 預先抓好受管工具（離線環境先在�
 poly lsp                       # 給編輯器用的 LSP daemon
 ```
 
-`fmt` 與 `check` 共用兩個旗標：`--compact` 每個問題只印一行（給 CI parser），
-`--no-ignore` 連 git 忽略的檔案也處理。
+`fmt` 與 `check` 共用三個旗標：`--compact` 每個問題只印一行（給 CI parser），
+`--no-ignore` 連 git 忽略的檔案也處理，`--hidden` 連點開頭的檔案／目錄也處理。
 
 Exit code：`0` 乾淨、`1` 有差異或違規、`2` 執行錯誤。
 
@@ -146,11 +146,24 @@ schema.sql:1:1: warning [poly/unformatted] file is not formatted
 預設值，走訪檔案時尊重 git 會尊重的忽略檔——`.gitignore`、`.ignore`、
 `.git/info/exclude`，以及 `core.excludesFile`（沒設就是
 `$XDG_CONFIG_HOME/git/ignore`），沿路每一層祖先目錄的都算。跟 git 一樣，全域忽略
-檔只在 git repo 裡生效。
+檔只在 git repo 裡生效。點開頭的檔案與目錄預設跳過，`.github/` 例外（workflow 是原
+始碼，actionlint 就是為它接的）。
 
-`--no-ignore` 關掉上面這些，用在要檢查的正好是被忽略的產物（generated code、
-vendored tree、build output）。`poly.toml` 的 `exclude` 不受影響——那是專案自己說
-「別碰」，跟 VCS 說「別追蹤」是兩件事。
+`--no-ignore` 關掉前一段的忽略檔，`--hidden` 讓走訪進入點開頭的路徑；`.git/` 兩者
+都進不去，物件庫不是原始碼。用在要檢查的正好是被藏起來的東西：generated code、
+vendored tree、`.config/` 底下的專案腳本。
+
+專案的原始碼本來就住在點開頭目錄時，改用設定檔而不是旗標，這樣編輯器與 CI 看到的
+檔案集合才一致：
+
+```toml
+[walk]
+include-hidden = true
+```
+
+兩者都只能把範圍放寬、不能收窄；要收窄請用 `exclude`。`poly.toml` 的 `exclude` 不受
+`--no-ignore`／`--hidden` 影響——那是專案自己說「別碰」，跟 VCS 說「別追蹤」是兩件
+事。
 
 要覆蓋預設值時，專案層的真相放 repo 根目錄的 `poly.toml`，CLI 與 extension 都讀
 它，保證編輯器與 CI 行為一致：
@@ -169,6 +182,9 @@ use-tabs = false
 
 [lint]
 exclude = ["third_party/**"]
+
+[walk]
+include-hidden = false # 預設；true 會連點開頭的路徑一起走（.git/ 仍然跳過）
 
 [tools] # 指定路徑，或設 "off" 關掉
 shellcheck = "C:/tools/shellcheck.exe"

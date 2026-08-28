@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use poly_core::{Config, ConfigCache, Ignores, Scope};
+use poly_core::{Config, ConfigCache, Hidden, Scope, Walk};
 use rayon::prelude::*;
 
 #[derive(Debug, Default)]
@@ -31,7 +31,7 @@ pub struct FmtSummary {
 pub fn resolve_targets(
     paths: &[PathBuf],
     scope: Scope,
-    ignores: Ignores,
+    walk: Walk,
     keep: impl Fn(&str) -> bool,
 ) -> Result<Vec<(PathBuf, String, Arc<Config>)>> {
     let start = paths.first().context("no paths given")?;
@@ -40,7 +40,19 @@ pub fn resolve_targets(
         Scope::Format => &top.format_exclude,
         Scope::Lint => &top.lint_exclude,
     };
-    let files = poly_core::walk_files(paths, exclude, top.root.as_deref(), ignores)?;
+    // The config can only widen the walk, never narrow it: a project that says
+    // its sources are hidden means it for every run, including the editor's,
+    // and a flag that could take that back would reintroduce the A4 split the
+    // setting exists to close.
+    let walk = Walk {
+        hidden: if top.include_hidden {
+            Hidden::Include
+        } else {
+            walk.hidden
+        },
+        ..walk
+    };
+    let files = poly_core::walk_files(paths, exclude, top.root.as_deref(), walk)?;
     // Naming a file on the command line beats any exclude, same as the walk.
     let explicit: HashSet<&Path> = paths
         .iter()
@@ -64,8 +76,8 @@ pub fn resolve_targets(
 /// Walk `paths`, format every supported file in place (or dry-run with
 /// `check`), honoring the poly.toml nearest each file. Parallelism uses the
 /// caller's rayon pool configuration.
-pub fn format_paths(paths: &[PathBuf], check: bool, ignores: Ignores) -> Result<FmtSummary> {
-    let targets = resolve_targets(paths, Scope::Format, ignores, crate::fmt::formattable)?;
+pub fn format_paths(paths: &[PathBuf], check: bool, walk: Walk) -> Result<FmtSummary> {
+    let targets = resolve_targets(paths, Scope::Format, walk, crate::fmt::formattable)?;
 
     let mut summary = targets
         .par_iter()

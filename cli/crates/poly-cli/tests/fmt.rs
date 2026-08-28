@@ -230,6 +230,33 @@ fn no_ignore_reaches_gitignored_files_but_not_excluded_ones() {
     assert!(!stdout.contains("vendor"), "exclude must outrank: {stdout}");
 }
 
+/// Dotted files are skipped by default, and both ways of asking for them work:
+/// the flag for a one-off run, the config for a project whose sources actually
+/// live under a dot (which the editor has to agree with, so it cannot be a
+/// flag).
+#[test]
+fn hidden_files_need_asking_for_by_flag_or_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join(".config")).unwrap();
+    std::fs::write(root.join(".config/a.json"), "{\"b\":1,  \"a\":2}").unwrap();
+    std::fs::write(root.join("plain.json"), "{\"b\":1,  \"a\":2}").unwrap();
+
+    let (code, stdout, _) = poly(root, &["fmt", "--check", "."]);
+    assert_eq!(code, 1, "{stdout}");
+    assert!(!stdout.contains(".config"), "hidden by default: {stdout}");
+
+    let (_, stdout, _) = poly(root, &["fmt", "--check", "--hidden", "."]);
+    assert!(stdout.contains(".config/a.json"), "{stdout}");
+
+    std::fs::write(root.join("poly.toml"), "[walk]\ninclude-hidden = true\n").unwrap();
+    let (_, stdout, _) = poly(root, &["fmt", "--check", "."]);
+    assert!(
+        stdout.contains(".config/a.json"),
+        "config ignored: {stdout}"
+    );
+}
+
 #[test]
 fn check_without_shell_files_is_clean() {
     let dir = tempfile::tempdir().unwrap();

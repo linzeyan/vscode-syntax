@@ -492,9 +492,11 @@ fn run_format_paths(arg: Option<&serde_json::Value>) -> Result<serde_json::Value
         }
         other => anyhow::bail!("unknown mode {other:?}"),
     };
-    // No editor-side `--no-ignore`: A4 says the editor and CI must agree on
-    // which files exist, and an escape hatch only one of them has breaks that.
-    let summary = crate::batch::format_paths(&targets, false, poly_core::Ignores::Respect)?;
+    // No editor-side flags: A4 says the editor and CI must agree on which
+    // files exist, and an escape hatch only one of them has breaks that. A
+    // project that needs the walk widened says so in poly.toml, which both
+    // sides read.
+    let summary = crate::batch::format_paths(&targets, false, poly_core::Walk::default())?;
     Ok(serde_json::json!({
         "total": summary.total,
         "changed": summary.changed.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),

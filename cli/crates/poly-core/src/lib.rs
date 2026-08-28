@@ -92,7 +92,14 @@ struct RawConfig {
     languages: RawLanguages,
     format: RawFormat,
     lint: RawLint,
+    walk: RawWalk,
     tools: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+struct RawWalk {
+    include_hidden: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -149,6 +156,11 @@ pub struct Config {
     lint_exclude_set: GlobSet,
     format_options: BTreeMap<String, FormatOptions>,
     pub tools: BTreeMap<String, String>,
+    /// `[walk] include-hidden`. A project decision rather than a per-run one:
+    /// a repo whose sources live under a dotted directory needs this on for
+    /// every invocation, editor included, or the editor and CI disagree about
+    /// which files exist (A4).
+    pub include_hidden: bool,
     /// Directory of the nearest poly.toml (config root); None when no config.
     pub root: Option<PathBuf>,
 }
@@ -207,6 +219,7 @@ impl Config {
             lint_exclude: raw.lint.exclude,
             format_options: raw.format.languages,
             tools: raw.tools,
+            include_hidden: raw.walk.include_hidden,
             root: chain
                 .first()
                 .and_then(|p| p.parent())
@@ -223,6 +236,7 @@ impl Config {
             lint_exclude_set: GlobSet::empty(),
             format_options: BTreeMap::new(),
             tools: BTreeMap::new(),
+            include_hidden: false,
             root: None,
         }
     }
@@ -345,7 +359,38 @@ pub enum Ignores {
     Disregard,
 }
 
-/// Collect files under `paths`, respecting [`Ignores`] plus `exclude` globs.
+/// Whether dotted files and directories are walked.
+///
+/// Skipped by default, because a dot prefix is how a tree says "this is
+/// machinery, not source" and most of what it hides is enormous — `.venv`,
+/// `.terraform`, editor state. `.github` is the standing exception and is
+/// walked either way: its workflows are source, and linting them is the whole
+/// reason actionlint is wired in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hidden {
+    Skip,
+    /// `--hidden` or `[walk] include-hidden`.
+    Include,
+}
+
+/// The two ways a walk can be widened past its defaults. Neither can narrow it:
+/// hiding more files is what `exclude` is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Walk {
+    pub ignores: Ignores,
+    pub hidden: Hidden,
+}
+
+impl Default for Walk {
+    fn default() -> Self {
+        Walk {
+            ignores: Ignores::Respect,
+            hidden: Hidden::Skip,
+        }
+    }
+}
+
+/// Collect files under `paths`, honoring [`Walk`] plus `exclude` globs.
 /// Explicit file arguments always pass through.
 ///
 /// `anchor` is the directory the patterns are relative to — the config's own
@@ -357,8 +402,9 @@ pub fn walk_files(
     paths: &[PathBuf],
     exclude: &[String],
     anchor: Option<&Path>,
-    ignores: Ignores,
+    walk: Walk,
 ) -> Result<Vec<PathBuf>> {
+    let hidden = walk.hidden == Hidden::Skip;
     let mut out = Vec::new();
     for root in paths {
         if root.is_file() {
@@ -372,17 +418,22 @@ pub fn walk_files(
                 .add(&format!("!{pattern}"))
                 .with_context(|| format!("invalid exclude pattern {pattern:?}"))?;
         }
+        // .git is machinery under any setting: object files are not source, and
+        // there are tens of thousands of them. Skipping it by dot prefix alone
+        // would mean --hidden walked the whole object store.
+        overrides.add("!.git/")?;
         let mut builder = ignore::WalkBuilder::new(root);
-        // Hidden dirs are skipped wholesale, but .github matters (workflow
-        // linting/formatting); walk it as an extra root.
+        // .github matters (workflow linting/formatting) and the dot prefix
+        // would otherwise hide it; walk it as an extra root. Redundant once
+        // hidden files are included, and the dedup below absorbs that.
         let github = root.join(".github");
-        if github.is_dir() {
+        if hidden && github.is_dir() {
             builder.add(github);
         }
-        let respect = ignores == Ignores::Respect;
+        let respect = walk.ignores == Ignores::Respect;
         let walker = builder
             .overrides(overrides.build()?)
-            .hidden(true)
+            .hidden(hidden)
             .ignore(respect)
             .git_ignore(respect)
             .git_global(respect)
@@ -549,8 +600,12 @@ mod tests {
         std::fs::create_dir_all(root.join(".git")).unwrap();
 
         let walk = |ignores| {
+            let options = Walk {
+                ignores,
+                ..Default::default()
+            };
             let files =
-                walk_files(&[root.to_path_buf()], &["vendor/**".into()], None, ignores).unwrap();
+                walk_files(&[root.to_path_buf()], &["vendor/**".into()], None, options).unwrap();
             files
                 .iter()
                 .map(|p| p.strip_prefix(root).unwrap().to_str().unwrap().to_string())
@@ -568,5 +623,52 @@ mod tests {
         assert!(names.contains(&"ignored.ts".to_string()), "{names:?}");
         assert!(names.contains(&"src/keep.ts".to_string()), "{names:?}");
         assert!(!names.iter().any(|n| n.contains("vendor")), "{names:?}");
+    }
+
+    #[test]
+    fn hidden_files_are_opt_in_but_git_never_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for sub in [".git", ".config", ".github/workflows", "src"] {
+            std::fs::create_dir_all(root.join(sub)).unwrap();
+        }
+        std::fs::write(root.join("src/keep.ts"), "").unwrap();
+        std::fs::write(root.join(".config/tool.ts"), "").unwrap();
+        std::fs::write(root.join(".dotfile.ts"), "").unwrap();
+        std::fs::write(root.join(".github/workflows/ci.yml"), "").unwrap();
+        std::fs::write(root.join(".git/hooks.ts"), "").unwrap();
+
+        let walk = |hidden| {
+            let options = Walk {
+                hidden,
+                ..Default::default()
+            };
+            walk_files(&[root.to_path_buf()], &[], None, options)
+                .unwrap()
+                .iter()
+                .map(|p| p.strip_prefix(root).unwrap().to_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        };
+
+        let names = walk(Hidden::Skip);
+        assert!(names.contains(&"src/keep.ts".to_string()), "{names:?}");
+        // .github is the standing exception: workflows are source.
+        assert!(
+            names.contains(&".github/workflows/ci.yml".to_string()),
+            "{names:?}"
+        );
+        assert!(!names.iter().any(|n| n.starts_with(".config")), "{names:?}");
+        assert!(!names.contains(&".dotfile.ts".to_string()), "{names:?}");
+
+        let names = walk(Hidden::Include);
+        assert!(names.contains(&".config/tool.ts".to_string()), "{names:?}");
+        assert!(names.contains(&".dotfile.ts".to_string()), "{names:?}");
+        assert_eq!(
+            names.iter().filter(|n| n.contains("ci.yml")).count(),
+            1,
+            "the extra .github root must not double-list it: {names:?}"
+        );
+        // Reaching hidden files must not mean walking the object store.
+        assert!(!names.iter().any(|n| n.starts_with(".git/")), "{names:?}");
     }
 }
