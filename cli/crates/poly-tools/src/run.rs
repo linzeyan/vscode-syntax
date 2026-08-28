@@ -530,6 +530,14 @@ struct SeleneItem {
     primary_label: SeleneLabel,
 }
 
+/// One page per lint, named exactly by the code selene reports. `parse_error`
+/// is the exception: it is how selene reports invalid Lua, not a lint, and has
+/// no page — linking it would send the reader somewhere that 404s.
+fn selene_url(code: &str) -> Option<String> {
+    (code != "parse_error")
+        .then(|| format!("https://kampfkarren.github.io/selene/lints/{code}.html"))
+}
+
 /// selene emits json2: one JSON object per line, already 0-based.
 pub fn selene_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
     let config = files
@@ -580,11 +588,11 @@ fn selene_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                 } else {
                     Severity::Warning
                 },
+                url: selene_url(&item.code),
                 code: item.code,
                 message: item.message,
                 source: "selene",
                 fix: None,
-                url: None,
             },
         });
     }
@@ -602,6 +610,14 @@ struct SwiftlintItem {
     severity: String,
     rule_id: String,
     reason: String,
+}
+
+/// One page per rule, named by `rule_id`. swiftlint knows which of its rules
+/// are correctable, but only as a column in `swiftlint rules` -- a second
+/// subprocess per run to learn something the violation itself never says, so
+/// poly reports the page and leaves the remedy to it.
+fn swiftlint_url(rule_id: &str) -> String {
+    format!("https://realm.github.io/SwiftLint/{rule_id}.html")
 }
 
 fn swiftlint_parse(stdout: &[u8], fallback: &Path) -> Result<Vec<FileIssue>> {
@@ -628,11 +644,11 @@ fn swiftlint_parse(stdout: &[u8], fallback: &Path) -> Result<Vec<FileIssue>> {
                     } else {
                         Severity::Warning
                     },
+                    url: Some(swiftlint_url(&i.rule_id)),
                     code: i.rule_id,
                     message: i.reason,
                     source: "swiftlint",
                     fix: None,
-                    url: None,
                 },
             }
         })
@@ -989,6 +1005,29 @@ struct BiomeOutput {
     diagnostics: Vec<BiomeDiagnostic>,
 }
 
+/// A biome category is `lint/<group>/<camelCaseRule>`, and the rule pages are
+/// keyed by the kebab-cased rule alone -- the group is presentational and does
+/// not appear in the URL. Only lint categories get a page: `format`, `parse`
+/// and `internalError/*` are not rules and have nothing to link to.
+fn biome_url(category: &str) -> Option<String> {
+    let mut parts = category.split('/');
+    if parts.next()? != "lint" {
+        return None;
+    }
+    let (_group, rule) = (parts.next()?, parts.next()?);
+    if parts.next().is_some() || rule.is_empty() {
+        return None;
+    }
+    let mut slug = String::with_capacity(rule.len() + 4);
+    for c in rule.chars() {
+        if c.is_ascii_uppercase() && !slug.is_empty() {
+            slug.push('-');
+        }
+        slug.push(c.to_ascii_lowercase());
+    }
+    Some(format!("https://biomejs.dev/linter/rules/{slug}/"))
+}
+
 /// biome ignores `--reporter` in stdin mode (it echoes the content to stdout
 /// and prints a human message to stderr), so lint always runs over real
 /// files. That is fine for lint-on-save, where the buffer is already on disk.
@@ -1025,11 +1064,11 @@ fn biome_parse(stdout: &[u8], root: &Path) -> Result<Vec<FileIssue>> {
                         "information" => Severity::Info,
                         _ => Severity::Hint,
                     },
+                    url: biome_url(&d.category),
                     code: d.category,
                     message: d.message,
                     source: "biome",
                     fix: None,
-                    url: None,
                 },
             }
         })
@@ -1250,6 +1289,40 @@ mod tests {
         let issues = biome_parse(old, Path::new("/w")).unwrap();
         assert_eq!(issues[0].file, PathBuf::from("/abs/a.ts"));
         assert_eq!(issues[0].issue.severity, Severity::Error);
+    }
+
+    /// These three tools name their rules well enough that the documentation
+    /// URL falls out of the code, so poly derives it instead of shipping a
+    /// table that would rot. Every scheme below was checked against the live
+    /// sites: a real rule resolves and an invented one 404s, so a derivation
+    /// that drifts shows up as a dead link rather than a wrong page.
+    #[test]
+    fn documentation_urls_are_derived_from_the_rule_code() {
+        assert_eq!(
+            selene_url("unused_variable").as_deref(),
+            Some("https://kampfkarren.github.io/selene/lints/unused_variable.html")
+        );
+        // Invalid Lua is not a lint and has no page.
+        assert_eq!(selene_url("parse_error"), None);
+
+        assert_eq!(
+            swiftlint_url("identifier_name"),
+            "https://realm.github.io/SwiftLint/identifier_name.html"
+        );
+
+        // The group is dropped and the camelCase rule becomes the slug.
+        assert_eq!(
+            biome_url("lint/correctness/noUnusedVariables").as_deref(),
+            Some("https://biomejs.dev/linter/rules/no-unused-variables/")
+        );
+        assert_eq!(
+            biome_url("lint/style/useConst").as_deref(),
+            Some("https://biomejs.dev/linter/rules/use-const/")
+        );
+        // Everything biome reports that is not a lint rule.
+        assert_eq!(biome_url("format"), None);
+        assert_eq!(biome_url("internalError/io"), None);
+        assert_eq!(biome_url("assist/source/organizeImports"), None);
     }
 
     #[test]
