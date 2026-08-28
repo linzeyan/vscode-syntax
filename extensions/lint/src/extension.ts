@@ -1,3 +1,4 @@
+import { execFile } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -58,6 +59,26 @@ let client: LanguageClient | undefined;
 let status: vscode.StatusBarItem | undefined;
 let health: "starting" | "ready" | "failed" = "starting";
 
+// The binary and the extension ship in one VSIX and are versioned together, so
+// a mismatch means something replaced one of them: a `poly.serverPath` aimed at
+// a stale local build (which is exactly how this repo is set up for
+// development), or a different poly earlier on PATH. The daemon still works, so
+// this is not a failure -- it is the reason a feature the extension advertises
+// appears to do nothing, and the only way to notice used to be to guess.
+let versionWarning: string | undefined;
+
+/// `poly --version` prints one line, `poly <version>`. Anything else -- a
+/// non-zero exit, no output, a hang -- means the binary is older than 0.3.0,
+/// which is itself the mismatch worth reporting rather than an error to raise.
+async function binaryVersion(serverPath: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    execFile(serverPath, ["--version"], { timeout: 5000 }, (err, stdout) => {
+      const version = stdout.trim().split(/\s+/).pop();
+      resolve(err || !version ? undefined : version);
+    });
+  });
+}
+
 /// Show the item while starting, on failure, and whenever the active file is
 /// one Poly actually handles — a permanent idle badge is just clutter.
 function refreshStatus(): void {
@@ -65,7 +86,10 @@ function refreshStatus(): void {
     return;
   }
   const language = vscode.window.activeTextEditor?.document.languageId;
-  const relevant = health !== "ready" || (language !== undefined && LANGUAGES.includes(language));
+  // A version mismatch stays on screen whatever the active file is: it is a
+  // broken installation, not a per-file state, and it will not fix itself.
+  const relevant = health !== "ready" || versionWarning !== undefined ||
+    (language !== undefined && LANGUAGES.includes(language));
   if (!relevant) {
     status.hide();
     return;
@@ -80,6 +104,12 @@ function refreshStatus(): void {
     status.text = "$(sync~spin) Poly";
     status.tooltip = "Starting the Poly daemon…";
     status.backgroundColor = undefined;
+  } else if (versionWarning) {
+    status.text = "$(warning) Poly";
+    status.tooltip = `Poly ${versionWarning} — click for the log`;
+    status.backgroundColor = new vscode.ThemeColor(
+      "statusBarItem.warningBackground",
+    );
   } else {
     status.text = "$(check) Poly";
     status.tooltip = "Poly is formatting and linting this file — click for the log";
@@ -215,6 +245,27 @@ async function promptFormatOnSave(context: vscode.ExtensionContext) {
   vscode.window.setStatusBarMessage("Poly: format-on-save enabled", 5000);
 }
 
+/// Record which binary answered and whether it is the one this extension was
+/// built against. The path goes in the log unconditionally -- "which poly is
+/// this?" is the first question of every support thread -- and only a mismatch
+/// reaches the status bar.
+async function reportVersionSkew(
+  serverPath: string,
+  expected: string,
+): Promise<void> {
+  const actual = await binaryVersion(serverPath);
+  client?.outputChannel.appendLine(
+    `[poly] binary ${serverPath} reports ${actual ?? "no version"}, extension is ${expected}`,
+  );
+  if (actual === expected) {
+    return;
+  }
+  versionWarning = actual
+    ? `binary is ${actual} but the extension is ${expected}`
+    : `binary at ${serverPath} is older than the extension (${expected})`;
+  refreshStatus();
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   const serverPath = resolveServerPath(context);
   client = new LanguageClient(
@@ -319,6 +370,7 @@ export async function activate(context: vscode.ExtensionContext) {
     void reportDaemonFailure(`${serverPath}: ${err}`);
     return;
   }
+  await reportVersionSkew(serverPath, context.extension.packageJSON.version);
   void promptFormatOnSave(context);
   scheduleUpdateCheck(context);
 }

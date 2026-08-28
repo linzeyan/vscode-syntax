@@ -87,6 +87,21 @@ jobs:
         run: |
           cli/target/release/poly fmt --check --strict .
           cli/target/release/poly check --strict .
+      # release.yml checks this too, but only when a tag is pushed -- by then
+      # the drift is already committed. The extension now warns at runtime when
+      # its binary is a different version, so a mismatch on main would ship a
+      # warning badge to every user.
+      - name: CLI and extension versions agree
+        run: |
+          cli=$(cli/target/release/poly --version | cut -d' ' -f2)
+          status=0
+          for f in extensions/lint/package.json extensions/syntax/package.json; do
+            v=$(python3 -c "import json;print(json.load(open('$f'))['version'])")
+            [ "$v" = "$cli" ] || {
+              echo "::error file=$f::version $v does not match the CLI's $cli"
+              status=1; }
+          done
+          exit $status
       - uses: actions/setup-node@v4
         with:
           node-version: 22

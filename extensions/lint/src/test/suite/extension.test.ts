@@ -1,4 +1,5 @@
 import * as assert from "node:assert";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -83,6 +84,26 @@ suite("poly-lint in a real editor", () => {
       ),
     );
     await eventually("the extension to activate", () => extension.isActive || undefined);
+  });
+
+  // The VSIX ships one binary with one extension and versions them together,
+  // so the pair the test host just wired up has to agree. A mismatch here is
+  // the same defect a user would see as a warning badge, caught before release
+  // rather than by whoever installs it.
+  test("the binary it talks to is its own version", async () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    const serverPath = vscode.workspace
+      .getConfiguration("poly")
+      .get<string>("serverPath");
+    assert.ok(serverPath, "the test host was given no poly.serverPath");
+    const reported = execFileSync(serverPath, ["--version"], {
+      encoding: "utf8",
+    }).trim();
+    assert.strictEqual(
+      reported,
+      `poly ${extension?.packageJSON.version}`,
+      "binary and extension versions have drifted",
+    );
   });
 
   test("contributes every command it declares", async () => {

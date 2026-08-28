@@ -36,6 +36,20 @@
 `Poly: Show Log` 看實際錯誤，再對照下面幾節。想手動確認 binary 能不能跑，
 在終端機執行 `<poly 路徑> tools`——會列出每個外部工具的解析狀態。
 
+### 狀態列出現黃底 `Poly`：binary 與 extension 版本不符
+
+daemon 有起來，但接到的 poly 不是這個 extension 出貨的那一支。VSIX 裡兩者是綁在
+一起發版的，所以會不一致只有兩種原因：`poly.serverPath` 指向舊的本機 build，或
+PATH 上有另一支 poly 排在前面。功能不會壞，但新版才有的行為會安靜地不出現。
+
+點狀態列看 log，第一行就寫著實際解析到哪支、它回報什麼版本。自己確認：
+
+```sh
+<poly 路徑> --version   # 應該與 extension 版本相同
+```
+
+沒有輸出代表那支 poly 舊到還沒有 `--version`（0.3.0 以前）。
+
 ### Windows SmartScreen／Defender
 
 內嵌的 `poly.exe` 未簽章，首次執行可能被擋。
