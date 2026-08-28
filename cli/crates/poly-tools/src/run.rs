@@ -676,6 +676,11 @@ struct TflintRange {
 struct TflintRule {
     name: String,
     severity: String,
+    /// tflint ships each rule's documentation URL, pinned to the ruleset
+    /// version that produced the finding — better than anything poly could
+    /// derive, which would point at whatever the ruleset says today.
+    #[serde(default)]
+    link: String,
 }
 
 #[derive(Deserialize)]
@@ -683,6 +688,9 @@ struct TflintItem {
     rule: TflintRule,
     message: String,
     range: TflintRange,
+    /// Whether `tflint --fix` rewrites this one.
+    #[serde(default)]
+    fixable: bool,
 }
 
 #[derive(Deserialize)]
@@ -707,32 +715,41 @@ pub fn tflint_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
     let mut out = Vec::new();
     for dir in dirs {
         let chdir = format!("--chdir={}", dir.display());
-        let stdout = run(cmd, &["--format", "json", &chdir], &[], None)?;
-        let parsed: TflintOutput =
-            serde_json::from_slice(&stdout).context("parsing tflint output")?;
-        for i in parsed.issues {
-            out.push(FileIssue {
-                file: PathBuf::from(i.range.filename),
-                issue: Issue {
-                    line: i.range.start.line.saturating_sub(1),
-                    col: i.range.start.column.saturating_sub(1),
-                    end_line: i.range.end.line.saturating_sub(1),
-                    end_col: i.range.end.column.saturating_sub(1),
-                    severity: if i.rule.severity == "error" {
-                        Severity::Error
-                    } else {
-                        Severity::Warning
-                    },
-                    code: i.rule.name,
-                    message: i.message,
-                    source: "tflint",
-                    fix: None,
-                    url: None,
-                },
-            });
-        }
+        out.extend(tflint_parse(&run(
+            cmd,
+            &["--format", "json", &chdir],
+            &[],
+            None,
+        )?)?);
     }
     Ok(out)
+}
+
+fn tflint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
+    let parsed: TflintOutput = serde_json::from_slice(stdout).context("parsing tflint output")?;
+    Ok(parsed
+        .issues
+        .into_iter()
+        .map(|i| FileIssue {
+            file: PathBuf::from(i.range.filename),
+            issue: Issue {
+                line: i.range.start.line.saturating_sub(1),
+                col: i.range.start.column.saturating_sub(1),
+                end_line: i.range.end.line.saturating_sub(1),
+                end_col: i.range.end.column.saturating_sub(1),
+                severity: if i.rule.severity == "error" {
+                    Severity::Error
+                } else {
+                    Severity::Warning
+                },
+                code: i.rule.name,
+                message: i.message,
+                source: "tflint",
+                fix: i.fixable.then_some(Fix::Automatic),
+                url: (!i.rule.link.is_empty()).then_some(i.rule.link),
+            },
+        })
+        .collect())
 }
 
 // ── golangci-lint (module semantics) ───────────────────────────────────────
@@ -748,6 +765,12 @@ struct GolangciPos {
 }
 
 #[derive(Deserialize)]
+struct GolangciFix {
+    #[serde(rename = "Message")]
+    message: String,
+}
+
+#[derive(Deserialize)]
 struct GolangciItem {
     #[serde(rename = "FromLinter")]
     from_linter: String,
@@ -755,6 +778,17 @@ struct GolangciItem {
     text: String,
     #[serde(rename = "Pos")]
     pos: GolangciPos,
+    /// Present when the analyzer computed an edit `golangci-lint --fix` would
+    /// apply. The edit itself is byte offsets into the file poly is not
+    /// rewriting; the message describing it is the useful half.
+    #[serde(rename = "SuggestedFixes", default)]
+    suggested_fixes: Vec<GolangciFix>,
+}
+
+/// golangci-lint documents every linter on one page, one anchor per linter.
+/// The anchor form is the one the site's own linter index links to.
+fn golangci_url(linter: &str) -> String {
+    format!("https://golangci-lint.run/docs/linters/configuration/#{linter}")
 }
 
 #[derive(Deserialize)]
@@ -801,31 +835,52 @@ pub fn golangci_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
                 }
             })?
             .context("parsing golangci-lint output")?;
-        for i in parsed.issues {
+        out.extend(golangci_issues(parsed, &root));
+    }
+    Ok(out)
+}
+
+/// Kept separate from the run so the shape can be tested: `SuggestedFixes` and
+/// the linter name are the two fields poly reports beyond position and text,
+/// and both are silently absent if golangci-lint renames them.
+fn golangci_issues(parsed: GolangciOutput, root: &Path) -> Vec<FileIssue> {
+    parsed
+        .issues
+        .into_iter()
+        .map(|i| {
             let file = PathBuf::from(&i.pos.filename);
-            let file = if file.is_absolute() {
-                file
-            } else {
-                root.join(file)
-            };
-            out.push(FileIssue {
-                file,
+            FileIssue {
+                file: if file.is_absolute() {
+                    file
+                } else {
+                    root.join(file)
+                },
                 issue: Issue {
                     line: i.pos.line.saturating_sub(1),
                     col: i.pos.column.saturating_sub(1),
                     end_line: i.pos.line.saturating_sub(1),
                     end_col: i.pos.column.max(1),
                     severity: Severity::Warning,
+                    url: Some(golangci_url(&i.from_linter)),
                     code: i.from_linter,
                     message: i.text,
                     source: "golangci-lint",
-                    fix: None,
-                    url: None,
+                    // safe: golangci-lint offers no notion of a risky fix, so
+                    // there is nothing to warn about. Only ruff makes that
+                    // distinction, and inventing it here would be a claim the
+                    // tool never made.
+                    fix: i
+                        .suggested_fixes
+                        .into_iter()
+                        .next()
+                        .map(|f| Fix::Described {
+                            what: f.message,
+                            safe: true,
+                        }),
                 },
-            });
-        }
-    }
-    Ok(out)
+            }
+        })
+        .collect()
 }
 
 fn go_module_root(file: &Path) -> Option<PathBuf> {
@@ -1087,6 +1142,65 @@ mod tests {
         assert_eq!(issues[0].issue.line, 1);
         assert_eq!(issues[0].issue.col, 6);
         assert_eq!(issues[0].issue.severity, Severity::Error);
+    }
+
+    /// tflint is the one tool that hands over both halves itself: a
+    /// version-pinned rule URL and whether `--fix` rewrites the finding.
+    /// Sampled from tflint 0.64.0.
+    #[test]
+    fn tflint_reports_its_own_link_and_fixability() {
+        let raw = br#"{"issues":[
+          {"rule":{"name":"terraform_required_version","severity":"warning",
+            "link":"https://github.com/terraform-linters/tflint-ruleset-terraform/blob/v0.15.0/docs/rules/terraform_required_version.md"},
+           "message":"terraform \"required_version\" attribute is required",
+           "range":{"filename":"main.tf","start":{"line":1,"column":1},"end":{"line":1,"column":1}},
+           "callers":[],"fixable":true,"fixed":false},
+          {"rule":{"name":"terraform_comment_syntax","severity":"notice","link":""},
+           "message":"Single line comments should begin with #",
+           "range":{"filename":"main.tf","start":{"line":9,"column":1},"end":{"line":9,"column":3}},
+           "callers":[],"fixable":false,"fixed":false}
+        ]}"#;
+        let issues = tflint_parse(raw).unwrap();
+        assert_eq!(issues[0].issue.fix, Some(Fix::Automatic));
+        assert!(issues[0].issue.url.as_deref().unwrap().ends_with(
+            "tflint-ruleset-terraform/blob/v0.15.0/docs/rules/terraform_required_version.md"
+        ));
+        // A rule with no link must not get an empty string dressed up as one.
+        assert_eq!(issues[1].issue.fix, None);
+        assert_eq!(issues[1].issue.url, None);
+    }
+
+    /// golangci-lint already computes the edit `--fix` would apply and
+    /// describes it; poly reports the description without applying anything.
+    /// Sampled from golangci-lint 2.13.1 (staticcheck).
+    #[test]
+    fn golangci_reports_the_suggested_fix_and_its_linter_docs() {
+        let raw = br#"{"Issues":[
+          {"FromLinter":"staticcheck",
+           "Text":"ST1023: should omit type int from declaration; it will be inferred from the right-hand side",
+           "Pos":{"Filename":"main.go","Offset":49,"Line":6,"Column":8},
+           "SuggestedFixes":[{"Message":"Remove redundant type","TextEdits":[{"Pos":49,"End":52,"NewText":null}]}]},
+          {"FromLinter":"staticcheck","Text":"SA9003: empty branch",
+           "Pos":{"Filename":"main.go","Offset":77,"Line":8,"Column":2}}
+        ]}"#;
+        let parsed: GolangciOutput = serde_json::from_slice(raw).unwrap();
+        let issues = golangci_issues(parsed, Path::new("/repo"));
+
+        assert_eq!(issues[0].file, Path::new("/repo/main.go"));
+        assert_eq!(
+            issues[0].issue.fix,
+            Some(Fix::Described {
+                what: "Remove redundant type".to_string(),
+                safe: true
+            })
+        );
+        assert_eq!(
+            issues[0].issue.url.as_deref(),
+            Some("https://golangci-lint.run/docs/linters/configuration/#staticcheck")
+        );
+        // No SuggestedFixes key at all: still a valid issue, just no remedy.
+        assert_eq!(issues[1].issue.fix, None);
+        assert!(issues[1].issue.url.is_some());
     }
 
     #[test]
