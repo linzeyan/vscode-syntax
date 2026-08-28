@@ -43,8 +43,7 @@ async function main(): Promise<void> {
     JSON.stringify(
       {
         "poly.serverPath": serverPath,
-        // Both would pop modal-ish UI that nothing in a headless run dismisses.
-        "poly.promptFormatOnSave": false,
+        // Would pop modal-ish UI that nothing in a headless run dismisses.
         "poly.updateCheck.enabled": false,
       },
       null,

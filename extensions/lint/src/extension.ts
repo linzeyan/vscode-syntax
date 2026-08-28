@@ -44,16 +44,15 @@ const LANGUAGES = [
   "swift",
 ];
 
-// Languages the one-click opt-in makes poly the *default* formatter for.
-// Toolchain languages are deliberately excluded: rust-analyzer, gopls and
+// Format-on-save is declared, not written: contributes.configurationDefaults
+// in package.json covers this list minus the toolchain languages (rust, go, c,
+// cpp, swift, terraform). Adding a language here means adding it there too.
+//
+// Toolchain languages are deliberately left out: rust-analyzer, gopls and
 // clangd already format them, silently taking that over would change output
 // (gofumpt is not gofmt), and poly returns nothing at all when the toolchain
 // binary is missing since it never auto-installs those. Poly stays reachable
 // there through "Format Document With...".
-const TOOLCHAIN_FORMATTERS = ["rust", "go", "c", "cpp", "swift", "terraform"];
-const FORMAT_ON_SAVE_LANGUAGES = LANGUAGES.filter(
-  (language) => !TOOLCHAIN_FORMATTERS.includes(language),
-);
 
 let client: LanguageClient | undefined;
 let status: vscode.StatusBarItem | undefined;
@@ -210,41 +209,6 @@ function gitBase(): string[] {
   return workspacePaths().slice(0, 1);
 }
 
-async function promptFormatOnSave(context: vscode.ExtensionContext) {
-  const config = vscode.workspace.getConfiguration("poly");
-  if (!config.get<boolean>("promptFormatOnSave")) {
-    return;
-  }
-  if (context.globalState.get<boolean>("promptedFormatOnSave")) {
-    return;
-  }
-  await context.globalState.update("promptedFormatOnSave", true);
-  const pick = await vscode.window.showInformationMessage(
-    "Poly can format supported files on save. Enable format-on-save for Poly languages?",
-    "Enable",
-    "No",
-  );
-  if (pick !== "Enable") {
-    return;
-  }
-  // Per-language so unrelated languages keep their own formatter (A8).
-  const root = vscode.workspace.getConfiguration();
-  for (const lang of FORMAT_ON_SAVE_LANGUAGES) {
-    const section = `[${lang}]`;
-    const current = root.get<Record<string, unknown>>(section) ?? {};
-    await root.update(
-      section,
-      {
-        ...current,
-        "editor.defaultFormatter": "ricky.poly-lint",
-        "editor.formatOnSave": true,
-      },
-      vscode.ConfigurationTarget.Global,
-    );
-  }
-  vscode.window.setStatusBarMessage("Poly: format-on-save enabled", 5000);
-}
-
 /// Record which binary answered and whether it is the one this extension was
 /// built against. The path goes in the log unconditionally -- "which poly is
 /// this?" is the first question of every support thread -- and only a mismatch
@@ -371,7 +335,6 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
   await reportVersionSkew(serverPath, context.extension.packageJSON.version);
-  void promptFormatOnSave(context);
   scheduleUpdateCheck(context);
 }
 

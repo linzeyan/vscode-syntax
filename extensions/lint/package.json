@@ -104,11 +104,6 @@
           "default": true,
           "description": "Publish lint diagnostics when a supported file is opened or saved."
         },
-        "poly.promptFormatOnSave": {
-          "type": "boolean",
-          "default": true,
-          "description": "Offer once to enable format-on-save for Poly-supported languages."
-        },
         "poly.updateCheck.enabled": {
           "type": "boolean",
           "default": true,
@@ -121,6 +116,31 @@
           "description": "Days between automatic update checks; 0 checks on every startup."
         }
       }
+    },
+    "configurationDefaults": {
+      "[typescript]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[typescriptreact]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[javascript]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[javascriptreact]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[json]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[jsonc]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[markdown]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[toml]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[css]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[scss]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[less]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[yaml]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[python]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[sql]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[xml]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[html]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[vue]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[svelte]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[astro]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[graphql]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[dockerfile]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[shellscript]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
+      "[lua]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true }
     }
   },
   "packageManager": "pnpm@11.5.3",

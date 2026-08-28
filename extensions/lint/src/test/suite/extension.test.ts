@@ -18,6 +18,11 @@ const COMMANDS = [
   "poly.showOutput",
 ];
 
+// Languages poly formats but deliberately does not take over: rust-analyzer,
+// gopls and clangd already own them, and poly returns nothing when the
+// toolchain binary is missing since it never installs those itself (A8).
+const TOOLCHAIN_FORMATTERS = ["rust", "go", "c", "cpp", "swift", "terraform"];
+
 function workspaceRoot(): string {
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, "the test host opened no workspace folder");
@@ -186,5 +191,60 @@ suite("poly-lint in a real editor", () => {
       vscode.Uri.file(folder),
     );
     assert.strictEqual(readFileSync(file, "utf8"), "{ \"b\": 1, \"a\": 2 }\n");
+  });
+
+  // Format-on-save used to need a notification the user had to catch: the
+  // "already asked" flag was written before the toast was even shown, so one
+  // that faded out unanswered left the feature off forever with nothing in the
+  // UI able to turn it on. Found on the Win11 VM, where settings.json had no
+  // language section at all. It is now declared in configurationDefaults, which
+  // needs no click and touches no user file -- but only the real editor can say
+  // whether VSCode honours it, and this test host writes no such setting.
+  test("format-on-save is on for a poly language out of the box", async () => {
+    const uri = writeFile("defaults.py", "x = 1\n");
+    const editor = vscode.workspace.getConfiguration("editor", {
+      uri,
+      languageId: "python",
+    });
+    assert.strictEqual(editor.get<boolean>("formatOnSave"), true);
+    assert.strictEqual(editor.get<string>("defaultFormatter"), EXTENSION_ID);
+  });
+
+  test("format-on-save leaves the toolchain languages alone", () => {
+    for (const languageId of TOOLCHAIN_FORMATTERS) {
+      const editor = vscode.workspace.getConfiguration("editor", {
+        uri: vscode.Uri.file(join(workspaceRoot(), `x.${languageId}`)),
+        languageId,
+      });
+      assert.notStrictEqual(
+        editor.get<string>("defaultFormatter"),
+        EXTENSION_ID,
+        `${languageId} must keep its own formatter`,
+      );
+    }
+  });
+
+  // Two lists in package.json describe the same set of languages, and nothing
+  // else notices when one grows without the other: a language added to
+  // activationEvents but not to configurationDefaults activates poly and then
+  // silently never formats on save.
+  test("configurationDefaults covers every activated language", () => {
+    const pkg = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON;
+    const activated = (pkg.activationEvents as string[])
+      .filter((event) => event.startsWith("onLanguage:"))
+      .map((event) => event.slice("onLanguage:".length))
+      .filter((language) => !TOOLCHAIN_FORMATTERS.includes(language));
+    const declared = Object.keys(pkg.contributes.configurationDefaults)
+      .map((section) => section.slice(1, -1));
+    assert.deepStrictEqual(
+      activated.filter((language) => !declared.includes(language)),
+      [],
+      "activated but never gets format-on-save",
+    );
+    assert.deepStrictEqual(
+      declared.filter((language) => !activated.includes(language)),
+      [],
+      "given format-on-save but never activates poly",
+    );
   });
 });
