@@ -63,8 +63,8 @@
 選檔案 → 重新載入視窗。或用命令列：
 
 ```sh
-code --install-extension poly-syntax-0.4.3.vsix
-code --install-extension poly-lint-darwin-arm64-0.4.3.vsix
+code --install-extension poly-syntax-0.4.4.vsix
+code --install-extension poly-lint-darwin-arm64-0.4.4.vsix
 ```
 
 之後的版本由 poly-lint 自己提示更新，不必再手動抓。
@@ -88,7 +88,7 @@ irm https://raw.githubusercontent.com/linzeyan/vscode-syntax/main/install.ps1 | 
 版本就設環境變數——`irm | iex` 沒辦法傳參數，所以兩邊都認得：
 
 ```sh
-POLY_VERSION=0.4.3 POLY_INSTALL_DIR=~/bin sh install.sh
+POLY_VERSION=0.4.4 POLY_INSTALL_DIR=~/bin sh install.sh
 ```
 
 Windows on ARM 上會裝 arm64 版，即使腳本本身跑在 x64 模擬層裡（從 ssh 或某些
@@ -114,7 +114,7 @@ SmartScreen 擋，處理方式見
 - run: poly check --strict .
 ```
 
-`@v0` 會跟著最新的 release 走。要釘死版本就寫 `with: { version: "0.4.3" }`——poly
+`@v0` 會跟著最新的 release 走。要釘死版本就寫 `with: { version: "0.4.4" }`——poly
 會改寫檔案，所以新版本自己跑進來有可能把綠的分支變紅。
 
 Action 做三件事：抓對應平台的 binary、對 `SHA256SUMS` 驗 sha256、放進 PATH。順便
@@ -127,7 +127,7 @@ Action 做三件事：抓對應平台的 binary、對 `SHA256SUMS` 驗 sha256、
 docker run --rm -v "$PWD:/work" ghcr.io/linzeyan/poly check --strict .
 ```
 
-`linux/amd64` 與 `linux/arm64` 都有。tag 有 `latest`、`0.4.3`、`0.4`；pre-release
+`linux/amd64` 與 `linux/arm64` 都有。tag 有 `latest`、`0.4.4`、`0.4`；pre-release
 不會動到 `latest`。image 裡的 binary 就是 release 附的那一支，不是另外編的。
 
 外部 linter 快取在 `/cache`，CI 裡掛個 volume 上去就不用每次重抓：
