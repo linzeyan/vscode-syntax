@@ -203,8 +203,8 @@ tflint = "off"
 
 ```sh
 cargo build --release --manifest-path cli/Cargo.toml   # → cli/target/release/poly
-(cd extensions/lint && npm ci && npm run build)        # extension bundle
-(cd extensions/lint && npm test)                       # 真 extension host E2E
+(cd extensions/lint && pnpm install && pnpm run build) # extension bundle
+(cd extensions/lint && pnpm test)                      # 真 extension host E2E
 pip install pyyaml && python tools/grammar-sync.py     # 重新同步文法
 ```
 
@@ -214,7 +214,6 @@ pip install pyyaml && python tools/grammar-sync.py     # 重新同步文法
 ## 授權
 
 poly 自身的程式碼為 MIT。內嵌文法與相依套件各自保留上游授權，完整清單見兩份
-`THIRD-PARTY-NOTICES.md`（由同步管線自動產生，含 pinned 版本）。授權允許清單
-（A9）由 `tools/grammar-sync.py` 與 `tools/third-party-notices.py` 在 CI 強制
-執行：permissive 授權加 MPL-2.0，GPL／AGPL／SSPL 與無 permissive 選項的 LGPL
-一律擋下。
+`THIRD-PARTY-NOTICES.md`（由同步管線自動產生，含 pinned 版本）。授權允許清單由
+`tools/grammar-sync.py` 與 `tools/third-party-notices.py` 在 CI 強制執行：
+permissive 授權加 MPL-2.0，GPL／AGPL／SSPL 與無 permissive 選項的 LGPL 一律擋下。

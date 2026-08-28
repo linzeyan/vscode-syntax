@@ -123,11 +123,12 @@
       }
     }
   },
+  "packageManager": "pnpm@11.5.3",
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
     "typecheck": "tsc --noEmit",
-    "test:build": "npm run build && tsc -p tsconfig.test.json",
-    "test": "npm run test:build && node out/runTest.js"
+    "test:build": "pnpm run build && tsc -p tsconfig.test.json",
+    "test": "pnpm run test:build && node out/runTest.js"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

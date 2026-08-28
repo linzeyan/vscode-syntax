@@ -54,6 +54,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: extensions/lint/package.json
       - name: Build
         working-directory: cli
         run: cargo build --release --locked --target ${{ matrix.target }}
@@ -75,7 +78,7 @@ jobs:
         run: |
           BIN=cli/target/${{ matrix.target }}/release/poly
           [ -f "$BIN.exe" ] && BIN="$BIN.exe"
-          npm ci --prefix extensions/lint
+          pnpm --dir extensions/lint install --frozen-lockfile
           tools/package-lint.sh ${{ matrix.vsce }} "$BIN"
       - uses: actions/upload-artifact@v4
         with:
@@ -94,6 +97,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: extensions/lint/package.json
       - name: Verify tag matches extension versions
         run: |
           BASE="${GITHUB_REF_NAME#v}"; BASE="${BASE%%-*}"
@@ -106,7 +112,7 @@ jobs:
           done
       - name: Package universal syntax VSIX
         working-directory: extensions/syntax
-        run: npx --yes @vscode/vsce package --allow-missing-repository
+        run: pnpm dlx @vscode/vsce package --allow-missing-repository
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*

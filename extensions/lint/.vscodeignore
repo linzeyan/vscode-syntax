@@ -2,7 +2,8 @@
 node_modules/**
 src/**
 tsconfig.json
-package-lock.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
 *.vsix
 out/**
 tsconfig.test.json

@@ -34,7 +34,9 @@ win32-*) cp "$BIN" "$EXT/bin/poly.exe" ;;
 *) cp "$BIN" "$EXT/bin/poly" && chmod +x "$EXT/bin/poly" ;;
 esac
 cd "$EXT" || exit 1
-npm run build || exit 1
-npx --yes @vscode/vsce package --allow-missing-repository --target "$TARGET" || exit 1
+pnpm run build || exit 1
+# --no-dependencies: nothing from node_modules ships (see .vscodeignore), and
+# vsce cannot walk pnpm's symlinked tree to prove that for itself.
+pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --target "$TARGET" || exit 1
 set +x
 ls -1 "$EXT"/poly-lint-*.vsix

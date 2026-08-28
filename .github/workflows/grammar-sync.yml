@@ -21,6 +21,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: extensions/lint/package.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -42,7 +45,9 @@ jobs:
       - name: Tokenize fixtures
         if: steps.diff.outputs.changed == 'true'
         run: |
-          npm install --prefix /tmp/tokdeps --no-save vscode-textmate vscode-oniguruma
+          mkdir -p /tmp/tokdeps
+          pnpm --dir /tmp/tokdeps init
+          pnpm --dir /tmp/tokdeps add vscode-textmate vscode-oniguruma
           node tools/tokenize-check.mjs /tmp/tokdeps/node_modules | tee /tmp/tokenize.log
       - name: Open PR
         if: steps.diff.outputs.changed == 'true'
