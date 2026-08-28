@@ -1093,6 +1093,17 @@ fn biome_parse(stdout: &[u8], root: &Path) -> Result<Vec<FileIssue>> {
         .collect())
 }
 
+/// eslint.org documents core rules only, and a plugin's `ruleId` always names
+/// the plugin before the rule (`@typescript-eslint/no-unused-vars`,
+/// `react/jsx-key`). Deriving for those would produce a link that resolves --
+/// to whichever core rule happens to share the name, or to a 404 -- for a rule
+/// eslint.org never described, so the slash is the whole test. Plugins
+/// document wherever they like and nothing in the JSON says where.
+fn eslint_url(rule_id: Option<&str>) -> Option<String> {
+    let rule = rule_id?;
+    (!rule.contains('/')).then(|| format!("https://eslint.org/docs/latest/rules/{rule}"))
+}
+
 fn eslint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
     let parsed: Vec<EslintFile> =
         serde_json::from_slice(stdout).context("parsing eslint output")?;
@@ -1113,11 +1124,13 @@ fn eslint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     } else {
                         Severity::Warning
                     },
+                    url: eslint_url(m.rule_id.as_deref()),
+                    // No ruleId means eslint failed before any rule ran: a
+                    // parse error or a broken config, not a violation.
                     code: m.rule_id.unwrap_or_else(|| "eslint".to_string()),
                     message: m.message,
                     source: "eslint",
                     fix: m.fix.is_some().then_some(Fix::Automatic),
-                    url: None,
                 },
             });
         }
@@ -1376,5 +1389,24 @@ mod tests {
         assert_eq!(issues[0].issue.code, "no-var");
         assert_eq!(issues[0].issue.line, 0);
         assert_eq!(issues[0].issue.severity, Severity::Error);
+        assert_eq!(
+            issues[0].issue.url.as_deref(),
+            Some("https://eslint.org/docs/latest/rules/no-var")
+        );
+    }
+
+    /// eslint.org is a core-rule index, so the slash in a plugin's ruleId is
+    /// the whole test. Getting this wrong is not a dead link -- it is a live
+    /// link to a rule eslint.org describes and the plugin does not implement.
+    #[test]
+    fn only_eslint_core_rules_get_a_documentation_link() {
+        assert_eq!(
+            eslint_url(Some("eqeqeq")).as_deref(),
+            Some("https://eslint.org/docs/latest/rules/eqeqeq")
+        );
+        assert_eq!(eslint_url(Some("react/jsx-key")), None);
+        assert_eq!(eslint_url(Some("@typescript-eslint/no-unused-vars")), None);
+        // A message with no rule is a parse error or a broken config.
+        assert_eq!(eslint_url(None), None);
     }
 }
