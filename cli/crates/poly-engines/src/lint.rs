@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
-use poly_core::diag::{Issue, Severity};
+use poly_core::diag::{Fix, Issue, Severity};
 
 /// Does `lang` have an embedded linter? Batch callers use this to avoid
 /// reading thousands of files whose lint would return nothing.
@@ -51,6 +51,8 @@ fn lint_toml(text: &str) -> Vec<Issue> {
             .collect::<Vec<_>>()
             .join(" "),
         source: "toml",
+        fix: None,
+        url: None,
     }]
 }
 
@@ -84,6 +86,13 @@ fn lint_sql(text: &str) -> Result<Vec<Issue>> {
                 code: v.rule_code().to_string(),
                 message: v.description.clone(),
                 source: "sqruff",
+                // sqruff carries a fixable flag but no description of the
+                // rewrite, and publishes no rule documentation to link to.
+                // `poly fmt` is the honest instruction here rather than a
+                // generic "the tool can fix it": format_sql *is* sqruff's
+                // fixer, so reformatting resolves exactly these.
+                fix: v.fixable.then_some(Fix::Reformat),
+                url: None,
             }
         })
         .collect())

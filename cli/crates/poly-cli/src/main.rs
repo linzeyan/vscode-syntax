@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use poly_core::diag::Severity;
+use poly_core::diag::{Fix, Severity};
 use poly_core::Scope;
 use poly_tools::run::FileIssue;
 use rayon::prelude::*;
@@ -46,6 +46,7 @@ fn run() -> Result<i32> {
                 &paths,
                 flags.contains(&"--strict"),
                 flags.contains(&"--changed"),
+                flags.contains(&"--compact"),
             )
         }
         "tools" => cmd_tools(&rest),
@@ -60,7 +61,10 @@ fn run() -> Result<i32> {
             Ok(0)
         }
         _ => {
-            bail!("usage: poly <fmt|check|tools|bench|lsp> [paths...] [--check|--strict|--changed]")
+            bail!(
+                "usage: poly <fmt|check|tools|bench|lsp> [paths...] \
+                 [--check|--strict|--changed|--compact]"
+            )
         }
     }
 }
@@ -71,7 +75,7 @@ fn split_flags<'a>(rest: &'a [String]) -> Result<(Vec<PathBuf>, Vec<&'a str>)> {
     for arg in rest {
         if let Some(flag) = arg.strip_prefix("--").map(|_| arg.as_str()) {
             match flag {
-                "--check" | "--strict" | "--changed" => flags.push(flag),
+                "--check" | "--strict" | "--changed" | "--compact" => flags.push(flag),
                 other => bail!("unknown flag: {other}"),
             }
         } else {
@@ -192,7 +196,60 @@ fn relative_to_base(file: &Path, base: &Path) -> PathBuf {
     }
 }
 
-fn cmd_check(paths: &[PathBuf], strict: bool, changed: bool) -> Result<i32> {
+/// One record shape for everything poly reports, whichever tool found it:
+///
+/// ```text
+/// lint.py:1:8: warning [ruff/F401] `os` imported but unused
+///     fix   Remove unused import: `os`
+///     docs  https://docs.astral.sh/ruff/rules/unused-import
+/// ```
+///
+/// The first line stays single and prefix-anchored so `rg`, CI annotation
+/// scripts and the terminal's file-link detection keep working. The
+/// continuations only appear when the tool actually supplied something —
+/// most linters report what is wrong and leave the remedy to their docs, and
+/// poly does not invent the difference. `--compact` drops them for parsers
+/// that want exactly one line per issue.
+fn render_issue(found: &FileIssue, compact: bool) -> String {
+    let FileIssue { file, issue } = found;
+    let severity = match issue.severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+        Severity::Info => "info",
+        Severity::Hint => "hint",
+    };
+    let mut out = format!(
+        "{}:{}:{}: {severity} [{}/{}] {}\n",
+        file.display(),
+        issue.line + 1,
+        issue.col + 1,
+        issue.source,
+        issue.code,
+        issue.message
+    );
+    if compact {
+        return out;
+    }
+    if let Some(fix) = &issue.fix {
+        let text = match fix {
+            // Only ruff spells the change out. "unsafe" is ruff's own word for
+            // an edit that can change behavior, so it has to be passed on.
+            Fix::Described { what, safe: true } => what.clone(),
+            Fix::Described { what, safe: false } => format!("{what} (unsafe: review it)"),
+            // Naming the tool keeps this honest: the fixer exists, but it is
+            // the tool's, and `poly check` does not run it.
+            Fix::Automatic => format!("{} can rewrite this automatically", issue.source),
+            Fix::Reformat => "run `poly fmt`".to_string(),
+        };
+        out.push_str(&format!("    fix   {text}\n"));
+    }
+    if let Some(url) = &issue.url {
+        out.push_str(&format!("    docs  {url}\n"));
+    }
+    out
+}
+
+fn cmd_check(paths: &[PathBuf], strict: bool, changed: bool, compact: bool) -> Result<i32> {
     // Tool binaries resolve against the top-level config: one run invokes each
     // linter once over a batch, so there is no per-file choice to make.
     // Language mapping and excludes are per file (batch::resolve_targets).
@@ -406,22 +463,8 @@ fn cmd_check(paths: &[PathBuf], strict: bool, changed: bool) -> Result<i32> {
     issues.sort_by(|a, b| {
         (&a.file, a.issue.line, a.issue.col).cmp(&(&b.file, b.issue.line, b.issue.col))
     });
-    for FileIssue { file, issue } in &issues {
-        let severity = match issue.severity {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
-            Severity::Info => "info",
-            Severity::Hint => "hint",
-        };
-        println!(
-            "{}:{}:{}: {severity} [{}/{}] {}",
-            file.display(),
-            issue.line + 1,
-            issue.col + 1,
-            issue.source,
-            issue.code,
-            issue.message
-        );
+    for issue in &issues {
+        print!("{}", render_issue(issue, compact));
     }
     eprintln!(
         "{} tools ran, {} issues{}{}",
@@ -524,6 +567,68 @@ fn bench(path: &Path, iters: usize) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn issue(fix: Option<Fix>, url: Option<&str>) -> FileIssue {
+        FileIssue {
+            file: PathBuf::from("lint.py"),
+            issue: poly_core::diag::Issue {
+                line: 0,
+                col: 7,
+                end_line: 0,
+                end_col: 9,
+                severity: Severity::Warning,
+                code: "F401".to_string(),
+                message: "`os` imported but unused".to_string(),
+                source: "ruff",
+                fix,
+                url: url.map(str::to_string),
+            },
+        }
+    }
+
+    #[test]
+    fn an_issue_renders_what_where_and_how_to_fix() {
+        let full = issue(
+            Some(Fix::Described {
+                what: "Remove unused import: `os`".to_string(),
+                safe: true,
+            }),
+            Some("https://docs.astral.sh/ruff/rules/unused-import"),
+        );
+        assert_eq!(
+            render_issue(&full, false),
+            "lint.py:1:8: warning [ruff/F401] `os` imported but unused\n\
+             \x20   fix   Remove unused import: `os`\n\
+             \x20   docs  https://docs.astral.sh/ruff/rules/unused-import\n"
+        );
+
+        // CI parsers want exactly one line per issue, and the first line alone
+        // is the whole record: everything after it is advice.
+        assert_eq!(
+            render_issue(&full, true),
+            "lint.py:1:8: warning [ruff/F401] `os` imported but unused\n"
+        );
+
+        // A tool that supplied nothing gets nothing invented on its behalf.
+        assert_eq!(
+            render_issue(&issue(None, None), false),
+            "lint.py:1:8: warning [ruff/F401] `os` imported but unused\n"
+        );
+
+        // ruff's own word for an edit that can change behavior has to survive.
+        let risky = issue(
+            Some(Fix::Described {
+                what: "Remove assignment".to_string(),
+                safe: false,
+            }),
+            None,
+        );
+        assert!(render_issue(&risky, false).contains("(unsafe: review it)"));
+
+        // Naming the tool keeps "automatic" honest: poly check does not run it.
+        let auto = issue(Some(Fix::Automatic), None);
+        assert!(render_issue(&auto, false).contains("ruff can rewrite this"));
+    }
 
     #[test]
     fn issue_paths_collapse_to_one_shape() {

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Context, Result};
-use poly_core::diag::{Issue, Severity};
+use poly_core::diag::{Fix, Issue, Severity};
 use serde::Deserialize;
 
 pub struct FileIssue {
@@ -132,6 +132,17 @@ struct ShellcheckItem {
     level: String,
     code: u64,
     message: String,
+    /// Present with the replacements shellcheck would apply, null otherwise.
+    /// It never describes them in words, so all poly can report is that a
+    /// mechanical fix exists.
+    fix: Option<serde_json::Value>,
+}
+
+/// One page per code, and the scheme has been stable for a decade. Derived
+/// rather than guessed: the wiki 404s for a code that does not exist, so a
+/// wrong link would be visible rather than silently misleading.
+fn shellcheck_url(code: u64) -> String {
+    format!("https://www.shellcheck.net/wiki/SC{code}")
 }
 
 fn shellcheck_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
@@ -150,6 +161,8 @@ fn shellcheck_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                 code: format!("SC{}", i.code),
                 message: i.message,
                 source: "shellcheck",
+                fix: i.fix.is_some().then_some(Fix::Automatic),
+                url: Some(shellcheck_url(i.code)),
             },
         })
         .collect())
@@ -179,6 +192,15 @@ struct HadolintItem {
     message: String,
 }
 
+/// hadolint runs shellcheck over every RUN line, so its output carries SC
+/// codes alongside its own DL ones; they document in different places.
+fn hadolint_url(code: &str) -> String {
+    match code.strip_prefix("SC").and_then(|n| n.parse().ok()) {
+        Some(n) => shellcheck_url(n),
+        None => format!("https://github.com/hadolint/hadolint/wiki/{code}"),
+    }
+}
+
 fn hadolint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
     let items: Vec<HadolintItem> =
         serde_json::from_slice(stdout).context("parsing hadolint output")?;
@@ -195,9 +217,11 @@ fn hadolint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     end_line: line,
                     end_col: col + 1,
                     severity: shellcheck_severity(&i.level),
+                    source: "hadolint",
+                    fix: None,
+                    url: Some(hadolint_url(&i.code)),
                     code: i.code,
                     message: i.message,
-                    source: "hadolint",
                 },
             }
         })
@@ -248,6 +272,8 @@ fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     code: i.kind,
                     message: i.message,
                     source: "actionlint",
+                    fix: None,
+                    url: None,
                 },
             }
         })
@@ -381,6 +407,10 @@ pub fn typos_paths(
                     }
                 ),
                 source: "typos",
+                // The correction is already in the message; what this adds is
+                // that `typos --write` would apply it without a human.
+                fix: Some(Fix::Automatic),
+                url: None,
             },
         });
     }
@@ -395,6 +425,14 @@ struct RuffPos {
     column: u32,
 }
 
+/// ruff is the only tool that ships a remediation sentence with the finding.
+/// `applicability` is "safe" when applying the edit cannot change behavior.
+#[derive(Deserialize)]
+struct RuffFix {
+    message: String,
+    applicability: String,
+}
+
 #[derive(Deserialize)]
 struct RuffItem {
     filename: String,
@@ -404,6 +442,9 @@ struct RuffItem {
     end_location: RuffPos,
     /// 1-based cell index for notebooks; absent for .py files.
     cell: Option<u32>,
+    /// Both absent on syntax errors, which no rule owns.
+    fix: Option<RuffFix>,
+    url: Option<String>,
 }
 
 fn ruff_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
@@ -426,6 +467,11 @@ fn ruff_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     None => i.message,
                 },
                 source: "ruff",
+                fix: i.fix.map(|f| Fix::Described {
+                    what: f.message,
+                    safe: f.applicability == "safe",
+                }),
+                url: i.url,
             },
         })
         .collect())
@@ -537,6 +583,8 @@ fn selene_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                 code: item.code,
                 message: item.message,
                 source: "selene",
+                fix: None,
+                url: None,
             },
         });
     }
@@ -583,6 +631,8 @@ fn swiftlint_parse(stdout: &[u8], fallback: &Path) -> Result<Vec<FileIssue>> {
                     code: i.rule_id,
                     message: i.reason,
                     source: "swiftlint",
+                    fix: None,
+                    url: None,
                 },
             }
         })
@@ -676,6 +726,8 @@ pub fn tflint_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
                     code: i.rule.name,
                     message: i.message,
                     source: "tflint",
+                    fix: None,
+                    url: None,
                 },
             });
         }
@@ -767,6 +819,8 @@ pub fn golangci_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
                     code: i.from_linter,
                     message: i.text,
                     source: "golangci-lint",
+                    fix: None,
+                    url: None,
                 },
             });
         }
@@ -799,6 +853,9 @@ struct EslintMessage {
     end_line: Option<u32>,
     #[serde(rename = "endColumn")]
     end_column: Option<u32>,
+    /// The replacement `eslint --fix` would apply; absent when the rule has
+    /// no fixer. Like shellcheck it never says what the change is in words.
+    fix: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -916,6 +973,8 @@ fn biome_parse(stdout: &[u8], root: &Path) -> Result<Vec<FileIssue>> {
                     code: d.category,
                     message: d.message,
                     source: "biome",
+                    fix: None,
+                    url: None,
                 },
             }
         })
@@ -945,6 +1004,8 @@ fn eslint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     code: m.rule_id.unwrap_or_else(|| "eslint".to_string()),
                     message: m.message,
                     source: "eslint",
+                    fix: m.fix.is_some().then_some(Fix::Automatic),
+                    url: None,
                 },
             });
         }
