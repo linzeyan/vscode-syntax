@@ -147,6 +147,33 @@ poly --version                 # 版本（確認 PATH 上是哪一支）
 說一聲然後跳過那些檔案，exit code 不受影響。這對「不是每台機器都裝了每套
 toolchain」是對的預設，但 CI 需要的是相反的答案——`--strict` 就是那個開關。
 
+### 什麼算失敗：`--fail-on`
+
+poly 預設對**任何**問題都 exit 1，連 `info` 等級的錯字也算。要放寬就設嚴重度門檻：
+
+```sh
+poly check --fail-on warning .   # info／hint 照樣回報，但不擋
+poly check --fail-on error .     # 只有語法錯誤等級才擋
+poly check --fail-on never .     # 純報告，永遠 exit 0
+```
+
+`--fail-on=warning` 與 `--fail-on warning` 都認得。低於門檻的問題**還是會印出來**，
+summary 會加註 `(N below fail-on)`，所以綠色的 run 有輸出不會被誤讀成 bug。
+
+寫進 `poly.toml` 才能讓編輯器與 CI 同一套標準，而且兩邊可以不同——「沒格式化要擋，
+錯字不用」是很常見的政策：
+
+```toml
+[format]
+fail-on = "warning" # 未格式化是 warning，所以 "error" 等於讓格式化只是建議
+
+[lint]
+fail-on = "error" # typos 報 info、多數 linter 報 warning、語法錯誤報 error
+```
+
+旗標壓過設定檔。這**不是** Rust 的 `-D warnings`——那個旗標存在是因為 Rust 的
+warning 預設不會 fail，poly 是相反的問題。
+
 Exit code：`0` 乾淨、`1` 有差異或違規、`2` 執行錯誤。`--help` 與 `--version` 放在
 哪個位置都認得（`poly fmt --help` 跟 `poly --help` 一樣）；`--help` 走 stdout、
 exit 0，指令打錯則是同一份說明走 stderr、exit 2。

@@ -112,6 +112,9 @@ struct RawLanguages {
 #[serde(default)]
 struct RawFormat {
     exclude: Vec<String>,
+    /// See `Config::format_fail_on`. Kebab-case like every other key.
+    #[serde(rename = "fail-on")]
+    fail_on: Option<String>,
     // Per-language option tables: `[format.python]`, `[format.typescript]`, …
     // serde forbids pairing flatten with deny_unknown_fields, but FormatOptions
     // carries its own, so a typo'd key still fails the parse.
@@ -123,6 +126,8 @@ struct RawFormat {
 #[serde(default, deny_unknown_fields)]
 struct RawLint {
     exclude: Vec<String>,
+    #[serde(rename = "fail-on")]
+    fail_on: Option<String>,
 }
 
 /// Per-language formatter knobs from `[format.<lang>]`.
@@ -190,6 +195,11 @@ pub struct Config {
     map: Vec<(GlobMatcher, String)>,
     pub format_exclude: Vec<String>,
     pub lint_exclude: Vec<String>,
+    /// Severity floor for `poly fmt --check`'s exit code. Separate from the
+    /// lint one on purpose: "unformatted files fail the build, spelling
+    /// suggestions do not" is a coherent policy and a common one.
+    pub format_fail_on: crate::diag::FailOn,
+    pub lint_fail_on: crate::diag::FailOn,
     format_exclude_set: GlobSet,
     lint_exclude_set: GlobSet,
     format_options: BTreeMap<String, FormatOptions>,
@@ -254,6 +264,8 @@ impl Config {
         }
         Ok(Config {
             map,
+            format_fail_on: parse_fail_on(raw.format.fail_on.as_deref(), "format")?,
+            lint_fail_on: parse_fail_on(raw.lint.fail_on.as_deref(), "lint")?,
             format_exclude_set: compile_excludes(&raw.format.exclude)?,
             lint_exclude_set: compile_excludes(&raw.lint.exclude)?,
             format_exclude: raw.format.exclude,
@@ -271,6 +283,8 @@ impl Config {
     pub fn empty() -> Config {
         Config {
             map: Vec::new(),
+            format_fail_on: crate::diag::FailOn::default(),
+            lint_fail_on: crate::diag::FailOn::default(),
             format_exclude: Vec::new(),
             lint_exclude: Vec::new(),
             format_exclude_set: GlobSet::empty(),
@@ -322,6 +336,17 @@ impl Config {
             }
         }
         builtin_language(path).map(str::to_string)
+    }
+}
+
+/// A misspelled severity fails the parse rather than falling back to the
+/// default, for the same reason a misspelled `line-width` does: the silent
+/// fallback here is "fail on everything", which looks like the setting simply
+/// having no effect.
+fn parse_fail_on(value: Option<&str>, section: &str) -> Result<crate::diag::FailOn> {
+    match value {
+        None => Ok(crate::diag::FailOn::default()),
+        Some(v) => crate::diag::FailOn::parse(v).map_err(|e| anyhow::anyhow!("[{section}] {e}")),
     }
 }
 

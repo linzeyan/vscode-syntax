@@ -72,6 +72,8 @@ usage:
 flags:
   --check       report what would change, write nothing (fmt only)
   --strict      a missing tool is an error, not a skipped file
+  --fail-on S   exit non-zero only at severity S or above
+                (error | warning | info | hint | never; default hint)
   --changed     only the files git reports as changed
   --compact     one line per issue, dropping the fix and docs lines
   --no-ignore   also visit files .gitignore and friends exclude
@@ -98,6 +100,8 @@ language: POLY_LANG=en or POLY_LANG=zh-TW (defaults to the system locale).
 旗標：
   --check       只回報會改什麼，不寫檔（限 fmt）
   --strict      工具缺席視為錯誤，而不是跳過該檔
+  --fail-on S   只有嚴重度 S 以上才非零離開
+                （error｜warning｜info｜hint｜never，預設 hint）
   --changed     只處理 git 回報有變更的檔案
   --compact     每個問題只印一行，不印 fix 與 docs
   --no-ignore   連 .gitignore 這類忽略檔排除的檔案也處理
@@ -179,6 +183,7 @@ mod tests {
             "--compact",
             "--no-ignore",
             "--hidden",
+            "--fail-on",
             "--version",
             "--help",
             "poly.toml",

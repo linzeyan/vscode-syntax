@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use poly_core::diag::{Fix, Severity};
+use poly_core::diag::{FailOn, Fix, Severity};
 use poly_core::{Hidden, Ignores, Scope, Walk};
 use poly_tools::run::FileIssue;
 use rayon::prelude::*;
@@ -45,7 +45,7 @@ fn run() -> Result<i32> {
     let rest: Vec<String> = args.into_iter().skip(1).collect();
     match cmd.as_str() {
         "fmt" => {
-            let (paths, flags) = split_flags("fmt", &rest)?;
+            let (paths, flags, fail_on) = split_flags("fmt", &rest)?;
             cmd_fmt(
                 &paths,
                 flags.contains(&"--check"),
@@ -53,16 +53,18 @@ fn run() -> Result<i32> {
                 flags.contains(&"--changed"),
                 flags.contains(&"--compact"),
                 walk_options(&flags),
+                fail_on,
             )
         }
         "check" => {
-            let (paths, flags) = split_flags("check", &rest)?;
+            let (paths, flags, fail_on) = split_flags("check", &rest)?;
             cmd_check(
                 &paths,
                 flags.contains(&"--strict"),
                 flags.contains(&"--changed"),
                 flags.contains(&"--compact"),
                 walk_options(&flags),
+                fail_on,
             )
         }
         "tools" => cmd_tools(&rest),
@@ -95,15 +97,32 @@ fn run() -> Result<i32> {
 /// too and ignore it. `poly check --check .` then looked like a dry run, did
 /// the real thing, and exited 0 -- a flag that is spelled right and silently
 /// does nothing is worse than one that is rejected.
-fn split_flags<'a>(cmd: &str, rest: &'a [String]) -> Result<(Vec<PathBuf>, Vec<&'a str>)> {
+fn split_flags<'a>(
+    cmd: &str,
+    rest: &'a [String],
+) -> Result<(Vec<PathBuf>, Vec<&'a str>, Option<FailOn>)> {
     let mut paths = Vec::new();
     let mut flags = Vec::new();
+    let mut fail_on = None;
+    let mut expecting_severity = false;
     for arg in rest {
+        // `--fail-on error` and `--fail-on=error` both work; the separated
+        // form is what people type, the joined form is what scripts generate.
+        if expecting_severity {
+            fail_on = Some(FailOn::parse(arg).map_err(|e| anyhow::anyhow!(e))?);
+            expecting_severity = false;
+            continue;
+        }
         let Some(flag) = arg.strip_prefix("--").map(|_| arg.as_str()) else {
             paths.push(PathBuf::from(arg));
             continue;
         };
+        if let Some(value) = flag.strip_prefix("--fail-on=") {
+            fail_on = Some(FailOn::parse(value).map_err(|e| anyhow::anyhow!(e))?);
+            continue;
+        }
         match flag {
+            "--fail-on" => expecting_severity = true,
             "--strict" | "--changed" | "--compact" | "--no-ignore" | "--hidden" => flags.push(flag),
             "--check" if cmd == "fmt" => flags.push(flag),
             "--check" => bail!(
@@ -113,10 +132,13 @@ fn split_flags<'a>(cmd: &str, rest: &'a [String]) -> Result<(Vec<PathBuf>, Vec<&
             other => bail!("unknown flag: {other}"),
         }
     }
+    if expecting_severity {
+        bail!("--fail-on needs a severity: error, warning, info, hint or never");
+    }
     if paths.is_empty() {
         paths.push(PathBuf::from("."));
     }
-    Ok((paths, flags))
+    Ok((paths, flags, fail_on))
 }
 
 /// `--no-ignore` and `--hidden` are spelled the way ripgrep and fd spell them,
@@ -212,8 +234,15 @@ fn cmd_fmt(
     changed: bool,
     compact: bool,
     walk: Walk,
+    fail_on: Option<FailOn>,
 ) -> Result<i32> {
     init_thread_pool();
+    // The flag beats poly.toml: a policy belongs in the file so the editor and
+    // CI share it, but one run wanting a different answer is why flags exist.
+    let fail_on = match fail_on {
+        Some(explicit) => explicit,
+        None => poly_core::Config::discover(&paths[0])?.format_fail_on,
+    };
     let paths: Vec<PathBuf> = if changed {
         match changed_scope(paths)? {
             Some(files) => files,
@@ -271,11 +300,11 @@ fn cmd_fmt(
     if !tally.errors.is_empty() || (strict && !missing.is_empty()) {
         return Ok(2);
     }
-    Ok(if check && !tally.changed.is_empty() {
-        1
-    } else {
-        0
-    })
+    // An unformatted file is a warning, so fail-on decides whether it is
+    // fatal. The files are still listed either way: the report is useful even
+    // when the pipeline is gated on something stricter.
+    let fatal = check && !tally.changed.is_empty() && fail_on.fails(Severity::Warning);
+    Ok(if fatal { 1 } else { 0 })
 }
 
 fn is_workflow_file(path: &Path) -> bool {
@@ -386,11 +415,13 @@ fn cmd_check(
     changed: bool,
     compact: bool,
     walk: Walk,
+    fail_on: Option<FailOn>,
 ) -> Result<i32> {
     // Tool binaries resolve against the top-level config: one run invokes each
     // linter once over a batch, so there is no per-file choice to make.
     // Language mapping and excludes are per file (batch::resolve_targets).
     let config = poly_core::Config::discover(paths.first().unwrap())?;
+    let fail_on = fail_on.unwrap_or(config.lint_fail_on);
     let scope: Vec<PathBuf> = if changed {
         match changed_scope(paths)? {
             Some(files) => files,
@@ -608,10 +639,22 @@ fn cmd_check(
     for issue in &issues {
         print!("{}", render_issue(issue, compact));
     }
+    // Every issue is still printed; fail-on only decides the exit code. The
+    // count of what is below the line is spelled out so a green run with
+    // visible findings does not read as a bug.
+    let fatal = issues
+        .iter()
+        .filter(|i| fail_on.fails(i.issue.severity))
+        .count();
     eprintln!(
-        "{} tools ran, {} issues{}{}",
+        "{} tools ran, {} issues{}{}{}",
         ran,
         issues.len(),
+        if fatal == issues.len() {
+            String::new()
+        } else {
+            format!(" ({} below fail-on)", issues.len() - fatal)
+        },
         if missing.is_empty() {
             String::new()
         } else {
@@ -626,7 +669,7 @@ fn cmd_check(
     if !failed.is_empty() || (strict && !missing.is_empty()) {
         return Ok(2);
     }
-    Ok(if issues.is_empty() { 0 } else { 1 })
+    Ok(if fatal == 0 { 0 } else { 1 })
 }
 
 fn cmd_tools(rest: &[String]) -> Result<i32> {

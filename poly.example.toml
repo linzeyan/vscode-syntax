@@ -37,6 +37,14 @@
 # Default: [].
 exclude = ["vendor/**", "**/*.generated.ts"]
 
+# Severity at or above which `poly fmt --check` exits 1. An unformatted file is
+# reported as a `warning`, so anything stricter than that makes formatting
+# advisory: still listed, no longer fatal.
+#
+# error | warning | info | hint | never
+# Default: "hint" -- the lowest severity poly emits, so everything is fatal.
+fail-on = "warning"
+
 # ── [format.<lang>] ────────────────────────────────────────────────────────
 # Three knobs, and deliberately only three: the ones every formatter agrees on.
 # Anything engine-specific belongs in that engine's own config file, which poly
@@ -88,6 +96,18 @@ line-width = 100
 #
 # Default: [].
 exclude = ["third_party/**"]
+
+# Same key, separate value, because the two policies genuinely differ:
+# "unformatted files fail the build, spelling suggestions do not" is a common
+# and coherent position. typos reports at `info`, most linters at `warning`,
+# syntax errors at `error`.
+#
+# `never` is a real option, not an escape hatch: `poly check` as a report with
+# the pipeline gated on something else is a reasonable way to adopt poly on a
+# codebase that would otherwise light up red on day one.
+#
+# Default: "hint" -- everything is fatal.
+fail-on = "warning"
 
 # ── [walk] ─────────────────────────────────────────────────────────────────
 [walk]

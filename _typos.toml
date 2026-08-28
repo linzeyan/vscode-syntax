@@ -4,6 +4,7 @@
 # Deliberate misspellings inside parser test fixtures — correcting them would
 # mean the tests no longer exercise what they claim to.
 teh = "teh"
+titel = "titel"
 varialbles = "varialbles"
 # Field name in biome's JSON diagnostics; we deserialize what biome emits.
 advices = "advices"

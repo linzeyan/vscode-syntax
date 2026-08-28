@@ -2,12 +2,75 @@
 //! (shellcheck, hadolint, ...) both produce these; the CLI and the LSP
 //! daemon render them.
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Ordered most severe first, and `Ord` follows that order: `Error < Hint`
+/// reads backwards, so comparisons go through `at_least` rather than `<=`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
     Error,
     Warning,
     Info,
     Hint,
+}
+
+impl Severity {
+    /// Is this at least as severe as `floor`?
+    pub fn at_least(self, floor: Severity) -> bool {
+        self <= floor
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+            Severity::Info => "info",
+            Severity::Hint => "hint",
+        }
+    }
+}
+
+/// How severe a finding has to be before poly exits non-zero.
+///
+/// Poly reports four severities and used to fail on all of them, so a repo
+/// with one `info` spelling suggestion could not have a green pipeline without
+/// excluding the file. This is the knob for that -- not Rust's `-D warnings`,
+/// which exists because warnings are *not* fatal there.
+///
+/// `Never` is deliberately reachable: `poly check` as a report, with the
+/// pipeline gated on something else, is a legitimate way to adopt poly on an
+/// existing codebase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailOn {
+    Severity(Severity),
+    Never,
+}
+
+impl Default for FailOn {
+    /// Every severity fails, which is what poly did before this existed.
+    fn default() -> Self {
+        FailOn::Severity(Severity::Hint)
+    }
+}
+
+impl FailOn {
+    pub fn fails(self, severity: Severity) -> bool {
+        match self {
+            FailOn::Severity(floor) => severity.at_least(floor),
+            FailOn::Never => false,
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "error" => Ok(FailOn::Severity(Severity::Error)),
+            "warning" => Ok(FailOn::Severity(Severity::Warning)),
+            "info" => Ok(FailOn::Severity(Severity::Info)),
+            "hint" => Ok(FailOn::Severity(Severity::Hint)),
+            "never" => Ok(FailOn::Never),
+            other => Err(format!(
+                "unknown fail-on value {other:?}: expected error, warning, info, hint or never"
+            )),
+        }
+    }
 }
 
 #[derive(Debug)]
