@@ -122,6 +122,18 @@ pub struct Rustfmt {
 }
 
 pub fn rustfmt(start: &Path) -> Option<Rustfmt> {
+    // rustfmt on PATH is the only requirement. A Cargo.toml is where the
+    // edition comes from when the file is in a crate; it used to be a
+    // precondition, which meant a .rs file that belongs to no crate -- a
+    // scratch file, an example dropped in a folder, anything opened outside a
+    // workspace -- was skipped without a word. rustfmt formats those fine.
+    let bin = crate::find_on_path("rustfmt")?;
+    let edition = manifest_edition(start).unwrap_or_else(|| "2021".to_string());
+    Some(Rustfmt { bin, edition })
+}
+
+/// The `edition` of the nearest enclosing crate, if the file is in one.
+fn manifest_edition(start: &Path) -> Option<String> {
     let start = std::path::absolute(start).unwrap_or_else(|_| start.to_path_buf());
     let start = start.as_path();
     let mut dir = if start.is_dir() {
@@ -136,8 +148,7 @@ pub fn rustfmt(start: &Path) -> Option<Rustfmt> {
         }
         dir = dir.parent()?;
     };
-    let bin = crate::find_on_path("rustfmt")?;
-    let edition = std::fs::read_to_string(&manifest)
+    std::fs::read_to_string(&manifest)
         .ok()
         .and_then(|t| t.parse::<toml::Table>().ok())
         .and_then(|t| {
@@ -150,8 +161,6 @@ pub fn rustfmt(start: &Path) -> Option<Rustfmt> {
             };
             read("package").or_else(|| read("workspace"))
         })
-        .unwrap_or_else(|| "2021".to_string());
-    Some(Rustfmt { bin, edition })
 }
 
 #[cfg(test)]
@@ -196,5 +205,19 @@ mod tests {
         if let Some(r) = rustfmt(&root.join("src").join("lib.rs")) {
             assert_eq!(r.edition, "2018");
         } // rustfmt not on PATH in bare CI: detection returning None is fine.
+    }
+
+    /// A .rs file in no crate at all still formats. Requiring a Cargo.toml
+    /// made `poly fmt` a no-op on loose Rust files -- silently, so it looked
+    /// like poly had decided the file was already formatted.
+    #[test]
+    fn rustfmt_without_a_manifest_uses_the_default_edition() {
+        let dir = tempfile::tempdir().unwrap();
+        let loose = dir.path().join("scratch.rs");
+        std::fs::write(&loose, "fn main() {}\n").unwrap();
+        if crate::find_on_path("rustfmt").is_some() {
+            let r = rustfmt(&loose).expect("rustfmt is on PATH, so this must resolve");
+            assert_eq!(r.edition, "2021");
+        }
     }
 }
