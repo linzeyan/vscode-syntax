@@ -42,3 +42,50 @@ pub enum Fix {
     /// poly's own formatters produce the corrected file.
     Reformat,
 }
+
+/// Pull a 1-based line and column out of a formatter error message.
+///
+/// Seven parsers sit behind `poly fmt`, each with its own error type, and none
+/// hands back a machine-readable position through the `anyhow` chain. They use
+/// two spellings between them, so both are tried.
+/// `every_engine_error_can_be_placed` pins that, so a message that stops
+/// matching fails a test instead of quietly landing on line 1.
+///
+/// Shared rather than duplicated because the CLI and the LSP have to place the
+/// same error identically: a squiggle in the editor and a `file:line:col` in CI
+/// that disagree are worse than either alone (R5/A4).
+pub fn parse_position(message: &str) -> Option<(u32, u32)> {
+    prose_position(message).or_else(|| trailing_position(message))
+}
+
+/// "line N, column M" (dprint-json, dprint-toml, ruff, pretty_yaml,
+/// markup_fmt) or "line N, col M" (pretty_graphql).
+fn prose_position(message: &str) -> Option<(u32, u32)> {
+    // First line only: pretty_yaml continues into a code frame whose gutter is
+    // full of digits. The first match also wins on purpose — markup_fmt names
+    // the unclosed tag before the position it gave up at, and the opening tag
+    // is the more useful place to point.
+    let head = message.lines().next()?.to_ascii_lowercase();
+    let after_line = head.split_once("line ")?.1;
+    let line = leading_number(after_line)?;
+    let after_col = after_line.split_once("col")?.1;
+    let after_col = after_col.strip_prefix("umn").unwrap_or(after_col);
+    let col = leading_number(after_col.trim_start_matches([' ', ':', ',']))?;
+    Some((line, col))
+}
+
+/// dprint-typescript names no line in prose; it draws a code frame and closes
+/// with "at file:///a.ts:1:22". Scanned from the bottom, because the frame
+/// above it also contains colons.
+fn trailing_position(message: &str) -> Option<(u32, u32)> {
+    message.lines().rev().find_map(|line| {
+        let (rest, col) = line.trim_end().rsplit_once(':')?;
+        let (_, line_no) = rest.rsplit_once(':')?;
+        Some((leading_number(line_no)?, leading_number(col)?))
+    })
+}
+
+fn leading_number(s: &str) -> Option<u32> {
+    let digits: String = s.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}

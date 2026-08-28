@@ -38,6 +38,7 @@ fn run() -> Result<i32> {
                 &paths,
                 flags.contains(&"--check"),
                 flags.contains(&"--changed"),
+                flags.contains(&"--compact"),
                 ignores(&flags),
             )
         }
@@ -123,7 +124,60 @@ fn changed_scope(paths: &[PathBuf]) -> Result<Option<Vec<PathBuf>>> {
     Ok(Some(files))
 }
 
-fn cmd_fmt(paths: &[PathBuf], check: bool, changed: bool, ignores: Ignores) -> Result<i32> {
+/// A file `--check` found unformatted, as an issue.
+///
+/// Not an editorialization: it is the same claim `poly check` makes about a
+/// lint violation — this file, this position, this is wrong, here is the
+/// remedy — and CI has no reason to parse it differently just because a
+/// formatter rather than a linter found it. Line 1 column 1 because a diff has
+/// no single position; the fix line names the command that resolves it.
+fn unformatted(file: PathBuf) -> FileIssue {
+    FileIssue {
+        file,
+        issue: poly_core::diag::Issue {
+            line: 0,
+            col: 0,
+            end_line: 0,
+            end_col: 0,
+            severity: Severity::Warning,
+            code: "unformatted".to_string(),
+            message: "file is not formatted".to_string(),
+            source: "poly",
+            fix: Some(Fix::Reformat),
+            url: None,
+        },
+    }
+}
+
+/// A file the formatter could not process. Placed where the parser stopped
+/// when it said, line 1 otherwise (a missing tool, a rejected option) — the
+/// message carries the rest either way.
+fn format_failure(file: PathBuf, error: &str) -> FileIssue {
+    let (line, col) = poly_core::diag::parse_position(error).unwrap_or((1, 1));
+    FileIssue {
+        file,
+        issue: poly_core::diag::Issue {
+            line: line - 1,
+            col: col - 1,
+            end_line: line - 1,
+            end_col: col,
+            severity: Severity::Error,
+            code: "format".to_string(),
+            message: error.to_string(),
+            source: "poly",
+            fix: None,
+            url: None,
+        },
+    }
+}
+
+fn cmd_fmt(
+    paths: &[PathBuf],
+    check: bool,
+    changed: bool,
+    compact: bool,
+    ignores: Ignores,
+) -> Result<i32> {
     init_thread_pool();
     let paths: Vec<PathBuf> = if changed {
         match changed_scope(paths)? {
@@ -135,15 +189,25 @@ fn cmd_fmt(paths: &[PathBuf], check: bool, changed: bool, ignores: Ignores) -> R
     };
     let tally = crate::batch::format_paths(&paths, check, ignores)?;
 
+    let base = std::env::current_dir().and_then(|d| d.canonicalize()).ok();
+    let shown = |path: &Path| match &base {
+        Some(base) => relative_to_base(path, base),
+        None => path.to_path_buf(),
+    };
     for path in &tally.changed {
-        println!(
-            "{} {}",
-            if check { "would format" } else { "formatted" },
-            path.display()
-        );
+        if check {
+            print!("{}", render_issue(&unformatted(shown(path)), compact));
+        } else {
+            // Not an issue: the file was fixed. A log line, and the only thing
+            // on stdout that is not a record.
+            println!("formatted {}", shown(path).display());
+        }
     }
     for (path, err) in &tally.errors {
-        eprintln!("error: {}: {err}", path.display());
+        print!(
+            "{}",
+            render_issue(&format_failure(shown(path), err), compact)
+        );
     }
     eprintln!(
         "{} files: {} {}, {} unchanged, {} errors",
@@ -224,6 +288,10 @@ fn relative_to_base(file: &Path, base: &Path) -> PathBuf {
 /// most linters report what is wrong and leave the remedy to their docs, and
 /// poly does not invent the difference. `--compact` drops them for parsers
 /// that want exactly one line per issue.
+///
+/// A message that spans lines (the code frames the format engines draw) keeps
+/// its first line in the record and the rest as indented detail, so one issue
+/// is still one anchored line however verbose the tool was.
 fn render_issue(found: &FileIssue, compact: bool) -> String {
     let FileIssue { file, issue } = found;
     let severity = match issue.severity {
@@ -232,6 +300,10 @@ fn render_issue(found: &FileIssue, compact: bool) -> String {
         Severity::Info => "info",
         Severity::Hint => "hint",
     };
+    let (head, detail) = issue
+        .message
+        .split_once('\n')
+        .unwrap_or((&issue.message, ""));
     let mut out = format!(
         "{}:{}:{}: {severity} [{}/{}] {}\n",
         file.display(),
@@ -239,10 +311,18 @@ fn render_issue(found: &FileIssue, compact: bool) -> String {
         issue.col + 1,
         issue.source,
         issue.code,
-        issue.message
+        head.trim_end()
     );
     if compact {
         return out;
+    }
+    for line in detail.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            out.push('\n');
+        } else {
+            out.push_str(&format!("    {line}\n"));
+        }
     }
     if let Some(fix) = &issue.fix {
         let text = match fix {

@@ -62,14 +62,45 @@ fn fmt_fixture_repo() {
     assert_eq!(code, 0, "second --check must be clean: {stdout}");
 }
 
+/// A file the formatter choked on is reported in the same shape `poly check`
+/// uses for a lint violation, and on the same stream: CI parses one format or
+/// it parses none.
 #[test]
 fn fmt_reports_broken_files_and_exits_2() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("bad.json"), "{ not json").unwrap();
-    let (code, _, stderr) = poly(root, &["fmt", "."]);
+    std::fs::write(root.join("bad.json"), "{\n  \"a\": 1,\n  \"b\": ,\n}\n").unwrap();
+    let (code, stdout, stderr) = poly(root, &["fmt", "."]);
     assert_eq!(code, 2, "{stderr}");
-    assert!(stderr.contains("bad.json"), "{stderr}");
+    let first = stdout.lines().next().unwrap_or_default();
+    assert!(
+        first.starts_with("bad.json:3:8: error [poly/format] "),
+        "wrong shape or position: {stdout}"
+    );
+}
+
+/// `--check` says the same thing about an unformatted file that a linter says
+/// about a violation, so it reads and parses the same way — including the line
+/// naming the command that resolves it.
+#[test]
+fn check_reports_unformatted_files_as_issues() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("a.json"), "{\"b\":1,  \"a\":2}").unwrap();
+
+    let (code, stdout, _) = poly(root, &["fmt", "--check", "."]);
+    assert_eq!(code, 1, "{stdout}");
+    assert_eq!(
+        stdout,
+        "a.json:1:1: warning [poly/unformatted] file is not formatted\n\
+         \x20   fix   run `poly fmt`\n"
+    );
+
+    let (_, stdout, _) = poly(root, &["fmt", "--check", "--compact", "."]);
+    assert_eq!(
+        stdout,
+        "a.json:1:1: warning [poly/unformatted] file is not formatted\n"
+    );
 }
 
 /// Git's Windows default checks files out as CRLF; every formatter we dispatch
@@ -143,9 +174,9 @@ fn an_option_the_engine_cannot_honor_is_an_error() {
     std::fs::write(root.join("poly.toml"), "[format.yaml]\nuse-tabs = true\n").unwrap();
     std::fs::write(root.join("a.yaml"), "a:   1\n").unwrap();
 
-    let (code, _, stderr) = poly(root, &["fmt", "."]);
+    let (code, stdout, stderr) = poly(root, &["fmt", "."]);
     assert_eq!(code, 2, "{stderr}");
-    assert!(stderr.contains("use-tabs"), "{stderr}");
+    assert!(stdout.contains("use-tabs"), "{stdout}");
     assert_eq!(
         std::fs::read_to_string(root.join("a.yaml")).unwrap(),
         "a:   1\n",
