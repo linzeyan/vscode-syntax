@@ -318,3 +318,43 @@ fn strict_turns_an_unavailable_formatter_into_a_failure() {
     assert_eq!(code, 2, "--strict must fail: {stderr}");
     assert!(stderr.contains("gofumpt"), "{stderr}");
 }
+
+/// rustfmt was the one formatter that skipped without saying so: it resolves
+/// straight off PATH instead of through `poly_tools::resolve`, so it never
+/// reached the code that records a missing formatter. An unformatted .rs file
+/// was therefore counted as "unchanged" and `--strict` stayed blind -- the same
+/// CI-passes-with-unformatted-files hole this file already guards for gofumpt.
+///
+/// Emptying PATH is the only way to reproduce a machine with no Rust
+/// toolchain, since `tools.rustfmt = "off"` does not reach this path.
+#[test]
+fn a_missing_rustfmt_is_reported_like_any_other_formatter() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("a.rs"), "fn main(){let x=1;}\n").unwrap();
+    let no_tools = root.join("no-such-bin-dir");
+
+    let run = |args: &[&str]| {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_poly"))
+            .args(args)
+            .current_dir(root)
+            .env("PATH", &no_tools)
+            .output()
+            .expect("spawn poly");
+        (
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    };
+
+    let (code, stderr) = run(&["fmt", "--check", "."]);
+    assert_eq!(code, 0, "the default is still a skip: {stderr}");
+    assert!(
+        stderr.contains("rustfmt"),
+        "the skip must be said: {stderr}"
+    );
+    assert!(stderr.contains("1 formatters missing"), "{stderr}");
+
+    let (code, stderr) = run(&["fmt", "--check", "--strict", "."]);
+    assert_eq!(code, 2, "--strict must fail: {stderr}");
+}

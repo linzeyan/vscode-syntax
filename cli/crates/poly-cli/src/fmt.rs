@@ -79,6 +79,7 @@ fn dispatch(
     if lang == "rust" {
         // Project toolchain only — never auto-downloaded (spec §4.3).
         let Some(rustfmt) = poly_tools::project::rustfmt(path) else {
+            note_missing("rustfmt");
             return Ok(None);
         };
         return poly_tools::run::format_stdin(
@@ -162,6 +163,19 @@ pub fn missing_formatters() -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Record a formatter this run could not resolve, and say so once. The set
+/// dedups, so the first `.swift` file in a repo reports and the other two
+/// hundred stay quiet.
+fn note_missing(name: &str) {
+    let mut guard = MISSING.lock().expect("missing formatter lock");
+    if guard
+        .get_or_insert_with(BTreeSet::new)
+        .insert(name.to_string())
+    {
+        eprintln!("[poly] formatter {name}: unavailable, skipping its files");
+    }
+}
+
 /// Managed-tool resolution can download; memoize for the process lifetime.
 fn cached_tool(name: &str, config: &poly_core::Config) -> Option<PathBuf> {
     static CACHE: Mutex<Option<HashMap<String, Option<PathBuf>>>> = Mutex::new(None);
@@ -173,12 +187,7 @@ fn cached_tool(name: &str, config: &poly_core::Config) -> Option<PathBuf> {
     let resolved = poly_tools::resolve(name, config, false);
     let path = resolved.command().map(Path::to_path_buf);
     if path.is_none() {
-        eprintln!("[poly] formatter {name}: unavailable, skipping its files");
-        MISSING
-            .lock()
-            .expect("missing formatter lock")
-            .get_or_insert_with(BTreeSet::new)
-            .insert(name.to_string());
+        note_missing(name);
     }
     cache.insert(name.to_string(), path.clone());
     path
