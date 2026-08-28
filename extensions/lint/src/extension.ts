@@ -88,8 +88,8 @@ function refreshStatus(): void {
   const language = vscode.window.activeTextEditor?.document.languageId;
   // A version mismatch stays on screen whatever the active file is: it is a
   // broken installation, not a per-file state, and it will not fix itself.
-  const relevant = health !== "ready" || versionWarning !== undefined ||
-    (language !== undefined && LANGUAGES.includes(language));
+  const relevant = health !== "ready" || versionWarning !== undefined
+    || (language !== undefined && LANGUAGES.includes(language));
   if (!relevant) {
     status.hide();
     return;
