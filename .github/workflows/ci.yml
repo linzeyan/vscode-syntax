@@ -84,9 +84,25 @@ jobs:
       # whole point, and a gate that only checks the files it happens to
       # resolve is not a gate.
       - name: Dogfood (poly formats and lints its own repo)
+        # Reading a job log needs a token this repo's collaborators do not all
+        # have; annotations are public. A gate whose failure says only "exit 1"
+        # is a gate nobody can act on, so it repeats its own output as errors.
         run: |
-          cli/target/release/poly fmt --check --strict .
-          cli/target/release/poly check --strict .
+          report() {
+            printf '%s\n' "$2"
+            printf '%s\n' "$2" | head -40 | while IFS= read -r line; do
+              printf '::error title=%s::%s\n' "$1" "$line"
+            done
+            exit 1
+          }
+          if ! out=$(cli/target/release/poly fmt --check --strict . 2>&1); then
+            report "poly fmt --check --strict" "$out"
+          fi
+          printf '%s\n' "$out"
+          if ! out=$(cli/target/release/poly check --strict . 2>&1); then
+            report "poly check --strict" "$out"
+          fi
+          printf '%s\n' "$out"
       # release.yml checks this too, but only when a tag is pushed -- by then
       # the drift is already committed. The extension now warns at runtime when
       # its binary is a different version, so a mismatch on main would ship a
