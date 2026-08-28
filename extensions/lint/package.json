@@ -2,7 +2,7 @@
   "name": "poly-lint",
   "displayName": "Poly Lint",
   "description": "Unified lint/format via the poly daemon: format-on-save, lint-on-save diagnostics, batch commands.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "ricky",
   "license": "MIT",
   "engines": {
