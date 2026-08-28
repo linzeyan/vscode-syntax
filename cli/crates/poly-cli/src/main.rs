@@ -429,7 +429,12 @@ fn cmd_check(
                 .filter(|p| is_workflow_file(p))
                 .cloned()
                 .collect(),
-            Box::new(poly_tools::run::actionlint_files),
+            // Resolved inside the closure so a repo with no workflows never
+            // pays for a shellcheck download it will not use.
+            Box::new(|cmd, files| {
+                let shellcheck = poly_tools::resolve("shellcheck", &config, false);
+                poly_tools::run::actionlint_files(cmd, files, shellcheck.command())
+            }),
         ),
         (
             "ruff",

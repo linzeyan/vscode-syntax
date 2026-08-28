@@ -22,6 +22,12 @@ jobs:
         with:
           python-version: "3.12"
       - name: Sync grammars from pinned sources
+        env:
+          # Even the pinned path fetches from api.github.com, and runner IPs
+          # are shared, so 60 anonymous requests per hour runs out during a
+          # busy afternoon. grammar-sync.yml has always passed this; this job
+          # did not, and failed as soon as main saw a few pushes in a row.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           pip install pyyaml
           python tools/grammar-sync.py

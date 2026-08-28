@@ -137,8 +137,10 @@ jobs:
           cd dist && sha256sum -- * > SHA256SUMS && ls -l
       - name: Sanity-check asset counts
         run: |
-          lint=$(ls dist/poly-lint-*.vsix | wc -l)
-          bins=$(ls dist/poly-* | grep -cv '\.vsix\|\.md\|SUMS' || true)
+          # find rather than ls: a release asset is named from a matrix entry,
+          # so a name that surprises `ls` is exactly the case worth surviving.
+          lint=$(find dist -type f -name 'poly-lint-*.vsix' | wc -l)
+          bins=$(find dist -type f -name 'poly-*' ! -name '*.vsix' ! -name '*.md' | wc -l)
           test "$lint" -eq 6 || { echo "expected 6 lint VSIX, got $lint" >&2; exit 1; }
           test "$bins" -eq 6 || { echo "expected 6 binaries, got $bins" >&2; exit 1; }
       - name: Create GitHub Release

@@ -36,7 +36,7 @@ fn nearest_ancestor_file(start: &Path, name: &str) -> Option<PathBuf> {
 }
 
 fn run(cmd: &Path, args: &[&str], files: &[PathBuf], stdin: Option<&str>) -> Result<Vec<u8>> {
-    run_impl(cmd, None, args, files, stdin)
+    run_impl(cmd, None, args, files, stdin, None)
 }
 
 /// Same, but rooted at `cwd` for tools that resolve config relative to it.
@@ -47,7 +47,7 @@ fn run_in(
     files: &[PathBuf],
     stdin: Option<&str>,
 ) -> Result<Vec<u8>> {
-    run_impl(cmd, Some(cwd), args, files, stdin)
+    run_impl(cmd, Some(cwd), args, files, stdin, None)
 }
 
 fn run_impl(
@@ -56,10 +56,16 @@ fn run_impl(
     args: &[&str],
     files: &[PathBuf],
     stdin: Option<&str>,
+    path: Option<std::ffi::OsString>,
 ) -> Result<Vec<u8>> {
     let mut command = Command::new(cmd);
     if let Some(dir) = cwd {
         command.current_dir(dir);
+    }
+    // Only actionlint needs this: it is the one tool that shells out to
+    // another tool poly resolves.
+    if let Some(path) = path {
+        command.env("PATH", path);
     }
     command.args(args);
     command.args(files.iter().map(|p| p.as_os_str()));
@@ -298,12 +304,42 @@ fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
         .collect())
 }
 
-pub fn actionlint_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
-    actionlint_parse(&run(cmd, &["-format", "{{json .}}"], files, None)?)
+/// actionlint runs shellcheck over every `run:` block, but only if it finds
+/// one on PATH -- and poly resolves shellcheck itself, into a cache directory
+/// that is on nobody's PATH. Without this, poly's answer depends on whether
+/// the developer happened to install shellcheck separately: this repo's own CI
+/// reported two SC findings that no local run could reproduce, because GitHub
+/// runners ship shellcheck and a laptop does not. Handing over the one poly
+/// already manages is what makes the two agree.
+fn with_shellcheck(shellcheck: Option<&Path>) -> Option<std::ffi::OsString> {
+    let dir = shellcheck?.parent()?;
+    let mut dirs = vec![dir.to_path_buf()];
+    dirs.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    std::env::join_paths(dirs).ok()
 }
 
-pub fn actionlint_stdin(cmd: &Path, text: &str) -> Result<Vec<Issue>> {
-    let out = run(cmd, &["-format", "{{json .}}", "-"], &[], Some(text))?;
+pub fn actionlint_files(
+    cmd: &Path,
+    files: &[PathBuf],
+    shellcheck: Option<&Path>,
+) -> Result<Vec<FileIssue>> {
+    let args = ["-format", "{{json .}}"];
+    let out = run_impl(cmd, None, &args, files, None, with_shellcheck(shellcheck))?;
+    actionlint_parse(&out)
+}
+
+pub fn actionlint_stdin(cmd: &Path, text: &str, shellcheck: Option<&Path>) -> Result<Vec<Issue>> {
+    let args = ["-format", "{{json .}}", "-"];
+    let out = run_impl(
+        cmd,
+        None,
+        &args,
+        &[],
+        Some(text),
+        with_shellcheck(shellcheck),
+    )?;
     Ok(actionlint_parse(&out)?
         .into_iter()
         .map(|f| f.issue)
@@ -380,7 +416,7 @@ pub fn typos_paths(
     // it as a working directory.
     let root = root.filter(|r| !r.as_os_str().is_empty());
     let scoped = scope_to_root(paths, root);
-    let stdout = run_impl(cmd, root, &args, &scoped, None)?;
+    let stdout = run_impl(cmd, root, &args, &scoped, None, None)?;
     let mut out = Vec::new();
     for line in stdout.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
         let record: TyposRecord =

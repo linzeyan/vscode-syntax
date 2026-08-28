@@ -388,7 +388,14 @@ fn external_lint(
     issues.extend(match name {
         "shellcheck" => poly_tools::run::shellcheck_stdin(&cmd, text)?,
         "hadolint" => poly_tools::run::hadolint_stdin(&cmd, text)?,
-        "actionlint" => poly_tools::run::actionlint_stdin(&cmd, text)?,
+        // The editor has to see the same SC findings CI does, which means
+        // handing actionlint the shellcheck poly resolves rather than hoping
+        // one is on PATH.
+        "actionlint" => poly_tools::run::actionlint_stdin(
+            &cmd,
+            text,
+            resolved_tool("shellcheck", config).as_deref(),
+        )?,
         "ruff" => poly_tools::run::ruff_stdin(&cmd, path, text)?,
         "selene" => poly_tools::run::selene_stdin(&cmd, path, text)?,
         "swiftlint" => poly_tools::run::swiftlint_stdin(&cmd, path, text)?,
