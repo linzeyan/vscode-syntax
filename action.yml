@@ -86,10 +86,14 @@ runs:
           echo "::error title=setup-poly::$asset is not listed in SHA256SUMS for $version"
           exit 1
         fi
+        # Read on stdin, not by name: coreutils escapes a filename containing
+        # a backslash and marks the line with a leading `\`, and every Windows
+        # path under RUNNER_TOOL_CACHE contains backslashes. Piping drops the
+        # filename from the output, so there is nothing left to escape.
         if command -v sha256sum >/dev/null; then
-          got=$(sha256sum "$dir/$exe" | cut -d' ' -f1)
+          got=$(sha256sum <"$dir/$exe" | cut -d' ' -f1)
         else
-          got=$(shasum -a 256 "$dir/$exe" | cut -d' ' -f1)
+          got=$(shasum -a 256 <"$dir/$exe" | cut -d' ' -f1)
         fi
         if [ "$want" != "$got" ]; then
           echo "::error title=setup-poly::$asset checksum mismatch (want $want, got $got)"
