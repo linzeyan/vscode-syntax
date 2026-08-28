@@ -118,6 +118,15 @@ suite("poly-lint in a real editor", () => {
       return found.length > 0 ? found : undefined;
     });
     assert.ok(diagnostics[0].message.length > 0, "empty diagnostic message");
+
+    // Problems has to carry the remedy the terminal carries, in the same
+    // words (A4). `select a,b` trips LT01, which sqruff marks fixable, so a
+    // diagnostic without the fix line means the CLI and the editor disagree
+    // about the same violation.
+    assert.ok(
+      diagnostics.some((d) => d.message.includes("fix: run `poly fmt`")),
+      `no fix line: ${diagnostics.map((d) => d.message).join(" | ")}`,
+    );
   });
 
   // A parse failure used to come back as an LSP error, which VSCode shows as a

@@ -43,6 +43,24 @@ pub enum Fix {
     Reformat,
 }
 
+impl Fix {
+    /// The one sentence poly uses to say how to resolve this, wherever it says
+    /// it. The terminal and the editor hover have to word it identically or a
+    /// reader has to learn two vocabularies for one product; `source` names the
+    /// tool because "can rewrite this automatically" is a claim about a
+    /// specific fixer, not about poly.
+    pub fn describe(&self, source: &str) -> String {
+        match self {
+            // "unsafe" is ruff's own word for an edit that can change behavior,
+            // so it is passed on rather than softened.
+            Fix::Described { what, safe: true } => what.clone(),
+            Fix::Described { what, safe: false } => format!("{what} (unsafe: review it)"),
+            Fix::Automatic => format!("{source} can rewrite this automatically"),
+            Fix::Reformat => "run `poly fmt`".to_string(),
+        }
+    }
+}
+
 /// Pull a 1-based line and column out of a formatter error message.
 ///
 /// Seven parsers sit behind `poly fmt`, each with its own error type, and none

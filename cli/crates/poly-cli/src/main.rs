@@ -325,17 +325,7 @@ fn render_issue(found: &FileIssue, compact: bool) -> String {
         }
     }
     if let Some(fix) = &issue.fix {
-        let text = match fix {
-            // Only ruff spells the change out. "unsafe" is ruff's own word for
-            // an edit that can change behavior, so it has to be passed on.
-            Fix::Described { what, safe: true } => what.clone(),
-            Fix::Described { what, safe: false } => format!("{what} (unsafe: review it)"),
-            // Naming the tool keeps this honest: the fixer exists, but it is
-            // the tool's, and `poly check` does not run it.
-            Fix::Automatic => format!("{} can rewrite this automatically", issue.source),
-            Fix::Reformat => "run `poly fmt`".to_string(),
-        };
-        out.push_str(&format!("    fix   {text}\n"));
+        out.push_str(&format!("    fix   {}\n", fix.describe(issue.source)));
     }
     if let Some(url) = &issue.url {
         out.push_str(&format!("    docs  {url}\n"));

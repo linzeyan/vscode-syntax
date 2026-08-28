@@ -416,25 +416,42 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
         Ok(more) => issues.extend(more),
         Err(e) => eprintln!("[poly] external lint error {}: {e:#}", path.display()),
     }
-    issues
-        .into_iter()
-        .map(|i| lsp_types::Diagnostic {
-            range: Range {
-                start: Position::new(i.line, i.col),
-                end: Position::new(i.end_line, i.end_col),
-            },
-            severity: Some(match i.severity {
-                poly_core::diag::Severity::Error => lsp_types::DiagnosticSeverity::ERROR,
-                poly_core::diag::Severity::Warning => lsp_types::DiagnosticSeverity::WARNING,
-                poly_core::diag::Severity::Info => lsp_types::DiagnosticSeverity::INFORMATION,
-                poly_core::diag::Severity::Hint => lsp_types::DiagnosticSeverity::HINT,
-            }),
-            code: Some(lsp_types::NumberOrString::String(i.code)),
-            source: Some(i.source.to_string()),
-            message: i.message,
-            ..Default::default()
-        })
-        .collect()
+    issues.into_iter().map(lint_diagnostic).collect()
+}
+
+/// The editor's copy of a `poly check` record.
+///
+/// The remedy is folded into the message because LSP has no field for it and a
+/// fix the terminal names but Problems does not is exactly the editor/CI split
+/// A4 forbids. Wording comes from `Fix::describe`, the same call the CLI makes,
+/// so the two cannot drift apart. The docs link becomes `codeDescription`,
+/// which VSCode renders as the rule code turned into a hyperlink.
+fn lint_diagnostic(i: poly_core::diag::Issue) -> lsp_types::Diagnostic {
+    let message = match &i.fix {
+        Some(fix) => format!("{}\n\nfix: {}", i.message, fix.describe(i.source)),
+        None => i.message,
+    };
+    lsp_types::Diagnostic {
+        range: Range {
+            start: Position::new(i.line, i.col),
+            end: Position::new(i.end_line, i.end_col),
+        },
+        severity: Some(match i.severity {
+            poly_core::diag::Severity::Error => lsp_types::DiagnosticSeverity::ERROR,
+            poly_core::diag::Severity::Warning => lsp_types::DiagnosticSeverity::WARNING,
+            poly_core::diag::Severity::Info => lsp_types::DiagnosticSeverity::INFORMATION,
+            poly_core::diag::Severity::Hint => lsp_types::DiagnosticSeverity::HINT,
+        }),
+        code: Some(lsp_types::NumberOrString::String(i.code)),
+        code_description: i
+            .url
+            .as_deref()
+            .and_then(|url| Url::parse(url).ok())
+            .map(|href| lsp_types::CodeDescription { href }),
+        source: Some(i.source.to_string()),
+        message,
+        ..Default::default()
+    }
 }
 
 /// `poly.formatPaths` argument: `{"mode": "paths"|"gitRepo"|"gitChanged",
@@ -504,6 +521,50 @@ fn full_range(text: &str) -> Range {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Problems has to carry everything the terminal carries, in the same
+    /// words: a user who reads one and then the other must not have to work out
+    /// that they are the same finding.
+    #[test]
+    fn a_diagnostic_carries_the_fix_and_the_docs_link() {
+        let issue = |fix, url: Option<&str>| poly_core::diag::Issue {
+            line: 0,
+            col: 7,
+            end_line: 0,
+            end_col: 9,
+            severity: poly_core::diag::Severity::Warning,
+            code: "F401".to_string(),
+            message: "`os` imported but unused".to_string(),
+            source: "ruff",
+            fix,
+            url: url.map(str::to_string),
+        };
+
+        let full = lint_diagnostic(issue(
+            Some(poly_core::diag::Fix::Described {
+                what: "Remove unused import: `os`".to_string(),
+                safe: false,
+            }),
+            Some("https://docs.astral.sh/ruff/rules/unused-import"),
+        ));
+        // Pinned literally, not via Fix::describe: the point is the vocabulary
+        // itself, which a test calling the same function could not catch
+        // changing.
+        assert_eq!(
+            full.message,
+            "`os` imported but unused\n\nfix: Remove unused import: `os` (unsafe: review it)"
+        );
+        assert_eq!(
+            full.code_description.map(|d| d.href.to_string()),
+            Some("https://docs.astral.sh/ruff/rules/unused-import".to_string())
+        );
+
+        // Nothing supplied, nothing appended — an empty "fix:" line would read
+        // as poly having no idea rather than the tool having said nothing.
+        let bare = lint_diagnostic(issue(None, None));
+        assert_eq!(bare.message, "`os` imported but unused");
+        assert!(bare.code_description.is_none());
+    }
 
     #[test]
     fn full_range_covers_document() {
