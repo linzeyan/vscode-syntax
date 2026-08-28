@@ -1,0 +1,47 @@
+name: Action tag
+
+# Consumers pin `uses: linzeyan/vscode-syntax@v0` and expect it to track the
+# newest release. release.yml moves that tag as part of publishing, which is
+# the path that matters; this reconciles it afterwards for the cases that path
+# misses -- a release published by hand, or a release run that died after
+# `gh release create` and before the tag push.
+#
+# It only ever moves the tag forward to an existing release, so the worst it
+# can do on a bad day is nothing.
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest=$(gh release view --json tagName --jq .tagName)
+          case "$latest" in
+            *-*)
+              echo "latest release $latest is a pre-release; nothing to point at"
+              exit 0 ;;
+          esac
+          major="${latest%%.*}"
+          # Compare commits, not tag names: the tag may already exist and
+          # point somewhere older, which is exactly the drift being fixed.
+          want=$(git rev-list -n1 "$latest")
+          have=$(git rev-list -n1 "$major" 2>/dev/null || true)
+          if [ "$want" = "$have" ]; then
+            echo "$major already points at $latest"
+            exit 0
+          fi
+          git tag -f "$major" "$latest"
+          git push -f origin "refs/tags/$major"
+          echo "::notice title=action tag::moved $major to $latest (was ${have:-unset})"

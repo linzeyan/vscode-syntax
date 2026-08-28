@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: write
+  # Publishing ghcr.io/<owner>/poly.
+  packages: write
 
 jobs:
   build:
@@ -150,3 +152,48 @@ jobs:
           case "$GITHUB_REF_NAME" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
           gh release create "$GITHUB_REF_NAME" $PRE --generate-notes \
             --title "$GITHUB_REF_NAME" dist/*
+      # The image assembles the binaries the release just published rather
+      # than compiling its own, so what runs in a container is byte-identical
+      # to what a user downloads. See the Dockerfile for why.
+      - name: Stage binaries for the image
+        run: |
+          mkdir -p docker
+          cp dist/poly-linux-x64 docker/poly-amd64
+          cp dist/poly-linux-arm64 docker/poly-arm64
+      # The runner is amd64 and the image runs `apt-get` and `poly --version`
+      # inside each target platform, so the arm64 half needs emulation.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/poly
+          # `latest` only from a final tag: a pre-release must never become
+          # what `docker run ghcr.io/.../poly` picks up by default.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      # Consumers write `uses: linzeyan/vscode-syntax@v0`; that tag has to
+      # follow the releases or it pins them to whatever shipped first. Moved
+      # here rather than on a schedule so it can never lag a release.
+      - name: Move the major action tag
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"
+          # HEAD, not the tag name: checkout is shallow here and the tag ref
+          # may not be present locally, while HEAD is the tagged commit.
+          git tag -f "$major" HEAD
+          git push -f origin "refs/tags/$major"

@@ -1,0 +1,113 @@
+name: Setup poly
+description: Install the poly CLI (formatter and linter) and put it on PATH.
+author: linzeyan
+branding:
+  icon: check-square
+  color: blue
+
+inputs:
+  version:
+    description: >-
+      Release tag to install, without the leading v (for example 0.3.0), or
+      "latest". Pin it when a formatting change must not arrive on its own:
+      poly rewrites files, so a new version can turn a green branch red.
+    default: latest
+  cache:
+    description: >-
+      Cache the external linters poly downloads on first use (~/.cache/poly).
+      Worth leaving on: a cold `poly check` fetches tens of megabytes of
+      shellcheck, ruff and friends before it lints anything.
+    default: "true"
+  token:
+    description: >-
+      Token for the GitHub API. The default is the workflow's own, which
+      raises the release lookup from 60 anonymous requests an hour per runner
+      IP to 1000 -- shared runners do run out.
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: The version actually installed, resolved from "latest".
+    value: ${{ steps.install.outputs.version }}
+  path:
+    description: Absolute path to the installed binary.
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        REQUESTED: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        case "${RUNNER_OS}/${RUNNER_ARCH}" in
+          Linux/X64)    asset=poly-linux-x64   ;;
+          Linux/ARM64)  asset=poly-linux-arm64 ;;
+          macOS/X64)    asset=poly-darwin-x64  ;;
+          macOS/ARM64)  asset=poly-darwin-arm64 ;;
+          Windows/X64)  asset=poly-win32-x64.exe ;;
+          Windows/ARM64) asset=poly-win32-arm64.exe ;;
+          *)
+            echo "::error title=setup-poly::no poly build for ${RUNNER_OS}/${RUNNER_ARCH}"
+            exit 1 ;;
+        esac
+
+        api=https://api.github.com/repos/linzeyan/vscode-syntax/releases
+        if [ "$REQUESTED" = latest ]; then
+          url="$api/latest"
+        else
+          url="$api/tags/v${REQUESTED#v}"
+        fi
+        # A missing tag otherwise surfaces as a download 404 several steps
+        # later, pointing at the asset rather than at the version that does
+        # not exist.
+        if ! release=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "$url"); then
+          echo "::error title=setup-poly::no release for version '$REQUESTED'"
+          exit 1
+        fi
+        version=$(printf '%s' "$release" | python3 -c 'import json,sys;print(json.load(sys.stdin)["tag_name"])')
+        base="https://github.com/linzeyan/vscode-syntax/releases/download/$version"
+
+        dir="$RUNNER_TOOL_CACHE/poly/$version"
+        mkdir -p "$dir"
+        exe=poly
+        [ "$RUNNER_OS" = Windows ] && exe=poly.exe
+        curl -fsSL -o "$dir/$exe" "$base/$asset"
+        curl -fsSL -o "$dir/SHA256SUMS" "$base/SHA256SUMS"
+
+        # Every release ships SHA256SUMS; a download that silently truncated
+        # is otherwise a confusing "cannot execute binary file" later on.
+        want=$(awk -v a="$asset" '$2 == a {print $1}' "$dir/SHA256SUMS")
+        if [ -z "$want" ]; then
+          echo "::error title=setup-poly::$asset is not listed in SHA256SUMS for $version"
+          exit 1
+        fi
+        if command -v sha256sum >/dev/null; then
+          got=$(sha256sum "$dir/$exe" | cut -d' ' -f1)
+        else
+          got=$(shasum -a 256 "$dir/$exe" | cut -d' ' -f1)
+        fi
+        if [ "$want" != "$got" ]; then
+          echo "::error title=setup-poly::$asset checksum mismatch (want $want, got $got)"
+          exit 1
+        fi
+
+        chmod +x "$dir/$exe"
+        echo "$dir" >> "$GITHUB_PATH"
+        echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+        echo "path=$dir/$exe" >> "$GITHUB_OUTPUT"
+        echo "::notice title=setup-poly::installed $version ($asset)"
+
+    # After the binary is on PATH: the key includes the resolved version
+    # because a poly upgrade can change which tool versions it wants.
+    - if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/poly
+          ~/AppData/Local/poly
+        key: poly-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.install.outputs.version }}

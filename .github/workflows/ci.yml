@@ -43,6 +43,38 @@ jobs:
         working-directory: extensions/syntax
         run: pnpm dlx @vscode/vsce package --allow-missing-repository
 
+  # release.yml publishes this image, but a Dockerfile only exercised when a
+  # tag is pushed is a Dockerfile that breaks when a tag is pushed. Native
+  # amd64 only: the release build covers arm64 under emulation, and paying for
+  # that on every push would buy nothing this job can catch.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
+          cache-on-failure: true
+      - name: Stage a binary the way release.yml does
+        run: |
+          cargo build --release --manifest-path cli/Cargo.toml
+          mkdir -p docker
+          cp cli/target/release/poly docker/poly-amd64
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: poly:ci
+      # Building proves it assembles; running proves the parts fit. The mount
+      # is how a CI job would actually use it, and `check` reaches for the
+      # network and for git, which is where a too-thin base image shows up.
+      - name: The image can lint a repository
+        run: |
+          docker run --rm -v "$PWD:/work" poly:ci --version
+          docker run --rm -v "$PWD:/work" poly:ci check --strict .
+
   cli:
     runs-on: ubuntu-latest
     env:

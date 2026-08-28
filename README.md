@@ -83,6 +83,35 @@ chmod +x poly-darwin-arm64 && mv poly-darwin-arm64 /usr/local/bin/poly
 SmartScreen 擋，處理方式見
 [extensions/lint/README.md](extensions/lint/README.md#疑難排解)。
 
+### 在 GitHub Actions 裡用
+
+```yaml
+- uses: linzeyan/vscode-syntax@v0
+- run: poly check --strict .
+```
+
+`@v0` 會跟著最新的 release 走。要釘死版本就寫 `with: { version: "0.3.0" }`——poly
+會改寫檔案，所以新版本自己跑進來有可能把綠的分支變紅。
+
+Action 做三件事：抓對應平台的 binary、對 `SHA256SUMS` 驗 sha256、放進 PATH。順便
+快取 poly 之後會下載的外部 linter（`with: { cache: false }` 可關）——冷跑一次
+`poly check` 在 lint 任何東西之前要先抓幾十 MB 的 shellcheck、ruff。
+
+### 在容器裡用
+
+```sh
+docker run --rm -v "$PWD:/work" ghcr.io/linzeyan/poly check --strict .
+```
+
+`linux/amd64` 與 `linux/arm64` 都有。tag 有 `latest`、`0.3.0`、`0.3`；pre-release
+不會動到 `latest`。image 裡的 binary 就是 release 附的那一支，不是另外編的。
+
+外部 linter 快取在 `/cache`，CI 裡掛個 volume 上去就不用每次重抓：
+
+```sh
+docker run --rm -v "$PWD:/work" -v poly-cache:/cache ghcr.io/linzeyan/poly check .
+```
+
 ### 驗證裝好了
 
 ```sh
