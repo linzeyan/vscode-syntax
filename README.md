@@ -35,11 +35,18 @@
   best-practice 全文。sqruff 沒有文件站可連，那份說明編在 binary 裡，版本精確、
   離線可讀。其他工具有自己的規則頁，走規則代碼上的超連結。
 - **語言伺服器（預設關閉）**：`poly.languageServers` 打開後，poly 會啟動專案自己
-  toolchain 裡的 language server——目前只有 Go 的 gopls——把 hover、go-to-definition、
-  references、outline、completion 路由給它。poly **不實作**這些功能也不代裝
-  server：答案來自 gopls 本人，所以品質就是 gopls 的品質。預設關閉是因為它會跟
-  你八成已經裝了的官方 extension 重疊，要用請先移除那個 extension。改完要重新載入
-  視窗。
+  toolchain 裡的 language server，把 hover、go-to-definition、type definition、
+  implementation、references、outline、completion 路由給它。目前六個：gopls（Go）、
+  rust-analyzer（Rust）、clangd（C／C++）、sourcekit-lsp（Swift）、terraform-ls
+  （Terraform）、lua-language-server（Lua）。poly **不實作**這些功能也不代裝
+  server——只從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。實際能用
+  哪幾項由 server 自己宣告：terraform-ls 只給五項，sourcekit-lsp 六項。預設關閉是
+  因為它會跟你八成已經裝了的官方 extension 重疊，要用請先移除那個 extension。改完
+  要重新載入視窗。
+- **`poly.languageServerLogs`（預設開啟）**：把 language server 自己的 stderr 轉進
+  Poly 輸出面板。clangd 與 terraform-ls 每個請求寫一行，嫌吵就關掉——關掉是整份丟棄，
+  不是去叫各家 server 安靜（有些根本沒這種旗標）。poly 自己的訊息（server 不在 PATH、
+  啟動就掛）不受影響。
 - **專案內工具優先**：偵測到專案的 biome／prettier／eslint／rustfmt 就用它們，
   避免和團隊 CI 結果不一致。
 - 背景檢查 GitHub Releases（預設 7 天一次，可調可關），一鍵同時更新兩個 extension。
@@ -72,8 +79,8 @@
 選檔案 → 重新載入視窗。或用命令列：
 
 ```sh
-code --install-extension poly-syntax-0.4.4.vsix
-code --install-extension poly-lint-darwin-arm64-0.4.4.vsix
+code --install-extension poly-syntax-0.5.0.vsix
+code --install-extension poly-lint-darwin-arm64-0.5.0.vsix
 ```
 
 之後的版本由 poly-lint 自己提示更新，不必再手動抓。
@@ -97,7 +104,7 @@ irm https://raw.githubusercontent.com/linzeyan/vscode-syntax/main/install.ps1 | 
 版本就設環境變數——`irm | iex` 沒辦法傳參數，所以兩邊都認得：
 
 ```sh
-POLY_VERSION=0.4.4 POLY_INSTALL_DIR=~/bin sh install.sh
+POLY_VERSION=0.5.0 POLY_INSTALL_DIR=~/bin sh install.sh
 ```
 
 Windows on ARM 上會裝 arm64 版，即使腳本本身跑在 x64 模擬層裡（從 ssh 或某些
@@ -123,7 +130,7 @@ SmartScreen 擋，處理方式見
 - run: poly check --strict .
 ```
 
-`@v0` 會跟著最新的 release 走。要釘死版本就寫 `with: { version: "0.4.4" }`——poly
+`@v0` 會跟著最新的 release 走。要釘死版本就寫 `with: { version: "0.5.0" }`——poly
 會改寫檔案，所以新版本自己跑進來有可能把綠的分支變紅。
 
 Action 做三件事：抓對應平台的 binary、對 `SHA256SUMS` 驗 sha256、放進 PATH。順便
@@ -136,7 +143,7 @@ Action 做三件事：抓對應平台的 binary、對 `SHA256SUMS` 驗 sha256、
 docker run --rm -v "$PWD:/work" ghcr.io/linzeyan/poly check --strict .
 ```
 
-`linux/amd64` 與 `linux/arm64` 都有。tag 有 `latest`、`0.4.4`、`0.4`；pre-release
+`linux/amd64` 與 `linux/arm64` 都有。tag 有 `latest`、`0.5.0`、`0.5`；pre-release
 不會動到 `latest`。image 裡的 binary 就是 release 附的那一支，不是另外編的。
 
 外部 linter 快取在 `/cache`，CI 裡掛個 volume 上去就不用每次重抓：

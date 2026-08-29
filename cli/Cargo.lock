@@ -1770,7 +1770,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "poly-cli"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "lsp-server",
@@ -1785,7 +1785,7 @@ dependencies = [
 
 [[package]]
 name = "poly-core"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "globset",
@@ -1797,7 +1797,7 @@ dependencies = [
 
 [[package]]
 name = "poly-engines"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "dprint-plugin-dockerfile",
@@ -1819,7 +1819,7 @@ dependencies = [
 
 [[package]]
 name = "poly-tools"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "flate2",
