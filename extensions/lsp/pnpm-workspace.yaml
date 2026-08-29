@@ -9,3 +9,14 @@
 # nowhere else.
 allowBuilds:
   esbuild: false
+
+# mocha still asks for serialize-javascript ^6 as of 11.8.0, and 6.x carries an
+# RCE and a DoS advisory. Dependabot cannot resolve this on its own -- there is
+# no mocha release to upgrade to -- so the version is pinned here instead.
+#
+# Crossing a major is safe here for a reason worth stating: mocha only loads
+# serialize-javascript in lib/nodejs/worker.js and buffered-worker-pool.js,
+# which are parallel mode. These tests run mocha in-process inside the
+# extension host, so that code never loads at all.
+overrides:
+  serialize-javascript: ^7.1.0
