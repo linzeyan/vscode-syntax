@@ -222,6 +222,7 @@ impl Downstream {
                         request.id = tag(&tag_with, &request.id);
                         Message::Request(request)
                     }
+                    Message::Response(response) => Message::Response(forwarded(response)),
                     other => other,
                 };
                 forward(message);
@@ -329,6 +330,20 @@ pub fn registrations(
         .collect()
 }
 
+/// A downstream response on its way to the editor, with a null result put back.
+///
+/// `lsp_server` parses a JSON `null` result into `None`, and skips the field
+/// entirely when it serializes — so a reply that went in as `"result": null`
+/// comes out carrying neither `result` nor `error`, which is not a legal
+/// response. `null` is a real answer here ("no definition at this position")
+/// and every server sends it eventually.
+fn forwarded(mut response: Response) -> Response {
+    if response.result.is_none() && response.error.is_none() {
+        response.result = Some(serde_json::Value::Null);
+    }
+    response
+}
+
 /// Was this id minted by poly rather than by the editor?
 pub fn is_poly_id(id: &RequestId) -> bool {
     serde_json::to_value(id)
@@ -419,6 +434,29 @@ mod tests {
         }
         // The editor's own ids are untagged and must stay that way.
         assert!(untag(&RequestId::from(7)).is_none());
+    }
+
+    /// Found on Windows against a rust-analyzer with no workspace loaded: it
+    /// answered `"result": null` and the editor got `{"jsonrpc":"2.0","id":3}`,
+    /// a response with neither field. Nothing Windows-specific about it —
+    /// every server sends a null result the moment it has no answer.
+    #[test]
+    fn a_null_result_survives_the_trip_to_the_editor() {
+        let raw = r#"{"jsonrpc":"2.0","id":3,"result":null}"#;
+        let parsed: Response = serde_json::from_str(raw).expect("a response");
+        assert!(
+            parsed.result.is_none(),
+            "lsp_server started keeping null results; this workaround can go"
+        );
+
+        let sent = serde_json::to_string(&forwarded(parsed)).expect("serialises");
+        assert!(sent.contains(r#""result":null"#), "{sent}");
+
+        // An error response must not grow a result alongside its error.
+        let raw = r#"{"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"no"}}"#;
+        let failed: Response = serde_json::from_str(raw).expect("a response");
+        let sent = serde_json::to_string(&forwarded(failed)).expect("serialises");
+        assert!(!sent.contains("result"), "{sent}");
     }
 
     #[test]

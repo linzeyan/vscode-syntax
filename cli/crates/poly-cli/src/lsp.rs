@@ -180,7 +180,6 @@ fn serve(connection: Connection) -> Result<()> {
         match message {
             Message::Request(request) => {
                 if server.connection.handle_shutdown(&request)? {
-                    server.stop_downstream();
                     break;
                 }
                 let started = Instant::now();
@@ -224,6 +223,11 @@ fn serve(connection: Connection) -> Result<()> {
         }
     }
 
+    // Here rather than only on the `shutdown` path: an editor that dies takes
+    // its pipe with it and never asks politely, and that is exactly when a
+    // downstream server is left holding a project's worth of memory. Observed
+    // as rust-analyzer's "client exited without proper shutdown sequence".
+    server.stop_downstream();
     Ok(())
 }
 

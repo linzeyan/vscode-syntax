@@ -351,7 +351,7 @@ def alive(pid):
     return True
 
 
-def run(case, logs=True):
+def run(case, logs=True, graceful=True):
     global proc, INBOX, STDERR
     INBOX = []
     STDERR = []
@@ -594,14 +594,31 @@ def run(case, logs=True):
         assert narrated, f"{case.server} was expected to be noisy by default"
         print(f"  {case.server} logged {len(narrated)} lines with logs on")
 
+    # Every response poly sent has to carry a result or an error. A downstream
+    # `"result": null` used to arrive as `{"jsonrpc":"2.0","id":3}` and nothing
+    # else, which is not a legal response -- caught on Windows, but the bug was
+    # never Windows-specific.
+    malformed = [
+        m
+        for m in INBOX
+        if "id" in m and "method" not in m and "result" not in m and "error" not in m
+    ]
+    assert not malformed, f"responses with neither result nor error: {malformed[:2]}"
+
     # Snapshot the tree before poly can tear it down, so the survivor check
     # below has something to look for. An empty set here would make it vacuous.
     spawned = descendants(proc.pid)
     assert spawned, f"{case.server} answered but poly has no child process"
 
-    send({"jsonrpc": "2.0", "id": 9, "method": "shutdown", "params": None})
-    pump(want_id=9)
-    send({"jsonrpc": "2.0", "method": "exit", "params": None})
+    if graceful:
+        send({"jsonrpc": "2.0", "id": 9, "method": "shutdown", "params": None})
+        pump(want_id=9)
+        send({"jsonrpc": "2.0", "method": "exit", "params": None})
+    else:
+        # An editor that dies takes its pipe with it and never asks politely.
+        # poly used to stop its downstream servers only on the shutdown path,
+        # which left this one to whatever the server did about it on its own.
+        proc.stdin.close()
     try:
         proc.wait(timeout=15)
     except subprocess.TimeoutExpired:
@@ -638,6 +655,25 @@ for probe in CASES:
         narrated = [line for line in STDERR if line.startswith(probe.chatty)]
         assert not narrated, f"asked for quiet, got {len(narrated)}: {narrated[:2]}"
         print(f"  {probe.server} still answered, and logged nothing")
+
+# An editor that dies takes its pipe with it and never sends shutdown.
+#
+# Checking that nothing leaked is not enough here: a server notices its client
+# has vanished and exits on its own, so that assertion holds whether or not
+# poly did the right thing -- measured, not assumed. rust-analyzer is the one
+# that says out loud which of the two happened, so it is the only case with
+# anything to test.
+rude = next(
+    (c for c in CASES if c.language in ran and c.server == "rust-analyzer"), None
+)
+if rude:
+    print(f"{rude.language} via {rude.server}, editor closes the pipe: ")
+    run(rude, graceful=False)
+    abandoned = [line for line in STDERR if "without proper shutdown" in line]
+    assert not abandoned, f"poly walked out on {rude.server}: {abandoned}"
+    print(f"  {rude.server} was shut down properly, not just abandoned")
+elif ran:
+    print("SKIPPED rude-exit check: needs rust-analyzer, the server that reports it")
 
 if not ran:
     print("PROXY PROBE SKIPPED: no language server on PATH")
