@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import * as vscode from "vscode";
 
-const EXTENSION_ID = "ricky.poly-lint";
+const EXTENSION_ID = "ricky.poly-lsp";
 
 const COMMANDS = [
   "poly.formatFile",
@@ -71,7 +71,7 @@ async function formatted(uri: vscode.Uri): Promise<string> {
   return document.getText();
 }
 
-suite("poly-lint in a real editor", () => {
+suite("poly-lsp in a real editor", () => {
   suiteSetup(async function() {
     this.timeout(120_000);
     const extension = vscode.extensions.getExtension(EXTENSION_ID);
@@ -276,7 +276,13 @@ func main() {
   // UI able to turn it on. Found on the Win11 VM, where settings.json had no
   // language section at all. It is now declared in configurationDefaults, which
   // needs no click and touches no user file -- but only the real editor can say
-  // whether VSCode honours it, and this test host writes no such setting.
+  // whether VSCode honours it.
+  //
+  // This reads a user setting when there is one, so it only proves anything on
+  // a clean profile. The old prompt did write one, and .vscode-test/user-data
+  // survives between runs: a stale copy naming the pre-rename extension id sat
+  // there passing this test for the wrong reason. Delete that directory if this
+  // ever disagrees with package.json.
   test("format-on-save is on for a poly language out of the box", async () => {
     const uri = writeFile("defaults.py", "x = 1\n");
     const editor = vscode.workspace.getConfiguration("editor", {

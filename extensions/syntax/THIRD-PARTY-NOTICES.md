@@ -1,4 +1,4 @@
-# Third-party notices — poly-syntax
+# Third-party notices — poly-syntax-highlight
 
 Bundled grammars retain their upstream licenses. Sources are pinned in
 grammars/sources.lock.json.

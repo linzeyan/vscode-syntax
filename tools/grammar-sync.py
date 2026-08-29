@@ -319,7 +319,7 @@ def build_contributes(sources: dict, lock: dict) -> tuple[list, list]:
 
 def build_notices(sources: dict, lock: dict) -> str:
     lines = [
-        "# Third-party notices — poly-syntax",
+        "# Third-party notices — poly-syntax-highlight",
         "",
         "Bundled grammars retain their upstream licenses. Sources are pinned in",
         "grammars/sources.lock.json.",

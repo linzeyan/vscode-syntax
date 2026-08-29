@@ -4,10 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 
-// poly-syntax and poly-lint release in lockstep (02 §8); poly-lint owns the
+// poly-syntax-highlight and poly-lsp release in lockstep (02 §8); poly-lsp owns the
 // update check for both.
 const REPO = "linzeyan/vscode-syntax";
-const SYNTAX_EXTENSION = "ricky.poly-syntax";
+const SYNTAX_EXTENSION = "ricky.poly-syntax-highlight";
 const LAST_CHECK = "updateCheck.lastCheck";
 const ETAG = "updateCheck.etag";
 const CACHED_TAG = "updateCheck.cachedTag";
@@ -34,7 +34,7 @@ async function fetchLatest(
   state: vscode.Memento,
 ): Promise<Release | undefined> {
   const headers: Record<string, string> = {
-    "User-Agent": "poly-lint",
+    "User-Agent": "poly-lsp",
     Accept: "application/vnd.github+json",
   };
   const etag = state.get<string>(ETAG);
@@ -85,7 +85,7 @@ function isNewer(latestTag: string, current: string): boolean {
 }
 
 async function download(url: string, dest: string): Promise<Buffer> {
-  const res = await fetch(url, { headers: { "User-Agent": "poly-lint" } });
+  const res = await fetch(url, { headers: { "User-Agent": "poly-lsp" } });
   if (!res.ok) {
     throw new Error(`download failed (${res.status}): ${url}`);
   }
@@ -98,8 +98,8 @@ async function download(url: string, dest: string): Promise<Buffer> {
 async function installUpdate(release: Release): Promise<void> {
   const version = release.tag.replace(/^v/, "");
   const names = [
-    `poly-syntax-${version}.vsix`,
-    `poly-lint-${vsceTarget()}-${version}.vsix`,
+    `poly-syntax-highlight-${version}.vsix`,
+    `poly-lsp-${vsceTarget()}-${version}.vsix`,
   ];
   const sumsUrl = release.assets.get("SHA256SUMS");
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "poly-update-"));
@@ -112,7 +112,7 @@ async function installUpdate(release: Release): Promise<void> {
     },
     async () => {
       const sums = sumsUrl
-        ? await (await fetch(sumsUrl, { headers: { "User-Agent": "poly-lint" } })).text()
+        ? await (await fetch(sumsUrl, { headers: { "User-Agent": "poly-lsp" } })).text()
         : "";
       for (const name of names) {
         const url = release.assets.get(name);
@@ -136,10 +136,10 @@ async function installUpdate(release: Release): Promise<void> {
 
   try {
     // Syntax first so a mid-update reload still has matching grammar+client.
-    // Skip poly-syntax if the user never installed it (README documents the
+    // Skip poly-syntax-highlight if the user never installed it (README documents the
     // standalone case).
     for (const file of files) {
-      const standalone = file.includes("poly-syntax")
+      const standalone = file.includes("poly-syntax-highlight")
         && !vscode.extensions.getExtension(SYNTAX_EXTENSION);
       if (standalone) {
         continue;

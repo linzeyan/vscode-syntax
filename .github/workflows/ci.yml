@@ -17,7 +17,7 @@ jobs:
       # and a developer machine cannot end up on different resolvers.
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: extensions/lint/package.json
+          package_json_file: extensions/lsp/package.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -224,7 +224,7 @@ jobs:
         run: |
           cli=$(cli/target/release/poly --version | cut -d' ' -f2)
           status=0
-          for f in extensions/lint/package.json extensions/syntax/package.json; do
+          for f in extensions/lsp/package.json extensions/syntax/package.json; do
             v=$(python3 -c "import json;print(json.load(open('$f'))['version'])")
             [ "$v" = "$cli" ] || {
               echo "::error file=$f::version $v does not match the CLI's $cli"
@@ -236,12 +236,12 @@ jobs:
           node-version: 22
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: extensions/lint/package.json
+          package_json_file: extensions/lsp/package.json
       # Runs here rather than in its own job so it can reuse the binary the
       # smoke test just built; a separate job would compile the workspace twice.
       # xvfb: the extension host needs a display even with no window on screen.
       - name: Editor end-to-end (real extension host)
-        working-directory: extensions/lint
+        working-directory: extensions/lsp
         env:
           POLY_BIN: ${{ github.workspace }}/cli/target/release/poly
         run: |

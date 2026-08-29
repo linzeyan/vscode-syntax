@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for poly-syntax grammars. Verified 2026-08-24 (all paths HTTP-checked, licenses from GitHub API). tools/grammar-sync.py consumes this. Two built-in extensions are deliberately left alone despite D5: search-result (the Search Editor's own result view, not a file format users open) and dotenv (poly already ships a community .env grammar as source.env; adding VSCode's source.dotenv would leave two grammars competing for the dotenv language id).",
+  "$comment": "Single source of truth for poly-syntax-highlight grammars. Verified 2026-08-24 (all paths HTTP-checked, licenses from GitHub API). tools/grammar-sync.py consumes this. Two built-in extensions are deliberately left alone despite D5: search-result (the Search Editor's own result view, not a file format users open) and dotenv (poly already ships a community .env grammar as source.env; adding VSCode's source.dotenv would leave two grammars competing for the dotenv language id).",
   "languages": [
     {
       "id": "rust",

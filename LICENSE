@@ -27,6 +27,6 @@ dependencies keep their upstream licenses; the complete list, with the pinned
 version and license of every one, is generated into:
 
   extensions/syntax/THIRD-PARTY-NOTICES.md   (grammars)
-  extensions/lint/THIRD-PARTY-NOTICES.md     (crates)
+  extensions/lsp/THIRD-PARTY-NOTICES.md     (crates)
 
 Both ship inside their VSIX and are attached to every GitHub release.

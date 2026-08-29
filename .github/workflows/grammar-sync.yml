@@ -23,7 +23,7 @@ jobs:
           node-version: 22
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: extensions/lint/package.json
+          package_json_file: extensions/lsp/package.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

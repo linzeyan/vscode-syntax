@@ -7,7 +7,7 @@ import { checkForUpdates, scheduleUpdateCheck } from "./update";
 
 // Everything the extension does goes through the daemon, so a daemon that
 // never started must be visible and actionable rather than a silent no-op.
-const TROUBLESHOOTING = "https://github.com/linzeyan/vscode-syntax/blob/main/extensions/lint/README.md#疑難排解";
+const TROUBLESHOOTING = "https://github.com/linzeyan/vscode-syntax/blob/main/extensions/lsp/README.md#疑難排解";
 
 // Language ids the daemon can format or lint (poly-core ids + VSCode
 // aliases). Drives the documentSelector, so this is also the set that gets

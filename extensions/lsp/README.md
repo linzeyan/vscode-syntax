@@ -1,4 +1,4 @@
-# Poly Lint
+# Poly LSP
 
 透過 `poly lsp` daemon 提供統一 lint/format：
 
@@ -20,7 +20,21 @@
 
 啟動後背景檢查 GitHub Releases（預設每 7 天至多一次；
 `poly.updateCheck.intervalDays` 調整、`poly.updateCheck.enabled` 關閉），
-或手動執行 `Poly: Check for Updates`。一鍵安裝會同時更新 poly-syntax。
+或手動執行 `Poly: Check for Updates`。一鍵安裝會同時更新 poly-syntax-highlight。
+
+### 從 0.5.0 以前升上來
+
+這個 extension 0.6.0 前叫 `poly-lint`（另一個叫 `poly-syntax`）。id 換了就是新
+extension，更新提示接不上，舊的得自己移除，否則兩個 formatter 搶同一批語言：
+
+```sh
+code --uninstall-extension ricky.poly-lint
+code --uninstall-extension ricky.poly-syntax
+```
+
+`settings.json` 裡若有 `"editor.defaultFormatter": "ricky.poly-lint"`，改成
+`"ricky.poly-lsp"`。留著舊值不會報錯，只是指向不存在的 extension，格式化會安靜
+地不動作。
 
 ## 開發設定
 
@@ -55,7 +69,7 @@ PATH 上有另一支 poly 排在前面。功能不會壞，但新版才有的行
 內嵌的 `poly.exe` 未簽章，首次執行可能被擋。
 
 - 解除封鎖：檔案總管開
-  `%USERPROFILE%\.vscode\extensions\ricky.poly-lint-*\bin\poly.exe` →
+  `%USERPROFILE%\.vscode\extensions\ricky.poly-lsp-*\bin\poly.exe` →
   內容 → 一般 → 勾「解除封鎖」。
 - 已被隔離：Windows 安全性 → 防毒與威脅防護 → 保護歷程記錄 → 允許。
 - 企業用 AppLocker／WDAC 全面封鎖未簽章執行檔時無法自行解除：Release 有獨立的

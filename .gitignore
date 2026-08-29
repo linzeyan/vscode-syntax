@@ -4,6 +4,6 @@ node_modules/
 *.vsix
 .DS_Store
 /docs
-extensions/lint/bin/
-extensions/lint/out/
-extensions/lint/.vscode-test/
+extensions/lsp/bin/
+extensions/lsp/out/
+extensions/lsp/.vscode-test/

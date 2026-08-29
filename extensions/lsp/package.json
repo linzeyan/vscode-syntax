@@ -1,6 +1,6 @@
 {
-  "name": "poly-lint",
-  "displayName": "Poly Lint",
+  "name": "poly-lsp",
+  "displayName": "Poly LSP",
   "description": "Unified lint/format via the poly daemon: format-on-save, lint-on-save diagnostics, batch commands.",
   "version": "0.5.0",
   "publisher": "ricky",
@@ -107,7 +107,7 @@
         "poly.languageServers": {
           "type": "boolean",
           "default": false,
-          "description": "Run the language server a project's own toolchain provides (currently gopls for Go) and route hover, go-to-definition, references, outline and completion to it. Off by default: it overlaps with the official extension for that language, so remove that extension before turning this on. Poly never installs these servers — they come from PATH."
+          "description": "Run the language server a project's own toolchain provides and route hover, go-to-definition, type definition, implementation, references, outline and completion to it. Six are known: gopls (Go), rust-analyzer (Rust), clangd (C/C++), sourcekit-lsp (Swift), terraform-ls (Terraform), lua-language-server (Lua). Off by default: it overlaps with the official extension for that language, so remove that extension before turning this on. Poly never installs these servers — they come from PATH, and which features work is whatever the server itself declares."
         },
         "poly.languageServerLogs": {
           "type": "boolean",
@@ -117,7 +117,7 @@
         "poly.updateCheck.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Periodically check GitHub Releases for new Poly versions (also covers poly-syntax)."
+          "description": "Periodically check GitHub Releases for new Poly versions (also covers poly-syntax-highlight)."
         },
         "poly.updateCheck.intervalDays": {
           "type": "number",
@@ -128,35 +128,35 @@
       }
     },
     "configurationDefaults": {
-      "[typescript]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[typescriptreact]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[javascript]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[javascriptreact]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[json]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[jsonc]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[markdown]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[toml]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[css]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[scss]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[less]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[yaml]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[python]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[sql]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[xml]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[html]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[vue]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[svelte]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[astro]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[graphql]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[dockerfile]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[shellscript]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[lua]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[rust]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[go]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[c]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[cpp]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[swift]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true },
-      "[terraform]": { "editor.defaultFormatter": "ricky.poly-lint", "editor.formatOnSave": true }
+      "[typescript]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[typescriptreact]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[javascript]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[javascriptreact]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[json]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[jsonc]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[markdown]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[toml]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[css]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[scss]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[less]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[yaml]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[python]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[sql]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[xml]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[html]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[vue]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[svelte]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[astro]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[graphql]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[dockerfile]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[shellscript]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[lua]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[rust]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[go]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[c]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[cpp]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[swift]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[terraform]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true }
     }
   },
   "packageManager": "pnpm@11.5.3",

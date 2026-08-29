@@ -1,4 +1,4 @@
-# Poly Syntax
+# Poly Syntax Highlight
 
 統一 syntax highlighting 文法包（批次 1：25 語言）。文法一律從上游 repo／marketplace VSIX
 以 pinned 版本同步（`grammars/sources.json` 為單一真相，`tools/grammar-sync.py` 產生本
@@ -20,8 +20,8 @@ scopes 應含 `keyword.operator.arrow.skinny.rust`（內建文法無此 scope）
 
 ## 更新
 
-poly-syntax 本身零執行期程式碼，更新提示由 poly-lint 代管（兩者同版號發佈、
-一鍵同時更新）。只安裝 poly-syntax 的使用者請自行從 GitHub Releases 下載新版
+poly-syntax-highlight 本身零執行期程式碼，更新提示由 poly-lsp 代管（兩者同版號發佈、
+一鍵同時更新）。只安裝 poly-syntax-highlight 的使用者請自行從 GitHub Releases 下載新版
 VSIX 安裝。
 
 ## 授權

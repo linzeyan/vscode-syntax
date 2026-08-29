@@ -1,7 +1,7 @@
 name: Release
 
 # Tag vX.Y.Z (or vX.Y.Z-rc.N for a pre-release) -> 6-platform build ->
-# 7 VSIX (6 platform poly-lint + 1 universal poly-syntax) + 6 binaries
+# 7 VSIX (6 platform poly-lsp + 1 universal poly-syntax-highlight) + 6 binaries
 # + SHA256SUMS + third-party notices, uploaded to a GitHub Release.
 #
 # Three dot-separated parts, not `v*`: the last step of this workflow force-
@@ -64,7 +64,7 @@ jobs:
           node-version: 22
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: extensions/lint/package.json
+          package_json_file: extensions/lsp/package.json
       - name: Build
         working-directory: cli
         run: cargo build --release --locked --target ${{ matrix.target }}
@@ -86,15 +86,15 @@ jobs:
         run: |
           BIN=cli/target/${{ matrix.target }}/release/poly
           [ -f "$BIN.exe" ] && BIN="$BIN.exe"
-          pnpm --dir extensions/lint install --frozen-lockfile
-          tools/package-lint.sh ${{ matrix.vsce }} "$BIN"
+          pnpm --dir extensions/lsp install --frozen-lockfile
+          tools/package-lsp.sh ${{ matrix.vsce }} "$BIN"
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.vsce }}
           path: |
             cli/target/${{ matrix.target }}/release/poly
             cli/target/${{ matrix.target }}/release/poly.exe
-            extensions/lint/poly-lint-*.vsix
+            extensions/lsp/poly-lsp-*.vsix
           if-no-files-found: error
 
   release:
@@ -107,11 +107,11 @@ jobs:
           node-version: 22
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: extensions/lint/package.json
+          package_json_file: extensions/lsp/package.json
       - name: Verify tag matches extension versions
         run: |
           BASE="${GITHUB_REF_NAME#v}"; BASE="${BASE%%-*}"
-          for f in extensions/lint/package.json extensions/syntax/package.json; do
+          for f in extensions/lsp/package.json extensions/syntax/package.json; do
             v=$(node -p "require('./$f').version")
             if [ "$v" != "$BASE" ]; then
               echo "version mismatch: $f has $v, tag implies $BASE" >&2
@@ -130,7 +130,7 @@ jobs:
           mkdir dist
           for d in artifacts/release-*; do
             vsce="${d#artifacts/release-}"
-            find "$d" -name 'poly-lint-*.vsix' -exec cp {} dist/ \;
+            find "$d" -name 'poly-lsp-*.vsix' -exec cp {} dist/ \;
             # Artifacts keep repo-relative nesting; locate binaries by name.
             exe=$(find "$d" -name poly.exe -type f | head -1)
             if [ -n "$exe" ]; then
@@ -139,8 +139,8 @@ jobs:
               find "$d" -name poly -type f -exec cp {} "dist/poly-$vsce" \;
             fi
           done
-          cp extensions/syntax/poly-syntax-*.vsix dist/
-          cp extensions/lint/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-cli.md
+          cp extensions/syntax/poly-syntax-highlight-*.vsix dist/
+          cp extensions/lsp/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-cli.md
           cp extensions/syntax/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-grammars.md
           # The bare binaries are downloaded on their own, and MIT asks for the
           # notice to travel with the copy. The VSIX carry their own.
@@ -150,9 +150,9 @@ jobs:
         run: |
           # find rather than ls: a release asset is named from a matrix entry,
           # so a name that surprises `ls` is exactly the case worth surviving.
-          lint=$(find dist -type f -name 'poly-lint-*.vsix' | wc -l)
+          lsp=$(find dist -type f -name 'poly-lsp-*.vsix' | wc -l)
           bins=$(find dist -type f -name 'poly-*' ! -name '*.vsix' ! -name '*.md' | wc -l)
-          test "$lint" -eq 6 || { echo "expected 6 lint VSIX, got $lint" >&2; exit 1; }
+          test "$lsp" -eq 6 || { echo "expected 6 poly-lsp VSIX, got $lsp" >&2; exit 1; }
           test "$bins" -eq 6 || { echo "expected 6 binaries, got $bins" >&2; exit 1; }
       - name: Create GitHub Release
         env:

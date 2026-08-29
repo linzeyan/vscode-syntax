@@ -4,15 +4,15 @@
 安裝的一大堆零散 extension。編輯器與 CI 共用同一個 binary、同一份設定，所以本機存
 檔跟 pipeline 的結果一定一致。
 
-| 產出物        | 職責                                                         |
-| ------------- | ------------------------------------------------------------ |
-| `poly-syntax` | 多語言 syntax highlighting，**接管全部 VSCode 內建語言文法** |
-| `poly-lint`   | 存檔即時 lint／format，批次命令；背後是 `poly lsp` daemon    |
-| `poly`        | 單一 binary CLI，供 CI、pre-commit、終端批次使用             |
+| 產出物                  | 職責                                                         |
+| ----------------------- | ------------------------------------------------------------ |
+| `poly-syntax-highlight` | 多語言 syntax highlighting，**接管全部 VSCode 內建語言文法** |
+| `poly-lsp`              | 存檔即時 lint／format，批次命令；背後是 `poly lsp` daemon    |
+| `poly`                  | 單一 binary CLI，供 CI、pre-commit、終端批次使用             |
 
 ## 功能
 
-### poly-syntax — highlighting
+### poly-syntax-highlight — highlighting
 
 - **151 個文法**：接管 49 個 VSCode 內建語言，另加 44 個內建沒有的語言
   （HCL／Terraform、nginx、zig、dotenv、protobuf、mermaid、caddyfile、systemd
@@ -25,7 +25,7 @@
   commit 同步，`grammars/sources.json` 是單一真相；CI 有 drift gate 擋手改。
 - **零執行期程式碼**，不佔 extension host 資源。
 
-### poly-lint — 編輯器整合
+### poly-lsp — 編輯器整合
 
 - **Format**：Format Document／`editor.formatOnSave`，加上批次命令 Format
   File／Folder／Workspace／Git Repo／Git Changed Files。
@@ -70,8 +70,8 @@
 [Releases](https://github.com/linzeyan/vscode-syntax/releases/latest) 下載，
 兩個 VSIX 都裝：
 
-1. `poly-syntax-<版本>.vsix` — 通用，不分平台。
-2. `poly-lint-<平台>-<版本>.vsix` — **要挑對平台**，內含對應的 poly binary：
+1. `poly-syntax-highlight-<版本>.vsix` — 通用，不分平台。
+2. `poly-lsp-<平台>-<版本>.vsix` — **要挑對平台**，內含對應的 poly binary：
    `darwin-arm64`、`darwin-x64`、`linux-arm64`、`linux-x64`、`win32-arm64`、
    `win32-x64`。
 
@@ -79,11 +79,26 @@
 選檔案 → 重新載入視窗。或用命令列：
 
 ```sh
-code --install-extension poly-syntax-0.5.0.vsix
-code --install-extension poly-lint-darwin-arm64-0.5.0.vsix
+code --install-extension poly-syntax-highlight-0.5.0.vsix
+code --install-extension poly-lsp-darwin-arm64-0.5.0.vsix
 ```
 
-之後的版本由 poly-lint 自己提示更新，不必再手動抓。
+之後的版本由 poly-lsp 自己提示更新，不必再手動抓。
+
+### 從 0.5.0 以前升上來
+
+兩個 extension 在 0.6.0 改了名字（`poly-lint` → `poly-lsp`、`poly-syntax` →
+`poly-syntax-highlight`）。換名字等於換 extension id，所以新版是**另一個**
+extension，內建的更新提示接不上——舊的會留著，兩個 formatter 搶同一批語言。
+
+```sh
+code --uninstall-extension ricky.poly-lint
+code --uninstall-extension ricky.poly-syntax
+```
+
+再檢查 `settings.json`：如果裡面有 `"editor.defaultFormatter": "ricky.poly-lint"`
+（曾經點過 format-on-save 提示的話就會有），要改成 `"ricky.poly-lsp"`。留著舊
+值不會報錯，只會指向一個不存在的 extension，然後格式化安靜地不動作。
 
 ### 只要 CLI
 
@@ -121,7 +136,7 @@ chmod +x poly-darwin-arm64 && mv poly-darwin-arm64 /usr/local/bin/poly
 
 `SHA256SUMS` 一併發佈，可先驗再用。Windows 上未簽章的 `poly.exe` 可能被
 SmartScreen 擋，處理方式見
-[extensions/lint/README.md](extensions/lint/README.md#疑難排解)。
+[extensions/lsp/README.md](extensions/lsp/README.md#疑難排解)。
 
 ### 在 GitHub Actions 裡用
 
@@ -397,8 +412,8 @@ exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同�
 
 ```sh
 cargo build --release --manifest-path cli/Cargo.toml   # → cli/target/release/poly
-(cd extensions/lint && pnpm install && pnpm run build) # extension bundle
-(cd extensions/lint && pnpm test)                      # 真 extension host E2E
+(cd extensions/lsp && pnpm install && pnpm run build) # extension bundle
+(cd extensions/lsp && pnpm test)                      # 真 extension host E2E
 pip install pyyaml && python tools/grammar-sync.py     # 重新同步文法
 python tools/tool-sync.py --check                      # 驗證外部工具 pin（離線）
 python tools/tool-sync.py --update                     # 跟上游對一次版本（需網路）

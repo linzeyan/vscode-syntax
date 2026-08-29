@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Package the poly-lint platform VSIX with the poly binary embedded.
-# Usage: tools/package-lint.sh [vsce-target] [poly-binary]
+# Package the poly-lsp platform VSIX with the poly binary embedded.
+# Usage: tools/package-lsp.sh [vsce-target] [poly-binary]
 # Defaults: current platform's target, cli/target/release/poly.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-EXT="$ROOT/extensions/lint"
+EXT="$ROOT/extensions/lsp"
 
 case "${1:-}" in
 "")
@@ -39,4 +39,4 @@ pnpm run build || exit 1
 # vsce cannot walk pnpm's symlinked tree to prove that for itself.
 pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --target "$TARGET" || exit 1
 set +x
-ls -1 "$EXT"/poly-lint-*.vsix
+ls -1 "$EXT"/poly-lsp-*.vsix
