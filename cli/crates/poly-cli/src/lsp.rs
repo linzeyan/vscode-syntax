@@ -45,6 +45,24 @@ const LANGUAGE_SERVERS: &[(&str, &str)] = &[
     ("cpp", "clangd"),
 ];
 
+/// What to pass a server so it stops narrating every request.
+///
+/// Only clangd needs anything: gopls and rust-analyzer say nothing unless
+/// asked. This is the one place poly puts words in a server's mouth, which is
+/// why it is opt-in (`poly.languageServerLogs`) rather than the default —
+/// `--log=error` also silences clangd's "Failed to find compilation database",
+/// and that line is the single most useful explanation of why its answers are
+/// worse than expected.
+const QUIET: &[(&str, &[&str])] = &[("clangd", &["--log=error"])];
+
+fn quiet_args(name: &str) -> &'static [&'static str] {
+    QUIET
+        .iter()
+        .find(|(known, _)| *known == name)
+        .map(|(_, args)| *args)
+        .unwrap_or(&[])
+}
+
 /// The language server that answers for `language`, if poly knows one.
 fn server_for(language: &str) -> Option<&'static str> {
     LANGUAGE_SERVERS
@@ -75,6 +93,10 @@ struct Server {
     /// golang.go the user has probably already installed, and that is their
     /// call to make rather than something a poly upgrade does to them.
     language_servers: bool,
+    /// Whether a downstream server's own logs are wanted. On by default: poly
+    /// adds no arguments unless asked, and a server explaining why it cannot
+    /// answer well is exactly what this project refuses to swallow.
+    language_server_logs: bool,
     /// The editor's own InitializeParams, replayed to each downstream server.
     init_params: serde_json::Value,
     /// Running servers, keyed by binary name rather than language: clangd
@@ -132,12 +154,14 @@ fn serve(connection: Connection) -> Result<()> {
     };
     let lint_on_save = option("lintOnSave", true);
     let language_servers = option("languageServers", false);
+    let language_server_logs = option("languageServerLogs", true);
 
     let mut server = Server {
         connection,
         documents: HashMap::new(),
         lint_on_save,
         language_servers,
+        language_server_logs,
         init_params,
         downstream: HashMap::new(),
         last_completion: None,
@@ -301,12 +325,18 @@ impl Server {
             self.downstream.insert(name.to_string(), None);
             return;
         };
+        let args = if self.language_server_logs {
+            &[][..]
+        } else {
+            quiet_args(name)
+        };
         let sender = self.connection.sender.clone();
         let started = Instant::now();
         let server = crate::proxy::Downstream::start(
             name,
             &languages,
             &command,
+            args,
             &self.init_params,
             Box::new(move |message| {
                 let _ = sender.send(message);
@@ -924,6 +954,18 @@ mod tests {
         assert_eq!(server_for("c"), server_for("cpp"));
         // A language poly formats but has no server for stays poly's alone.
         assert_eq!(server_for("typescript"), None);
+    }
+
+    /// Only a server that narrates gets told to stop.
+    ///
+    /// Passing arguments to one that is already quiet is poly making a
+    /// decision on behalf of a server that never asked for one — the thing
+    /// `languageServerLogs` exists to keep explicit.
+    #[test]
+    fn quiet_arguments_are_only_for_the_servers_that_need_them() {
+        assert_eq!(quiet_args("clangd"), ["--log=error"]);
+        assert!(quiet_args("gopls").is_empty());
+        assert!(quiet_args("rust-analyzer").is_empty());
     }
 
     /// Problems has to carry everything the terminal carries, in the same

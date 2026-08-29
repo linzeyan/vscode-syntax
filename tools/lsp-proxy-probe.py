@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -95,6 +96,10 @@ class Case:
     # Set where one server covers several languages. clangd is why this
     # exists: it answers for both c and cpp, and there must be one of it.
     second: Second = None
+    # Prefix of a line this server writes for every request it handles, when
+    # poly passes it no logging arguments. Set only for a server that is noisy
+    # by default -- it is what the languageServerLogs switch is measured by.
+    chatty: str = None
     # Only one case needs to prove poly does not clobber downstream diagnostics:
     # the guard lives in publish_all and is language-agnostic, so re-checking it
     # per language would buy nothing and cost a wait on cargo check.
@@ -147,6 +152,7 @@ CASES = [
             call_line=5,
             call_character=13,  # inside `twice` on the call line
         ),
+        chatty="[clangd] I[",
     ),
 ]
 
@@ -154,7 +160,18 @@ CASES = [
 # whenever the downstream server feels like it -- a probe that only looked at
 # what came in during one wait would miss diagnostics that landed in a previous.
 INBOX = []
+# Every line poly has written to stderr, including the downstream server's own
+# output that poly prefixes and passes on.
+STDERR = []
 proc = None
+
+
+def watch(stream):
+    """Record poly's stderr, and echo it so a failing run still shows why."""
+    for raw in stream:
+        line = raw.decode(errors="replace").rstrip()
+        STDERR.append(line)
+        print(line, file=sys.stderr)
 
 
 def send(msg):
@@ -270,9 +287,10 @@ def alive(pid):
     return True
 
 
-def run(case):
-    global proc, INBOX
+def run(case, logs=True):
+    global proc, INBOX, STDERR
     INBOX = []
+    STDERR = []
 
     root = tempfile.mkdtemp(prefix=f"poly-proxy-{case.language}-")
     for name, text in case.files.items():
@@ -284,7 +302,13 @@ def run(case):
     uri = "file://" + entry
     source = case.files[case.entry]
 
-    proc = subprocess.Popen([BIN, "lsp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    proc = subprocess.Popen(
+        [BIN, "lsp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    threading.Thread(target=watch, args=(proc.stderr,), daemon=True).start()
 
     send(
         {
@@ -295,7 +319,10 @@ def run(case):
                 "processId": None,
                 "rootUri": "file://" + root,
                 "workspaceFolders": [{"uri": "file://" + root, "name": "probe"}],
-                "initializationOptions": {"languageServers": True},
+                "initializationOptions": {
+                    "languageServers": True,
+                    "languageServerLogs": logs,
+                },
                 "capabilities": {
                     "textDocument": {
                         "definition": {"linkSupport": False},
@@ -494,6 +521,15 @@ def run(case):
         wiped = [d for d in diagnostics_for(uri, saved_at) if not d]
         assert not wiped, f"poly cleared {case.server}'s diagnostics on save"
 
+    if case.chatty and logs:
+        # The default passes no arguments, so a server that narrates every
+        # request narrates it straight into poly's log. This is the half of
+        # the languageServerLogs switch that proves the other half means
+        # something.
+        narrated = [line for line in STDERR if line.startswith(case.chatty)]
+        assert narrated, f"{case.server} was expected to be noisy by default"
+        print(f"  {case.server} logged {len(narrated)} lines with logs on")
+
     # Snapshot the tree before poly can tear it down, so the survivor check
     # below has something to look for. An empty set here would make it vacuous.
     spawned = descendants(proc.pid)
@@ -527,6 +563,17 @@ for probe in CASES:
     print(f"{probe.language} via {probe.server}:")
     run(probe)
     ran.append(probe.language)
+
+    if probe.chatty:
+        # Turning poly.languageServerLogs off has to reach the server, and the
+        # whole case runs again rather than just the handshake: an argument
+        # poly got wrong would show up as a server that no longer answers, not
+        # as one that is merely quiet.
+        print(f"{probe.language} via {probe.server}, languageServerLogs off:")
+        run(probe, logs=False)
+        narrated = [line for line in STDERR if line.startswith(probe.chatty)]
+        assert not narrated, f"asked for quiet, got {len(narrated)}: {narrated[:2]}"
+        print(f"  {probe.server} still answered, and logged nothing")
 
 if not ran:
     print("PROXY PROBE SKIPPED: no language server on PATH")

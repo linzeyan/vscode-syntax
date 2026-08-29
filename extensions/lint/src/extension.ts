@@ -261,6 +261,11 @@ export async function activate(context: vscode.ExtensionContext) {
         languageServers: vscode.workspace
           .getConfiguration("poly")
           .get<boolean>("languageServers", false),
+        // Same deal: it becomes a command-line argument at spawn time, so a
+        // server already running keeps the verbosity it started with.
+        languageServerLogs: vscode.workspace
+          .getConfiguration("poly")
+          .get<boolean>("languageServerLogs", true),
       },
     },
   );

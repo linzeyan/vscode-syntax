@@ -88,14 +88,21 @@ impl Downstream {
     /// unchanged: the server has to see the same rootUri, workspaceFolders and
     /// client capabilities the editor offered, or it resolves imports against
     /// the wrong tree. poly is a pipe here, not a negotiator.
+    ///
+    /// `args` is empty unless the user asked for something poly can only get by
+    /// telling the server about it — see `quiet_args` in `lsp.rs`. Inventing
+    /// arguments is how a proxy starts making decisions for the server it is
+    /// supposed to be relaying.
     pub fn start(
         name: &str,
         languages: &[String],
         command: &Path,
+        args: &[&str],
         init_params: &serde_json::Value,
         forward: Box<dyn Fn(Message) + Send>,
     ) -> Result<Downstream> {
         let mut child = Command::new(command)
+            .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -359,6 +366,7 @@ mod tests {
             // Prints a version and exits: a process that speaks no LSP at all,
             // which is exactly what a broken shim looks like from here.
             &std::env::current_exe().unwrap(),
+            &[],
             &serde_json::json!({}),
             Box::new(|_| {}),
         );
