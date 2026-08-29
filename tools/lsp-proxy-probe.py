@@ -159,16 +159,41 @@ class Case:
     # one -- selene and swiftlint are the only linters poly runs in the editor
     # for a proxied language, and no language server looks for what they do.
     merged_source: str = None
-    # Whether this server declares renameProvider. Stated rather than
-    # discovered: a check that only runs when the capability shows up cannot
-    # notice poly dropping the capability.
-    renames: bool = True
-    # Whether this server declares codeActionProvider. Stated for the same
-    # reason `renames` is: a check that skips when the capability is absent
-    # cannot notice the capability going missing.
-    code_actions: bool = True
+    # Exactly what poly must register for this server, `textDocument/` dropped.
+    # Measured from each server's own initialize result, then written down --
+    # discovering it at runtime would make the check agree with whatever poly
+    # happened to do.
+    registers: set = None
+    # Capabilities this server declares at initialize and then refuses when
+    # actually asked. poly registers them anyway: the policy is to relay what
+    # the server said about itself, and a per-server denylist would be poly
+    # holding an opinion about someone else's binary -- one that rots the
+    # moment they fix it. Recorded here so the lie is visible, and so the
+    # probe fails loudly if it ever becomes true.
+    unsupported: set = field(default_factory=set)
     edit: tuple = field(default=("world", "there"))
 
+
+# What every server here declares, so the per-case sets below are only the
+# differences worth reading. Nothing is derived from PROXIED on purpose: a
+# table built from the code under test agrees with it by construction.
+COMMON = {
+    "hover",
+    "definition",
+    "references",
+    "documentSymbol",
+    "completion",
+    "signatureHelp",
+}
+# The rest of the batch, which the two thin servers do not all have.
+FULL = COMMON | {
+    "typeDefinition",
+    "implementation",
+    "rename",
+    "codeAction",
+    "documentHighlight",
+    "foldingRange",
+}
 
 CASES = [
     Case(
@@ -181,6 +206,9 @@ CASES = [
         call_character=15,  # inside `Greet` on the call line
         hover_needle="Greet",
         diagnostics=True,
+        # No declarationProvider: in Go a declaration and a definition are the
+        # same thing, so gopls has nothing separate to point at.
+        registers=FULL | {"selectionRange"},
     ),
     Case(
         language="rust",
@@ -194,6 +222,7 @@ CASES = [
         call_line=5,
         call_character=20,  # inside `greet` on the call line
         hover_needle="greet",
+        registers=FULL | {"selectionRange", "declaration"},
     ),
     # No compile_commands.json on purpose. clangd falls back to default flags
     # for a standalone file, which is enough for a same-file definition, and
@@ -216,6 +245,7 @@ CASES = [
             call_character=13,  # inside `twice` on the call line
         ),
         chatty="[clangd] I[",
+        registers=FULL | {"selectionRange", "declaration"},
     ),
     Case(
         language="swift",
@@ -226,6 +256,13 @@ CASES = [
         call_line=4,
         call_character=16,  # inside `greet` on the call line
         hover_needle="greet",
+        # No typeDefinition and no selectionRange; it is the only server here
+        # that has declaration but not selectionRange.
+        registers=(FULL - {"typeDefinition"}) | {"declaration"},
+        # Declares declarationProvider, then answers -32001 "unsupported
+        # method". Measured 2026-08-29 against sourcekit-lsp from the Xcode
+        # toolchain.
+        unsupported={"declaration"},
     ),
     # The one server here that is not its own entry point: poly has to run
     # `terraform-ls serve`, and without the subcommand the binary prints usage
@@ -240,8 +277,9 @@ CASES = [
         call_character=15,  # inside `name` of `var.name`
         hover_needle="name",
         chatty="[terraform-ls] ",
-        renames=False,
-        code_actions=False,
+        # The thinnest of the six: no rename, no code actions, and none of the
+        # position-scoped extras beyond signatureHelp.
+        registers=COMMON | {"declaration"},
     ),
     Case(
         language="lua",
@@ -253,6 +291,7 @@ CASES = [
         call_character=18,  # inside `greet` on the call line
         hover_needle="greet",
         merged_source="selene",
+        registers=FULL,
     ),
 ]
 
@@ -518,6 +557,19 @@ def run(case, logs=True, graceful=True):
     send({"jsonrpc": "2.0", "id": registration["id"], "result": None})
     print(f"  registered for {', '.join(sorted(covered))}: {sorted(methods)}")
 
+    # The exact set, not a subset. Stated per server rather than read off what
+    # arrived, because the interesting failures are both directions: poly
+    # dropping a capability the server has, and poly claiming one it does not.
+    # A subset check would miss the first and a presence check would miss the
+    # second, and both were real bugs the earlier per-capability booleans were
+    # rewritten to catch.
+    short = {m.removeprefix("textDocument/") for m in methods}
+    assert short == case.registers, (
+        f"{case.server} registrations differ\n"
+        f"  missing: {sorted(case.registers - short)}\n"
+        f"    extra: {sorted(short - case.registers)}"
+    )
+
     at_call = {
         "textDocument": {"uri": uri},
         "position": {"line": case.call_line, "character": case.call_character},
@@ -626,11 +678,7 @@ def run(case, logs=True, graceful=True):
     # Asserted against the table rather than skipped when absent. The first
     # version gated on `if registered`, which made it a no-op against a poly
     # that had never heard of rename -- it read as six clean skips.
-    declared = "textDocument/rename" in methods
-    assert declared == case.renames, (
-        f"{case.server} rename registration: {declared}, expected {case.renames}"
-    )
-    if declared:
+    if "rename" in case.registers:
         if methods["textDocument/rename"]["registerOptions"].get("prepareProvider"):
             # Sent because of a flag inside the rename registration and never
             # registered on its own, so this is the only thing here that proves
@@ -662,12 +710,7 @@ def run(case, logs=True, graceful=True):
     # Asserted against the table, never gated on what showed up, for the reason
     # the rename check had to be rewritten: a check that skips when the
     # capability is absent cannot notice the capability going missing.
-    declared = "textDocument/codeAction" in methods
-    assert declared == case.code_actions, (
-        f"{case.server} codeAction registration: {declared}, "
-        f"expected {case.code_actions}"
-    )
-    if declared:
+    if "codeAction" in case.registers:
         kinds = methods["textDocument/codeAction"]["registerOptions"].get(
             "codeActionKinds"
         )
@@ -702,6 +745,46 @@ def run(case, logs=True, graceful=True):
         )
     else:
         print(f"  {case.server} declares no codeActionProvider, as expected")
+
+    # The read-only batch. poly implements none of these, and an unrouted
+    # request comes back as METHOD_NOT_FOUND -- an error, with no `result`
+    # field at all. So the presence of `result` is proof the request reached a
+    # server, and it is the whole check: what the server then says is the
+    # server's business, which is the point of proxying rather than answering.
+    #
+    # foldingRange and selectionRange are document-scoped rather than
+    # position-scoped, and selectionRange wants a list of positions.
+    extras = {
+        "signatureHelp": at_call,
+        "documentHighlight": at_call,
+        "declaration": at_call,
+        "foldingRange": {"textDocument": {"uri": uri}},
+        "selectionRange": {
+            "textDocument": {"uri": uri},
+            "positions": [at_call["position"]],
+        },
+    }
+    for offset, (feature, params) in enumerate(sorted(extras.items())):
+        method = f"textDocument/{feature}"
+        answer = ask(30 + offset, method, params)
+        if feature in case.unsupported:
+            # Registered, because the server said it could. Asked, and it said
+            # otherwise. poly relays that verbatim rather than papering over it.
+            assert "error" in answer, (
+                f"{case.server} now answers {feature}; drop it from "
+                f"`unsupported` -- the workaround note is stale"
+            )
+            print(f"  {feature}: declared by {case.server}, refused by it")
+        elif feature in case.registers:
+            assert "result" in answer, f"{method} was not routed: {answer}"
+            print(f"  {feature} routed: {str(answer['result'])[:60]}")
+        else:
+            # Not registered, so the editor would never send it. Asking anyway
+            # proves poly says so rather than hanging or inventing an answer.
+            assert "error" in answer, (
+                f"{case.server} declares no {feature} yet poly answered it: {answer}"
+            )
+            print(f"  {case.server} declares no {feature}, as expected")
 
     if case.merged_source:
         # publishDiagnostics replaces the whole set for a uri, so poly has to

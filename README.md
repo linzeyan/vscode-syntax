@@ -35,12 +35,16 @@
   best-practice 全文。sqruff 沒有文件站可連，那份說明編在 binary 裡，版本精確、
   離線可讀。其他工具有自己的規則頁，走規則代碼上的超連結。
 - **語言伺服器（預設關閉）**：`poly.languageServers` 打開後，poly 會啟動專案自己
-  toolchain 裡的 language server，把 hover、go-to-definition、type definition、
-  implementation、references、outline、completion、rename、code action 路由給它。目前六個：
+  toolchain 裡的 language server，把 hover、go-to-definition、declaration、type
+  definition、implementation、references、outline、completion、signature help、
+  symbol highlight、folding、expand selection、rename、code action 路由給它。目前六個：
   gopls（Go）、rust-analyzer（Rust）、clangd（C／C++）、sourcekit-lsp（Swift）、terraform-ls
   （Terraform）、lua-language-server（Lua）。poly **不實作**這些功能也不代裝
   server——只從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。實際能用
-  哪幾項由 server 自己宣告：九項裡 terraform-ls 只給五項，sourcekit-lsp 八項。**code
+  哪幾項由 server 自己宣告，十四項裡：clangd 與 rust-analyzer 給滿 14、gopls 13、
+  sourcekit-lsp 12、lua-language-server 12、terraform-ls 只有 7。有一個例外值得知道：
+  sourcekit-lsp 宣告了 declaration 卻在被問時回「unsupported method」，poly 照樣轉發
+  它自己說過的話，所以 Swift 的 Go to Declaration 會失敗（Go to Definition 正常）。**code
   action 只給燈泡那些**：`editor.codeActionsOnSave` 跑的 `source.*` 一律不轉，因為 VSCode
   會在 formatter **之前**跑它們，等於 gopls 的 organizeImports 跟 poly 的 gofumpt 在同一次
   存檔改同一段 import——兩者對 std import 的分組意見不同，誰贏只取決於誰後跑。代價是

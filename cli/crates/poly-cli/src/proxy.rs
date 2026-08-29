@@ -73,7 +73,35 @@ pub const PROXIED: &[(&str, &str)] = &[
     ("textDocument/completion", "completionProvider"),
     ("textDocument/rename", "renameProvider"),
     ("textDocument/codeAction", "codeActionProvider"),
+    // Read-only, document-scoped, no follow-up request to route: the same
+    // shape as hover, which is why they arrive as one batch rather than one
+    // decision each. Every one of them was measured as declared by at least
+    // three of the six servers before being added — a row here that no server
+    // answers is a registration the editor acts on and nothing fulfils.
+    ("textDocument/signatureHelp", "signatureHelpProvider"),
+    (
+        "textDocument/documentHighlight",
+        "documentHighlightProvider",
+    ),
+    ("textDocument/foldingRange", "foldingRangeProvider"),
+    ("textDocument/declaration", "declarationProvider"),
+    ("textDocument/selectionRange", "selectionRangeProvider"),
 ];
+
+// Capabilities the servers declare that poly leaves alone, so the next person
+// adding a row above does not have to rediscover which were already weighed:
+//
+// - `documentOnTypeFormatting` (4 of 6 declare it): poly is the formatter.
+//   This is the `source.organizeImports` collision without even the save
+//   boundary to contain it — it fires mid-keystroke.
+// - `workspaceSymbol` (6 of 6): the request names no document, so routing it
+//   means asking every running server and merging. A different shape, not a
+//   row in the table above.
+// - `codeLens` (6 of 6): a lens carries a command the server runs through
+//   `workspace/executeCommand`, which poly already occupies with its own.
+// - `semanticTokens` (4 of 6): routable, but a whole token set per change is
+//   a different traffic profile, and it lands on top of the TextMate layer
+//   poly-syntax-highlight already paints. Worth its own decision.
 
 /// Requests poly routes but never registers.
 ///
