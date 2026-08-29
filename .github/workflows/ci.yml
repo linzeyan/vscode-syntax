@@ -154,14 +154,16 @@ jobs:
           go install golang.org/x/tools/gopls@v0.23.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           rustup component add rust-analyzer
+          sudo apt-get install -y clangd
       - name: Language server proxy probe
         run: |
           # The probe skips a language when its server is missing, which is
           # right on a developer's machine and wrong here: a gate that silently
-          # turns into a no-op is worse than no gate. Assert both are present
-          # before running it.
+          # turns into a no-op is worse than no gate. Assert all three are
+          # present before running it.
           gopls version
           rust-analyzer --version
+          clangd --version
           python tools/lsp-proxy-probe.py cli/target/release/poly
       # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
       # two commands the README tells users to put in their CI. This was a

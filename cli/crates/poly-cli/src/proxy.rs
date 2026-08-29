@@ -65,10 +65,13 @@ pub const SYNCED: &[&str] = &[
 ];
 
 pub struct Downstream {
-    /// Binary name, for logs.
+    /// Binary name. Identifies the server in logs, in registration ids, and as
+    /// the key poly routes on.
     pub name: String,
-    /// The language poly routes to this server.
-    pub language: String,
+    /// Every language poly routes to this server. Usually one; clangd answers
+    /// for both c and cpp, and one process has to serve them — a second clangd
+    /// would index the same project again for the same answers.
+    pub languages: Vec<String>,
     /// `capabilities` from the server's `initialize` result, verbatim. poly
     /// re-registers a subset of these with the editor rather than asserting
     /// what the server can do.
@@ -87,7 +90,7 @@ impl Downstream {
     /// the wrong tree. poly is a pipe here, not a negotiator.
     pub fn start(
         name: &str,
-        language: &str,
+        languages: &[String],
         command: &Path,
         init_params: &serde_json::Value,
         forward: Box<dyn Fn(Message) + Send>,
@@ -174,8 +177,7 @@ impl Downstream {
         .write(&mut stdin)
         .with_context(|| format!("sending initialized to {name}"))?;
 
-        let language = language.to_string();
-        let tag_with = language.clone();
+        let tag_with = name.to_string();
         std::thread::spawn(move || {
             for message in rx {
                 // Replies to poly's own requests are poly's business; passing
@@ -188,8 +190,8 @@ impl Downstream {
                 }
                 // A request from the server carries an id in *its* numbering,
                 // and the editor's reply comes back to poly with that id and
-                // nothing else. Tagging it with the language is what lets the
-                // reply find its way home once there is more than one server.
+                // nothing else. Tagging it with the server is what lets the
+                // reply find its way home once there is more than one.
                 let message = match message {
                     Message::Request(mut request) => {
                         request.id = tag(&tag_with, &request.id);
@@ -203,7 +205,7 @@ impl Downstream {
 
         Ok(Downstream {
             name: name.to_string(),
-            language: language.clone(),
+            languages: languages.to_vec(),
             capabilities,
             child,
             stdin,
@@ -257,8 +259,21 @@ impl Downstream {
 /// Driven by what the server declared, never by poly's idea of it — gopls's
 /// completion trigger characters are gopls's to choose, and a capability it
 /// does not have must not reach the editor as one that does.
-pub fn registrations(capabilities: &serde_json::Value, language: &str) -> Vec<serde_json::Value> {
-    let selector = serde_json::json!([{ "scheme": "file", "language": language }]);
+///
+/// One registration per method covers every language the server answers for,
+/// which is why the id is keyed by server rather than language: clangd
+/// registering twice, once for c and once for cpp, would be two registrations
+/// claiming the same id.
+pub fn registrations(
+    capabilities: &serde_json::Value,
+    name: &str,
+    languages: &[String],
+) -> Vec<serde_json::Value> {
+    let selector: Vec<serde_json::Value> = languages
+        .iter()
+        .map(|language| serde_json::json!({ "scheme": "file", "language": language }))
+        .collect();
+    let selector = serde_json::Value::Array(selector);
     PROXIED
         .iter()
         .filter_map(|(method, capability)| {
@@ -274,7 +289,7 @@ pub fn registrations(capabilities: &serde_json::Value, language: &str) -> Vec<se
             };
             options["documentSelector"] = selector.clone();
             Some(serde_json::json!({
-                "id": format!("{POLY_ID}{language}:{method}"),
+                "id": format!("{POLY_ID}{name}:{method}"),
                 "method": method,
                 "registerOptions": options,
             }))
@@ -290,25 +305,25 @@ pub fn is_poly_id(id: &RequestId) -> bool {
         .unwrap_or(false)
 }
 
-/// `42` -> `"go:42"`. The tag rides on the id itself, so a reply routes with
+/// `42` -> `"gopls:42"`. The tag rides on the id itself, so a reply routes with
 /// no table for poly to keep in step with the traffic.
-fn tag(language: &str, id: &RequestId) -> RequestId {
-    RequestId::from(format!("{language}:{id}"))
+fn tag(name: &str, id: &RequestId) -> RequestId {
+    RequestId::from(format!("{name}:{id}"))
 }
 
-/// Undo `tag`: the language poly sent this request out for, and the id the
+/// Undo `tag`: the server poly sent this request out for, and the id that
 /// server knows it by.
 pub fn untag(id: &RequestId) -> Option<(String, RequestId)> {
     let tagged = serde_json::to_value(id).ok()?;
     let tagged = tagged.as_str()?;
-    let (language, original) = tagged.split_once(':')?;
+    let (name, original) = tagged.split_once(':')?;
     // `tag` formats through Display, which quotes a string id and leaves a
     // numeric one bare -- so this parses back to whichever the server used.
     let original = original
         .parse::<i32>()
         .map(RequestId::from)
         .unwrap_or_else(|_| RequestId::from(original.trim_matches('"').to_string()));
-    Some((language.to_string(), original))
+    Some((name.to_string(), original))
 }
 
 /// A response saying poly has nothing for this request.
@@ -340,7 +355,7 @@ mod tests {
         let started = std::time::Instant::now();
         let outcome = Downstream::start(
             "notaserver",
-            "go",
+            &["go".to_string()],
             // Prints a version and exits: a process that speaks no LSP at all,
             // which is exactly what a broken shim looks like from here.
             &std::env::current_exe().unwrap(),
@@ -364,8 +379,8 @@ mod tests {
     #[test]
     fn tagging_survives_a_round_trip() {
         for original in [RequestId::from(42), RequestId::from("abc".to_string())] {
-            let (language, back) = untag(&tag("go", &original)).expect("tagged id parses");
-            assert_eq!(language, "go");
+            let (name, back) = untag(&tag("gopls", &original)).expect("tagged id parses");
+            assert_eq!(name, "gopls");
             assert_eq!(back, original, "id changed shape in transit");
         }
         // The editor's own ids are untagged and must stay that way.
@@ -391,7 +406,7 @@ mod tests {
             "definitionProvider": false,
             "completionProvider": {"triggerCharacters": ["."], "resolveProvider": true},
         });
-        let registrations = registrations(&declared, "go");
+        let registrations = registrations(&declared, "gopls", &["go".to_string()]);
         let methods: Vec<&str> = registrations
             .iter()
             .map(|r| r["method"].as_str().unwrap())
@@ -410,5 +425,33 @@ mod tests {
             registrations[0]["registerOptions"]["documentSelector"][0]["scheme"],
             "file"
         );
+    }
+
+    /// A server covering several languages registers once for all of them.
+    ///
+    /// Registering per language would mint the same id twice, and the second
+    /// `client/registerCapability` for an id the editor already holds is an
+    /// error — the feature would come and go depending on which file was
+    /// opened first.
+    #[test]
+    fn one_server_covers_every_language_it_answers_for() {
+        let declared = serde_json::json!({"hoverProvider": true});
+        let languages = ["c".to_string(), "cpp".to_string()];
+        let registrations = registrations(&declared, "clangd", &languages);
+
+        assert_eq!(
+            registrations.len(),
+            1,
+            "one registration, not one per language"
+        );
+        assert_eq!(registrations[0]["id"], "poly:clangd:textDocument/hover");
+        let selector = &registrations[0]["registerOptions"]["documentSelector"];
+        let covered: Vec<&str> = selector
+            .as_array()
+            .expect("a selector per language")
+            .iter()
+            .map(|entry| entry["language"].as_str().unwrap())
+            .collect();
+        assert_eq!(covered, ["c", "cpp"]);
     }
 }

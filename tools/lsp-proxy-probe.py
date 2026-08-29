@@ -49,6 +49,37 @@ fn main() {
 """
 
 
+MAIN_C = """int greet(int n) {
+    return n + 1;
+}
+
+int main(void) {
+    int message = greet(1);
+    return message;
+}
+"""
+
+OTHER_CPP = """int twice(int n) {
+    return n * 2;
+}
+
+int main() {
+    return twice(2);
+}
+"""
+
+
+@dataclass
+class Second:
+    """A file in another language the same server answers for."""
+
+    entry: str
+    language: str
+    definition_line: int
+    call_line: int
+    call_character: int
+
+
 @dataclass
 class Case:
     """One language's end of the proxy, and where to poke it."""
@@ -61,6 +92,9 @@ class Case:
     call_line: int
     call_character: int
     hover_needle: str
+    # Set where one server covers several languages. clangd is why this
+    # exists: it answers for both c and cpp, and there must be one of it.
+    second: Second = None
     # Only one case needs to prove poly does not clobber downstream diagnostics:
     # the guard lives in publish_all and is language-agnostic, so re-checking it
     # per language would buy nothing and cost a wait on cargo check.
@@ -92,6 +126,27 @@ CASES = [
         call_line=5,
         call_character=20,  # inside `greet` on the call line
         hover_needle="greet",
+    ),
+    # No compile_commands.json on purpose. clangd falls back to default flags
+    # for a standalone file, which is enough for a same-file definition, and
+    # producing a compile database is the project's business -- poly inventing
+    # one would be poly guessing at a build it did not run (D6).
+    Case(
+        language="c",
+        server="clangd",
+        files={"main.c": MAIN_C, "other.cpp": OTHER_CPP},
+        entry="main.c",
+        definition_line=0,
+        call_line=5,
+        call_character=20,  # inside `greet` on the call line
+        hover_needle="greet",
+        second=Second(
+            entry="other.cpp",
+            language="cpp",
+            definition_line=0,
+            call_line=5,
+            call_character=13,  # inside `twice` on the call line
+        ),
     ),
 ]
 
@@ -292,10 +347,14 @@ def run(case):
     registration, _ = pump(want_method="client/registerCapability")
     methods = {r["method"]: r for r in registration["params"]["registrations"]}
     assert "textDocument/definition" in methods, methods
+    # One registration covers every language the server answers for, so the
+    # selector is the whole set and not just the language that started it.
+    expected = {case.language} | ({case.second.language} if case.second else set())
     selector = methods["textDocument/definition"]["registerOptions"]["documentSelector"]
-    assert selector[0]["language"] == case.language, selector
+    covered = {entry["language"] for entry in selector}
+    assert covered == expected, selector
     send({"jsonrpc": "2.0", "id": registration["id"], "result": None})
-    print(f"  registered for {case.language}: {sorted(methods)}")
+    print(f"  registered for {', '.join(sorted(covered))}: {sorted(methods)}")
 
     at_call = {
         "textDocument": {"uri": uri},
@@ -324,6 +383,47 @@ def run(case):
     )
     summary = next(line for line in hover_text(hover).splitlines() if line.strip())
     print(f"  hover: {summary[:60]}")
+
+    if case.second:
+        # Opening a file in the server's other language must reach the process
+        # that is already running. A clangd per language would index the same
+        # project twice to answer the same questions.
+        before = descendants(proc.pid)
+        assert before, (
+            f"{case.server} answered but poly has no child to compare against"
+        )
+        second = os.path.join(root, case.second.entry)
+        second_uri = "file://" + second
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": second_uri,
+                        "languageId": case.second.language,
+                        "version": 1,
+                        "text": case.files[case.second.entry],
+                    }
+                },
+            }
+        )
+        at_second = {
+            "textDocument": {"uri": second_uri},
+            "position": {
+                "line": case.second.call_line,
+                "character": case.second.call_character,
+            },
+        }
+        found = settle(7, "textDocument/definition", at_second, bool, "cross-language")
+        if isinstance(found, dict):
+            found = [found]
+        assert found[0]["range"]["start"]["line"] == case.second.definition_line, found
+        after = descendants(proc.pid)
+        assert after == before, f"a second {case.server} started: {before} -> {after}"
+        print(
+            f"  one {case.server} answers for {case.language} and {case.second.language}"
+        )
 
     # completionItem/resolve carries no uri, so poly routes it by the language
     # of the last completion. Completing and then resolving one of the items is

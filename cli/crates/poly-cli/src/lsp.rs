@@ -38,7 +38,34 @@ pub fn run() -> Result<()> {
 /// clang-format already follow (01 §4.3). A language server has to match the
 /// toolchain that built the project, and a version poly chose would be a
 /// version poly chose wrong.
-const LANGUAGE_SERVERS: &[(&str, &str)] = &[("go", "gopls"), ("rust", "rust-analyzer")];
+const LANGUAGE_SERVERS: &[(&str, &str)] = &[
+    ("go", "gopls"),
+    ("rust", "rust-analyzer"),
+    ("c", "clangd"),
+    ("cpp", "clangd"),
+];
+
+/// The language server that answers for `language`, if poly knows one.
+fn server_for(language: &str) -> Option<&'static str> {
+    LANGUAGE_SERVERS
+        .iter()
+        .find(|(known, _)| *known == language)
+        .map(|(_, name)| *name)
+}
+
+/// Every language a server answers for.
+///
+/// The map is written language-first because that is the direction a request
+/// arrives in, but the server is what gets started — clangd serves c and cpp
+/// from one process, and starting one per language would index the project
+/// twice to give the same answers.
+fn languages_for(name: &str) -> Vec<String> {
+    LANGUAGE_SERVERS
+        .iter()
+        .filter(|(_, known)| *known == name)
+        .map(|(language, _)| language.to_string())
+        .collect()
+}
 
 struct Server {
     connection: Connection,
@@ -50,13 +77,16 @@ struct Server {
     language_servers: bool,
     /// The editor's own InitializeParams, replayed to each downstream server.
     init_params: serde_json::Value,
-    /// Started on first sight of a document in that language, never eagerly:
+    /// Running servers, keyed by binary name rather than language: clangd
+    /// answers for c and cpp and there must be exactly one of it.
+    ///
+    /// Started on first sight of a document it answers for, never eagerly —
     /// gopls costs seconds and memory, and most sessions never open a Go file.
-    /// A language that failed to start is remembered as absent so poly does
-    /// not retry the spawn on every keystroke.
+    /// A server that failed to start is remembered as absent so poly does not
+    /// retry the spawn on every keystroke.
     downstream: HashMap<String, Option<crate::proxy::Downstream>>,
-    /// Language of the most recent `textDocument/completion`, which is the only
-    /// thing that can route a `completionItem/resolve`. See `route`.
+    /// Server that answered the most recent `textDocument/completion`, which is
+    /// the only thing that can route a `completionItem/resolve`. See `route`.
     last_completion: Option<String>,
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
@@ -188,8 +218,8 @@ impl Server {
         // field could carry the origin, but that field belongs to the server
         // that made the item and rewriting it would break resolve outright.
         // A resolve is always about the list currently on screen, and there is
-        // only ever one of those, so the last completion's language is it.
-        let language = match request.method.as_str() {
+        // only ever one of those, so the last completion's server is it.
+        let name = match request.method.as_str() {
             "completionItem/resolve" => self.last_completion.clone(),
             _ => request
                 .params
@@ -197,22 +227,23 @@ impl Server {
                 .and_then(|d| d.get("uri"))
                 .and_then(serde_json::Value::as_str)
                 .and_then(|uri| Url::parse(uri).ok())
-                .and_then(|uri| self.language_of(&uri)),
+                .and_then(|uri| self.server_of(&uri))
+                .map(str::to_string),
         };
-        let Some(language) = language else {
+        let Some(name) = name else {
             return Ok(Some(request));
         };
         if request.method == "textDocument/completion" {
-            self.last_completion = Some(language.clone());
+            self.last_completion = Some(name.clone());
         }
-        match self.downstream.get_mut(&language) {
+        match self.downstream.get_mut(&name) {
             Some(Some(server)) => {
                 server.send(Message::Request(request))?;
                 Ok(None)
             }
-            // Registered for the language but the server is gone: answer
-            // nothing rather than let the editor wait for a reply that is
-            // never coming.
+            // The server was registered for and is now gone: answer nothing
+            // rather than let the editor wait for a reply that is never
+            // coming.
             Some(None) => {
                 let empty = crate::proxy::nothing(request.id);
                 self.connection.sender.send(Message::Response(empty))?;
@@ -234,40 +265,47 @@ impl Server {
             }
             return;
         }
-        let Some((language, id)) = crate::proxy::untag(&response.id) else {
+        let Some((name, id)) = crate::proxy::untag(&response.id) else {
             return; // not ours and not theirs; nothing to do with it
         };
-        if let Some(Some(server)) = self.downstream.get_mut(&language) {
+        if let Some(Some(server)) = self.downstream.get_mut(&name) {
             let restored = Response { id, ..response };
             if let Err(e) = server.send(Message::Response(restored)) {
-                eprintln!("[poly] {language}: {e:#}");
+                eprintln!("[poly] {name}: {e:#}");
             }
         }
     }
 
-    /// Start the server for `language`, if there is one and it is wanted.
+    /// Start the server that answers for `language`, if there is one and it is
+    /// wanted.
     ///
-    /// Called on didOpen. Failure is recorded as "no server for this language"
-    /// so a missing gopls costs one message rather than one spawn attempt per
-    /// keystroke — and it is a message, because a silently absent feature is
-    /// the failure this project keeps refusing to ship.
+    /// Called on didOpen, and keyed by server: opening a .cpp after a .c finds
+    /// the clangd that is already running rather than starting a second one.
+    /// Failure is recorded as "this server is absent" so a missing gopls costs
+    /// one message rather than one spawn attempt per keystroke — and it is a
+    /// message, because a silently absent feature is the failure this project
+    /// keeps refusing to ship.
     fn ensure_downstream(&mut self, language: &str) {
-        if !self.language_servers || self.downstream.contains_key(language) {
-            return;
-        }
-        let Some((_, name)) = LANGUAGE_SERVERS.iter().find(|(l, _)| *l == language) else {
+        let Some(name) = server_for(language) else {
             return;
         };
+        if !self.language_servers || self.downstream.contains_key(name) {
+            return;
+        }
+        let languages = languages_for(name);
         let Some(command) = poly_tools::find_on_path(name) else {
-            eprintln!("[poly] {language}: {name} is not on PATH — no language features");
-            self.downstream.insert(language.to_string(), None);
+            eprintln!(
+                "[poly] {name} is not on PATH — no language features for {}",
+                languages.join(", ")
+            );
+            self.downstream.insert(name.to_string(), None);
             return;
         };
         let sender = self.connection.sender.clone();
         let started = Instant::now();
         let server = crate::proxy::Downstream::start(
             name,
-            language,
+            &languages,
             &command,
             &self.init_params,
             Box::new(move |message| {
@@ -281,28 +319,29 @@ impl Server {
                     started.elapsed().as_secs_f64() * 1000.0
                 );
                 self.register_downstream(&server);
-                self.downstream.insert(language.to_string(), Some(server));
+                self.downstream.insert(name.to_string(), Some(server));
             }
             // Every error out of `start` already names the server, so this
             // does not repeat it.
             Err(e) => {
                 eprintln!("[poly] {e:#}");
-                self.downstream.insert(language.to_string(), None);
+                self.downstream.insert(name.to_string(), None);
             }
         }
     }
 
     /// Tell the editor which features this server answers for, scoped to its
-    /// language. Nothing was declared at initialize, so until this lands the
+    /// languages. Nothing was declared at initialize, so until this lands the
     /// editor offers none of them.
     fn register_downstream(&mut self, server: &crate::proxy::Downstream) {
-        let registrations = crate::proxy::registrations(&server.capabilities, &server.language);
+        let registrations =
+            crate::proxy::registrations(&server.capabilities, &server.name, &server.languages);
         if registrations.is_empty() {
             eprintln!("[poly] {} declared nothing poly proxies", server.name);
             return;
         }
         let request = lsp_server::Request {
-            id: lsp_server::RequestId::from(format!("poly:register:{}", server.language)),
+            id: lsp_server::RequestId::from(format!("poly:register:{}", server.name)),
             method: "client/registerCapability".to_string(),
             params: serde_json::json!({ "registrations": registrations }),
         };
@@ -316,6 +355,11 @@ impl Server {
         poly_core::Config::discover(&path)
             .unwrap_or_else(|_| poly_core::Config::empty())
             .language(&path)
+    }
+
+    /// The server poly would route this document to, running or not.
+    fn server_of(&self, uri: &Url) -> Option<&'static str> {
+        self.language_of(uri).as_deref().and_then(server_for)
     }
 
     fn stop_downstream(&mut self) {
@@ -461,9 +505,12 @@ impl Server {
         if notification.method == "textDocument/didOpen" {
             self.ensure_downstream(&language);
         }
-        if let Some(Some(server)) = self.downstream.get_mut(&language) {
+        let Some(name) = server_for(&language) else {
+            return;
+        };
+        if let Some(Some(server)) = self.downstream.get_mut(name) {
             if let Err(e) = server.send(Message::Notification(notification.clone())) {
-                eprintln!("[poly] {language}: {e:#}");
+                eprintln!("[poly] {name}: {e:#}");
             }
         }
     }
@@ -518,8 +565,8 @@ impl Server {
 
     /// Is a downstream server answering for this document?
     fn is_proxied(&self, uri: &Url) -> bool {
-        self.language_of(uri)
-            .is_some_and(|language| matches!(self.downstream.get(&language), Some(Some(_))))
+        self.server_of(uri)
+            .is_some_and(|name| matches!(self.downstream.get(name), Some(Some(_))))
     }
 
     fn publish(&mut self, uri: &Url, diagnostics: Vec<lsp_types::Diagnostic>) -> Result<()> {
@@ -857,6 +904,27 @@ fn full_range(text: &str) -> Range {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The routing table is read in both directions and they have to agree.
+    ///
+    /// `downstream` is keyed by server while requests arrive by language, so a
+    /// language whose server does not list it back would spawn a process no
+    /// request could ever reach.
+    #[test]
+    fn every_language_maps_to_a_server_that_claims_it() {
+        for (language, name) in LANGUAGE_SERVERS {
+            assert_eq!(server_for(language), Some(*name));
+            assert!(
+                languages_for(name).contains(&language.to_string()),
+                "{name} does not answer for {language}"
+            );
+        }
+        // The case this keying exists for: one process, both languages.
+        assert_eq!(languages_for("clangd"), ["c", "cpp"]);
+        assert_eq!(server_for("c"), server_for("cpp"));
+        // A language poly formats but has no server for stays poly's alone.
+        assert_eq!(server_for("typescript"), None);
+    }
 
     /// Problems has to carry everything the terminal carries, in the same
     /// words: a user who reads one and then the other must not have to work out
