@@ -128,9 +128,37 @@ jobs:
       - name: Clippy
         working-directory: cli
         run: cargo clippy --all-targets -- -D warnings
+      # A panic here was unreadable from outside the org: the job log needs a
+      # token not every collaborator has, and the annotation said no more than
+      # "exit code 101". That is how an ETXTBSY bug in poly-tools survived a
+      # full round of guessing before someone with the log pasted one line of
+      # it. Annotations and the job summary are public, so the failure goes
+      # there instead. libtest's JSON output is nightly-only; its text has a
+      # `failures:` block naming what broke and printing the panic, which is
+      # the part worth republishing.
       - name: Test
         working-directory: cli
-        run: cargo test --workspace --release
+        run: |
+          status=0
+          cargo test --workspace --release >"$RUNNER_TEMP/test.log" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/test.log"
+          if [ "$status" -ne 0 ]; then
+            body=$(awk '/^failures:$/ {found = 1} found' "$RUNNER_TEMP/test.log" | head -200)
+            # A compile error never reaches a failures block, and that is
+            # exactly when the log is least readable from here -- fall back to
+            # the end of the output, where rustc puts the error.
+            [ -n "$body" ] || body=$(tail -50 "$RUNNER_TEMP/test.log")
+            # Tildes, not backticks: a backtick fence inside the format string
+            # reads as a command substitution to shellcheck (SC2016), and
+            # markdown fences both ways.
+            printf '### cargo test (exit %s)\n\n~~~\n%s\n~~~\n' "$status" "$body" \
+              >>"$GITHUB_STEP_SUMMARY"
+            # One line per failed test, so the commit page names them without
+            # anyone opening the summary.
+            grep -E '^test .+ FAILED$' "$RUNNER_TEMP/test.log" |
+              sed -E 's/^test (.+) \.\.\. FAILED$/::error::cargo test: \1/' || true
+          fi
+          exit $status
       - name: Third-party notices are current (A9)
         run: |
           python3 tools/third-party-notices.py --self-test

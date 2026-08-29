@@ -13,7 +13,8 @@ POLY := cli/target/release/poly
 MANIFEST := --manifest-path cli/Cargo.toml
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint dogfood smoke probe e2e gates version bump control clean
+.PHONY: help build test lint notices pins dogfood smoke probe e2e gates version \
+	bump control clean
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -28,6 +29,20 @@ test: ## Rust unit and integration tests
 lint: ## rustfmt and clippy, both as CI runs them
 	cargo fmt --all $(MANIFEST) -- --check
 	cargo clippy --all-targets $(MANIFEST) -- -D warnings
+
+# Both are drift gates, and drift gates never fail on the machine that caused
+# the drift -- the notices file is regenerated from cargo metadata and the tool
+# lock from the registry, so whoever adds a dependency has both already right.
+# They fail for whoever pulls next, which is why they belong in a local gate.
+notices: ## THIRD-PARTY-NOTICES still matches cargo metadata
+	python3 tools/third-party-notices.py --self-test
+	python3 tools/third-party-notices.py --check
+
+# Offline on purpose: it compares the lock against the registry, nothing
+# upstream. A hand-edited version pin leaves every platform but this one on
+# trust-on-first-use, which looks exactly like a pin until someone downloads.
+pins: ## External tool versions and hashes are locked
+	python3 tools/tool-sync.py --check
 
 # poly run over its own repo. --strict so a missing toolchain fails here rather
 # than quietly formatting less than a developer's machine does.
@@ -44,8 +59,10 @@ smoke: build ## LSP handshake and formatting over stdio
 probe: build ## Language server proxy, against whichever servers are installed
 	python3 tools/lsp-proxy-probe.py $(POLY)
 
-e2e: ## Extension tests in a real extension host
-	cd extensions/lsp && pnpm test
+# typecheck first, same as CI: the extension host takes half a minute to boot,
+# and a type error does not need it.
+e2e: ## Typecheck and run the extension tests in a real extension host
+	cd extensions/lsp && pnpm run typecheck && pnpm test
 
 # Given the binary as well, so this asks the same question CI asks: not just
 # whether the files agree with each other, but whether the thing users run
@@ -53,7 +70,10 @@ e2e: ## Extension tests in a real extension host
 version: build ## Check every version string agrees, binary included
 	python3 tools/bump.py --check $(POLY)
 
-gates: lint test version dogfood smoke probe e2e ## Everything above, in CI's order
+# The order is ci.yml's, so a failure here fails at the same point CI would.
+# The list is ci.yml's too: this claims a green run means the push is already
+# checked the way CI checks it, and a gate missing from here makes that a lie.
+gates: lint test notices pins smoke probe dogfood version e2e ## Everything above, in CI's order
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0
