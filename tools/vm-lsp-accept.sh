@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Verify the two bugs the VM found are actually fixed in the *published* 0.6.0
-# binary, not a local build. Both live at the edges of the protocol, so this
-# drives the daemon by writing LSP framing by hand and reads what comes back.
-OUT="$HOME/poly-accept-060/lsp"
-BIN="${1:-$HOME/.vscode/extensions/ricky.poly-lsp-0.6.0/bin/poly.exe}"
+# Verify the two bugs the VM found stay fixed in the *published* binary, not a
+# local build. Both live at the edges of the protocol, so this drives the daemon
+# by writing LSP framing by hand and reads what comes back.
+#
+# Defaults to the newest installed extension's binary. Pass an older one as $1
+# to run the control -- the checks below have to fail against a poly without
+# the fixes, or they are proving nothing.
+OUT="$HOME/poly-lsp-accept"
+BIN="${1:-$(find "$HOME/.vscode/extensions" -maxdepth 3 -path '*ricky.poly-lsp-*/bin/poly.exe' | sort -V | tail -1)}"
 echo "binary: $BIN"
 rm -rf "$OUT" && mkdir -p "$OUT/rsproj/src" && cd "$OUT" || exit 1
 
