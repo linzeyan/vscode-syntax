@@ -19,6 +19,7 @@ use lsp_types::{
 };
 
 const INTERNAL_ERROR: i32 = -32603;
+const METHOD_NOT_FOUND: i32 = -32601;
 const FORMAT_PATHS: &str = "poly.formatPaths";
 
 pub fn run() -> Result<()> {
@@ -37,7 +38,7 @@ pub fn run() -> Result<()> {
 /// clang-format already follow (01 §4.3). A language server has to match the
 /// toolchain that built the project, and a version poly chose would be a
 /// version poly chose wrong.
-const LANGUAGE_SERVERS: &[(&str, &str)] = &[("go", "gopls")];
+const LANGUAGE_SERVERS: &[(&str, &str)] = &[("go", "gopls"), ("rust", "rust-analyzer")];
 
 struct Server {
     connection: Connection,
@@ -54,6 +55,9 @@ struct Server {
     /// A language that failed to start is remembered as absent so poly does
     /// not retry the spawn on every keystroke.
     downstream: HashMap<String, Option<crate::proxy::Downstream>>,
+    /// Language of the most recent `textDocument/completion`, which is the only
+    /// thing that can route a `completionItem/resolve`. See `route`.
+    last_completion: Option<String>,
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
     lint_hashes: HashMap<Url, u64>,
@@ -106,6 +110,7 @@ fn serve(connection: Connection) -> Result<()> {
         language_servers,
         init_params,
         downstream: HashMap::new(),
+        last_completion: None,
         lint_hashes: HashMap::new(),
         lint_diagnostics: HashMap::new(),
         format_errors: HashMap::new(),
@@ -133,18 +138,24 @@ fn serve(connection: Connection) -> Result<()> {
                     }
                 };
                 let response = match method.as_str() {
-                    "textDocument/formatting" => Some(server.on_formatting(request)),
-                    "textDocument/hover" => Some(server.on_hover(request)),
-                    "workspace/executeCommand" => Some(server.on_execute_command(request)),
-                    _ => None,
+                    "textDocument/formatting" => server.on_formatting(request),
+                    "textDocument/hover" => server.on_hover(request),
+                    "workspace/executeCommand" => server.on_execute_command(request),
+                    // Reached poly because no downstream claimed it. Dropping
+                    // it is not a harmless no-op: the editor waits on that id
+                    // for the rest of the session, so the feature looks hung
+                    // instead of absent.
+                    _ => Response::new_err(
+                        request.id,
+                        METHOD_NOT_FOUND,
+                        format!("poly does not handle {method}"),
+                    ),
                 };
-                if let Some(response) = response {
-                    eprintln!(
-                        "[poly] {method} {:.1}ms",
-                        started.elapsed().as_secs_f64() * 1000.0
-                    );
-                    server.connection.sender.send(Message::Response(response))?;
-                }
+                eprintln!(
+                    "[poly] {method} {:.1}ms",
+                    started.elapsed().as_secs_f64() * 1000.0
+                );
+                server.connection.sender.send(Message::Response(response))?;
             }
             Message::Notification(notification) => server.on_notification(notification)?,
             // Either an answer to something poly asked the editor (its own
@@ -172,15 +183,14 @@ impl Server {
             return Ok(Some(request));
         }
         // completionItem/resolve names no document -- it is a follow-up about
-        // an item some server already produced. With one server that is not
-        // ambiguous; with two it will be, and the item will have to carry its
-        // own origin. Noted rather than guessed at.
+        // an item some server already produced, and once two servers are up
+        // there is nothing in the request to tell them apart. The item's `data`
+        // field could carry the origin, but that field belongs to the server
+        // that made the item and rewriting it would break resolve outright.
+        // A resolve is always about the list currently on screen, and there is
+        // only ever one of those, so the last completion's language is it.
         let language = match request.method.as_str() {
-            "completionItem/resolve" => self
-                .downstream
-                .iter()
-                .find(|(_, server)| server.is_some())
-                .map(|(language, _)| language.clone()),
+            "completionItem/resolve" => self.last_completion.clone(),
             _ => request
                 .params
                 .get("textDocument")
@@ -192,6 +202,9 @@ impl Server {
         let Some(language) = language else {
             return Ok(Some(request));
         };
+        if request.method == "textDocument/completion" {
+            self.last_completion = Some(language.clone());
+        }
         match self.downstream.get_mut(&language) {
             Some(Some(server)) => {
                 server.send(Message::Request(request))?;
@@ -270,8 +283,10 @@ impl Server {
                 self.register_downstream(&server);
                 self.downstream.insert(language.to_string(), Some(server));
             }
+            // Every error out of `start` already names the server, so this
+            // does not repeat it.
             Err(e) => {
-                eprintln!("[poly] {name}: {e:#}");
+                eprintln!("[poly] {e:#}");
                 self.downstream.insert(language.to_string(), None);
             }
         }
@@ -454,17 +469,6 @@ impl Server {
     }
 
     fn publish_lint(&mut self, uri: &Url) -> Result<()> {
-        // A proxied language publishes its own diagnostics, and
-        // publishDiagnostics replaces the whole set for a uri: poly sending an
-        // empty list here would wipe gopls's findings on every save until it
-        // happened to republish. poly has nothing to add for these languages
-        // yet -- wiring golangci-lint in alongside means merging two sources,
-        // which is its own piece of work.
-        if let Some(language) = self.language_of(uri) {
-            if matches!(self.downstream.get(&language), Some(Some(_))) {
-                return Ok(());
-            }
-        }
         let Some(text) = self.documents.get(uri) else {
             return Ok(());
         };
@@ -492,10 +496,30 @@ impl Server {
     }
 
     /// Lint findings plus the formatter's parse failure, if it has one.
+    ///
+    /// Silent for a language poly proxies: `publishDiagnostics` replaces the
+    /// whole set for a uri, so anything poly says here erases what the
+    /// downstream server said — and it says more, and better. A parse failure
+    /// that stops rustfmt is one rust-analyzer already reports, with a range
+    /// that covers the problem rather than the point the formatter gave up at.
+    ///
+    /// Every publish poly makes about its own findings goes through here, which
+    /// is why the check lives here and not in the two callers. A missing
+    /// formatter is not affected: that path returns without an error and says
+    /// so on stderr, so nothing is swallowed by staying quiet in the editor.
     fn publish_all(&mut self, uri: &Url) -> Result<()> {
+        if self.is_proxied(uri) {
+            return Ok(());
+        }
         let mut diagnostics = self.lint_diagnostics.get(uri).cloned().unwrap_or_default();
         diagnostics.extend(self.format_errors.get(uri).cloned());
         self.publish(uri, diagnostics)
+    }
+
+    /// Is a downstream server answering for this document?
+    fn is_proxied(&self, uri: &Url) -> bool {
+        self.language_of(uri)
+            .is_some_and(|language| matches!(self.downstream.get(&language), Some(Some(_))))
     }
 
     fn publish(&mut self, uri: &Url, diagnostics: Vec<lsp_types::Diagnostic>) -> Result<()> {

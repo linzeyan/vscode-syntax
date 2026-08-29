@@ -149,16 +149,19 @@ jobs:
       # else's server", so the gate needs that server present. Installed here
       # rather than left to the probe's skip: a check that only ever skips is
       # a check nobody is running.
-      - name: Install gopls
+      - name: Install language servers
         run: |
           go install golang.org/x/tools/gopls@v0.23.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          rustup component add rust-analyzer
       - name: Language server proxy probe
         run: |
-          # The probe skips when gopls is missing, which is right on a
-          # developer's machine and wrong here: a gate that silently turns
-          # into a no-op is worse than no gate.
+          # The probe skips a language when its server is missing, which is
+          # right on a developer's machine and wrong here: a gate that silently
+          # turns into a no-op is worse than no gate. Assert both are present
+          # before running it.
           gopls version
+          rust-analyzer --version
           python tools/lsp-proxy-probe.py cli/target/release/poly
       # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
       # two commands the README tells users to put in their CI. This was a

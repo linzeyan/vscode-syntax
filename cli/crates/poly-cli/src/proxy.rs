@@ -138,11 +138,18 @@ impl Downstream {
         .with_context(|| format!("sending initialize to {name}"))?;
 
         let capabilities = loop {
-            let message = rx.recv_timeout(HANDSHAKE_TIMEOUT).map_err(|_| {
-                anyhow!(
+            let message = rx.recv_timeout(HANDSHAKE_TIMEOUT).map_err(|e| match e {
+                // The channel closes when the child's stdout hits EOF, so this
+                // is the server having exited. Worth telling apart: "it died"
+                // and "it is ignoring us" have different causes, and the first
+                // is answered immediately rather than after the full wait.
+                mpsc::RecvTimeoutError::Disconnected => {
+                    anyhow!("{name} exited without answering initialize")
+                }
+                mpsc::RecvTimeoutError::Timeout => anyhow!(
                     "{name} did not answer initialize within {}s",
                     HANDSHAKE_TIMEOUT.as_secs()
-                )
+                ),
             })?;
             match message {
                 Message::Response(response) if response.id == handshake => {
@@ -320,6 +327,39 @@ pub fn nothing(id: RequestId) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A server that dies on startup must fail the spawn, not the daemon.
+    ///
+    /// This is not hypothetical: a rustup or mise shim for a component that
+    /// is not installed sits on PATH, resolves, runs, and exits — poly cannot
+    /// tell those apart from a working server until it tries. Waiting out the
+    /// full handshake timeout for one would freeze formatting and lint for
+    /// every language, which is a far worse outcome than no completion.
+    #[test]
+    fn a_server_that_exits_fails_fast_and_says_so() {
+        let started = std::time::Instant::now();
+        let outcome = Downstream::start(
+            "notaserver",
+            "go",
+            // Prints a version and exits: a process that speaks no LSP at all,
+            // which is exactly what a broken shim looks like from here.
+            &std::env::current_exe().unwrap(),
+            &serde_json::json!({}),
+            Box::new(|_| {}),
+        );
+        let error = match outcome {
+            Ok(_) => panic!("a process that speaks no LSP cannot be a language server"),
+            Err(e) => e,
+        };
+        assert!(
+            error.to_string().contains("exited without answering"),
+            "{error:#}"
+        );
+        assert!(
+            started.elapsed() < HANDSHAKE_TIMEOUT,
+            "waited out the full timeout for a server that was already gone"
+        );
+    }
 
     #[test]
     fn tagging_survives_a_round_trip() {

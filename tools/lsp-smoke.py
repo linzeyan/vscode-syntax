@@ -191,6 +191,16 @@ assert summary and summary["changed"], f"expected batch change: {resp}"
 with open(batch_file) as f:
     assert f.read() == '{ "b": 1, "a": 2 }\n', "batch format did not rewrite file"
 
+# Every request gets an answer, including the ones poly does not implement.
+# Silence is not a polite decline: the editor keeps waiting on that id, so the
+# feature looks hung rather than absent. Caught for real by a probe that hung
+# for ten minutes instead of failing.
+send({"jsonrpc": "2.0", "id": 90, "method": "textDocument/rename", "params": {}})
+declined = recv_response(90)
+assert declined.get("error", {}).get("code") == -32601, (
+    f"expected a decline: {declined}"
+)
+
 # Idle RSS after real work (budget: <150MB, 02 §9). ps works on mac/linux;
 # the Windows number comes from the VM checklist.
 if sys.platform != "win32":
@@ -208,5 +218,6 @@ except subprocess.TimeoutExpired:
     raise SystemExit("FAIL: server did not exit after `exit` notification")
 assert proc.returncode == 0, f"server exit code {proc.returncode}"
 print(
-    "LSP SMOKE PASS: formatting, diagnostics, rule hover, batch executeCommand, clean shutdown"
+    "LSP SMOKE PASS: formatting, diagnostics, rule hover, batch executeCommand,"
+    " unhandled methods declined, clean shutdown"
 )
