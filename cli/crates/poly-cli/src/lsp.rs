@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyhow::Result;
@@ -118,11 +119,48 @@ struct Server {
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
     lint_hashes: HashMap<Url, u64>,
-    /// publishDiagnostics replaces the whole set for a uri, so the two sources
-    /// cannot each publish on their own — the last one to speak would erase the
-    /// other. Both are kept here and merged on every publish.
-    lint_diagnostics: HashMap<Url, Vec<lsp_types::Diagnostic>>,
-    format_errors: HashMap<Url, lsp_types::Diagnostic>,
+    diagnostics: Arc<Mutex<Diagnostics>>,
+}
+
+/// Every source of diagnostics for a document, in one place.
+///
+/// `publishDiagnostics` replaces the whole set for a uri, so no source can
+/// publish on its own — the last one to speak erases the rest. Everything is
+/// kept here and every publish sends the union.
+///
+/// Shared rather than owned by `Server` because the downstream half arrives on
+/// another thread: a language server publishes when it has something to say,
+/// not when the editor asks poly a question.
+#[derive(Default)]
+struct Diagnostics {
+    lint: HashMap<Url, Vec<lsp_types::Diagnostic>>,
+    format: HashMap<Url, lsp_types::Diagnostic>,
+    downstream: HashMap<Url, Vec<lsp_types::Diagnostic>>,
+}
+
+impl Diagnostics {
+    /// The whole set for a uri, as the editor should see it.
+    ///
+    /// The formatter's parse failure is dropped for a proxied document on
+    /// purpose: it is one the language server already reports, with a range
+    /// covering the problem rather than the point the formatter gave up at.
+    /// Lint findings are not dropped — selene and swiftlint report things no
+    /// language server looks for, and silently losing them on a setting the
+    /// user turned on for *more* information would be the wrong trade.
+    fn merged(&self, uri: &Url, proxied: bool) -> Vec<lsp_types::Diagnostic> {
+        let mut all = self.lint.get(uri).cloned().unwrap_or_default();
+        if !proxied {
+            all.extend(self.format.get(uri).cloned());
+        }
+        all.extend(self.downstream.get(uri).cloned().unwrap_or_default());
+        all
+    }
+
+    fn forget(&mut self, uri: &Url) {
+        self.lint.remove(uri);
+        self.format.remove(uri);
+        self.downstream.remove(uri);
+    }
 }
 
 fn serve(connection: Connection) -> Result<()> {
@@ -171,8 +209,7 @@ fn serve(connection: Connection) -> Result<()> {
         downstream: HashMap::new(),
         last_completion: None,
         lint_hashes: HashMap::new(),
-        lint_diagnostics: HashMap::new(),
-        format_errors: HashMap::new(),
+        diagnostics: Arc::new(Mutex::new(Diagnostics::default())),
     };
 
     // A receive error means the editor closed the pipe: nothing left to serve.
@@ -335,6 +372,7 @@ impl Server {
             return;
         };
         let sender = self.connection.sender.clone();
+        let diagnostics = Arc::clone(&self.diagnostics);
         let started = Instant::now();
         let server = crate::proxy::Downstream::start(
             name,
@@ -344,7 +382,10 @@ impl Server {
             self.language_server_logs,
             &self.init_params,
             Box::new(move |message| {
-                let _ = sender.send(message);
+                // Diagnostics are the one thing that cannot just be passed
+                // along: the notification replaces the whole set for the uri,
+                // so forwarding it verbatim erases poly's own findings.
+                let _ = sender.send(merge_publish(&diagnostics, message));
             }),
         );
         match server {
@@ -416,7 +457,7 @@ impl Server {
         };
         match format_document(&uri, &text) {
             Ok(edits) => {
-                if self.format_errors.remove(&uri).is_some() {
+                if self.lock().format.remove(&uri).is_some() {
                     let _ = self.publish_all(&uri);
                 }
                 Response::new_ok(request.id, serde_json::json!(edits))
@@ -426,7 +467,8 @@ impl Server {
             // clicked; as a diagnostic it lands in Problems with a squiggle
             // where the parser stopped, which is what every other linter does.
             Err(error) => {
-                self.format_errors
+                self.lock()
+                    .format
                     .insert(uri.clone(), format_diagnostic(&error.to_string(), &text));
                 let _ = self.publish_all(&uri);
                 Response::new_ok(request.id, serde_json::json!([]))
@@ -448,7 +490,8 @@ impl Server {
         };
         let at = params.text_document_position_params;
         let hover = self
-            .lint_diagnostics
+            .lock()
+            .lint
             .get(&at.text_document.uri)
             .and_then(|diagnostics| rule_hover(diagnostics, at.position));
         Response::new_ok(request.id, serde_json::json!(hover))
@@ -506,8 +549,7 @@ impl Server {
                 let uri = params.text_document.uri;
                 self.documents.remove(&uri);
                 self.lint_hashes.remove(&uri);
-                self.lint_diagnostics.remove(&uri);
-                self.format_errors.remove(&uri);
+                self.lock().forget(&uri);
                 // Clear diagnostics so closed files don't linger in Problems.
                 self.publish(&uri, Vec::new())?;
             }
@@ -573,28 +615,26 @@ impl Server {
             started.elapsed().as_secs_f64() * 1000.0,
             diagnostics.len()
         );
-        self.lint_diagnostics.insert(uri.clone(), diagnostics);
+        self.lock().lint.insert(uri.clone(), diagnostics);
         self.publish_all(uri)
     }
 
-    /// Lint findings plus the formatter's parse failure, if it has one.
+    fn lock(&self) -> std::sync::MutexGuard<'_, Diagnostics> {
+        // Poisoned means a thread panicked mid-update. The critical sections
+        // here are map reads and inserts, so that cannot happen without a bug
+        // worth crashing on.
+        self.diagnostics.lock().expect("diagnostics lock")
+    }
+
+    /// Publish everything known about a document, from whichever source.
     ///
-    /// Silent for a language poly proxies: `publishDiagnostics` replaces the
-    /// whole set for a uri, so anything poly says here erases what the
-    /// downstream server said — and it says more, and better. A parse failure
-    /// that stops rustfmt is one rust-analyzer already reports, with a range
-    /// that covers the problem rather than the point the formatter gave up at.
-    ///
-    /// Every publish poly makes about its own findings goes through here, which
-    /// is why the check lives here and not in the two callers. A missing
-    /// formatter is not affected: that path returns without an error and says
-    /// so on stderr, so nothing is swallowed by staying quiet in the editor.
+    /// Every publish poly makes about its own findings goes through here, so
+    /// this is the one place that has to know a downstream server may also have
+    /// something to say about the same uri. A missing formatter is unaffected:
+    /// that path returns without an error and says so on stderr, so nothing is
+    /// swallowed by staying quiet in the editor.
     fn publish_all(&mut self, uri: &Url) -> Result<()> {
-        if self.is_proxied(uri) {
-            return Ok(());
-        }
-        let mut diagnostics = self.lint_diagnostics.get(uri).cloned().unwrap_or_default();
-        diagnostics.extend(self.format_errors.get(uri).cloned());
+        let diagnostics = self.lock().merged(uri, self.is_proxied(uri));
         self.publish(uri, diagnostics)
     }
 
@@ -773,6 +813,44 @@ fn external_lint(
     Ok(issues)
 }
 
+/// Record a downstream server's diagnostics and hand back what to send instead.
+///
+/// Anything that is not a `publishDiagnostics` travels on untouched. So does a
+/// `publishDiagnostics` whose params will not parse: passing the server's own
+/// notification through is no worse than what poly did before, and dropping it
+/// would lose the only report of a real problem.
+///
+/// The document is proxied by definition — a server only publishes about files
+/// it was given — so the formatter's parse failure stays suppressed here for
+/// the same reason `merged` suppresses it.
+fn merge_publish(store: &Mutex<Diagnostics>, message: Message) -> Message {
+    let Message::Notification(notification) = &message else {
+        return message;
+    };
+    if notification.method != "textDocument/publishDiagnostics" {
+        return message;
+    }
+    let Ok(params) =
+        serde_json::from_value::<PublishDiagnosticsParams>(notification.params.clone())
+    else {
+        return message;
+    };
+    let mut store = store.lock().expect("diagnostics lock");
+    store
+        .downstream
+        .insert(params.uri.clone(), params.diagnostics);
+    let merged = PublishDiagnosticsParams {
+        diagnostics: store.merged(&params.uri, true),
+        uri: params.uri,
+        version: params.version,
+    };
+    drop(store);
+    Message::Notification(Notification::new(
+        "textDocument/publishDiagnostics".to_string(),
+        merged,
+    ))
+}
+
 fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     let config = poly_core::Config::discover(path).unwrap_or_else(|_| poly_core::Config::empty());
     let Some(lang) = config.language(path) else {
@@ -939,6 +1017,118 @@ fn full_range(text: &str) -> Range {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn diagnostic(source: &str) -> lsp_types::Diagnostic {
+        lsp_types::Diagnostic {
+            source: Some(source.to_string()),
+            message: source.to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn sources(diagnostics: &[lsp_types::Diagnostic]) -> Vec<&str> {
+        diagnostics
+            .iter()
+            .map(|d| d.source.as_deref().unwrap_or("?"))
+            .collect()
+    }
+
+    fn uri() -> Url {
+        Url::parse("file:///a.lua").expect("valid uri")
+    }
+
+    /// Turning the proxy on must not cost the user findings it never replaces.
+    ///
+    /// selene and swiftlint are the two linters that run in the editor for a
+    /// proxied language, and no language server looks for what they look for.
+    /// Before these were merged, whichever side published last erased the
+    /// other, and the setting silently traded lint away for language features.
+    #[test]
+    fn a_proxied_document_keeps_both_halves() {
+        let mut store = Diagnostics::default();
+        store.lint.insert(uri(), vec![diagnostic("selene")]);
+        store
+            .downstream
+            .insert(uri(), vec![diagnostic("Lua Diagnostics.")]);
+
+        assert_eq!(
+            sources(&store.merged(&uri(), true)),
+            ["selene", "Lua Diagnostics."]
+        );
+    }
+
+    /// The formatter's parse failure is the one thing a server does replace,
+    /// with a range covering the problem rather than the point rustfmt gave up.
+    #[test]
+    fn a_proxied_document_drops_only_the_format_error() {
+        let mut store = Diagnostics::default();
+        store.lint.insert(uri(), vec![diagnostic("selene")]);
+        store.format.insert(uri(), diagnostic("poly/format"));
+
+        assert_eq!(
+            sources(&store.merged(&uri(), false)),
+            ["selene", "poly/format"]
+        );
+        assert_eq!(sources(&store.merged(&uri(), true)), ["selene"]);
+    }
+
+    /// The downstream half arrives as a notification poly has to rewrite in
+    /// flight; everything else it forwards has to come out unchanged.
+    #[test]
+    fn merge_publish_rewrites_only_diagnostics() {
+        let store = Mutex::new(Diagnostics::default());
+        store
+            .lock()
+            .expect("lock")
+            .lint
+            .insert(uri(), vec![diagnostic("selene")]);
+
+        let incoming = Message::Notification(Notification::new(
+            "textDocument/publishDiagnostics".to_string(),
+            PublishDiagnosticsParams {
+                uri: uri(),
+                diagnostics: vec![diagnostic("Lua Diagnostics.")],
+                version: None,
+            },
+        ));
+        let Message::Notification(out) = merge_publish(&store, incoming) else {
+            panic!("still a notification");
+        };
+        let params: PublishDiagnosticsParams =
+            serde_json::from_value(out.params).expect("params survive the rewrite");
+        assert_eq!(sources(&params.diagnostics), ["selene", "Lua Diagnostics."]);
+        // Recorded, not just forwarded: poly's next publish has to include the
+        // server's half too, or saving the file would erase it again.
+        assert_eq!(
+            sources(&store.lock().expect("lock").merged(&uri(), true)),
+            ["selene", "Lua Diagnostics."]
+        );
+
+        let other = Message::Notification(Notification::new(
+            "window/logMessage".to_string(),
+            serde_json::json!({"type": 3, "message": "hi"}),
+        ));
+        let Message::Notification(out) = merge_publish(&store, other) else {
+            panic!("untouched");
+        };
+        assert_eq!(out.method, "window/logMessage");
+    }
+
+    /// A publishDiagnostics poly cannot parse still has to reach the editor:
+    /// the server is reporting a real problem either way, and dropping it would
+    /// make poly the reason a diagnostic vanished.
+    #[test]
+    fn merge_publish_passes_unparsable_diagnostics_through() {
+        let store = Mutex::new(Diagnostics::default());
+        let incoming = Message::Notification(Notification::new(
+            "textDocument/publishDiagnostics".to_string(),
+            serde_json::json!({"uri": "not a uri"}),
+        ));
+        let Message::Notification(out) = merge_publish(&store, incoming) else {
+            panic!("still a notification");
+        };
+        assert_eq!(out.params, serde_json::json!({"uri": "not a uri"}));
+    }
 
     /// The routing table is read in both directions and they have to agree.
     ///

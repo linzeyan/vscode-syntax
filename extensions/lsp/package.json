@@ -107,7 +107,7 @@
         "poly.languageServers": {
           "type": "boolean",
           "default": false,
-          "description": "Run the language server a project's own toolchain provides and route hover, go-to-definition, type definition, implementation, references, outline and completion to it. Six are known: gopls (Go), rust-analyzer (Rust), clangd (C/C++), sourcekit-lsp (Swift), terraform-ls (Terraform), lua-language-server (Lua). Off by default: it overlaps with the official extension for that language, so remove that extension before turning this on. Poly never installs these servers — they come from PATH, and which features work is whatever the server itself declares."
+          "description": "Run the language server a project's own toolchain provides and route hover, go-to-definition, type definition, implementation, references, outline and completion to it. Six are known: gopls (Go), rust-analyzer (Rust), clangd (C/C++), sourcekit-lsp (Swift), terraform-ls (Terraform), lua-language-server (Lua). Poly's own lint findings stay: the server's diagnostics are merged with them rather than replacing them, so selene and swiftlint keep reporting. Off by default: it overlaps with the official extension for that language, so remove that extension before turning this on. Poly never installs these servers — they come from PATH, and which features work is whatever the server itself declares."
         },
         "poly.languageServerLogs": {
           "type": "boolean",

@@ -40,9 +40,11 @@
   rust-analyzer（Rust）、clangd（C／C++）、sourcekit-lsp（Swift）、terraform-ls
   （Terraform）、lua-language-server（Lua）。poly **不實作**這些功能也不代裝
   server——只從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。實際能用
-  哪幾項由 server 自己宣告：terraform-ls 只給五項，sourcekit-lsp 六項。預設關閉是
-  因為它會跟你八成已經裝了的官方 extension 重疊，要用請先移除那個 extension。改完
-  要重新載入視窗。
+  哪幾項由 server 自己宣告：terraform-ls 只給五項，sourcekit-lsp 六項。**poly 自己
+  的 lint 不會因此消失**：server 的診斷是跟 poly 的合併，不是取代，所以 lua 的
+  selene 與 swift 的 swiftlint 照常回報（LSP 的診斷通知會整批取代同一個檔案的舊
+  結果，所以這件事得由 poly 主動合併才會成立）。預設關閉是因為它會跟你八成已經裝了
+  的官方 extension 重疊，要用請先移除那個 extension。改完要重新載入視窗。
 - **`poly.languageServerLogs`（預設開啟）**：把 language server 自己的 stderr 轉進
   Poly 輸出面板。clangd 與 terraform-ls 每個請求寫一行，嫌吵就關掉——關掉是整份丟棄，
   不是去叫各家 server 安靜（有些根本沒這種旗標）。poly 自己的訊息（server 不在 PATH、
