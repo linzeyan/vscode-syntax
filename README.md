@@ -31,6 +31,9 @@
   File／Folder／Workspace／Git Repo／Git Changed Files。
 - **Lint**：存檔即時 diagnostics 進 Problems panel；`Poly: Lint (poly check)`
   在終端跑完整 CLI。
+- **規則說明**：滑鼠移到 SQL 的波浪線上會顯示 sqruff 該條規則的 anti-pattern／
+  best-practice 全文。sqruff 沒有文件站可連，那份說明編在 binary 裡，版本精確、
+  離線可讀。其他工具有自己的規則頁，走規則代碼上的超連結。
 - **專案內工具優先**：偵測到專案的 biome／prettier／eslint／rustfmt 就用它們，
   避免和團隊 CI 結果不一致。
 - 背景檢查 GitHub Releases（預設 7 天一次，可調可關），一鍵同時更新兩個 extension。
@@ -345,6 +348,10 @@ use-tabs = false
 [lint]
 exclude = ["third_party/**"]
 
+[lint.per-file-ignores] # 只關掉某條規則，檔案照樣 lint
+"tests/fixtures/**" = ["ruff/F401"]
+"vendor/*.sh" = ["shellcheck/*"] # tool/* 是整支工具
+
 [walk]
 include-hidden = false # 預設；true 會連點開頭的路徑一起走（.git/ 仍然跳過）
 
@@ -352,6 +359,12 @@ include-hidden = false # 預設；true 會連點開頭的路徑一起走（.git/
 shellcheck = "C:/tools/shellcheck.exe"
 tflint = "off"
 ```
+
+`[lint.per-file-ignores]` 的規則代碼就是輸出裡印的那個——看到
+`[ruff/F401]` 就複製 `ruff/F401`，沒有第二套語法要查。它與 `exclude` 的差別是範圍：
+exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同一個檔的其他問題照
+報。少了工具名的 `"F401"` 會讓 poly.toml 解析失敗，而不是安靜地什麼都沒關掉。編輯
+器與 CI 讀同一份設定，所以關掉的規則在 Problems 裡也不會出現。
 
 `[format.<lang>]` 只認 `line-width`（1–1000）／`indent-width`（1–16）／`use-tabs`
 三個鍵，拼錯或超出範圍都會直接讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部

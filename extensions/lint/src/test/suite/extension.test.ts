@@ -150,6 +150,39 @@ suite("poly-lint in a real editor", () => {
     );
   });
 
+  // sqruff has no documentation site, so its findings carry no link and the
+  // prose compiled into the binary is the only answer to "why is this a rule".
+  // The server advertises hoverProvider and the client registers it from that
+  // alone -- no extension code is involved, which is exactly why only the real
+  // editor can prove the hover arrives.
+  test("hovering a sqruff finding shows its rule documentation", async () => {
+    const uri = writeFile("hover.sql", "select a,b from t\n");
+    await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument(uri),
+    );
+    const flagged = await eventually(
+      "a sqruff diagnostic to hover",
+      () => vscode.languages.getDiagnostics(uri).find((d) => d.source === "sqruff"),
+    );
+
+    const hovers = await eventually("the rule hover", async () => {
+      const found = await vscode.commands.executeCommand<vscode.Hover[]>(
+        "vscode.executeHoverProvider",
+        uri,
+        flagged.range.start,
+      );
+      return found?.length ? found : undefined;
+    });
+    const text = hovers
+      .flatMap((h) => h.contents)
+      .map((c) => (typeof c === "string" ? c : c.value))
+      .join("\n");
+    assert.ok(text.includes("**sqruff/"), `no rule heading: ${text}`);
+    // sqruff's own section headings: if these are gone the hover has stopped
+    // being the tool's documentation and become poly's paraphrase of it.
+    assert.ok(text.includes("Best practice"), `not the rule docs: ${text}`);
+  });
+
   // A parse failure used to come back as an LSP error, which VSCode shows as a
   // toast that names no line and cannot be clicked. Only the real editor can
   // prove it now lands in Problems instead.

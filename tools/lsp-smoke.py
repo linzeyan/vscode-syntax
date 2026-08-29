@@ -78,6 +78,7 @@ send(
 init = recv_response(1)
 caps = init["result"]["capabilities"]
 assert caps.get("documentFormattingProvider"), f"no formatting capability: {caps}"
+assert caps.get("hoverProvider"), f"no hover capability: {caps}"
 send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
 
 send(
@@ -131,6 +132,43 @@ diag = wait_diagnostics(SQL_URI)
 assert diag["params"]["diagnostics"], f"expected sqruff diagnostics: {diag}"
 assert diag["params"]["diagnostics"][0]["source"] == "sqruff", diag
 
+# Hover over that finding: sqruff publishes no rule pages, so the diagnostic
+# carries no docs link and this prose -- compiled into the binary -- is the only
+# route to "why is this a rule".
+flagged = diag["params"]["diagnostics"][0]
+send(
+    {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "textDocument/hover",
+        "params": {
+            "textDocument": {"uri": SQL_URI},
+            "position": flagged["range"]["start"],
+        },
+    }
+)
+hover = recv_response(4).get("result")
+assert hover, f"expected a hover on {flagged['code']}"
+assert hover["contents"]["kind"] == "markdown", hover
+assert hover["contents"]["value"].startswith(f"**sqruff/{flagged['code']}**"), hover
+assert "Best practice" in hover["contents"]["value"], hover
+assert hover["range"] == flagged["range"], hover
+
+# Off the finding poly has nothing to say, and must say so rather than shadow
+# whatever else the editor would have shown there.
+send(
+    {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "textDocument/hover",
+        "params": {
+            "textDocument": {"uri": SQL_URI},
+            "position": {"line": 50, "character": 0},
+        },
+    }
+)
+assert recv_response(5).get("result") is None, "hover away from any finding"
+
 # Batch formatting via executeCommand, shared code path with the CLI.
 batch_dir = tempfile.mkdtemp(prefix="poly-smoke-")
 batch_file = os.path.join(batch_dir, "batch.json")
@@ -169,4 +207,6 @@ except subprocess.TimeoutExpired:
     proc.kill()
     raise SystemExit("FAIL: server did not exit after `exit` notification")
 assert proc.returncode == 0, f"server exit code {proc.returncode}"
-print("LSP SMOKE PASS: formatting, diagnostics, batch executeCommand, clean shutdown")
+print(
+    "LSP SMOKE PASS: formatting, diagnostics, rule hover, batch executeCommand, clean shutdown"
+)

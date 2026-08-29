@@ -128,6 +128,51 @@ struct RawLint {
     exclude: Vec<String>,
     #[serde(rename = "fail-on")]
     fail_on: Option<String>,
+    /// Glob -> the `tool/rule` codes that path may not report. See
+    /// `Config::lint_ignored`.
+    #[serde(rename = "per-file-ignores")]
+    per_file_ignores: BTreeMap<String, Vec<String>>,
+}
+
+/// One entry of a `[lint.per-file-ignores]` list.
+///
+/// Spelled exactly as poly prints it — `ruff/F401` is what `[ruff/F401]` in a
+/// finding means — so silencing a rule is copying the code out of the output
+/// rather than looking up a syntax. `ruff/*` covers every rule from one tool.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Suppression {
+    tool: String,
+    /// `None` for `tool/*`.
+    rule: Option<String>,
+}
+
+impl Suppression {
+    fn parse(entry: &str, pattern: &str) -> Result<Suppression> {
+        // Shape only: an unknown tool or rule name is self-revealing (the
+        // finding keeps appearing), but `"F401"` with no tool looks like a
+        // spelling poly ought to understand and would silently match nothing.
+        let (tool, rule) = entry
+            .split_once('/')
+            .filter(|(t, r)| !t.is_empty() && !r.is_empty())
+            .with_context(|| {
+                format!(
+                    "[lint.per-file-ignores] {pattern:?}: {entry:?} is not a rule code — write it \
+                     the way poly prints it, `tool/rule` (e.g. \"ruff/F401\") or `tool/*`"
+                )
+            })?;
+        anyhow::ensure!(
+            !rule.contains('/'),
+            "[lint.per-file-ignores] {pattern:?}: {entry:?} has more than one `/`"
+        );
+        Ok(Suppression {
+            tool: tool.to_string(),
+            rule: (rule != "*").then(|| rule.to_string()),
+        })
+    }
+
+    fn matches(&self, source: &str, code: &str) -> bool {
+        self.tool == source && self.rule.as_deref().is_none_or(|rule| rule == code)
+    }
 }
 
 /// Per-language formatter knobs from `[format.<lang>]`.
@@ -202,6 +247,9 @@ pub struct Config {
     pub lint_fail_on: crate::diag::FailOn,
     format_exclude_set: GlobSet,
     lint_exclude_set: GlobSet,
+    /// `[lint.per-file-ignores]`, in file order. A GlobSet would say only
+    /// *that* something matched, and each pattern carries its own rule list.
+    lint_ignores: Vec<(GlobMatcher, Vec<Suppression>)>,
     format_options: BTreeMap<String, FormatOptions>,
     pub tools: BTreeMap<String, String>,
     /// `[walk] include-hidden`. A project decision rather than a per-run one:
@@ -268,6 +316,7 @@ impl Config {
             lint_fail_on: parse_fail_on(raw.lint.fail_on.as_deref(), "lint")?,
             format_exclude_set: compile_excludes(&raw.format.exclude)?,
             lint_exclude_set: compile_excludes(&raw.lint.exclude)?,
+            lint_ignores: compile_per_file_ignores(&raw.lint.per_file_ignores)?,
             format_exclude: raw.format.exclude,
             lint_exclude: raw.lint.exclude,
             format_options: raw.format.languages,
@@ -289,6 +338,7 @@ impl Config {
             lint_exclude: Vec::new(),
             format_exclude_set: GlobSet::empty(),
             lint_exclude_set: GlobSet::empty(),
+            lint_ignores: Vec::new(),
             format_options: BTreeMap::new(),
             tools: BTreeMap::new(),
             include_hidden: false,
@@ -308,11 +358,38 @@ impl Config {
         if set.is_empty() {
             return false;
         }
-        let relative = match &self.root {
+        set.is_match(self.relative(path))
+    }
+
+    /// Is this finding silenced for this file by `[lint.per-file-ignores]`?
+    ///
+    /// The narrower neighbour of `[lint] exclude`: a test fixture with a
+    /// deliberate typo or a vendored script with one unquoted expansion is
+    /// still worth linting for everything *else*, and dropping the whole file
+    /// to silence one rule is how a suppression stops being reviewable.
+    ///
+    /// Called with the same `source` and `code` the terminal prints as
+    /// `[source/code]`, so what you read in the output is what you paste into
+    /// the config. Anchored at the config's own directory like `exclude`, and
+    /// consulted by the CLI and the daemon alike — a rule silenced only in the
+    /// editor is the editor/CI split A4 exists to prevent.
+    pub fn lint_ignored(&self, path: &Path, source: &str, code: &str) -> bool {
+        if self.lint_ignores.is_empty() {
+            return false;
+        }
+        let relative = self.relative(path);
+        self.lint_ignores.iter().any(|(matcher, entries)| {
+            matcher.is_match(relative) && entries.iter().any(|e| e.matches(source, code))
+        })
+    }
+
+    /// Path as the patterns in this config were written: relative to the
+    /// directory holding the poly.toml they came from.
+    fn relative<'p>(&self, path: &'p Path) -> &'p Path {
+        match &self.root {
             Some(root) => path.strip_prefix(root).unwrap_or(path),
             None => path,
-        };
-        set.is_match(relative)
+        }
     }
 
     /// Formatter knobs for `lang`, from `[format.<lang>]`. Nested poly.toml
@@ -348,6 +425,22 @@ fn parse_fail_on(value: Option<&str>, section: &str) -> Result<crate::diag::Fail
         None => Ok(crate::diag::FailOn::default()),
         Some(v) => crate::diag::FailOn::parse(v).map_err(|e| anyhow::anyhow!("[{section}] {e}")),
     }
+}
+
+fn compile_per_file_ignores(
+    raw: &BTreeMap<String, Vec<String>>,
+) -> Result<Vec<(GlobMatcher, Vec<Suppression>)>> {
+    let mut compiled = Vec::new();
+    for (pattern, entries) in raw {
+        let glob = Glob::new(pattern)
+            .with_context(|| format!("invalid [lint.per-file-ignores] pattern {pattern:?}"))?;
+        let entries = entries
+            .iter()
+            .map(|entry| Suppression::parse(entry, pattern))
+            .collect::<Result<Vec<_>>>()?;
+        compiled.push((glob.compile_matcher(), entries));
+    }
+    Ok(compiled)
 }
 
 fn compile_excludes(patterns: &[String]) -> Result<GlobSet> {
@@ -682,6 +775,71 @@ mod tests {
         assert!(!inner.excluded(&pkg.join("vendor/x.tpl"), Scope::Format));
         // lint excludes are a separate list; neither file set one.
         assert!(!inner.excluded(&pkg.join("generated/x.tpl"), Scope::Lint));
+    }
+
+    /// The intent is "keep linting this file, minus this rule" — so anything
+    /// that is not the named rule on the named path has to survive, or the
+    /// setting is just a slower `exclude`.
+    #[test]
+    fn per_file_ignores_silence_only_the_named_rule() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(
+            root.join("poly.toml"),
+            "[lint.per-file-ignores]\n\
+             \"tests/**\" = [\"ruff/F401\"]\n\
+             \"vendor/*.sh\" = [\"shellcheck/*\"]\n",
+        )
+        .unwrap();
+        let config = Config::discover(root).unwrap();
+
+        assert!(config.lint_ignored(&root.join("tests/a.py"), "ruff", "F401"));
+        // A different rule, a different tool, and a different path each still
+        // report.
+        assert!(!config.lint_ignored(&root.join("tests/a.py"), "ruff", "E501"));
+        assert!(!config.lint_ignored(&root.join("tests/a.py"), "typos", "F401"));
+        assert!(!config.lint_ignored(&root.join("src/a.py"), "ruff", "F401"));
+
+        // `tool/*` is the whole tool, on that path only.
+        assert!(config.lint_ignored(&root.join("vendor/x.sh"), "shellcheck", "SC2086"));
+        assert!(config.lint_ignored(&root.join("vendor/x.sh"), "shellcheck", "SC1017"));
+        assert!(!config.lint_ignored(&root.join("vendor/x.sh"), "typos", "typo"));
+        assert!(!config.lint_ignored(&root.join("src/x.sh"), "shellcheck", "SC2086"));
+
+        // Patterns are anchored at the poly.toml's directory, like `exclude`:
+        // "tests/**" written at the repo root means that root's tests/.
+        let nested = root.join("pkg");
+        std::fs::create_dir(&nested).unwrap();
+        assert!(!config.lint_ignored(&nested.join("tests/a.py"), "ruff", "F401"));
+    }
+
+    /// A code with no tool would match nothing and read like a working
+    /// setting. Same reasoning as `deny_unknown_fields`: a line that cannot do
+    /// what it says stops the run.
+    #[test]
+    fn a_malformed_suppression_fails_the_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let write = |body: &str| std::fs::write(root.join("poly.toml"), body).unwrap();
+
+        let error = |root: &Path| match Config::discover(root) {
+            Ok(_) => panic!("expected the parse to fail"),
+            Err(e) => format!("{e:#}"),
+        };
+
+        write("[lint.per-file-ignores]\n\"tests/**\" = [\"F401\"]\n");
+        let err = error(root);
+        assert!(err.contains("F401"), "{err}");
+        assert!(err.contains("tool/rule"), "{err}");
+
+        write("[lint.per-file-ignores]\n\"tests/**\" = [\"a/b/c\"]\n");
+        assert!(error(root).contains("more than one"));
+
+        // The shape is all that is checked: poly cannot know every rule code
+        // its tools will grow, and an unknown one is visible anyway — the
+        // finding it was meant to silence keeps being printed.
+        write("[lint.per-file-ignores]\n\"tests/**\" = [\"ruff/NOSUCHRULE\"]\n");
+        assert!(Config::discover(root).is_ok());
     }
 
     #[test]

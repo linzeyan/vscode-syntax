@@ -109,6 +109,30 @@ exclude = ["third_party/**"]
 # Default: "hint" -- everything is fatal.
 fail-on = "warning"
 
+# ── [lint.per-file-ignores] ────────────────────────────────────────────────
+# Glob -> the rules that path may not report. The narrower neighbour of
+# `exclude`: a fixture with a deliberate typo or a vendored script with one
+# unquoted expansion is still worth linting for everything else, and dropping
+# the whole file to silence one rule is how a suppression stops being
+# reviewable.
+#
+# Codes are spelled the way poly prints them. A finding reading
+#
+#   tests/fixtures/bad.py:1:8: warning [ruff/F401] `os` imported but unused
+#
+# is silenced by copying `ruff/F401` out of that line -- there is no second
+# syntax to look up. `tool/*` covers every rule from one tool. Anything else,
+# including a bare `F401`, fails the parse rather than matching nothing.
+#
+# Globs are anchored at this file's directory, like [format].exclude. Both the
+# CLI and the editor consult this, so a rule silenced here is gone from
+# Problems too.
+#
+# Default: empty.
+[lint.per-file-ignores]
+"tests/fixtures/**" = ["ruff/F401", "typos/typo"]
+"vendor/*.sh" = ["shellcheck/*"]
+
 # ── [walk] ─────────────────────────────────────────────────────────────────
 [walk]
 # Walk paths beginning with a dot. Off by default, because a dot prefix is how a

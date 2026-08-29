@@ -12,7 +12,8 @@ use lsp_server::{Connection, Message, Notification, Response};
 use lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     DidSaveTextDocumentParams, DocumentFormattingParams, ExecuteCommandOptions,
-    ExecuteCommandParams, OneOf, Position, PublishDiagnosticsParams, Range, SaveOptions,
+    ExecuteCommandParams, Hover, HoverContents, HoverParams, HoverProviderCapability,
+    MarkupContent, MarkupKind, OneOf, Position, PublishDiagnosticsParams, Range, SaveOptions,
     ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
     TextDocumentSyncSaveOptions, TextEdit, Url,
 };
@@ -56,6 +57,11 @@ fn serve(connection: Connection) -> Result<()> {
             },
         )),
         document_formatting_provider: Some(OneOf::Left(true)),
+        // Rule documentation for a finding already on screen -- not a language
+        // feature. A6 rules out completion, go-to-definition and the rest, all
+        // of which mean understanding the code; this only reads out what the
+        // linter that produced the squiggle has to say about its own rule.
+        hover_provider: Some(HoverProviderCapability::Simple(true)),
         execute_command_provider: Some(ExecuteCommandOptions {
             commands: vec![FORMAT_PATHS.to_string()],
             ..Default::default()
@@ -89,6 +95,7 @@ fn serve(connection: Connection) -> Result<()> {
                 let method = request.method.clone();
                 let response = match method.as_str() {
                     "textDocument/formatting" => Some(server.on_formatting(request)),
+                    "textDocument/hover" => Some(server.on_hover(request)),
                     "workspace/executeCommand" => Some(server.on_execute_command(request)),
                     _ => None,
                 };
@@ -138,6 +145,26 @@ impl Server {
                 Response::new_ok(request.id, serde_json::json!([]))
             }
         }
+    }
+
+    /// Rule documentation for the finding under the cursor.
+    ///
+    /// Anchored to a published diagnostic rather than to the text: poly has no
+    /// model of what is under the cursor, and the one thing it does know is
+    /// what it already flagged there. Everywhere else — every other tool, and
+    /// sqruff on a line with no finding — this answers nothing and the
+    /// editor's other hover providers are unaffected.
+    fn on_hover(&mut self, request: lsp_server::Request) -> Response {
+        let params: HoverParams = match serde_json::from_value(request.params) {
+            Ok(params) => params,
+            Err(e) => return Response::new_err(request.id, INTERNAL_ERROR, e.to_string()),
+        };
+        let at = params.text_document_position_params;
+        let hover = self
+            .lint_diagnostics
+            .get(&at.text_document.uri)
+            .and_then(|diagnostics| rule_hover(diagnostics, at.position));
+        Response::new_ok(request.id, serde_json::json!(hover))
     }
 
     fn on_execute_command(&mut self, request: lsp_server::Request) -> Response {
@@ -420,6 +447,10 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
         Ok(more) => issues.extend(more),
         Err(e) => eprintln!("[poly] external lint error {}: {e:#}", path.display()),
     }
+    // Same call `poly check` makes, so a rule silenced in poly.toml is silent
+    // in Problems too. A suppression only one side honors is the editor/CI
+    // split A4 exists to prevent.
+    issues.retain(|i| !config.lint_ignored(path, i.source, &i.code));
     issues.into_iter().map(lint_diagnostic).collect()
 }
 
@@ -456,6 +487,45 @@ fn lint_diagnostic(i: poly_core::diag::Issue) -> lsp_types::Diagnostic {
         message,
         ..Default::default()
     }
+}
+
+/// The first diagnostic covering `position` whose rule poly can document.
+///
+/// Overlapping findings are possible and only one hover can be returned; the
+/// first in publication order is the same one Problems lists first, so the
+/// hover and the panel agree about which finding is being explained.
+fn rule_hover(diagnostics: &[lsp_types::Diagnostic], position: Position) -> Option<Hover> {
+    diagnostics.iter().find_map(|d| {
+        if !covers(d.range, position) {
+            return None;
+        }
+        let source = d.source.as_deref()?;
+        let lsp_types::NumberOrString::String(code) = d.code.as_ref()? else {
+            return None;
+        };
+        let doc = poly_engines::lint::rule_doc(source, code)?;
+        Some(Hover {
+            // The heading names the rule because VSCode stacks this under the
+            // diagnostic's own hover: without it, two blocks of prose about
+            // the same squiggle read as one, and with several diagnostics on
+            // the line it is the only thing saying which one this explains.
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: format!("**{source}/{code}**\n\n{doc}"),
+            }),
+            range: Some(d.range),
+        })
+    })
+}
+
+/// Is `position` inside `range`? Inclusive of both ends: the cursor sits
+/// *between* characters, so a hover at the last column of a squiggle is still
+/// a hover over it.
+fn covers(range: Range, position: Position) -> bool {
+    let after_start =
+        (position.line, position.character) >= (range.start.line, range.start.character);
+    let before_end = (position.line, position.character) <= (range.end.line, range.end.character);
+    after_start && before_end
 }
 
 /// `poly.formatPaths` argument: `{"mode": "paths"|"gitRepo"|"gitChanged",
@@ -570,6 +640,48 @@ mod tests {
         let bare = lint_diagnostic(issue(None, None));
         assert_eq!(bare.message, "`os` imported but unused");
         assert!(bare.code_description.is_none());
+    }
+
+    /// sqruff's rule prose is compiled into this binary and has nowhere else to
+    /// go: no documentation site means no `code_description` link, so without
+    /// the hover the reader is told what is wrong and never why.
+    #[test]
+    fn hover_explains_the_finding_under_the_cursor() {
+        let text = "select a,b from t\nWHERE x = 1;\n";
+        let diagnostics = lint_document(Path::new("/nonexistent/a.sql"), text);
+        let flagged = diagnostics.first().expect("a sqruff finding").range;
+
+        let hover = rule_hover(&diagnostics, flagged.start).expect("hover at the squiggle");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected markdown");
+        };
+        assert_eq!(markup.kind, MarkupKind::Markdown);
+        assert!(markup.value.starts_with("**sqruff/"), "{}", markup.value);
+        // The tool's own words, not a paraphrase: the section headings are
+        // sqruff's, and losing them means the hover stopped being its docs.
+        assert!(markup.value.contains("Best practice"), "{}", markup.value);
+        // Highlighting the finding, not the word: the range is the squiggle's.
+        assert_eq!(hover.range, Some(flagged));
+
+        // Off the finding, poly has nothing to say and must not shadow whatever
+        // else the editor would have shown there.
+        assert!(rule_hover(&diagnostics, Position::new(500, 0)).is_none());
+
+        // A tool that documents itself on the web is already served by the link
+        // on its code; a second copy here could only be the staler one.
+        let ruff = lint_diagnostic(poly_core::diag::Issue {
+            line: 0,
+            col: 0,
+            end_line: 0,
+            end_col: 3,
+            severity: poly_core::diag::Severity::Warning,
+            code: "F401".to_string(),
+            message: "unused".to_string(),
+            source: "ruff",
+            fix: None,
+            url: None,
+        });
+        assert!(rule_hover(&[ruff], Position::new(0, 1)).is_none());
     }
 
     #[test]

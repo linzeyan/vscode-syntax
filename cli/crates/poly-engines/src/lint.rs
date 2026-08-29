@@ -2,7 +2,9 @@
 //! actionlint, typos) lives in poly-tools; the LSP daemon and the CLI merge
 //! both sources.
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, Result};
 use poly_core::diag::{Fix, Issue, Severity};
@@ -11,6 +13,33 @@ use poly_core::diag::{Fix, Issue, Severity};
 /// reading thousands of files whose lint would return nothing.
 pub fn supported(lang: &str) -> bool {
     matches!(lang, "sql" | "toml")
+}
+
+/// Rule documentation poly is holding that a diagnostic has no way to carry.
+///
+/// Every other tool either publishes a rule page — which becomes the
+/// `code_description` link on the code — or says nothing, and both already
+/// reach the reader. sqruff is the one that does neither: it has no
+/// documentation site to link to, so `url` is empty, while the full
+/// anti-pattern/best-practice prose for each rule is compiled into this very
+/// binary. Version-exact and readable offline, and until now with no way out.
+///
+/// `None` is the answer for everything else, deliberately: poly does not
+/// paraphrase a tool's rules, it repeats what the tool itself says.
+pub fn rule_doc(source: &str, code: &str) -> Option<&'static str> {
+    if source != "sqruff" {
+        return None;
+    }
+    static DOCS: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    DOCS.get_or_init(|| {
+        sqruff_lib::rules::rules()
+            .iter()
+            .map(|rule| (rule.code(), rule.long_description().trim()))
+            .filter(|(_, doc)| !doc.is_empty())
+            .collect()
+    })
+    .get(code)
+    .copied()
 }
 
 /// Lint `text` as `lang` with embedded engines only. Languages without one
@@ -112,6 +141,32 @@ mod tests {
         let issues = lint("sql", Path::new("a.sql"), "select a,b from t\n").unwrap();
         assert!(!issues.is_empty());
         assert!(issues.iter().all(|i| i.source == "sqruff"));
+    }
+
+    /// Every code sqruff can report has to resolve, or the hover is present
+    /// for some findings and silently absent for others. The lookup is built
+    /// from the same registry the linter runs, so this fails if an upgrade
+    /// changes how codes are spelled rather than at a user's cursor.
+    #[test]
+    fn every_sqruff_rule_has_documentation() {
+        let issues = lint(
+            "sql",
+            Path::new("a.sql"),
+            "select a,b from t\nWHERE x = 1;\n",
+        )
+        .unwrap();
+        assert!(issues.len() >= 2, "{issues:?}");
+        for issue in &issues {
+            let doc = rule_doc(issue.source, &issue.code)
+                .unwrap_or_else(|| panic!("no docs for {}/{}", issue.source, issue.code));
+            assert!(doc.contains("Best practice"), "{}: {doc}", issue.code);
+        }
+
+        // Only the tool that has nothing else to offer. ruff's rules are
+        // linked from the diagnostic already; repeating them here would be
+        // poly holding a second, staler copy.
+        assert!(rule_doc("ruff", "F401").is_none());
+        assert!(rule_doc("sqruff", "NOSUCHRULE").is_none());
     }
 
     #[test]

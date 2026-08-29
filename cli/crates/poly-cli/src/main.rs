@@ -376,21 +376,29 @@ fn is_workflow_file(path: &Path) -> bool {
 /// nothing. Anything that fails to resolve (a stdin buffer, a file deleted
 /// mid-run) keeps the form the tool gave, which still beats an empty path.
 fn relative_to_base(file: &Path, base: &Path) -> PathBuf {
+    match resolve_report(file, base) {
+        Some(abs) => abs
+            .strip_prefix(base)
+            .map_or(abs.clone(), Path::to_path_buf),
+        None => file.strip_prefix("./").unwrap_or(file).to_path_buf(),
+    }
+}
+
+/// The file a tool's report names, as an absolute path — the shape
+/// `poly.toml` lookups and its patterns are both anchored against.
+///
+/// A relative report is resolved against `base`, not the process cwd. The two
+/// are the same directory in production; saying so explicitly is what keeps
+/// this a pure function instead of one reading ambient state. `None` when the
+/// path does not resolve (a stdin buffer, a file deleted mid-run).
+fn resolve_report(file: &Path, base: &Path) -> Option<PathBuf> {
     let stripped = file.strip_prefix("./").unwrap_or(file);
-    // A relative report is resolved against `base`, not the process cwd. The
-    // two are the same directory in production; saying so explicitly is what
-    // keeps this a pure function instead of one reading ambient state.
     let absolute = if stripped.is_absolute() {
         stripped.to_path_buf()
     } else {
         base.join(stripped)
     };
-    match absolute.canonicalize() {
-        Ok(abs) => abs
-            .strip_prefix(base)
-            .map_or(abs.clone(), Path::to_path_buf),
-        Err(_) => stripped.to_path_buf(),
-    }
+    absolute.canonicalize().ok()
 }
 
 fn cmd_check(inv: &Invocation) -> Result<i32> {
@@ -607,7 +615,24 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         }
     }
 
+    // Both steps need the same thing — the absolute path behind whatever shape
+    // the tool printed — so both live here. A cwd that cannot be read means a
+    // relative report resolves to nothing, and the findings are reported as the
+    // tool worded them rather than being silently dropped.
     if let Ok(base) = std::env::current_dir().and_then(|d| d.canonicalize()) {
+        // The config governing each *file*, not the top-level one: a package's
+        // poly.toml has to silence its own rules in `poly check` exactly as it
+        // does in the editor, or the suppression is one more thing that only
+        // works on one side (A4).
+        let mut configs = poly_core::ConfigCache::new();
+        issues.retain(|found| match resolve_report(&found.file, &base) {
+            Some(path) => {
+                !configs
+                    .for_file(&path)
+                    .lint_ignored(&path, found.issue.source, &found.issue.code)
+            }
+            None => true,
+        });
         for issue in &mut issues {
             issue.file = relative_to_base(&issue.file, &base);
         }
