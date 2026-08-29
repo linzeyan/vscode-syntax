@@ -183,6 +183,55 @@ suite("poly-lint in a real editor", () => {
     assert.ok(text.includes("Best practice"), `not the rule docs: ${text}`);
   });
 
+  // poly declares no definition provider at initialize -- it cannot, because an
+  // LSP capability is server-wide and poly speaks for 29 languages while gopls
+  // answers for one. It registers dynamically once gopls is up, scoped to Go,
+  // and whether VSCode acts on a registration that arrives after initialize is
+  // precisely what no protocol test can tell us.
+  test("routes go-to-definition for Go to gopls", async function() {
+    this.timeout(60_000);
+    try {
+      execFileSync("gopls", ["version"], { stdio: "ignore" });
+    } catch {
+      // Loudly, not silently: poly never installs a language server, so a
+      // machine without one genuinely cannot run this.
+      console.log("      skipped: gopls is not on PATH");
+      this.skip();
+    }
+    const uri = writeFile(
+      "greet.go",
+      `package main
+
+func Greet(name string) string {
+\treturn "hello " + name
+}
+
+func main() {
+\tprintln(Greet("world"))
+}
+`,
+    );
+    await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument(uri),
+    );
+    // Position is inside `Greet` at the call site on line 8; the definition is
+    // on line 3. gopls needs a moment to load the package, so poll.
+    const locations = await eventually("gopls to resolve the definition", async () => {
+      const found = await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeDefinitionProvider",
+        uri,
+        new vscode.Position(7, 10),
+      );
+      return found?.length ? found : undefined;
+    });
+    assert.strictEqual(
+      locations[0].range.start.line,
+      2,
+      "definition did not land on the declaration",
+    );
+    assert.ok(locations[0].uri.fsPath.endsWith("greet.go"), locations[0].uri.fsPath);
+  });
+
   // A parse failure used to come back as an LSP error, which VSCode shows as a
   // toast that names no line and cannot be clicked. Only the real editor can
   // prove it now lands in Problems instead.

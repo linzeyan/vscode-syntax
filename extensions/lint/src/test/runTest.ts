@@ -45,11 +45,18 @@ async function main(): Promise<void> {
         "poly.serverPath": serverPath,
         // Would pop modal-ish UI that nothing in a headless run dismisses.
         "poly.updateCheck.enabled": false,
+        // Off for real users until they ask for it; on here, because the
+        // proxy is exactly the part no protocol test can prove -- whether
+        // VSCode acts on a capability registered after initialize.
+        "poly.languageServers": true,
       },
       null,
       2,
     ),
   );
+  // gopls refuses to resolve anything outside a module, so the throwaway
+  // workspace needs to be one before it can answer a single question.
+  writeFileSync(join(workspace, "go.mod"), "module polye2e\n\ngo 1.21\n");
 
   await runTests({
     extensionDevelopmentPath,

@@ -34,6 +34,12 @@
 - **規則說明**：滑鼠移到 SQL 的波浪線上會顯示 sqruff 該條規則的 anti-pattern／
   best-practice 全文。sqruff 沒有文件站可連，那份說明編在 binary 裡，版本精確、
   離線可讀。其他工具有自己的規則頁，走規則代碼上的超連結。
+- **語言伺服器（預設關閉）**：`poly.languageServers` 打開後，poly 會啟動專案自己
+  toolchain 裡的 language server——目前只有 Go 的 gopls——把 hover、go-to-definition、
+  references、outline、completion 路由給它。poly **不實作**這些功能也不代裝
+  server：答案來自 gopls 本人，所以品質就是 gopls 的品質。預設關閉是因為它會跟
+  你八成已經裝了的官方 extension 重疊，要用請先移除那個 extension。改完要重新載入
+  視窗。
 - **專案內工具優先**：偵測到專案的 biome／prettier／eslint／rustfmt 就用它們，
   避免和團隊 CI 結果不一致。
 - 背景檢查 GitHub Releases（預設 7 天一次，可調可關），一鍵同時更新兩個 extension。
@@ -365,6 +371,12 @@ tflint = "off"
 exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同一個檔的其他問題照
 報。少了工具名的 `"F401"` 會讓 poly.toml 解析失敗，而不是安靜地什麼都沒關掉。編輯
 器與 CI 讀同一份設定，所以關掉的規則在 Problems 裡也不會出現。
+
+語言伺服器只認 VSCode settings 的 `poly.languageServers`，不進 `poly.toml`——那是
+「這台機器上我要不要讓 poly 接管 Go」的個人偏好，CI 根本不跑 `poly lsp`，寫進專案設定
+只會讓兩邊看到一個對方不在乎的鍵（A4）。server 一律從 PATH 找，poly 永遠不代裝：它必須
+跟蓋出這個專案的 toolchain 對得上，poly 選版本就是 poly 選錯版本。找不到會在
+`Poly` 輸出頻道說一聲，不會靜默沒作用。
 
 `[format.<lang>]` 只認 `line-width`（1–1000）／`indent-width`（1–16）／`use-tabs`
 三個鍵，拼錯或超出範圍都會直接讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部

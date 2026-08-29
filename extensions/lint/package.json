@@ -104,6 +104,11 @@
           "default": true,
           "description": "Publish lint diagnostics when a supported file is opened or saved."
         },
+        "poly.languageServers": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the language server a project's own toolchain provides (currently gopls for Go) and route hover, go-to-definition, references, outline and completion to it. Off by default: it overlaps with the official extension for that language, so remove that extension before turning this on. Poly never installs these servers — they come from PATH."
+        },
         "poly.updateCheck.enabled": {
           "type": "boolean",
           "default": true,

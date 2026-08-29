@@ -30,10 +30,30 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
+/// Languages poly hands to a real language server, and the binary that serves
+/// them.
+///
+/// PATH only, never a managed download — the same policy rustfmt and
+/// clang-format already follow (01 §4.3). A language server has to match the
+/// toolchain that built the project, and a version poly chose would be a
+/// version poly chose wrong.
+const LANGUAGE_SERVERS: &[(&str, &str)] = &[("go", "gopls")];
+
 struct Server {
     connection: Connection,
     documents: HashMap<Url, String>,
     lint_on_save: bool,
+    /// Opt-in, and off by default: taking over Go means colliding with a
+    /// golang.go the user has probably already installed, and that is their
+    /// call to make rather than something a poly upgrade does to them.
+    language_servers: bool,
+    /// The editor's own InitializeParams, replayed to each downstream server.
+    init_params: serde_json::Value,
+    /// Started on first sight of a document in that language, never eagerly:
+    /// gopls costs seconds and memory, and most sessions never open a Go file.
+    /// A language that failed to start is remembered as absent so poly does
+    /// not retry the spawn on every keystroke.
+    downstream: HashMap<String, Option<crate::proxy::Downstream>>,
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
     lint_hashes: HashMap<Url, u64>,
@@ -69,16 +89,23 @@ fn serve(connection: Connection) -> Result<()> {
         ..Default::default()
     };
     let init_params = connection.initialize(serde_json::to_value(capabilities)?)?;
-    let lint_on_save = serde_json::from_value::<lsp_types::InitializeParams>(init_params)
-        .ok()
-        .and_then(|p| p.initialization_options)
-        .and_then(|o| o.get("lintOnSave").and_then(|v| v.as_bool()))
-        .unwrap_or(true);
+    let option = |name: &str, default: bool| {
+        init_params
+            .get("initializationOptions")
+            .and_then(|o| o.get(name))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(default)
+    };
+    let lint_on_save = option("lintOnSave", true);
+    let language_servers = option("languageServers", false);
 
     let mut server = Server {
         connection,
         documents: HashMap::new(),
         lint_on_save,
+        language_servers,
+        init_params,
+        downstream: HashMap::new(),
         lint_hashes: HashMap::new(),
         lint_diagnostics: HashMap::new(),
         format_errors: HashMap::new(),
@@ -89,10 +116,22 @@ fn serve(connection: Connection) -> Result<()> {
         match message {
             Message::Request(request) => {
                 if server.connection.handle_shutdown(&request)? {
+                    server.stop_downstream();
                     break;
                 }
                 let started = Instant::now();
                 let method = request.method.clone();
+                // A proxied language answers for itself. The reply carries the
+                // editor's own request id, so it lands where it belongs
+                // without poly touching it.
+                let request = match server.route(request) {
+                    Ok(None) => continue,
+                    Ok(Some(request)) => request,
+                    Err(e) => {
+                        eprintln!("[poly] {method}: {e:#}");
+                        continue;
+                    }
+                };
                 let response = match method.as_str() {
                     "textDocument/formatting" => Some(server.on_formatting(request)),
                     "textDocument/hover" => Some(server.on_hover(request)),
@@ -108,7 +147,10 @@ fn serve(connection: Connection) -> Result<()> {
                 }
             }
             Message::Notification(notification) => server.on_notification(notification)?,
-            Message::Response(_) => {}
+            // Either an answer to something poly asked the editor (its own
+            // registrations), or one meant for a downstream server that asked
+            // through poly.
+            Message::Response(response) => server.on_client_response(response),
         }
     }
 
@@ -116,6 +158,157 @@ fn serve(connection: Connection) -> Result<()> {
 }
 
 impl Server {
+    /// Hand `request` to a downstream server if one answers for it.
+    ///
+    /// `Ok(None)` means it was forwarded and poly must stay quiet — two
+    /// replies to one id is a protocol violation, and the editor believes the
+    /// first. `Ok(Some(request))` hands it back for poly to answer itself.
+    fn route(&mut self, request: lsp_server::Request) -> Result<Option<lsp_server::Request>> {
+        if !crate::proxy::PROXIED
+            .iter()
+            .any(|(method, _)| *method == request.method)
+            && request.method != "completionItem/resolve"
+        {
+            return Ok(Some(request));
+        }
+        // completionItem/resolve names no document -- it is a follow-up about
+        // an item some server already produced. With one server that is not
+        // ambiguous; with two it will be, and the item will have to carry its
+        // own origin. Noted rather than guessed at.
+        let language = match request.method.as_str() {
+            "completionItem/resolve" => self
+                .downstream
+                .iter()
+                .find(|(_, server)| server.is_some())
+                .map(|(language, _)| language.clone()),
+            _ => request
+                .params
+                .get("textDocument")
+                .and_then(|d| d.get("uri"))
+                .and_then(serde_json::Value::as_str)
+                .and_then(|uri| Url::parse(uri).ok())
+                .and_then(|uri| self.language_of(&uri)),
+        };
+        let Some(language) = language else {
+            return Ok(Some(request));
+        };
+        match self.downstream.get_mut(&language) {
+            Some(Some(server)) => {
+                server.send(Message::Request(request))?;
+                Ok(None)
+            }
+            // Registered for the language but the server is gone: answer
+            // nothing rather than let the editor wait for a reply that is
+            // never coming.
+            Some(None) => {
+                let empty = crate::proxy::nothing(request.id);
+                self.connection.sender.send(Message::Response(empty))?;
+                Ok(None)
+            }
+            None => Ok(Some(request)),
+        }
+    }
+
+    /// A reply from the editor: to poly's own registration, or to a request a
+    /// downstream server made through poly.
+    fn on_client_response(&mut self, response: Response) {
+        if crate::proxy::is_poly_id(&response.id) {
+            if let Some(error) = &response.error {
+                eprintln!(
+                    "[poly] the editor rejected a registration: {}",
+                    error.message
+                );
+            }
+            return;
+        }
+        let Some((language, id)) = crate::proxy::untag(&response.id) else {
+            return; // not ours and not theirs; nothing to do with it
+        };
+        if let Some(Some(server)) = self.downstream.get_mut(&language) {
+            let restored = Response { id, ..response };
+            if let Err(e) = server.send(Message::Response(restored)) {
+                eprintln!("[poly] {language}: {e:#}");
+            }
+        }
+    }
+
+    /// Start the server for `language`, if there is one and it is wanted.
+    ///
+    /// Called on didOpen. Failure is recorded as "no server for this language"
+    /// so a missing gopls costs one message rather than one spawn attempt per
+    /// keystroke — and it is a message, because a silently absent feature is
+    /// the failure this project keeps refusing to ship.
+    fn ensure_downstream(&mut self, language: &str) {
+        if !self.language_servers || self.downstream.contains_key(language) {
+            return;
+        }
+        let Some((_, name)) = LANGUAGE_SERVERS.iter().find(|(l, _)| *l == language) else {
+            return;
+        };
+        let Some(command) = poly_tools::find_on_path(name) else {
+            eprintln!("[poly] {language}: {name} is not on PATH — no language features");
+            self.downstream.insert(language.to_string(), None);
+            return;
+        };
+        let sender = self.connection.sender.clone();
+        let started = Instant::now();
+        let server = crate::proxy::Downstream::start(
+            name,
+            language,
+            &command,
+            &self.init_params,
+            Box::new(move |message| {
+                let _ = sender.send(message);
+            }),
+        );
+        match server {
+            Ok(server) => {
+                eprintln!(
+                    "[poly] {name} ready in {:.0}ms",
+                    started.elapsed().as_secs_f64() * 1000.0
+                );
+                self.register_downstream(&server);
+                self.downstream.insert(language.to_string(), Some(server));
+            }
+            Err(e) => {
+                eprintln!("[poly] {name}: {e:#}");
+                self.downstream.insert(language.to_string(), None);
+            }
+        }
+    }
+
+    /// Tell the editor which features this server answers for, scoped to its
+    /// language. Nothing was declared at initialize, so until this lands the
+    /// editor offers none of them.
+    fn register_downstream(&mut self, server: &crate::proxy::Downstream) {
+        let registrations = crate::proxy::registrations(&server.capabilities, &server.language);
+        if registrations.is_empty() {
+            eprintln!("[poly] {} declared nothing poly proxies", server.name);
+            return;
+        }
+        let request = lsp_server::Request {
+            id: lsp_server::RequestId::from(format!("poly:register:{}", server.language)),
+            method: "client/registerCapability".to_string(),
+            params: serde_json::json!({ "registrations": registrations }),
+        };
+        let _ = self.connection.sender.send(Message::Request(request));
+    }
+
+    /// The language poly detects for a document, by the same rules the CLI
+    /// uses (R5/A4).
+    fn language_of(&self, uri: &Url) -> Option<String> {
+        let path = uri_path(uri);
+        poly_core::Config::discover(&path)
+            .unwrap_or_else(|_| poly_core::Config::empty())
+            .language(&path)
+    }
+
+    fn stop_downstream(&mut self) {
+        for server in self.downstream.values_mut().flatten() {
+            server.stop();
+        }
+    }
+
     fn on_formatting(&mut self, request: lsp_server::Request) -> Response {
         let params: DocumentFormattingParams = match serde_json::from_value(request.params) {
             Ok(params) => params,
@@ -186,6 +379,7 @@ impl Server {
     }
 
     fn on_notification(&mut self, notification: Notification) -> Result<()> {
+        self.sync_downstream(&notification);
         match notification.method.as_str() {
             "textDocument/didOpen" => {
                 let params: DidOpenTextDocumentParams =
@@ -228,7 +422,49 @@ impl Server {
         Ok(())
     }
 
+    /// Mirror a document lifecycle notification to the server that owns the
+    /// language, starting it on first sight.
+    ///
+    /// Without this a downstream server reads the file from disk while the
+    /// editor holds unsaved edits, and every answer is quietly one save
+    /// behind. `didOpen` is also the only signal poly gets that this session
+    /// is going to need the server at all.
+    fn sync_downstream(&mut self, notification: &Notification) {
+        if !crate::proxy::SYNCED.contains(&notification.method.as_str()) {
+            return;
+        }
+        let Some(language) = notification
+            .params
+            .get("textDocument")
+            .and_then(|d| d.get("uri"))
+            .and_then(serde_json::Value::as_str)
+            .and_then(|uri| Url::parse(uri).ok())
+            .and_then(|uri| self.language_of(&uri))
+        else {
+            return;
+        };
+        if notification.method == "textDocument/didOpen" {
+            self.ensure_downstream(&language);
+        }
+        if let Some(Some(server)) = self.downstream.get_mut(&language) {
+            if let Err(e) = server.send(Message::Notification(notification.clone())) {
+                eprintln!("[poly] {language}: {e:#}");
+            }
+        }
+    }
+
     fn publish_lint(&mut self, uri: &Url) -> Result<()> {
+        // A proxied language publishes its own diagnostics, and
+        // publishDiagnostics replaces the whole set for a uri: poly sending an
+        // empty list here would wipe gopls's findings on every save until it
+        // happened to republish. poly has nothing to add for these languages
+        // yet -- wiring golangci-lint in alongside means merging two sources,
+        // which is its own piece of work.
+        if let Some(language) = self.language_of(uri) {
+            if matches!(self.downstream.get(&language), Some(Some(_))) {
+                return Ok(());
+            }
+        }
         let Some(text) = self.documents.get(uri) else {
             return Ok(());
         };

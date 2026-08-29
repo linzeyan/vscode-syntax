@@ -6,6 +6,7 @@
 mod batch;
 mod fmt;
 mod lsp;
+mod proxy;
 mod report;
 mod usage;
 

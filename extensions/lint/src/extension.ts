@@ -254,6 +254,13 @@ export async function activate(context: vscode.ExtensionContext) {
         lintOnSave: vscode.workspace
           .getConfiguration("poly")
           .get<boolean>("lintOnSave", true),
+        // Read once at startup, like lintOnSave: the daemon acts on it when it
+        // spawns a downstream server, and a server already running cannot be
+        // un-started by a settings change. Toggling it takes a reload, which
+        // is what the setting description says.
+        languageServers: vscode.workspace
+          .getConfiguration("poly")
+          .get<boolean>("languageServers", false),
       },
     },
   );

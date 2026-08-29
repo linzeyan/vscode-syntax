@@ -433,7 +433,10 @@ pub fn resolve(name: &str, config: &poly_core::Config, offline: bool) -> Resolve
     }
 }
 
-pub(crate) fn find_on_path(name: &str) -> Option<PathBuf> {
+/// Last resort of `resolve`, and the only route for the tools poly never
+/// installs for you — rustfmt, clang-format, and the language servers the LSP
+/// daemon proxies, all of which have to match the project's own toolchain.
+pub fn find_on_path(name: &str) -> Option<PathBuf> {
     let exe = if cfg!(windows) {
         format!("{name}.exe")
     } else {

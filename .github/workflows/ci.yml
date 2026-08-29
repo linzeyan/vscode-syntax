@@ -145,6 +145,21 @@ jobs:
         run: |
           cargo build --release --manifest-path cli/Cargo.toml
           python tools/lsp-smoke.py cli/target/release/poly
+      # The proxy is the one part where poly's own answer is "run someone
+      # else's server", so the gate needs that server present. Installed here
+      # rather than left to the probe's skip: a check that only ever skips is
+      # a check nobody is running.
+      - name: Install gopls
+        run: |
+          go install golang.org/x/tools/gopls@v0.23.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Language server proxy probe
+        run: |
+          # The probe skips when gopls is missing, which is right on a
+          # developer's machine and wrong here: a gate that silently turns
+          # into a no-op is worse than no gate.
+          gopls version
+          python tools/lsp-proxy-probe.py cli/target/release/poly
       # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
       # two commands the README tells users to put in their CI. This was a
       # documented gate that was never actually wired, so every dogfood run was
