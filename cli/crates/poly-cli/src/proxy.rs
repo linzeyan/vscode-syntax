@@ -44,11 +44,19 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 /// The requests poly hands over, paired with the capability field a server
 /// uses to declare it.
 ///
-/// Everything here is a plain request/response about one position in one
-/// document — no state poly would have to keep in step. Rename and code
-/// actions are absent for that reason: they come back as workspace edits that
-/// interact with poly's own formatting, and that interaction has to be
-/// designed rather than discovered.
+/// Rename is here despite returning a workspace edit: poly never applies one.
+/// The edit travels to the editor, the editor applies it, and poly sees the
+/// result as ordinary document changes — the same thing typing produces. What
+/// poly formats afterwards is whatever the file then says.
+///
+/// Code actions stay out, and not for that reason. `editor.codeActionsOnSave`
+/// runs them before the formatter on every save, so gopls's
+/// `source.organizeImports` and poly's gofumpt would both be deciding import
+/// order on the same keystroke — an answer that has to be chosen rather than
+/// discovered. `codeAction/resolve` also cannot borrow the trick
+/// `completionItem/resolve` uses: there is only ever one completion list on
+/// screen, but on-save kinds and the lightbulb put several action lists in
+/// flight at once, so "whichever server answered last" is not the right one.
 pub const PROXIED: &[(&str, &str)] = &[
     ("textDocument/hover", "hoverProvider"),
     ("textDocument/definition", "definitionProvider"),
@@ -57,7 +65,16 @@ pub const PROXIED: &[(&str, &str)] = &[
     ("textDocument/references", "referencesProvider"),
     ("textDocument/documentSymbol", "documentSymbolProvider"),
     ("textDocument/completion", "completionProvider"),
+    ("textDocument/rename", "renameProvider"),
 ];
+
+/// Requests poly routes but never registers.
+///
+/// The editor sends these because of a flag inside somebody else's
+/// registration — `renameProvider.prepareProvider` for the first,
+/// `completionProvider.resolveProvider` for the second — so registering them
+/// separately would claim a capability the server never declared.
+pub const EXTRA_ROUTED: &[&str] = &["textDocument/prepareRename", "completionItem/resolve"];
 
 /// Document lifecycle notifications a downstream server needs to see. Without
 /// these it is reading files from disk while the editor holds unsaved changes,

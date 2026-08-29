@@ -97,6 +97,10 @@ end
 
 local message = greet("world")
 print(message)
+
+-- selene reports this and lua-language-server reports it too, which is the
+-- point: the editor has to end up with both halves, from both sources.
+local unused = 1
 """
 
 
@@ -130,10 +134,19 @@ class Case:
     # poly passes it no logging arguments. Set only for a server that is noisy
     # by default -- it is what the languageServerLogs switch is measured by.
     chatty: str = None
-    # Only one case needs to prove poly does not clobber downstream diagnostics:
-    # the guard lives in publish_all and is language-agnostic, so re-checking it
+    # Only one case needs to prove poly does not clobber downstream diagnostics
+    # on save: the merge in publish_all is language-agnostic, so re-checking it
     # per language would buy nothing and cost a wait on cargo check.
     diagnostics: bool = False
+    # `source` of a finding poly itself publishes for this language, which has
+    # to still be there once the server is answering. Only lua and swift have
+    # one -- selene and swiftlint are the only linters poly runs in the editor
+    # for a proxied language, and no language server looks for what they do.
+    merged_source: str = None
+    # Whether this server declares renameProvider. Stated rather than
+    # discovered: a check that only runs when the capability shows up cannot
+    # notice poly dropping the capability.
+    renames: bool = True
     edit: tuple = field(default=("world", "there"))
 
 
@@ -207,6 +220,7 @@ CASES = [
         call_character=15,  # inside `name` of `var.name`
         hover_needle="name",
         chatty="[terraform-ls] ",
+        renames=False,
     ),
     Case(
         language="lua",
@@ -217,6 +231,7 @@ CASES = [
         call_line=4,
         call_character=18,  # inside `greet` on the call line
         hover_needle="greet",
+        merged_source="selene",
     ),
 ]
 
@@ -534,6 +549,89 @@ def run(case, logs=True, graceful=True):
         print(f"  completion resolved: {resolved['result']['label']}")
     else:
         print(f"  {case.server} declares no resolveProvider; resolve not asked")
+
+    # Rename is the one proxied request that answers with an edit rather than a
+    # location. poly never applies it -- the editor does -- but it has to come
+    # back at all, and only the server can produce it.
+    #
+    # Asserted against the table rather than skipped when absent. The first
+    # version gated on `if registered`, which made it a no-op against a poly
+    # that had never heard of rename -- it read as six clean skips.
+    declared = "textDocument/rename" in methods
+    assert declared == case.renames, (
+        f"{case.server} rename registration: {declared}, expected {case.renames}"
+    )
+    if declared:
+        if methods["textDocument/rename"]["registerOptions"].get("prepareProvider"):
+            # Sent because of a flag inside the rename registration and never
+            # registered on its own, so this is the only thing here that proves
+            # poly routes a request it never advertised.
+            prepared = ask(7, "textDocument/prepareRename", at_call)
+            assert "result" in prepared, f"prepareRename was not routed: {prepared}"
+            print(f"  prepareRename answered: {str(prepared['result'])[:50]}")
+        edit = settle(
+            8,
+            "textDocument/rename",
+            {**at_call, "newName": "renamed"},
+            lambda r: bool(r) and bool(r.get("changes") or r.get("documentChanges")),
+            "rename",
+        )
+        touched = edit.get("changes") or {
+            c["textDocument"]["uri"]: c["edits"]
+            for c in edit.get("documentChanges", [])
+        }
+        print(f"  rename produced edits in {len(touched)} file(s)")
+    else:
+        print(f"  {case.server} declares no renameProvider, as expected")
+
+    if case.merged_source:
+        # publishDiagnostics replaces the whole set for a uri, so poly has to
+        # merge rather than forward: whichever side spoke last would otherwise
+        # erase the other. Turning the proxy on used to silently trade selene
+        # and swiftlint away for language features.
+        #
+        # Waited on with a request as the barrier, never by pumping for the
+        # publish itself. A poly that does not merge sends no publish at all
+        # here, and pumping for one that is never coming hangs until something
+        # outside kills the probe -- which is a worse failure than the bug.
+        # poly answers every request, so the hover always comes back, and any
+        # publish sent on the way lands in INBOX before it does.
+        both = []
+        for attempt in range(6):
+            both = [
+                published
+                for published in diagnostics_for(uri)
+                if any(d.get("source") == case.merged_source for d in published)
+                and any(d.get("source") != case.merged_source for d in published)
+            ]
+            if both:
+                break
+            # A save with no change lints nothing: poly skips a document whose
+            # content hash has not moved, so each attempt has to move it.
+            send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didChange",
+                    "params": {
+                        "textDocument": {"uri": uri, "version": 2 + attempt},
+                        "contentChanges": [{"text": f"{source}\n-- {attempt}\n"}],
+                    },
+                }
+            )
+            send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didSave",
+                    "params": {"textDocument": {"uri": uri}},
+                }
+            )
+            ask(20 + attempt, "textDocument/hover", at_call)
+        assert both, (
+            f"no publish carried both {case.merged_source} and {case.server}: "
+            f"{[[d.get('source') for d in p] for p in diagnostics_for(uri)]}"
+        )
+        sources = sorted({d.get("source") for d in both[-1]})
+        print(f"  diagnostics merged from {sources}")
 
     if case.diagnostics:
         # The server owns diagnostics for its language. publishDiagnostics

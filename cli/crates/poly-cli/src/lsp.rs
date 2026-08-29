@@ -278,7 +278,7 @@ impl Server {
         if !crate::proxy::PROXIED
             .iter()
             .any(|(method, _)| *method == request.method)
-            && request.method != "completionItem/resolve"
+            && !crate::proxy::EXTRA_ROUTED.contains(&request.method.as_str())
         {
             return Ok(Some(request));
         }
