@@ -21,18 +21,34 @@ from dataclasses import dataclass, field
 
 BIN = sys.argv[1] if len(sys.argv) > 1 else "cli/target/release/poly"
 
-# Greet is defined on line 3 (1-based) and called on line 8; the probe asks
+# Greet is defined on line 10 (1-based) and called on line 15; the probe asks
 # about the call and expects to be sent to the definition.
 # The unused local is deliberate: it makes gopls publish a diagnostic, which is
 # what lets the probe prove poly does not overwrite them with its own empty set.
+# The import block is deliberately out of order and split by a blank line, so
+# gopls has a `source.organizeImports` to offer. Without one there is nothing
+# for poly to strip, and the check that it strips them passes over an empty
+# list -- which is the shape of vacuous check this probe keeps finding.
+#
+# It is also the exact disagreement the design is about: goimports keeps the
+# blank line and gofumpt removes it, so these two would rewrite the same lines
+# on one save.
 MAIN_GO = """package main
+
+import (
+\t"os"
+\t"fmt"
+
+\t"strings"
+)
 
 func Greet(name string) string {
 \treturn "hello " + name
 }
 
 func main() {
-\tprintln(Greet("world"))
+\tfmt.Println(Greet("world"))
+\tfmt.Println(strings.ToUpper(os.Getenv("USER")))
 \tunused := 1
 }
 """
@@ -147,6 +163,10 @@ class Case:
     # discovered: a check that only runs when the capability shows up cannot
     # notice poly dropping the capability.
     renames: bool = True
+    # Whether this server declares codeActionProvider. Stated for the same
+    # reason `renames` is: a check that skips when the capability is absent
+    # cannot notice the capability going missing.
+    code_actions: bool = True
     edit: tuple = field(default=("world", "there"))
 
 
@@ -156,9 +176,9 @@ CASES = [
         server="gopls",
         files={"go.mod": "module probe\n\ngo 1.21\n", "main.go": MAIN_GO},
         entry="main.go",
-        definition_line=2,
-        call_line=7,
-        call_character=10,  # inside `Greet` on the call line
+        definition_line=9,
+        call_line=14,
+        call_character=15,  # inside `Greet` on the call line
         hover_needle="Greet",
         diagnostics=True,
     ),
@@ -221,6 +241,7 @@ CASES = [
         hover_needle="name",
         chatty="[terraform-ls] ",
         renames=False,
+        code_actions=False,
     ),
     Case(
         language="lua",
@@ -311,6 +332,15 @@ def ask(rid, method, params):
     send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
     response, _ = pump(want_id=rid)
     return response
+
+
+def on_save_kind(kind):
+    """A code action kind VSCode runs on save rather than on request.
+
+    Dot-separated prefix match down the LSP kind hierarchy, the same rule poly
+    applies -- a vendor kind that merely starts with the same letters is not one.
+    """
+    return bool(kind) and (kind == "source" or kind.startswith("source."))
 
 
 def settle(rid, method, params, ready, what):
@@ -421,6 +451,32 @@ def run(case, logs=True, graceful=True):
                                 }
                             }
                         },
+                        # rust-analyzer returns null for every code action
+                        # request unless the client declares it can accept
+                        # CodeAction literals rather than bare Commands. Real
+                        # editors declare it; the probe under-declaring made
+                        # rust-analyzer look like it had nothing to offer.
+                        #
+                        # The on-save kinds are in the valueSet on purpose. A
+                        # client that does not ask for them is one no server
+                        # would offer them to, and the leak check downstream
+                        # would then be inspecting a list that could not have
+                        # contained the thing it is looking for.
+                        "codeAction": {
+                            "codeActionLiteralSupport": {
+                                "codeActionKind": {
+                                    "valueSet": [
+                                        "quickfix",
+                                        "refactor",
+                                        "refactor.extract",
+                                        "refactor.inline",
+                                        "refactor.rewrite",
+                                        "source",
+                                        "source.organizeImports",
+                                    ]
+                                }
+                            }
+                        },
                     },
                     "workspace": {"configuration": True, "didChangeConfiguration": {}},
                 },
@@ -465,6 +521,19 @@ def run(case, logs=True, graceful=True):
     at_call = {
         "textDocument": {"uri": uri},
         "position": {"line": case.call_line, "character": case.call_character},
+    }
+    # Code actions are asked over a range, and this one is the whole file. A
+    # narrow selection gets whatever that one line supports, while the on-save
+    # kinds are offered for the document — asking narrowly is how the leak
+    # check ends up inspecting a list that never could have held the thing it
+    # is looking for.
+    entry_lines = case.files[case.entry].split("\n")
+    at_range = {
+        "textDocument": {"uri": uri},
+        "range": {
+            "start": {"line": 0, "character": 0},
+            "end": {"line": len(entry_lines) - 1, "character": len(entry_lines[-1])},
+        },
     }
 
     # The actual point: poly implements no definition provider, so a location
@@ -583,6 +652,56 @@ def run(case, logs=True, graceful=True):
         print(f"  rename produced edits in {len(touched)} file(s)")
     else:
         print(f"  {case.server} declares no renameProvider, as expected")
+
+    # Code actions are the one proxied request poly does not pass through
+    # untouched. `source.*` kinds are stripped, because VSCode runs those on
+    # save and runs them *before* the formatter -- gopls's organizeImports and
+    # poly's gofumpt disagree about import grouping, and save ordering would
+    # pick the winner. What is left is the lightbulb.
+    #
+    # Asserted against the table, never gated on what showed up, for the reason
+    # the rename check had to be rewritten: a check that skips when the
+    # capability is absent cannot notice the capability going missing.
+    declared = "textDocument/codeAction" in methods
+    assert declared == case.code_actions, (
+        f"{case.server} codeAction registration: {declared}, "
+        f"expected {case.code_actions}"
+    )
+    if declared:
+        kinds = methods["textDocument/codeAction"]["registerOptions"].get(
+            "codeActionKinds"
+        )
+        # The editor picks providers by declared kind, so claiming an on-save
+        # kind is enough to put poly back on the save path on its own.
+        claimed = [k for k in kinds or [] if on_save_kind(k)]
+        assert not claimed, f"{case.server} registration still claims {claimed}"
+        print(f"  codeAction kinds registered: {kinds}")
+
+        # The save arriving. poly answers this one itself; nothing it hands
+        # back here may be an action the formatter would then have to fight.
+        saving = {
+            **at_range,
+            "context": {"diagnostics": [], "only": ["source.organizeImports"]},
+        }
+        on_save = ask(9, "textDocument/codeAction", saving)["result"]
+        assert not on_save, f"an on-save action survived the save path: {on_save}"
+        print("  on-save request answered empty, as designed")
+
+        # The lightbulb: the path where the server really is asked. Asked once
+        # rather than through settle -- a server with nothing to offer here is
+        # answering correctly, and retrying for two minutes to confirm it is
+        # still nothing only makes the run slower.
+        actions = ask(
+            10, "textDocument/codeAction", {**at_range, "context": {"diagnostics": []}}
+        )["result"]
+        leaked = [a.get("kind") for a in actions or [] if on_save_kind(a.get("kind"))]
+        assert not leaked, f"{case.server} leaked on-save kinds: {leaked}"
+        print(
+            f"  lightbulb offered {len(actions or [])} action(s), none on-save: "
+            f"{sorted({a.get('kind') for a in actions or []})}"
+        )
+    else:
+        print(f"  {case.server} declares no codeActionProvider, as expected")
 
     if case.merged_source:
         # publishDiagnostics replaces the whole set for a uri, so poly has to

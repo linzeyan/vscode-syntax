@@ -44,19 +44,25 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 /// The requests poly hands over, paired with the capability field a server
 /// uses to declare it.
 ///
-/// Rename is here despite returning a workspace edit: poly never applies one.
-/// The edit travels to the editor, the editor applies it, and poly sees the
-/// result as ordinary document changes — the same thing typing produces. What
-/// poly formats afterwards is whatever the file then says.
+/// Rename and code actions are here despite returning workspace edits: poly
+/// never applies one. The edit travels to the editor, the editor applies it,
+/// and poly sees the result as ordinary document changes — the same thing
+/// typing produces. What poly formats afterwards is whatever the file then says.
 ///
-/// Code actions stay out, and not for that reason. `editor.codeActionsOnSave`
-/// runs them before the formatter on every save, so gopls's
-/// `source.organizeImports` and poly's gofumpt would both be deciding import
-/// order on the same keystroke — an answer that has to be chosen rather than
-/// discovered. `codeAction/resolve` also cannot borrow the trick
-/// `completionItem/resolve` uses: there is only ever one completion list on
-/// screen, but on-save kinds and the lightbulb put several action lists in
-/// flight at once, so "whichever server answered last" is not the right one.
+/// Code actions carry the one exception to "the proxy interprets nothing":
+/// `source.*` kinds are stripped, from the registration and again from every
+/// reply. Those are the kinds `editor.codeActionsOnSave` runs, and VSCode runs
+/// them *before* `editor.formatOnSave` — so gopls's `source.organizeImports`
+/// and poly's gofumpt would both be rewriting the import block on one
+/// keystroke, and they disagree about it: goimports keeps a hand-split group
+/// inside the std imports, gofumpt merges it. Save ordering would decide, which
+/// is not a thing to leave to save ordering.
+///
+/// What is left is the lightbulb, where the user asks for one action at a time
+/// and nothing else is rewriting the file at that moment. It also keeps
+/// `codeAction/resolve` routable: with the on-save kinds gone there is one
+/// action list on screen, so it can use the same trick
+/// `completionItem/resolve` does.
 pub const PROXIED: &[(&str, &str)] = &[
     ("textDocument/hover", "hoverProvider"),
     ("textDocument/definition", "definitionProvider"),
@@ -66,15 +72,69 @@ pub const PROXIED: &[(&str, &str)] = &[
     ("textDocument/documentSymbol", "documentSymbolProvider"),
     ("textDocument/completion", "completionProvider"),
     ("textDocument/rename", "renameProvider"),
+    ("textDocument/codeAction", "codeActionProvider"),
 ];
 
 /// Requests poly routes but never registers.
 ///
 /// The editor sends these because of a flag inside somebody else's
 /// registration — `renameProvider.prepareProvider` for the first,
-/// `completionProvider.resolveProvider` for the second — so registering them
+/// `completionProvider.resolveProvider` for the second,
+/// `codeActionProvider.resolveProvider` for the third — so registering them
 /// separately would claim a capability the server never declared.
-pub const EXTRA_ROUTED: &[&str] = &["textDocument/prepareRename", "completionItem/resolve"];
+pub const EXTRA_ROUTED: &[&str] = &[
+    "textDocument/prepareRename",
+    "completionItem/resolve",
+    "codeAction/resolve",
+];
+
+/// A code action kind the editor runs on save rather than on request.
+///
+/// Prefix match down the LSP kind hierarchy, which is dot-separated: `source`
+/// and `source.organizeImports` are both on-save kinds, while a vendor kind
+/// that merely starts with the same letters is not.
+fn is_source_kind(kind: &str) -> bool {
+    kind == "source" || kind.starts_with("source.")
+}
+
+/// Is the editor asking only for the kinds poly does not hand over?
+///
+/// `editor.codeActionsOnSave` asks by kind, so a request that names nothing
+/// else is that save arriving. Answering it here keeps a server poly is about
+/// to ignore off the save path entirely, rather than paying for a round trip
+/// whose whole answer gets thrown away.
+pub fn only_source_actions(params: &serde_json::Value) -> bool {
+    let Some(only) = params
+        .get("context")
+        .and_then(|context| context.get("only"))
+        .and_then(serde_json::Value::as_array)
+    else {
+        return false;
+    };
+    !only.is_empty()
+        && only
+            .iter()
+            .all(|kind| kind.as_str().is_some_and(is_source_kind))
+}
+
+/// A code action reply with the on-save kinds taken out.
+///
+/// The registration already tells the editor poly does not offer them, but
+/// `codeActionKinds` is optional — a server that declared none gets asked for
+/// everything, and this is what keeps the promise on its behalf.
+pub fn without_source_actions(mut result: serde_json::Value) -> serde_json::Value {
+    let Some(actions) = result.as_array_mut() else {
+        return result;
+    };
+    // A bare Command has no `kind` and so cannot be an on-save action.
+    actions.retain(|action| {
+        !action
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(is_source_kind)
+    });
+    result
+}
 
 /// Document lifecycle notifications a downstream server needs to see. Without
 /// these it is reading files from disk while the editor holds unsaved changes,
@@ -338,6 +398,21 @@ pub fn registrations(
                 _ => serde_json::json!({}),
             };
             options["documentSelector"] = selector.clone();
+            // The editor picks providers by declared kind, so claiming the
+            // ones poly strips out of every reply would put it back on the
+            // save path to answer nothing. A server whose kinds were *all*
+            // on-save has nothing left to register for.
+            if *method == "textDocument/codeAction" {
+                if let Some(kinds) = options
+                    .get_mut("codeActionKinds")
+                    .and_then(serde_json::Value::as_array_mut)
+                {
+                    kinds.retain(|kind| !kind.as_str().is_some_and(is_source_kind));
+                    if kinds.is_empty() {
+                        return None;
+                    }
+                }
+            }
             Some(serde_json::json!({
                 "id": format!("{POLY_ID}{name}:{method}"),
                 "method": method,
@@ -514,6 +589,107 @@ mod tests {
             registrations[0]["registerOptions"]["documentSelector"][0]["scheme"],
             "file"
         );
+    }
+
+    /// The whole point of proxying code actions at all: the on-save kinds are
+    /// the ones that would race gofumpt, and they must not survive the trip.
+    #[test]
+    fn on_save_kinds_never_reach_the_editor() {
+        let reply = serde_json::json!([
+            {"title": "Organize Imports", "kind": "source.organizeImports"},
+            {"title": "Fix All", "kind": "source.fixAll"},
+            {"title": "Everything source", "kind": "source"},
+            {"title": "Extract function", "kind": "refactor.extract"},
+            {"title": "Add missing import", "kind": "quickfix"},
+            // A vendor kind that merely starts with the same letters, and a
+            // bare Command with no kind at all. Both are the lightbulb's.
+            {"title": "Sourcery thing", "kind": "sourcery.refactor"},
+            {"title": "A Command", "command": "gopls.tidy"},
+        ]);
+        let filtered = without_source_actions(reply);
+        let kept: Vec<&str> = filtered
+            .as_array()
+            .expect("still a list")
+            .iter()
+            .map(|action| action["title"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            kept,
+            [
+                "Extract function",
+                "Add missing import",
+                "Sourcery thing",
+                "A Command"
+            ]
+        );
+
+        // A server answering `null` says nothing, and nothing is not a list.
+        assert!(without_source_actions(serde_json::Value::Null).is_null());
+    }
+
+    /// The save path, recognised by what it asks for. Getting this wrong in
+    /// either direction is bad: a false positive silently kills the lightbulb,
+    /// a false negative puts a downstream round trip back on every save.
+    #[test]
+    fn a_request_for_only_on_save_kinds_is_recognised() {
+        let only = |kinds: serde_json::Value| serde_json::json!({"context": {"only": kinds}});
+        assert!(only_source_actions(&only(serde_json::json!([
+            "source.organizeImports"
+        ]))));
+        assert!(only_source_actions(&only(serde_json::json!([
+            "source.organizeImports",
+            "source.fixAll"
+        ]))));
+
+        // The lightbulb asks for these, or for nothing in particular.
+        assert!(!only_source_actions(&only(serde_json::json!(["quickfix"]))));
+        assert!(!only_source_actions(&serde_json::json!({"context": {}})));
+        assert!(!only_source_actions(&serde_json::json!({})));
+        // An empty `only` is not "only the on-save kinds".
+        assert!(!only_source_actions(&only(serde_json::json!([]))));
+        // Mixed has something poly does hand over, so it goes downstream and
+        // the reply filter takes the rest.
+        assert!(!only_source_actions(&only(serde_json::json!([
+            "quickfix",
+            "source.fixAll"
+        ]))));
+    }
+
+    /// The editor picks providers by declared kind, so the registration has to
+    /// tell the same story every reply does.
+    #[test]
+    fn registration_does_not_claim_the_on_save_kinds() {
+        let declared = serde_json::json!({
+            "codeActionProvider": {
+                "codeActionKinds": ["quickfix", "refactor.extract", "source.organizeImports"],
+                "resolveProvider": true,
+            },
+        });
+        let declares_both = registrations(&declared, "gopls", &["go".to_string()]);
+        assert_eq!(declares_both.len(), 1);
+        let options = &declares_both[0]["registerOptions"];
+        assert_eq!(
+            options["codeActionKinds"],
+            serde_json::json!(["quickfix", "refactor.extract"])
+        );
+        // Everything else the server said about itself still rides along.
+        assert_eq!(options["resolveProvider"], serde_json::json!(true));
+
+        // A server whose kinds were all on-save has nothing left to offer, and
+        // registering for it would put poly back on the save path to answer [].
+        let only_on_save = serde_json::json!({
+            "codeActionProvider": {"codeActionKinds": ["source.fixAll"]},
+        });
+        assert!(registrations(&only_on_save, "x", &["go".to_string()]).is_empty());
+
+        // Declaring no kinds means the server does not say; poly still
+        // registers, and the reply filter is what keeps the promise.
+        let unspecified = serde_json::json!({"codeActionProvider": true});
+        let declares_nothing = registrations(&unspecified, "x", &["go".to_string()]);
+        assert_eq!(declares_nothing.len(), 1);
+        assert!(declares_nothing[0]["registerOptions"]
+            .get("codeActionKinds")
+            .is_none());
     }
 
     /// A server covering several languages registers once for all of them.

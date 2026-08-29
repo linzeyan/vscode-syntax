@@ -36,11 +36,15 @@
   離線可讀。其他工具有自己的規則頁，走規則代碼上的超連結。
 - **語言伺服器（預設關閉）**：`poly.languageServers` 打開後，poly 會啟動專案自己
   toolchain 裡的 language server，把 hover、go-to-definition、type definition、
-  implementation、references、outline、completion、rename 路由給它。目前六個：gopls（Go）、
-  rust-analyzer（Rust）、clangd（C／C++）、sourcekit-lsp（Swift）、terraform-ls
+  implementation、references、outline、completion、rename、code action 路由給它。目前六個：
+  gopls（Go）、rust-analyzer（Rust）、clangd（C／C++）、sourcekit-lsp（Swift）、terraform-ls
   （Terraform）、lua-language-server（Lua）。poly **不實作**這些功能也不代裝
   server——只從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。實際能用
-  哪幾項由 server 自己宣告：八項裡 terraform-ls 只給五項，sourcekit-lsp 七項。**poly 自己
+  哪幾項由 server 自己宣告：九項裡 terraform-ls 只給五項，sourcekit-lsp 八項。**code
+  action 只給燈泡那些**：`editor.codeActionsOnSave` 跑的 `source.*` 一律不轉，因為 VSCode
+  會在 formatter **之前**跑它們，等於 gopls 的 organizeImports 跟 poly 的 gofumpt 在同一次
+  存檔改同一段 import——兩者對 std import 的分組意見不同，誰贏只取決於誰後跑。代價是
+  gopls 的「Source Action…」選單在 poly 下是空的。**poly 自己
   的 lint 不會因此消失**：server 的診斷是跟 poly 的合併，不是取代，所以 lua 的
   selene 與 swift 的 swiftlint 照常回報（LSP 的診斷通知會整批取代同一個檔案的舊
   結果，所以這件事得由 poly 主動合併才會成立）。預設關閉是因為它會跟你八成已經裝了

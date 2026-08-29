@@ -3,7 +3,7 @@
 //! lint-on-save diagnostics, and batch formatting via workspace/executeCommand
 //! (shared with the CLI through crate::batch).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -116,6 +116,15 @@ struct Server {
     /// Server that answered the most recent `textDocument/completion`, which is
     /// the only thing that can route a `completionItem/resolve`. See `route`.
     last_completion: Option<String>,
+    /// The same, for `codeAction/resolve`.
+    last_code_action: Option<String>,
+    /// Editor ids of `textDocument/codeAction` requests still in flight.
+    ///
+    /// A response carries an id and no method, so this is the only way the pump
+    /// thread can tell a code action list from any other reply — and the pump
+    /// thread is where it has to be told, because a downstream response never
+    /// reaches the main loop. Shared for the same reason `diagnostics` is.
+    code_action_ids: Arc<Mutex<HashSet<lsp_server::RequestId>>>,
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
     lint_hashes: HashMap<Url, u64>,
@@ -208,6 +217,8 @@ fn serve(connection: Connection) -> Result<()> {
         init_params,
         downstream: HashMap::new(),
         last_completion: None,
+        last_code_action: None,
+        code_action_ids: Arc::new(Mutex::new(HashSet::new())),
         lint_hashes: HashMap::new(),
         diagnostics: Arc::new(Mutex::new(Diagnostics::default())),
     };
@@ -291,6 +302,11 @@ impl Server {
         // only ever one of those, so the last completion's server is it.
         let name = match request.method.as_str() {
             "completionItem/resolve" => self.last_completion.clone(),
+            // Same problem, same answer, and only because the on-save kinds are
+            // gone: those put several action lists in flight at once, and
+            // "whichever server answered last" would be the wrong one. The
+            // lightbulb is one list at a time, like a completion list.
+            "codeAction/resolve" => self.last_code_action.clone(),
             _ => request
                 .params
                 .get("textDocument")
@@ -306,8 +322,31 @@ impl Server {
         if request.method == "textDocument/completion" {
             self.last_completion = Some(name.clone());
         }
+        if request.method == "textDocument/codeAction" {
+            if crate::proxy::only_source_actions(&request.params) {
+                // The save asking for kinds poly does not hand over. An empty
+                // list is the honest answer and it costs no round trip.
+                let empty = Response {
+                    id: request.id,
+                    result: Some(serde_json::json!([])),
+                    error: None,
+                };
+                self.connection.sender.send(Message::Response(empty))?;
+                return Ok(None);
+            }
+            self.last_code_action = Some(name.clone());
+        }
         match self.downstream.get_mut(&name) {
             Some(Some(server)) => {
+                // Only once it is really going downstream: an id recorded for a
+                // request poly answers itself would sit in the set forever,
+                // since nothing comes back through the pump thread to clear it.
+                if request.method == "textDocument/codeAction" {
+                    self.code_action_ids
+                        .lock()
+                        .expect("code action lock")
+                        .insert(request.id.clone());
+                }
                 server.send(Message::Request(request))?;
                 Ok(None)
             }
@@ -373,6 +412,7 @@ impl Server {
         };
         let sender = self.connection.sender.clone();
         let diagnostics = Arc::clone(&self.diagnostics);
+        let code_action_ids = Arc::clone(&self.code_action_ids);
         let started = Instant::now();
         let server = crate::proxy::Downstream::start(
             name,
@@ -382,10 +422,12 @@ impl Server {
             self.language_server_logs,
             &self.init_params,
             Box::new(move |message| {
-                // Diagnostics are the one thing that cannot just be passed
-                // along: the notification replaces the whole set for the uri,
-                // so forwarding it verbatim erases poly's own findings.
-                let _ = sender.send(merge_publish(&diagnostics, message));
+                // Two things cannot just be passed along. A publishDiagnostics
+                // replaces the whole set for the uri, so forwarding it verbatim
+                // erases poly's own findings; a code action list may carry the
+                // on-save kinds poly promised the editor it does not offer.
+                let message = merge_publish(&diagnostics, message);
+                let _ = sender.send(strip_source_actions(&code_action_ids, message));
             }),
         );
         match server {
@@ -851,6 +893,30 @@ fn merge_publish(store: &Mutex<Diagnostics>, message: Message) -> Message {
     ))
 }
 
+/// Take the on-save kinds out of a code action list on its way to the editor.
+///
+/// Here rather than in the main loop because a downstream response never gets
+/// there: the pump thread is the only place it exists. A response carries an id
+/// and no method, so `pending` — filled by `route` as each request goes out —
+/// is what says which one this is.
+fn strip_source_actions(
+    pending: &Mutex<HashSet<lsp_server::RequestId>>,
+    message: Message,
+) -> Message {
+    let Message::Response(mut response) = message else {
+        return message;
+    };
+    if !pending
+        .lock()
+        .expect("code action lock")
+        .remove(&response.id)
+    {
+        return Message::Response(response);
+    }
+    response.result = response.result.map(crate::proxy::without_source_actions);
+    Message::Response(response)
+}
+
 fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     let config = poly_core::Config::discover(path).unwrap_or_else(|_| poly_core::Config::empty());
     let Some(lang) = config.language(path) else {
@@ -1128,6 +1194,45 @@ mod tests {
             panic!("still a notification");
         };
         assert_eq!(out.params, serde_json::json!({"uri": "not a uri"}));
+    }
+
+    /// The pump thread sees responses to everything, so it has to filter the
+    /// code action lists and leave every other reply alone — a hover result
+    /// rewritten as if it were an action list is a far worse bug than the one
+    /// this is preventing.
+    #[test]
+    fn only_a_code_action_reply_is_filtered() {
+        let pending = Mutex::new(HashSet::from([lsp_server::RequestId::from(7)]));
+        let list = serde_json::json!([
+            {"title": "Organize Imports", "kind": "source.organizeImports"},
+            {"title": "Extract", "kind": "refactor.extract"},
+        ]);
+        let reply = |id: i32| {
+            Message::Response(Response {
+                id: lsp_server::RequestId::from(id),
+                result: Some(list.clone()),
+                error: None,
+            })
+        };
+
+        let Message::Response(filtered) = strip_source_actions(&pending, reply(7)) else {
+            panic!("still a response");
+        };
+        assert_eq!(
+            filtered.result.unwrap(),
+            serde_json::json!([{"title": "Extract", "kind": "refactor.extract"}])
+        );
+
+        // Same payload, an id poly never recorded: not a code action list, so
+        // it travels untouched.
+        let Message::Response(passed) = strip_source_actions(&pending, reply(8)) else {
+            panic!("still a response");
+        };
+        assert_eq!(passed.result.unwrap(), list);
+
+        // The id is spent once it is answered, so a later reply reusing the
+        // number cannot be mistaken for another action list.
+        assert!(pending.lock().unwrap().is_empty());
     }
 
     /// The routing table is read in both directions and they have to agree.
