@@ -69,6 +69,17 @@ int main() {
 }
 """
 
+# No Package.swift, for the same reason the c case has no compile database:
+# sourcekit-lsp falls back to default arguments for a loose file, and building
+# a package is the project's job.
+MAIN_SWIFT = """func greet(_ name: String) -> String {
+    return "hello " + name
+}
+
+let message = greet("world")
+print(message)
+"""
+
 
 @dataclass
 class Second:
@@ -153,6 +164,16 @@ CASES = [
             call_character=13,  # inside `twice` on the call line
         ),
         chatty="[clangd] I[",
+    ),
+    Case(
+        language="swift",
+        server="sourcekit-lsp",
+        files={"main.swift": MAIN_SWIFT},
+        entry="main.swift",
+        definition_line=0,
+        call_line=4,
+        call_character=16,  # inside `greet` on the call line
+        hover_needle="greet",
     ),
 ]
 

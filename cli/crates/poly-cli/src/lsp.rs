@@ -43,6 +43,7 @@ const LANGUAGE_SERVERS: &[(&str, &str)] = &[
     ("rust", "rust-analyzer"),
     ("c", "clangd"),
     ("cpp", "clangd"),
+    ("swift", "sourcekit-lsp"),
 ];
 
 /// What to pass a server so it stops narrating every request.
