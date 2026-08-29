@@ -554,13 +554,50 @@ fn ensure_installed(
 
 /// Pull the tool binary out of the payload and land it at `target`
 /// atomically (temp file + rename) so a crashed download never half-installs.
+///
+/// The scratch file is unique per installer, not just per tool. Sharing one
+/// name looks safe because the rename is atomic, and is not: the loser of the
+/// race is still holding a write handle on the inode the winner just renamed
+/// into place, and Linux refuses to exec a file that is open for writing --
+/// ETXTBSY, "Text file busy". Two poly processes with a cold cache is the
+/// ordinary way to hit it, and so is one poly linting two files that need the
+/// same missing tool, since files are linted concurrently.
 fn extract(body: &[u8], kind: Kind, name: &str, target: &Path) -> Result<()> {
     let dir = target.parent().expect("cache target has parent");
     std::fs::create_dir_all(dir)?;
-    let tmp = target.with_extension("tmp");
+    let tmp = target.with_extension(format!(
+        "tmp.{}.{}",
+        std::process::id(),
+        // The pid alone would still collide between threads of one poly.
+        INSTALL.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let outcome = unpack(body, kind, name, &tmp).and_then(|()| install(&tmp, target));
+    if outcome.is_err() {
+        // A unique name means a failure leaves litter rather than something
+        // the next attempt overwrites, so this has to clean up after itself.
+        let _ = std::fs::remove_file(&tmp);
+    }
+    outcome
+}
+
+/// Distinguishes concurrent installers within one process. See `extract`.
+static INSTALL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Make `tmp` executable and move it into place, closing every handle first.
+fn install(tmp: &Path, target: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(tmp, std::fs::Permissions::from_mode(0o755))?;
+    }
+    std::fs::rename(tmp, target)?;
+    Ok(())
+}
+
+fn unpack(body: &[u8], kind: Kind, name: &str, tmp: &Path) -> Result<()> {
     let exe_names = [name.to_string(), format!("{name}.exe")];
     match kind {
-        Kind::Raw => std::fs::write(&tmp, body)?,
+        Kind::Raw => std::fs::write(tmp, body)?,
         Kind::TarGz => {
             let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(body));
             let mut found = false;
@@ -569,7 +606,7 @@ fn extract(body: &[u8], kind: Kind, name: &str, target: &Path) -> Result<()> {
                 let path = entry.path()?;
                 let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 if exe_names.iter().any(|n| n == file_name) {
-                    entry.unpack(&tmp)?;
+                    entry.unpack(tmp)?;
                     found = true;
                     break;
                 }
@@ -596,22 +633,62 @@ fn extract(body: &[u8], kind: Kind, name: &str, target: &Path) -> Result<()> {
                 })
                 .ok_or_else(|| anyhow!("{name} not found inside zip"))?;
             let mut file = archive.by_index(index)?;
-            let mut out = std::fs::File::create(&tmp)?;
+            let mut out = std::fs::File::create(tmp)?;
             std::io::copy(&mut file, &mut out)?;
         }
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
-    }
-    std::fs::rename(&tmp, target)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Two installers of the same tool must not share a scratch file.
+    ///
+    /// Found by CI, which is the only place this could show up: a cold tool
+    /// cache plus `cargo test` running test binaries in parallel had two poly
+    /// processes install typos at once, and the loser's still-open write
+    /// handle made the winner's exec fail with ETXTBSY -- "Text file busy",
+    /// which only Linux raises. macOS runs the binary regardless, so no amount
+    /// of local testing would have found it.
+    ///
+    /// Threads rather than processes here, because a shared temp name collides
+    /// the same way inside one poly: files are linted concurrently, and two of
+    /// them wanting the same missing tool is the ordinary case. The payload is
+    /// large on purpose -- a small one lands in a single write and the race is
+    /// invisible.
+    #[test]
+    fn concurrent_installs_do_not_share_a_scratch_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("cache").join("typos");
+        let body: Vec<u8> = (0..4 << 20).map(|i| (i % 251) as u8).collect();
+
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| scope.spawn(|| extract(&body, Kind::Raw, "typos", &target)))
+                .collect();
+            for handle in handles {
+                handle.join().unwrap().expect("install failed");
+            }
+        });
+
+        // Whichever installer renamed last, the file it left has to be whole:
+        // a reader that finds a short or interleaved binary is the corruption
+        // ETXTBSY was protecting against.
+        assert_eq!(
+            std::fs::read(&target).unwrap(),
+            body,
+            "installed a torn file"
+        );
+        assert!(
+            std::fs::read_dir(target.parent().unwrap())
+                .unwrap()
+                .filter_map(Result::ok)
+                .all(|entry| entry.path() == target),
+            "left scratch files behind in the cache"
+        );
+    }
 
     fn config_with_tools(entries: &[(&str, &str)]) -> poly_core::Config {
         let dir = tempfile::tempdir().unwrap();
