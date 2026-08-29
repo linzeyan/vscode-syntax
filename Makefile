@@ -47,8 +47,11 @@ probe: build ## Language server proxy, against whichever servers are installed
 e2e: ## Extension tests in a real extension host
 	cd extensions/lsp && pnpm test
 
-version: ## Check every version string agrees
-	python3 tools/bump.py --check
+# Given the binary as well, so this asks the same question CI asks: not just
+# whether the files agree with each other, but whether the thing users run
+# agrees with them.
+version: build ## Check every version string agrees, binary included
+	python3 tools/bump.py --check $(POLY)
 
 gates: lint test version dogfood smoke probe e2e ## Everything above, in CI's order
 	@echo "all gates passed"

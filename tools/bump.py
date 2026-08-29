@@ -22,10 +22,14 @@ number. Every prose site is anchored on the text around it:
 
 Usage:
   tools/bump.py 0.8.0    rewrite every file, then run `cargo update -w`
-  tools/bump.py --check  fail if the versions disagree; no writes
+  tools/bump.py --check [poly]  fail if the versions disagree; no writes.
+                                Given a binary, its --version must agree too --
+                                the manifest is the source, the binary is what
+                                users actually get.
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -67,13 +71,54 @@ def current() -> str:
     return match.group(1)
 
 
-def check(version: str) -> int:
-    bad = []
+def report(problems: list) -> None:
+    """Print findings where whoever needs them can see them.
+
+    On CI that means GitHub annotations, anchored on the line that caused
+    them. Reading a job log needs a token not every collaborator on this repo
+    has -- annotations are public, and a gate whose failure reads "exit code 1"
+    is a gate nobody can act on.
+    """
+    on_ci = os.environ.get("GITHUB_ACTIONS") == "true"
+    for path, line, message in problems:
+        if on_ci:
+            where = ""
+            if path:
+                where = f" file={path}" + (f",line={line}" if line else "")
+            print(f"::error{where}::{message}")
+        else:
+            where = f"{path}:{line}: " if line else (f"{path}: " if path else "")
+            print(f"  {where}{message}", file=sys.stderr)
+
+
+def check(version: str, binary: str | None = None) -> int:
+    problems = []
     minor = ".".join(version.split(".")[:2])
+
+    # Against the built binary rather than only the manifest, when there is
+    # one. poly reports its own compiled-in version, and the status bar turns
+    # amber when the extension it is talking to disagrees -- so a mismatch
+    # merged to main ships a warning badge to every user. Checking the source
+    # alone would miss a binary built from a different tree.
+    if binary:
+        reported = subprocess.run(
+            [binary, "--version"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        if reported != f"poly {version}":
+            problems.append(
+                (None, None, f"{binary} reports {reported!r}, want 'poly {version}'")
+            )
+
     for manifest in MANIFESTS:
         declared = json.loads(manifest.read_text())["version"]
         if declared != version:
-            bad.append(f"{manifest.relative_to(ROOT)}: {declared}, want {version}")
+            problems.append(
+                (
+                    manifest.relative_to(ROOT),
+                    None,
+                    f"version {declared} does not match the CLI's {version}",
+                )
+            )
 
     seen = {site: 0 for site in SITES}
     for path in PROSE:
@@ -81,28 +126,26 @@ def check(version: str) -> int:
         for site in SITES:
             for found in re.finditer(site, text):
                 seen[site] += 1
+                where = (path.relative_to(ROOT), text.count("\n", 0, found.start()) + 1)
+                quoted = found.group(0)
                 if found.group("v") != version:
-                    bad.append(
-                        f"{path.relative_to(ROOT)}: {found.group(0)!r} "
-                        f"names {found.group('v')}, want {version}"
-                    )
+                    drift = f"{quoted!r} names {found.group('v')}, want {version}"
+                    problems.append((*where, drift))
                 if "m" in found.groupdict() and found.group("m") != minor:
-                    bad.append(
-                        f"{path.relative_to(ROOT)}: {found.group(0)!r} "
-                        f"names {found.group('m')}, want {minor}"
-                    )
+                    drift = f"{quoted!r} names {found.group('m')}, want {minor}"
+                    problems.append((*where, drift))
     for site, hits in seen.items():
         if not hits:
-            bad.append(f"pattern matched nothing and is no longer checking: {site}")
+            problems.append(
+                (None, None, f"pattern matches nothing and checks nothing: {site}")
+            )
 
-    if bad:
+    if problems:
         print(f"version drift (workspace says {version}):", file=sys.stderr)
-        for line in bad:
-            print(f"  {line}", file=sys.stderr)
+        report(problems)
         return 1
-    print(
-        f"{sum(seen.values())} prose sites and {len(MANIFESTS)} manifests agree on {version}"
-    )
+    checked = f"{sum(seen.values())} prose sites and {len(MANIFESTS)} manifests"
+    print(f"{checked}{' and the binary' if binary else ''} agree on {version}")
     return 0
 
 
@@ -152,11 +195,14 @@ def bump(old: str, new: str) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
+    args = sys.argv[1:]
+    if args and args[0] == "--check":
+        if len(args) > 2:
+            sys.exit(__doc__)
+        return check(current(), args[1] if len(args) == 2 else None)
+    if len(args) != 1:
         sys.exit(__doc__)
-    if sys.argv[1] == "--check":
-        return check(current())
-    new = sys.argv[1]
+    new = args[0]
     if not re.fullmatch(r"\d+\.\d+\.\d+", new):
         sys.exit(f"error: {new} is not a release version")
     old = current()
