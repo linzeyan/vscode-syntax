@@ -25,7 +25,14 @@
 ### 從 0.5.0 以前升上來
 
 這個 extension 0.6.0 前叫 `poly-lint`（另一個叫 `poly-syntax`）。id 換了就是新
-extension，更新提示接不上，舊的得自己移除，否則兩個 formatter 搶同一批語言：
+extension，只能手動裝。
+
+0.5.0 的更新提示還是會跳，但按下 Install 必定失敗（它找的是 `poly-syntax-0.6.0.vsix`
+這個已經不存在的檔名），而且錯誤訊息會說「The VSIX files were downloaded」——
+其實一個都沒下載，所以「Show Files」也沒東西可看。那段程式碼凍在已安裝的 0.5.0
+裡，改不了。
+
+舊的得自己移除，否則兩個 formatter 搶同一批語言：
 
 ```sh
 code --uninstall-extension ricky.poly-lint

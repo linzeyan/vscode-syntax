@@ -89,7 +89,16 @@ code --install-extension poly-lsp-darwin-arm64-0.6.0.vsix
 
 兩個 extension 在 0.6.0 改了名字（`poly-lint` → `poly-lsp`、`poly-syntax` →
 `poly-syntax-highlight`）。換名字等於換 extension id，所以新版是**另一個**
-extension，內建的更新提示接不上——舊的會留著，兩個 formatter 搶同一批語言。
+extension，只能手動裝。
+
+0.5.0 的更新提示還是會跳，但按下 Install 一定失敗，而且訊息會騙你：
+
+> Poly: automatic install failed (Error: release has no asset
+> poly-syntax-0.6.0.vsix). The VSIX files were downloaded — install them
+> manually via "Extensions: Install from VSIX".
+
+其實一個檔都沒下載（它在第一個找不到的 asset 就放棄了），所以「Show Files」按下
+去也沒有東西。這段程式碼凍在已安裝的 0.5.0 裡，改不了。照下面手動做：
 
 ```sh
 code --uninstall-extension ricky.poly-lint
