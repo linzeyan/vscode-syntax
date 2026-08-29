@@ -155,15 +155,27 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           rustup component add rust-analyzer
           sudo apt-get install -y clangd
+          # terraform-ls is the only server whose binary is not itself the
+          # language server (`terraform-ls serve`), so it is the only thing
+          # exercising the LAUNCH table. Without it that path is untested here.
+          curl -sSLo /tmp/terraform-ls.zip \
+            https://releases.hashicorp.com/terraform-ls/0.39.0/terraform-ls_0.39.0_linux_amd64.zip
+          sudo unzip -q -o -d /usr/local/bin /tmp/terraform-ls.zip
       - name: Language server proxy probe
         run: |
           # The probe skips a language when its server is missing, which is
           # right on a developer's machine and wrong here: a gate that silently
-          # turns into a no-op is worse than no gate. Assert all three are
+          # turns into a no-op is worse than no gate. Assert each one is
           # present before running it.
+          #
+          # swift and lua are not installed: no Swift toolchain on these
+          # runners, and lua-language-server adds nothing the others do not
+          # already cover. Both stay verified locally on macOS, and the probe
+          # prints the skip rather than passing quietly.
           gopls version
           rust-analyzer --version
           clangd --version
+          terraform-ls version
           python tools/lsp-proxy-probe.py cli/target/release/poly
       # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
       # two commands the README tells users to put in their CI. This was a

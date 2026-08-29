@@ -112,7 +112,7 @@
         "poly.languageServerLogs": {
           "type": "boolean",
           "default": true,
-          "description": "Forward a downstream language server's own log output to the Poly output channel. On by default, and Poly passes no logging arguments in that case. Turning it off passes clangd --log=error, which quiets its line-per-request chatter but also hides its warning that it found no compile_commands.json — the usual reason its answers are worse than expected. gopls and rust-analyzer are quiet either way."
+          "description": "Forward a downstream language server's own stderr to the Poly output channel. On by default. clangd and terraform-ls write a line per request; gopls, rust-analyzer, sourcekit-lsp and lua-language-server are quiet unless something is wrong. Turning this off discards that output entirely rather than asking each server to be quieter — not all of them can be. Poly's own reports, including a server that is missing or failed to start, are unaffected."
         },
         "poly.updateCheck.enabled": {
           "type": "boolean",

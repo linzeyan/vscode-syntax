@@ -44,20 +44,22 @@ const LANGUAGE_SERVERS: &[(&str, &str)] = &[
     ("c", "clangd"),
     ("cpp", "clangd"),
     ("swift", "sourcekit-lsp"),
+    // Terraform only. Generic .hcl (Packer, Consul) is a different language
+    // that happens to share a syntax, and terraform-ls would read it as a
+    // module that makes no sense.
+    ("terraform", "terraform-ls"),
+    ("lua", "lua-language-server"),
 ];
 
-/// What to pass a server so it stops narrating every request.
+/// What a binary needs before it is a language server at all.
 ///
-/// Only clangd needs anything: gopls and rust-analyzer say nothing unless
-/// asked. This is the one place poly puts words in a server's mouth, which is
-/// why it is opt-in (`poly.languageServerLogs`) rather than the default —
-/// `--log=error` also silences clangd's "Failed to find compilation database",
-/// and that line is the single most useful explanation of why its answers are
-/// worse than expected.
-const QUIET: &[(&str, &[&str])] = &[("clangd", &["--log=error"])];
+/// Not a preference and not poly's opinion: `terraform-ls` on its own prints
+/// its usage and exits, because the language server is a subcommand of it.
+/// Every other server here is its own entry point.
+const LAUNCH: &[(&str, &[&str])] = &[("terraform-ls", &["serve"])];
 
-fn quiet_args(name: &str) -> &'static [&'static str] {
-    QUIET
+fn args_for(table: &'static [(&str, &[&str])], name: &str) -> &'static [&'static str] {
+    table
         .iter()
         .find(|(known, _)| *known == name)
         .map(|(_, args)| *args)
@@ -94,9 +96,11 @@ struct Server {
     /// golang.go the user has probably already installed, and that is their
     /// call to make rather than something a poly upgrade does to them.
     language_servers: bool,
-    /// Whether a downstream server's own logs are wanted. On by default: poly
-    /// adds no arguments unless asked, and a server explaining why it cannot
-    /// answer well is exactly what this project refuses to swallow.
+    /// Whether a downstream server's own stderr reaches poly's log. On by
+    /// default: a server explaining why it cannot answer well is exactly what
+    /// this project refuses to swallow. Off sends it to the void — poly's own
+    /// messages about a server that is missing or died are unaffected, since
+    /// those are poly's to write.
     language_server_logs: bool,
     /// The editor's own InitializeParams, replayed to each downstream server.
     init_params: serde_json::Value,
@@ -326,18 +330,14 @@ impl Server {
             self.downstream.insert(name.to_string(), None);
             return;
         };
-        let args = if self.language_server_logs {
-            &[][..]
-        } else {
-            quiet_args(name)
-        };
         let sender = self.connection.sender.clone();
         let started = Instant::now();
         let server = crate::proxy::Downstream::start(
             name,
             &languages,
             &command,
-            args,
+            args_for(LAUNCH, name),
+            self.language_server_logs,
             &self.init_params,
             Box::new(move |message| {
                 let _ = sender.send(message);
@@ -957,16 +957,27 @@ mod tests {
         assert_eq!(server_for("typescript"), None);
     }
 
-    /// Only a server that narrates gets told to stop.
+    /// poly passes arguments only where the binary is not itself the server.
     ///
-    /// Passing arguments to one that is already quiet is poly making a
-    /// decision on behalf of a server that never asked for one — the thing
-    /// `languageServerLogs` exists to keep explicit.
+    /// Everything else it might want — quieter logs, in particular — it gets
+    /// by changing what it does with the output, not by telling the server how
+    /// to behave. terraform-ls has no logging flag at all, which is what
+    /// settled that.
     #[test]
-    fn quiet_arguments_are_only_for_the_servers_that_need_them() {
-        assert_eq!(quiet_args("clangd"), ["--log=error"]);
-        assert!(quiet_args("gopls").is_empty());
-        assert!(quiet_args("rust-analyzer").is_empty());
+    fn only_a_server_that_needs_a_subcommand_gets_arguments() {
+        assert_eq!(args_for(LAUNCH, "terraform-ls"), ["serve"]);
+        for own_entry_point in [
+            "gopls",
+            "rust-analyzer",
+            "clangd",
+            "sourcekit-lsp",
+            "lua-language-server",
+        ] {
+            assert!(
+                args_for(LAUNCH, own_entry_point).is_empty(),
+                "{own_entry_point}"
+            );
+        }
     }
 
     /// Problems has to carry everything the terminal carries, in the same

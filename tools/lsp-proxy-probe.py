@@ -80,6 +80,25 @@ let message = greet("world")
 print(message)
 """
 
+# No `terraform init`: resolving var.name back to its own block is module-local
+# and needs no provider schema.
+MAIN_TF = """variable "name" {
+  type = string
+}
+
+output "greeting" {
+  value = var.name
+}
+"""
+
+MAIN_LUA = """local function greet(name)
+    return "hello " .. name
+end
+
+local message = greet("world")
+print(message)
+"""
+
 
 @dataclass
 class Second:
@@ -173,6 +192,30 @@ CASES = [
         definition_line=0,
         call_line=4,
         call_character=16,  # inside `greet` on the call line
+        hover_needle="greet",
+    ),
+    # The one server here that is not its own entry point: poly has to run
+    # `terraform-ls serve`, and without the subcommand the binary prints usage
+    # and exits.
+    Case(
+        language="terraform",
+        server="terraform-ls",
+        files={"main.tf": MAIN_TF},
+        entry="main.tf",
+        definition_line=0,
+        call_line=5,
+        call_character=15,  # inside `name` of `var.name`
+        hover_needle="name",
+        chatty="[terraform-ls] ",
+    ),
+    Case(
+        language="lua",
+        server="lua-language-server",
+        files={"main.lua": MAIN_LUA},
+        entry="main.lua",
+        definition_line=0,
+        call_line=4,
+        call_character=18,  # inside `greet` on the call line
         hover_needle="greet",
     ),
 ]

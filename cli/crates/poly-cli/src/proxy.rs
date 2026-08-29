@@ -36,6 +36,11 @@ const POLY_ID: &str = "poly:";
 /// with it, which is a far worse failure than not having completion.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// How long a server gets to answer `shutdown` before poly stops being polite
+/// about it. Short: the editor is already closing, and the kill that follows
+/// is a correct if blunt answer.
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// The requests poly hands over, paired with the capability field a server
 /// uses to declare it.
 ///
@@ -78,6 +83,9 @@ pub struct Downstream {
     pub capabilities: serde_json::Value,
     child: Child,
     stdin: ChildStdin,
+    /// Fires when the server answers poly's `shutdown`. `stop` waits on it
+    /// before sending `exit`.
+    shutdown_ack: mpsc::Receiver<()>,
 }
 
 impl Downstream {
@@ -89,15 +97,19 @@ impl Downstream {
     /// client capabilities the editor offered, or it resolves imports against
     /// the wrong tree. poly is a pipe here, not a negotiator.
     ///
-    /// `args` is empty unless the user asked for something poly can only get by
-    /// telling the server about it — see `quiet_args` in `lsp.rs`. Inventing
-    /// arguments is how a proxy starts making decisions for the server it is
-    /// supposed to be relaying.
+    /// `args` is only ever what the binary needs to be a language server at
+    /// all — see `LAUNCH` in `lsp.rs`. Inventing anything beyond that is how a
+    /// proxy starts making decisions for the server it is meant to be relaying.
+    ///
+    /// `logs` false sends the server's stderr to the void rather than asking it
+    /// to be quiet: not every server has a flag for that (terraform-ls has
+    /// none), and this way poly needs no opinion about any of them.
     pub fn start(
         name: &str,
         languages: &[String],
         command: &Path,
         args: &[&str],
+        logs: bool,
         init_params: &serde_json::Value,
         forward: Box<dyn Fn(Message) + Send>,
     ) -> Result<Downstream> {
@@ -105,7 +117,7 @@ impl Downstream {
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(if logs { Stdio::piped() } else { Stdio::null() })
             .spawn()
             .with_context(|| format!("starting {name} ({})", command.display()))?;
         let mut stdin = child.stdin.take().expect("piped stdin");
@@ -185,6 +197,8 @@ impl Downstream {
         .with_context(|| format!("sending initialized to {name}"))?;
 
         let tag_with = name.to_string();
+        let (ack_tx, shutdown_ack) = mpsc::channel::<()>();
+        let shutdown_id = RequestId::from(format!("{POLY_ID}shutdown"));
         std::thread::spawn(move || {
             for message in rx {
                 // Replies to poly's own requests are poly's business; passing
@@ -192,6 +206,10 @@ impl Downstream {
                 // never made.
                 if let Message::Response(response) = &message {
                     if is_poly_id(&response.id) {
+                        // The exception: `stop` is waiting on this one.
+                        if response.id == shutdown_id {
+                            let _ = ack_tx.send(());
+                        }
                         continue;
                     }
                 }
@@ -216,6 +234,7 @@ impl Downstream {
             capabilities,
             child,
             stdin,
+            shutdown_ack,
         })
     }
 
@@ -237,6 +256,12 @@ impl Downstream {
             params: serde_json::Value::Null,
         })
         .write(&mut self.stdin);
+        // `exit` follows the shutdown *response*, not the request. Sending
+        // both back to back looked fine against three servers and was wrong
+        // the whole time: terraform-ls rejects an exit that arrives first
+        // ("cannot exit as session is initialized") and then has to be killed
+        // instead of being allowed to close down on its own terms.
+        let _ = self.shutdown_ack.recv_timeout(SHUTDOWN_TIMEOUT);
         let _ = Message::Notification(Notification {
             method: "exit".to_string(),
             params: serde_json::Value::Null,
@@ -367,6 +392,7 @@ mod tests {
             // which is exactly what a broken shim looks like from here.
             &std::env::current_exe().unwrap(),
             &[],
+            true,
             &serde_json::json!({}),
             Box::new(|_| {}),
         );
