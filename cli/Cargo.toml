@@ -37,6 +37,11 @@ ruff_formatter = "=0.0.10"
 ruff_python_formatter = "=0.0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Line diff for Format Selection: poly formats the whole document and then has
+# to say which parts of the result fall inside the selection. Free in build
+# terms -- ruff_python_formatter already pulls it in -- and a hand-rolled LCS
+# would be the one piece of this that nobody could review by reading it.
+similar = "3"
 # sqruff's lib API is unstable; exact pin required (M0 decision).
 sqruff-lib = "=0.40.0"
 toml = "0.8"

@@ -12,11 +12,11 @@ use anyhow::Result;
 use lsp_server::{Connection, Message, Notification, Response};
 use lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, DocumentFormattingParams, ExecuteCommandOptions,
-    ExecuteCommandParams, Hover, HoverContents, HoverParams, HoverProviderCapability,
-    MarkupContent, MarkupKind, OneOf, Position, PublishDiagnosticsParams, Range, SaveOptions,
-    ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, TextEdit, Url,
+    DidSaveTextDocumentParams, DocumentFormattingParams, DocumentRangeFormattingParams,
+    ExecuteCommandOptions, ExecuteCommandParams, Hover, HoverContents, HoverParams,
+    HoverProviderCapability, MarkupContent, MarkupKind, OneOf, Position, PublishDiagnosticsParams,
+    Range, SaveOptions, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+    TextDocumentSyncOptions, TextDocumentSyncSaveOptions, TextEdit, Url,
 };
 
 const INTERNAL_ERROR: i32 = -32603;
@@ -224,6 +224,12 @@ fn serve(connection: Connection) -> Result<()> {
             },
         )),
         document_formatting_provider: Some(OneOf::Left(true)),
+        // Format Selection, and the `formatOnSaveMode: modifications` setting
+        // that rides on the same request. Answered by narrowing a whole-document
+        // format rather than by formatting the selected text, so see
+        // `format_response` before assuming this is the fragment formatter the
+        // name suggests.
+        document_range_formatting_provider: Some(OneOf::Left(true)),
         // Rule documentation for a finding already on screen -- not a language
         // feature. A6 rules out completion, go-to-definition and the rest, all
         // of which mean understanding the code; this only reads out what the
@@ -284,6 +290,7 @@ fn serve(connection: Connection) -> Result<()> {
                 };
                 let response = match method.as_str() {
                     "textDocument/formatting" => server.on_formatting(request),
+                    "textDocument/rangeFormatting" => server.on_range_formatting(request),
                     "textDocument/hover" => server.on_hover(request),
                     "workspace/executeCommand" => server.on_execute_command(request),
                     // Reached poly because no downstream claimed it. Dropping
@@ -535,18 +542,53 @@ impl Server {
             Ok(params) => params,
             Err(e) => return Response::new_err(request.id, INTERNAL_ERROR, e.to_string()),
         };
-        let uri = params.text_document.uri;
+        self.format_response(request.id, params.text_document.uri, None)
+    }
+
+    fn on_range_formatting(&mut self, request: lsp_server::Request) -> Response {
+        let params: DocumentRangeFormattingParams = match serde_json::from_value(request.params) {
+            Ok(params) => params,
+            Err(e) => return Response::new_err(request.id, INTERNAL_ERROR, e.to_string()),
+        };
+        self.format_response(request.id, params.text_document.uri, Some(params.range))
+    }
+
+    /// Format a document, answering with the edits the editor asked for.
+    ///
+    /// `Some(range)` is Format Selection. poly still formats the *whole*
+    /// document and then keeps only the changes that land inside the selection,
+    /// rather than formatting the selected text on its own. Two reasons, and
+    /// the second is the one that settles it: a selection is rarely a parsable
+    /// unit -- half a function, one arm of a match, three lines of a table --
+    /// and a fragment formatter that did parse it could still reach a different
+    /// answer than `poly fmt` does for the same lines, which is exactly the
+    /// editor/CI split A4 exists to prevent.
+    fn format_response(
+        &mut self,
+        id: lsp_server::RequestId,
+        uri: Url,
+        range: Option<Range>,
+    ) -> Response {
         let Some(text) = self.documents.get(&uri).cloned() else {
             // Nothing opened for this uri: no edits rather than an error, so a
             // race with didClose degrades to a no-op save.
-            return Response::new_ok(request.id, serde_json::json!([]));
+            return Response::new_ok(id, serde_json::json!([]));
         };
-        match format_document(&uri, &text) {
-            Ok(edits) => {
+        match formatted_text(&uri, &text) {
+            Ok(formatted) => {
                 if self.lock().format.remove(&uri).is_some() {
                     let _ = self.publish_all(&uri);
                 }
-                Response::new_ok(request.id, serde_json::json!(edits))
+                let edits = match (formatted, range) {
+                    (Some(new_text), Some(range)) => edits_within(&text, &new_text, range),
+                    (Some(new_text), None) => vec![TextEdit {
+                        range: full_range(&text),
+                        new_text,
+                    }],
+                    // Already formatted, or a language poly does not format.
+                    (None, _) => vec![],
+                };
+                Response::new_ok(id, serde_json::json!(edits))
             }
             // A parse failure is the file's problem, not the request's. As an
             // LSP error it became a toast that named no line and could not be
@@ -557,7 +599,7 @@ impl Server {
                     .format
                     .insert(uri.clone(), format_diagnostic(&error.to_string(), &text));
                 let _ = self.publish_all(&uri);
-                Response::new_ok(request.id, serde_json::json!([]))
+                Response::new_ok(id, serde_json::json!([]))
             }
         }
     }
@@ -841,26 +883,102 @@ fn format_diagnostic(message: &str, text: &str) -> lsp_types::Diagnostic {
     }
 }
 
-fn format_document(uri: &Url, text: &str) -> Result<Vec<TextEdit>> {
+/// The document as poly would write it, or `None` if there is nothing to write
+/// — already formatted, or a file poly does not format at all.
+fn formatted_text(uri: &Url, text: &str) -> Result<Option<String>> {
     let path = uri_path(uri);
     // Rediscover per call: an upward stat chain is cheap (<1ms) and picks up
     // poly.toml edits without a watcher.
     let config = poly_core::Config::discover(&path).unwrap_or_else(|_| poly_core::Config::empty());
     let Some(lang) = config.language(&path) else {
-        return Ok(vec![]);
+        return Ok(None);
     };
     if !crate::fmt::formattable(&lang) {
-        return Ok(vec![]);
+        return Ok(None);
     }
-    Ok(
-        match crate::fmt::format_text(&lang, &path, text, &config)? {
-            Some(new_text) => vec![TextEdit {
-                range: full_range(text),
-                new_text,
-            }],
-            None => vec![],
-        },
-    )
+    crate::fmt::format_text(&lang, &path, text, &config)
+}
+
+/// The parts of a whole-document reformat that fall inside `range`.
+///
+/// A line diff, because a selection is a span of lines: each hunk the formatter
+/// produced becomes its own edit, and the hunks the selection does not touch
+/// are dropped. That is the point — the rest of the file comes back as the user
+/// left it, even where poly would have rewritten it.
+///
+/// A hunk the selection only partly covers is returned whole, and deliberately.
+/// A hunk is a run of lines with no unchanged line inside it, which is exactly
+/// the statement that the diff found no way to line its two halves up: there is
+/// no "first three lines of the change" to return. Cutting one at the selection
+/// boundary would mean inventing an alignment and emitting text neither the
+/// user nor `poly fmt` would ever write. Overshooting the selection is visible
+/// and one undo away; wrong text is neither.
+fn edits_within(text: &str, formatted: &str, range: Range) -> Vec<TextEdit> {
+    let old = lines(text);
+    let new = lines(formatted);
+    let first = range.start.line as usize;
+    // Selecting whole lines by dragging down the gutter ends the range at
+    // column 0 of the line *after* the last highlighted one. That line is not
+    // selected, and reformatting it would be one line more than the user asked
+    // for every single time.
+    let last = if range.end.character == 0 && range.end.line > range.start.line {
+        range.end.line.saturating_sub(1)
+    } else {
+        range.end.line
+    } as usize;
+
+    similar::capture_diff_slices(similar::Algorithm::Myers, &old, &new)
+        .into_iter()
+        .filter(|op| op.tag() != similar::DiffTag::Equal)
+        .filter_map(|op| {
+            let span = op.old_range();
+            // A pure insertion replaces no lines, so it has no extent of its own
+            // to compare against the selection; it belongs to the line it goes
+            // in front of.
+            let extent = span.end.max(span.start + 1);
+            (span.start <= last && extent > first).then(|| TextEdit {
+                range: Range {
+                    start: line_start(&old, span.start),
+                    end: line_start(&old, span.end),
+                },
+                new_text: new[op.new_range()].concat(),
+            })
+        })
+        .collect()
+}
+
+/// Split on newlines, keeping the terminators, so the pieces concatenate back
+/// into the text they came from.
+fn lines(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(end) = rest.find('\n') {
+        out.push(&rest[..=end]);
+        rest = &rest[end + 1..];
+    }
+    if !rest.is_empty() {
+        out.push(rest);
+    }
+    out
+}
+
+/// The LSP position at the start of line `i`, or the end of the document when
+/// there is no such line.
+///
+/// `lines` counts pieces of text, and a file ending in a newline has one more
+/// line than it has pieces — the empty one after the last terminator. A file
+/// that does not end in one has no line past its last, so an edit reaching
+/// there ends at the end of that line instead; a position on a line the editor
+/// does not have is an error, not a clamp it fixes up.
+fn line_start(lines: &[&str], i: usize) -> Position {
+    if i < lines.len() {
+        return Position::new(i as u32, 0);
+    }
+    match lines.last() {
+        Some(last) if last.ends_with('\n') => Position::new(lines.len() as u32, 0),
+        Some(last) => Position::new((lines.len() - 1) as u32, last.encode_utf16().count() as u32),
+        None => Position::new(0, 0),
+    }
 }
 
 /// Tool resolution memoized for the daemon's lifetime: resolution can hit
@@ -1488,6 +1606,135 @@ mod tests {
             url: None,
         });
         assert!(rule_hover(&[ruff], Position::new(0, 1)).is_none());
+    }
+
+    /// Apply edits the way an editor would, so a test can assert about the file
+    /// the user ends up with rather than about a list of ranges.
+    ///
+    /// Back to front, because every offset is measured against the original
+    /// text. Columns are byte offsets here, not UTF-16: the fixtures are ASCII,
+    /// and the thing under test is which lines are edited.
+    fn apply(text: &str, edits: &[TextEdit]) -> String {
+        let offset = |position: Position| -> usize {
+            let mut offset = 0;
+            for (i, line) in lines(text).iter().enumerate() {
+                if i == position.line as usize {
+                    return offset + position.character as usize;
+                }
+                offset += line.len();
+            }
+            text.len()
+        };
+        let mut out = text.to_string();
+        for edit in edits.iter().rev() {
+            out.replace_range(
+                offset(edit.range.start)..offset(edit.range.end),
+                &edit.new_text,
+            );
+        }
+        out
+    }
+
+    fn selection(from: (u32, u32), to: (u32, u32)) -> Range {
+        Range {
+            start: Position::new(from.0, from.1),
+            end: Position::new(to.0, to.1),
+        }
+    }
+
+    /// Format Selection has to leave the rest of the file alone, including the
+    /// parts poly would have rewritten.
+    ///
+    /// This is the whole difference from Format Document, and it is the reason
+    /// the request cannot just return the same whole-file edit: a user who
+    /// selects one query in a file of ten is saying they do not want the other
+    /// nine touched, and returning them anyway is worse than answering nothing.
+    #[test]
+    fn a_selection_gets_only_the_changes_inside_it() {
+        let old = "a\n  BAD1\nc\n  BAD2\ne\n";
+        let new = "a\nGOOD1\nc\nGOOD2\ne\n";
+
+        let edits = edits_within(old, new, selection((3, 0), (3, 6)));
+        assert_eq!(edits.len(), 1, "{edits:?}");
+        assert_eq!(apply(old, &edits), "a\n  BAD1\nc\nGOOD2\ne\n");
+
+        // Both, when the selection covers both.
+        let edits = edits_within(old, new, selection((0, 0), (4, 1)));
+        assert_eq!(edits.len(), 2, "{edits:?}");
+        assert_eq!(apply(old, &edits), new);
+
+        // Neither, when it covers neither. An empty list, not an error: a
+        // selection over already-formatted lines is a no-op, not a failure.
+        assert!(edits_within(old, new, selection((2, 0), (2, 1))).is_empty());
+    }
+
+    /// Dragging down the gutter selects whole lines and ends the range at column
+    /// 0 of the line after the last one highlighted. Treating that line as
+    /// selected would reformat one line more than the user asked for, on the
+    /// most common way there is to make a selection.
+    #[test]
+    fn a_whole_line_selection_stops_where_the_highlight_does() {
+        let old = "a\n  BAD1\nc\n  BAD2\ne\n";
+        let new = "a\nGOOD1\nc\nGOOD2\ne\n";
+
+        // Highlights lines 1 and 2. Line 3 is where the caret is, not where the
+        // selection is, and its hunk stays untouched.
+        let edits = edits_within(old, new, selection((1, 0), (3, 0)));
+        assert_eq!(apply(old, &edits), "a\nGOOD1\nc\n  BAD2\ne\n");
+
+        // A caret with nothing selected is not the same shape: (3,0) to (3,0)
+        // is on line 3, so line 3's hunk is the one it asks for.
+        let edits = edits_within(old, new, selection((3, 0), (3, 0)));
+        assert_eq!(apply(old, &edits), "a\n  BAD1\nc\nGOOD2\ne\n");
+    }
+
+    /// A hunk the selection covers only part of comes back whole.
+    ///
+    /// Not a rounding error — a hunk has no unchanged line inside it, which is
+    /// the diff saying it could not line the two halves up, so there is no
+    /// "part" of it to return. The alternative to overshooting is either doing
+    /// nothing (Format Selection looks broken on exactly the messy block it is
+    /// for) or splicing text at a boundary the diff never found, which is how a
+    /// formatter produces something no one wrote.
+    #[test]
+    fn a_hunk_the_selection_straddles_is_applied_whole() {
+        let old = "a\n  BAD1\n  BAD2\nd\n";
+        let new = "a\nGOOD1\nGOOD2\nd\n";
+
+        let edits = edits_within(old, new, selection((1, 0), (1, 6)));
+        assert_eq!(edits.len(), 1, "one hunk, not two: {edits:?}");
+        assert_eq!(apply(old, &edits), new);
+    }
+
+    /// The two ends of a file are where line arithmetic goes wrong: an
+    /// insertion has no lines of its own to match against the selection, and a
+    /// file with no trailing newline has no line after its last one for an edit
+    /// to end on.
+    #[test]
+    fn edits_at_the_edges_of_the_file_stay_in_the_document() {
+        // An appended line belongs to the end of the file, so a selection that
+        // reaches the end gets it and one that does not, does not.
+        let edits = edits_within("a\nb\n", "a\nb\nc\n", selection((2, 0), (2, 0)));
+        assert_eq!(apply("a\nb\n", &edits), "a\nb\nc\n");
+        assert!(edits_within("a\nb\n", "a\nb\nc\n", selection((0, 0), (0, 1))).is_empty());
+
+        // No trailing newline: the edit has to end at the end of the last line,
+        // because there is no line 2 for it to end at the start of.
+        let edits = edits_within("a\nb", "a\nB", selection((1, 0), (1, 1)));
+        assert_eq!(edits[0].range.end, Position::new(1, 1));
+        assert_eq!(apply("a\nb", &edits), "a\nB");
+    }
+
+    /// `lines` has to be the exact inverse of concatenation, or every edit
+    /// `edits_within` builds is off by a newline.
+    #[test]
+    fn lines_keep_their_terminators() {
+        for text in ["a\nb\n", "a\nb", "", "\n", "a"] {
+            assert_eq!(lines(text).concat(), text);
+        }
+        assert_eq!(lines("a\nb\n"), ["a\n", "b\n"]);
+        assert_eq!(lines("a\nb"), ["a\n", "b"]);
+        assert!(lines("").is_empty());
     }
 
     #[test]

@@ -78,6 +78,7 @@ send(
 init = recv_response(1)
 caps = init["result"]["capabilities"]
 assert caps.get("documentFormattingProvider"), f"no formatting capability: {caps}"
+assert caps.get("documentRangeFormattingProvider"), f"no Format Selection: {caps}"
 assert caps.get("hoverProvider"), f"no hover capability: {caps}"
 send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
 
@@ -227,6 +228,65 @@ edits = resp.get("result")
 assert edits, f"expected minify edits: {resp}"
 assert edits[0]["newText"] == '{"b":1,"a":"two  spaces"}', edits[0]["newText"]
 
+# Format Selection. Two things have to be true at once and only a round trip
+# shows both: the selected line comes back formatted, and the identical problem
+# on another line does not. A unit test can check the narrowing logic, but not
+# that the request reaches it -- rangeFormatting is a separate LSP method, and
+# an unhandled one is declined rather than answered.
+RANGE_URI = "file:///tmp/smoke-range.json"
+send(
+    {
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {
+            "textDocument": {
+                "uri": RANGE_URI,
+                "languageId": "json",
+                "version": 1,
+                "text": '{\n  "a":  1,\n  "b": 2,\n  "c":  3\n}\n',
+            }
+        },
+    }
+)
+send(
+    {
+        "jsonrpc": "2.0",
+        "id": 12,
+        "method": "textDocument/rangeFormatting",
+        "params": {
+            "textDocument": {"uri": RANGE_URI},
+            "range": {
+                "start": {"line": 3, "character": 0},
+                "end": {"line": 3, "character": 11},
+            },
+            "options": {"tabSize": 2, "insertSpaces": True},
+        },
+    }
+)
+resp = recv_response(12)
+edits = resp.get("result")
+assert edits, f"expected range edits: {resp}"
+assert len(edits) == 1, f"only the selected line: {edits}"
+assert edits[0]["newText"] == '  "c": 3\n', edits[0]["newText"]
+assert edits[0]["range"]["start"] == {"line": 3, "character": 0}, edits[0]["range"]
+
+# Same document, no range: the whole file in one edit. Without this the
+# assertion above passes just as well for a server that formats nothing.
+send(
+    {
+        "jsonrpc": "2.0",
+        "id": 13,
+        "method": "textDocument/formatting",
+        "params": {
+            "textDocument": {"uri": RANGE_URI},
+            "options": {"tabSize": 2, "insertSpaces": True},
+        },
+    }
+)
+whole = recv_response(13).get("result")
+assert whole and len(whole) == 1, f"expected one whole-file edit: {whole}"
+assert '"a": 1' in whole[0]["newText"], whole[0]["newText"]
+
 # Every request gets an answer, including the ones poly does not implement.
 # Silence is not a polite decline: the editor keeps waiting on that id, so the
 # feature looks hung rather than absent. Caught for real by a probe that hung
@@ -254,6 +314,6 @@ except subprocess.TimeoutExpired:
     raise SystemExit("FAIL: server did not exit after `exit` notification")
 assert proc.returncode == 0, f"server exit code {proc.returncode}"
 print(
-    "LSP SMOKE PASS: formatting, diagnostics, rule hover, batch executeCommand,"
-    " minify, unhandled methods declined, clean shutdown"
+    "LSP SMOKE PASS: formatting, Format Selection, diagnostics, rule hover,"
+    " batch executeCommand, minify, unhandled methods declined, clean shutdown"
 )

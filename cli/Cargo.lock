@@ -1786,6 +1786,7 @@ dependencies = [
  "poly-tools",
  "rayon",
  "serde_json",
+ "similar",
  "tempfile",
 ]
 
