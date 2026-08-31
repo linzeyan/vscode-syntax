@@ -1018,10 +1018,34 @@ fn external_lint(
     text: &str,
     config: &poly_core::Config,
 ) -> anyhow::Result<Vec<poly_core::diag::Issue>> {
+    let mut issues = Vec::new();
+
+    // typos has no language of its own: `poly check` runs it repo-wide over
+    // the walk roots, which is why a misspelling could fail CI while the
+    // editor never mentioned it -- the last editor/CI split A4 forbids.
+    //
+    // Handed the path rather than the buffer, even though typos does read
+    // stdin: on stdin the document is called `-`, so the per-extension config
+    // (`[type.*]`, keyed off the file name) does not apply and the editor
+    // would answer differently from CI for exactly the repos that configure
+    // it. Reading from disk is what didOpen and didSave already guarantee is
+    // current, the same trade biome makes above.
+    if let Some(cmd) = resolved_tool("typos", config) {
+        issues.extend(
+            poly_tools::run::typos_paths(
+                &cmd,
+                &[path.to_path_buf()],
+                &config.lint_exclude,
+                config.root.as_deref(),
+            )?
+            .into_iter()
+            .map(|f| f.issue),
+        );
+    }
+
     // biome and eslint are project-local only and never managed, so they
     // resolve through the same detection `poly check` uses rather than the
     // tool registry.
-    let mut issues = Vec::new();
     if poly_tools::project::BIOME_LANGUAGES.contains(&lang) {
         if let Some(bin) = crate::fmt::cached_project_tool("biome", path) {
             // biome cannot lint stdin, so this reads the file from disk —
@@ -1137,6 +1161,15 @@ fn strip_source_actions(
 
 fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     let config = poly_core::Config::discover(path).unwrap_or_else(|_| poly_core::Config::empty());
+    // A file `[lint] exclude` drops has to come back clean here too, or
+    // Problems shows findings no `poly check` run will ever produce. Naming a
+    // file on the command line still beats the exclude (batch::resolve_targets
+    // keeps that), but opening one in an editor is the walk's case, not that
+    // one -- nobody asked for this file specifically, it just happens to be
+    // on screen.
+    if config.excluded(path, poly_core::Scope::Lint) {
+        return Vec::new();
+    }
     let Some(lang) = config.language(path) else {
         return Vec::new();
     };
@@ -1888,6 +1921,25 @@ mod tests {
         let diagnostics = lint_document(Path::new("/nonexistent/a.sql"), "select a,b from t\n");
         assert!(!diagnostics.is_empty());
         assert_eq!(diagnostics[0].source.as_deref(), Some("sqruff"));
+    }
+
+    /// `[lint] exclude` is the setting that decides what CI looks at, so an
+    /// excluded file has to be silent in Problems as well. The same text in a
+    /// sibling directory still reports, or this would pass just as well with
+    /// linting switched off.
+    #[test]
+    fn an_excluded_file_is_silent_in_the_editor_too() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        std::fs::write(
+            root.join("poly.toml"),
+            "[lint]\nexclude = [\"vendor/**\"]\n",
+        )
+        .expect("write poly.toml");
+        let sql = "select a,b from t\n";
+
+        assert!(lint_document(&root.join("vendor/a.sql"), sql).is_empty());
+        assert!(!lint_document(&root.join("src/a.sql"), sql).is_empty());
     }
 
     /// The squiggle's position is scraped out of prose, so the prose is a

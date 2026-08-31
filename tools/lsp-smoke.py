@@ -13,6 +13,13 @@ import tempfile
 
 BIN = sys.argv[1] if len(sys.argv) > 1 else "cli/target/release/poly"
 
+# The daemon resolves managed tools offline on purpose -- a download must not
+# run on a keystroke -- so on a machine that has never fetched typos the
+# assertions below would come back empty and pass for the wrong reason.
+subprocess.run(
+    [BIN, "tools", "install", "typos"], check=True, stdout=subprocess.DEVNULL
+)
+
 proc = subprocess.Popen([BIN, "lsp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
 
@@ -264,6 +271,51 @@ assert ec["endOfLine"] is None, ec
 # one save.
 assert ec["formatted"] is False, ec
 
+# typos, the one lint tool with no language of its own: `poly check` runs it
+# repo-wide over the walk roots, so until the daemon ran it too a misspelling
+# failed CI while the editor never said a word. It reads from disk rather than
+# the buffer, which is why these are real files.
+typo_dir = tempfile.mkdtemp(prefix="poly-smoke-typos-")
+os.mkdir(os.path.join(typo_dir, "vendor"))
+with open(os.path.join(typo_dir, "poly.toml"), "w") as f:
+    f.write('[lint]\nexclude = ["vendor/**"]\n')
+for name in ("notes.md", "vendor/notes.md"):
+    with open(os.path.join(typo_dir, name), "w") as f:
+        f.write("# Notes\n\nSpelt teh wrong way.\n")
+
+
+def open_note(name):
+    uri = "file://" + os.path.join(typo_dir, name)
+    send(
+        {
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "markdown",
+                    "version": 1,
+                    "text": "# Notes\n\nSpelt teh wrong way.\n",
+                }
+            },
+        }
+    )
+    return wait_diagnostics(uri)["params"]["diagnostics"]
+
+
+spelling = open_note("notes.md")
+assert spelling, "expected a typos diagnostic"
+assert spelling[0]["source"] == "typos", spelling
+assert spelling[0]["code"] == "typo", spelling
+assert "`teh` should be `the`" in spelling[0]["message"], spelling[0]["message"]
+assert spelling[0]["range"]["start"] == {"line": 2, "character": 6}, spelling[0][
+    "range"
+]
+# `[lint] exclude` is what decides which files CI looks at, so the same text
+# under it has to come back clean -- an editor that reports findings no CI run
+# can produce is the A4 split pointing the other way.
+assert open_note("vendor/notes.md") == [], "excluded file still linted"
+
 # Format Selection. Two things have to be true at once and only a round trip
 # shows both: the selected line comes back formatted, and the identical problem
 # on another line does not. A unit test can check the narrowing logic, but not
@@ -350,7 +402,7 @@ except subprocess.TimeoutExpired:
     raise SystemExit("FAIL: server did not exit after `exit` notification")
 assert proc.returncode == 0, f"server exit code {proc.returncode}"
 print(
-    "LSP SMOKE PASS: formatting, Format Selection, diagnostics, rule hover,"
-    " batch executeCommand, minify, .editorconfig, unhandled methods declined,"
-    " clean shutdown"
+    "LSP SMOKE PASS: formatting, Format Selection, diagnostics, spelling,"
+    " lint excludes, rule hover, batch executeCommand, minify, .editorconfig,"
+    " unhandled methods declined, clean shutdown"
 )
