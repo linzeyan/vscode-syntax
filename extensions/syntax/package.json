@@ -18,6 +18,13 @@
         "configuration": "./language-configuration/markdown.json"
       },
       {
+        "id": "shellscript",
+        "extensions": [
+          ".bats",
+          ".azcli"
+        ]
+      },
+      {
         "id": "hcl",
         "extensions": [
           ".hcl"

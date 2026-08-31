@@ -59,6 +59,11 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("sh", "shellscript"),
     ("bash", "shellscript"),
     ("zsh", "shellscript"),
+    // Both are shell with a different job, and neither is in VSCode's built-in
+    // shellscript extension list -- which is why an extension existed to
+    // format them. shfmt reads them as what they are.
+    ("bats", "shellscript"),
+    ("azcli", "shellscript"),
     ("go", "go"),
     ("lua", "lua"),
     ("swift", "swift"),
