@@ -293,6 +293,49 @@ func main() {
     assert.strictEqual(editor.get<string>("defaultFormatter"), EXTENSION_ID);
   });
 
+  // The test above runs on a profile that never turned format-on-save off, so
+  // it cannot see the case A8 actually has to survive: a user with
+  // `"editor.formatOnSave": false` globally. That is not hypothetical -- the
+  // machine this was written on has exactly that, plus ~25 language blocks
+  // switching it back on one at a time, and whether those blocks are load
+  // bearing or redundant is the same question. Nothing in the manifest answers
+  // it; only the editor does.
+  //
+  // Set at workspace scope, which outranks user scope: if a declared default
+  // survives this, it survives the weaker case too. Restored in `finally`
+  // because everything after it in this file formats on save.
+  test("a declared language default outranks a global formatOnSave: false", async () => {
+    const uri = writeFile("global-off.py", "x = 1\n");
+    const config = vscode.workspace.getConfiguration();
+    await config.update(
+      "editor.formatOnSave",
+      false,
+      vscode.ConfigurationTarget.Workspace,
+    );
+    try {
+      assert.strictEqual(
+        vscode.workspace
+          .getConfiguration("editor", { uri, languageId: "python" })
+          .get<boolean>("formatOnSave"),
+        true,
+      );
+      // The control: with no language in scope the user's false is what stands,
+      // or this would pass just as well against a setting that never applied.
+      assert.strictEqual(
+        vscode.workspace.getConfiguration("editor", uri).get<boolean>(
+          "formatOnSave",
+        ),
+        false,
+      );
+    } finally {
+      await config.update(
+        "editor.formatOnSave",
+        undefined,
+        vscode.ConfigurationTarget.Workspace,
+      );
+    }
+  });
+
   // The toolchain languages were held back on the theory that rust-analyzer,
   // gopls and clangd own them. poly formats rust, c, cpp, swift and terraform
   // by calling the same binary those servers call, so the output is identical,
