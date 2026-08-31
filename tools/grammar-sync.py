@@ -284,15 +284,25 @@ def build_contributes(sources: dict, lock: dict) -> tuple[list, list]:
                     f"./language-configuration/{cfg['configuration']}"
                 )
             languages.append(entry)
-        elif cfg.get("configuration"):
-            # Built-in override that only refines configuration (e.g. markdown
-            # onEnterRules): contribute id+configuration, never associations.
-            languages.append(
-                {
-                    "id": lang["id"],
-                    "configuration": f"./language-configuration/{cfg['configuration']}",
-                }
-            )
+        elif cfg.get("configuration") or cfg.get("extensions"):
+            # Built-in override that refines the language rather than replacing
+            # it: configuration (markdown's onEnterRules), or an association the
+            # built-in does not claim (.bats is shell, and VSCode's shellscript
+            # has never listed it).
+            #
+            # Still never the associations the built-in already has. Those are
+            # not ours to restate -- two extensions declaring the same extension
+            # for the same id is how a file type ends up depending on load
+            # order. An `extensions` list here is a claim that the built-in
+            # does not have these, and the rationale is where that gets argued.
+            entry = {"id": lang["id"]}
+            if cfg.get("extensions"):
+                entry["extensions"] = cfg["extensions"]
+            if cfg.get("configuration"):
+                entry["configuration"] = (
+                    f"./language-configuration/{cfg['configuration']}"
+                )
+            languages.append(entry)
         for f in lang["files"]:
             g = {}
             if f.get("language"):

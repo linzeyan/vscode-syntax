@@ -126,9 +126,10 @@
     {
       "id": "shellscript",
       "override": true,
-      "rationale": "Same upstream as built-in.",
+      "rationale": "Same upstream as built-in. The two extensions are ours to add: VSCode's shellscript claims neither .bats (bats-core tests) nor .azcli, so both open as plain text with no formatter bound to them, and shfmt parses both as what they are. Adding an association the built-in does not have is not the same as re-declaring one it does -- see build_contributes.",
       "repo": "microsoft/vscode",
       "license": "MIT",
+      "language": { "extensions": [".bats", ".azcli"] },
       "files": [
         { "src": "extensions/shellscript/syntaxes/shell-unix-bash.tmLanguage.json", "out": "shell-unix-bash.tmLanguage.json", "scopeName": "source.shell", "language": "shellscript", "contributesFrom": "extensions/shellscript/package.json" }
       ]

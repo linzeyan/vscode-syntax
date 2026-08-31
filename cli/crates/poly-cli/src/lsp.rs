@@ -1399,6 +1399,11 @@ mod tests {
     /// no formatter bound to it. Two manifests saying the same thing is the
     /// cost, and this is what stops them drifting -- a third extension added to
     /// one and not the other formats or does not depending on what is installed.
+    ///
+    /// Only one of the two is edited by hand. extensions/syntax/package.json is
+    /// generated from grammars/sources.json, and CI regenerates it and fails on
+    /// any diff -- a hand edit there survives `make gates` and dies in the
+    /// grammars job.
     #[test]
     fn both_manifests_teach_the_editor_the_same_shell_extensions() {
         let declared = |extension: &str| -> Vec<String> {
