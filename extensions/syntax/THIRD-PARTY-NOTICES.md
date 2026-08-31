@@ -5,7 +5,7 @@ grammars/sources.lock.json.
 
 - https://github.com/dustypomerleau/rust-syntax (MIT) @ 24e041c9b0bd
   files: rust.tmLanguage.json
-- https://github.com/microsoft/vscode (MIT) @ 2a058e884436
+- https://github.com/microsoft/vscode (MIT) @ 400d86be5f49
   files: asp-vb-net.tmLanguage.json, batchfile.tmLanguage.json, bibtex.tmLanguage.json, c.tmLanguage.json, clojure.tmLanguage.json, coffeescript.tmLanguage.json, cpp-grammar-bailout.tmLanguage.json, cpp.embedded.macro.tmLanguage.json, cpp.tmLanguage.json, csharp.tmLanguage.json, cshtml.tmLanguage.json, css.tmLanguage.json, cuda-cpp.tmLanguage.json, dart.tmLanguage.json, diff.tmLanguage.json, docker.tmLanguage.json, fsharp.tmLanguage.json, git-commit.tmLanguage.json, git-rebase.tmLanguage.json, go.tmLanguage.json, groovy.tmLanguage.json, handlebars.tmLanguage.json, hlsl.tmLanguage.json, html-derivative.tmLanguage.json, html.tmLanguage.json, ignore.tmLanguage.json, ini.tmLanguage.json, java.tmLanguage.json, javascript.regexp.tmLanguage.json, javascript.tmLanguage.json, javascriptreact.tmLanguage.json, jsdoc.js.injection.tmLanguage.json, jsdoc.ts.injection.tmLanguage.json, json.tmLanguage.json, jsonc.tmLanguage.json, jsonl.tmLanguage.json, julia.tmLanguage.json, latex.tmLanguage.json, less.tmLanguage.json, log.tmLanguage.json, lua.tmLanguage.json, make.tmLanguage.json, markdown-latex-combined.tmLanguage.json, markdown.tmLanguage.json, md-math-block.tmLanguage.json, md-math-fence.tmLanguage.json, md-math-inline.tmLanguage.json, md-math.tmLanguage.json, objective-c++.tmLanguage.json, objective-c.tmLanguage.json, perl.tmLanguage.json, perl6.tmLanguage.json, php-html.tmLanguage.json, php.tmLanguage.json, platform.tmLanguage.json, powershell.tmLanguage.json, prompt.tmLanguage.json, pug.tmLanguage.json, python.regexp.tmLanguage.json, python.tmLanguage.json, r.tmLanguage.json, rst.tmLanguage.json, ruby.tmLanguage.json, sassdoc.tmLanguage.json, scss.tmLanguage.json, shaderlab.tmLanguage.json, shell-unix-bash.tmLanguage.json, snippets.tmLanguage.json, sql.tmLanguage.json, swift.tmLanguage.json, tex.tmLanguage.json, typescript.tmLanguage.json, typescriptreact.tmLanguage.json, xml.tmLanguage.json, xsl.tmLanguage.json, yaml-1.0.tmLanguage.json, yaml-1.1.tmLanguage.json, yaml-1.2.tmLanguage.json, yaml-1.3.tmLanguage.json, yaml-embedded.tmLanguage.json, yaml.tmLanguage.json
 - https://github.com/hashicorp/syntax (MPL-2.0) @ ae0c4e30047d
   files: hcl.tmLanguage.json, terraform.tmLanguage.json
@@ -25,9 +25,9 @@ grammars/sources.lock.json.
   files: mermaid.markdown.tmLanguage.json, mermaid.tmLanguage.json
 - https://github.com/sveltejs/language-tools (MIT) @ 092af3826bad
   files: svelte.tmLanguage.json
-- https://github.com/graphql/graphiql (MIT) @ 7d543a9d8c71
+- https://github.com/graphql/graphiql (MIT) @ bffd89e964c5
   files: graphql.js.tmLanguage.json, graphql.markdown.codeblock.tmLanguage.json, graphql.python.tmLanguage.json, graphql.tmLanguage.json
-- https://github.com/vuejs/language-tools (MIT) @ f4b17caaecdd
+- https://github.com/vuejs/language-tools (MIT) @ e46126c95682
   files: vue-directives.tmLanguage.json, vue-interpolations.tmLanguage.json, vue-markdown.tmLanguage.json, vue-sfc-script-leading-operator-fix.tmLanguage.json, vue-sfc-style-variable-injection.tmLanguage.json, vue.tmLanguage.json
 - https://github.com/fwcd/vscode-kotlin (MIT) @ 4a7c15387548
   files: kotlin-markdown.tmLanguage.json, kotlin.tmLanguage.json
@@ -53,7 +53,7 @@ grammars/sources.lock.json.
   files: erlang.tmLanguage.json
 - https://github.com/justusadam/language-haskell (BSD-3-Clause) @ 7d3aa4811a63
   files: cabal-markdown.tmLanguage.json, cabal.tmLanguage.json, haskell-markdown.tmLanguage.json, haskell.tmLanguage.json
-- https://github.com/ocamllabs/vscode-ocaml-platform (ISC) @ da3dbe865e03
+- https://github.com/ocamllabs/vscode-ocaml-platform (ISC) @ 715202f37fd9
   files: dune-project.tmLanguage.json, dune.tmLanguage.json, ocaml-interface.tmLanguage.json, ocaml-markdown.tmLanguage.json, ocaml.tmLanguage.json, opam.tmLanguage.json
 - https://github.com/samuelcolvin/jinjahtml-vscode (MIT) @ d8daf5fd4394
   files: jinja-dockerfile.tmLanguage.json, jinja-html.tmLanguage.json, jinja-json.tmLanguage.json, jinja-nginx.tmLanguage.json, jinja-py.tmLanguage.json, jinja-shell.tmLanguage.json, jinja-sql.tmLanguage.json, jinja-toml.tmLanguage.json, jinja-yaml.tmLanguage.json, jinja.tmLanguage.json
