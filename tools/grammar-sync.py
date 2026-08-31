@@ -391,13 +391,61 @@ def prune_lock(sources: dict, lock: dict) -> None:
                     del files[src]
 
 
+def check_generated() -> int:
+    """Are the generated files what sources.json plus the committed lock say?
+
+    CI runs the whole sync and diffs, which needs the network and a token. This
+    asks the offline half of the same question: everything downstream of the
+    fetch. It catches the failure that a full sync catches and nothing else
+    does -- somebody hand-editing extensions/syntax/package.json, which is a
+    generated file that looks exactly like a hand-written one.
+
+    Not a replacement for the CI job: it cannot notice that an upstream grammar
+    moved, because it never asks upstream. It is the part a developer can run.
+    """
+    sources = json.loads(SOURCES.read_text())
+    lock = json.loads(LOCK.read_text())
+    languages, grammars = build_contributes(sources, lock)
+    pkg = json.loads((EXT / "package.json").read_text())
+    stale = [
+        name
+        for name, generated, committed in (
+            ("contributes.languages", languages, pkg["contributes"]["languages"]),
+            ("contributes.grammars", grammars, pkg["contributes"]["grammars"]),
+            (
+                "THIRD-PARTY-NOTICES.md",
+                build_notices(sources, lock),
+                (EXT / "THIRD-PARTY-NOTICES.md").read_text(encoding="utf-8"),
+            ),
+        )
+        if generated != committed
+    ]
+    if stale:
+        print(
+            "generated files do not match grammars/sources.json:\n  "
+            + "\n  ".join(stale)
+            + "\nrun tools/grammar-sync.py -- and edit sources.json, not the output",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"{len(languages)} languages and {len(grammars)} grammars match sources.json")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--update", action="store_true", help="refresh pinned shas to HEAD"
     )
     parser.add_argument("--only", help="comma-separated language ids")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="offline: generated files still match sources.json; no fetching",
+    )
     args = parser.parse_args()
+    if args.check:
+        return check_generated()
 
     sources = json.loads(SOURCES.read_text())
     lock = json.loads(LOCK.read_text()) if LOCK.exists() else {}

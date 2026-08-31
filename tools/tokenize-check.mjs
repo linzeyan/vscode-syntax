@@ -443,20 +443,25 @@ const PREAMBLE = {
 
 let cfgFailed = 0;
 for (const lang of pkg.contributes.languages) {
+  const scopeName = scopeOf.get(lang.id);
+  if (!scopeName) {
+    // A contributed language with no grammar bound to its id opens with no
+    // highlighting whatsoever, which is the whole point of this extension.
+    console.log(`FAIL ${lang.id}: no grammar contributes language "${lang.id}"`);
+    cfgFailed++;
+    continue;
+  }
+  // An entry that only adds file associations to a built-in — shellscript
+  // gaining .bats — ships no configuration of its own. VSCode keeps the
+  // built-in's, so there is no file here that could disagree with the grammar,
+  // which is the only thing the probe below is looking for.
+  if (!lang.configuration) continue;
   const cfgPath = join(EXT, lang.configuration.replace(/^\.\//, ""));
   let cfg;
   try {
     cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
   } catch (e) {
     console.log(`FAIL ${lang.id}: ${lang.configuration}: ${e.message}`);
-    cfgFailed++;
-    continue;
-  }
-  const scopeName = scopeOf.get(lang.id);
-  if (!scopeName) {
-    // A contributed language with no grammar bound to its id opens with no
-    // highlighting whatsoever, which is the whole point of this extension.
-    console.log(`FAIL ${lang.id}: no grammar contributes language "${lang.id}"`);
     cfgFailed++;
     continue;
   }

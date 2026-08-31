@@ -14,7 +14,7 @@ MANIFEST := --manifest-path cli/Cargo.toml
 
 .DEFAULT_GOAL := help
 .PHONY: help build test lint notices pins dogfood smoke probe e2e gates version \
-	bump control clean
+	grammars bump control clean
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -73,6 +73,24 @@ editor: ## Typecheck, test, build and package poly-editor
 	cd extensions/editor && pnpm run typecheck && pnpm test && pnpm run build && \
 		pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository
 
+# The offline half of ci.yml's grammars job. The other half re-fetches every
+# pinned grammar, which needs the network and a token; what stays here is
+# everything downstream of that -- and it is where the failures actually are.
+# This target exists because it was missing: a hand edit to the generated
+# extensions/syntax/package.json passed a full green `make gates` twice and
+# failed in CI twice, which made this file's opening claim untrue.
+#
+# The tokenizer deps go to /tmp rather than into the repo: they are two
+# packages this repo does not otherwise depend on, and pnpm has them cached
+# after the first run.
+grammars: ## Generated syntax files match sources.json; grammars tokenize
+	python3 tools/grammar-sync.py --check
+	@mkdir -p /tmp/poly-tokdeps
+	@test -d /tmp/poly-tokdeps/node_modules/vscode-textmate || ( \
+		pnpm --dir /tmp/poly-tokdeps init >/dev/null && \
+		pnpm --dir /tmp/poly-tokdeps add vscode-textmate vscode-oniguruma >/dev/null )
+	node tools/tokenize-check.mjs /tmp/poly-tokdeps/node_modules
+
 # Given the binary as well, so this asks the same question CI asks: not just
 # whether the files agree with each other, but whether the thing users run
 # agrees with them.
@@ -82,7 +100,7 @@ version: build ## Check every version string agrees, binary included
 # The order is ci.yml's, so a failure here fails at the same point CI would.
 # The list is ci.yml's too: this claims a green run means the push is already
 # checked the way CI checks it, and a gate missing from here makes that a lie.
-gates: lint test notices pins smoke probe dogfood version e2e editor ## Everything above, in CI's order
+gates: lint test notices pins smoke probe dogfood version grammars e2e editor ## Everything above, in CI's order
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0
