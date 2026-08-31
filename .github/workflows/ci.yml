@@ -292,3 +292,14 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run typecheck
           xvfb-run -a pnpm test
+      # poly-editor has no daemon to talk to and no extension-host test yet, so
+      # what CI can prove is that it compiles and that vsce will take it. The
+      # package step is the one that catches a manifest VSCode would reject --
+      # a release is a bad place to find that out.
+      - name: poly-editor builds and packages
+        working-directory: extensions/editor
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run typecheck
+          pnpm run build
+          pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository

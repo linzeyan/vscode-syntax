@@ -1,8 +1,9 @@
 name: Release
 
 # Tag vX.Y.Z (or vX.Y.Z-rc.N for a pre-release) -> 6-platform build ->
-# 7 VSIX (6 platform poly-lsp + 1 universal poly-syntax-highlight) + 6 binaries
-# + SHA256SUMS + third-party notices, uploaded to a GitHub Release.
+# 8 VSIX (6 platform poly-lsp + 2 universal: poly-syntax-highlight and
+# poly-editor) + 6 binaries + SHA256SUMS + third-party notices, uploaded to a
+# GitHub Release.
 #
 # Three dot-separated parts, not `v*`: the last step of this workflow force-
 # pushes the moving major tag (`v0`), which `v*` also matched. That published
@@ -111,16 +112,27 @@ jobs:
       - name: Verify tag matches extension versions
         run: |
           BASE="${GITHUB_REF_NAME#v}"; BASE="${BASE%%-*}"
-          for f in extensions/lsp/package.json extensions/syntax/package.json; do
+          for f in extensions/lsp/package.json extensions/syntax/package.json \
+                   extensions/editor/package.json; do
             v=$(node -p "require('./$f').version")
             if [ "$v" != "$BASE" ]; then
               echo "version mismatch: $f has $v, tag implies $BASE" >&2
               exit 1
             fi
           done
-      - name: Package universal syntax VSIX
-        working-directory: extensions/syntax
-        run: pnpm dlx @vscode/vsce package --allow-missing-repository
+      # Universal, not per-platform: neither of these carries the poly binary,
+      # so one VSIX serves every machine (02 §11.4).
+      - name: Package universal VSIX
+        run: |
+          (cd extensions/syntax && pnpm dlx @vscode/vsce package --allow-missing-repository)
+          # Built here rather than taken from the tree: dist/ is committed for
+          # convenience, and a release has to ship what the source says.
+          pnpm --dir extensions/editor install --frozen-lockfile
+          pnpm --dir extensions/editor run build
+          # --no-dependencies for the same reason package-lsp.sh passes it:
+          # nothing from node_modules ships, and vsce cannot walk pnpm's
+          # symlinked tree to prove that for itself.
+          (cd extensions/editor && pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository)
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*
@@ -140,6 +152,7 @@ jobs:
             fi
           done
           cp extensions/syntax/poly-syntax-highlight-*.vsix dist/
+          cp extensions/editor/poly-editor-*.vsix dist/
           cp extensions/lsp/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-cli.md
           cp extensions/syntax/THIRD-PARTY-NOTICES.md dist/THIRD-PARTY-NOTICES-grammars.md
           # The bare binaries are downloaded on their own, and MIT asks for the
@@ -152,8 +165,11 @@ jobs:
           # so a name that surprises `ls` is exactly the case worth surviving.
           lsp=$(find dist -type f -name 'poly-lsp-*.vsix' | wc -l)
           bins=$(find dist -type f -name 'poly-*' ! -name '*.vsix' ! -name '*.md' | wc -l)
+          universal=$(find dist -type f \( -name 'poly-syntax-highlight-*.vsix' \
+            -o -name 'poly-editor-*.vsix' \) | wc -l)
           test "$lsp" -eq 6 || { echo "expected 6 poly-lsp VSIX, got $lsp" >&2; exit 1; }
           test "$bins" -eq 6 || { echo "expected 6 binaries, got $bins" >&2; exit 1; }
+          test "$universal" -eq 2 || { echo "expected 2 universal VSIX, got $universal" >&2; exit 1; }
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

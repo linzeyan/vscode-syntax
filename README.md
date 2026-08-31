@@ -1,6 +1,6 @@
 # Poly
 
-用「兩個 VSCode extension ＋ 一個 CLI」取代為了各語言 highlight／lint／format 而
+用「三個 VSCode extension ＋ 一個 CLI」取代為了各語言 highlight／lint／format 而
 安裝的一大堆零散 extension。編輯器與 CI 共用同一個 binary、同一份設定，所以本機存
 檔跟 pipeline 的結果一定一致。
 
@@ -8,7 +8,13 @@
 | ----------------------- | ------------------------------------------------------------ |
 | `poly-syntax-highlight` | 多語言 syntax highlighting，**接管全部 VSCode 內建語言文法** |
 | `poly-lsp`              | 存檔即時 lint／format，批次命令；背後是 `poly lsp` daemon    |
+| `poly-editor`           | 編輯器端便利功能，沒有 CI 對應物的那些；不需要 poly binary   |
 | `poly`                  | 單一 binary CLI，供 CI、pre-commit、終端批次使用             |
+
+三個 extension 同版號一起發版，但彼此不相依：poly-lsp 可以單獨裝，poly-editor 連
+poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 daemon 沒起來就整個失效，
+而它的 VSIX 是分平台六份，純 TypeScript 的功能沒有理由跟著被打包六次，也沒有理由讓
+只想要 lint／format 的人一起收下。
 
 ## 功能
 
@@ -62,7 +68,18 @@
   啟動就掛）不受影響。
 - **專案內工具優先**：偵測到專案的 biome／prettier／eslint／rustfmt 就用它們，
   避免和團隊 CI 結果不一致。
-- 背景檢查 GitHub Releases（預設 7 天一次，可調可關），一鍵同時更新兩個 extension。
+- 背景檢查 GitHub Releases（預設 7 天一次，可調可關），一鍵更新裝了的那幾個
+  extension——沒裝的不會被順手裝上，那不是更新。
+
+### poly-editor — 編輯器便利功能
+
+沒有 CI 對應物的那些功能住在這裡，跟 poly binary 完全無關，所以裝不裝、要不要更新
+都可以單獨決定。
+
+- **`Poly: Copy Path with Line Numbers`**：複製 `路徑:行號`；選取多行時是
+  `路徑:42-51`。VSCode 內建的 Copy Relative Path 只到路徑為止，`:42` 是唯一的差別，
+  但那一截才是重點——`src/lib.rs:42` 正是 `rg` 印的、CI annotation 連過去的、終端機
+  能點的，也是 poly 自己診斷輸出的形狀。預設沒綁快捷鍵，命令面板與編輯器右鍵都有。
 
 ### poly — CLI
 
@@ -90,13 +107,13 @@
 ## 安裝
 
 需要 VSCode 1.85 以上。從
-[Releases](https://github.com/linzeyan/vscode-syntax/releases/latest) 下載，
-兩個 VSIX 都裝：
+[Releases](https://github.com/linzeyan/vscode-syntax/releases/latest) 下載：
 
 1. `poly-syntax-highlight-<版本>.vsix` — 通用，不分平台。
 2. `poly-lsp-<平台>-<版本>.vsix` — **要挑對平台**，內含對應的 poly binary：
    `darwin-arm64`、`darwin-x64`、`linux-arm64`、`linux-x64`、`win32-arm64`、
    `win32-x64`。
+3. `poly-editor-<版本>.vsix` — 通用，**可選**。編輯器便利功能，不含 binary。
 
 安裝方式：VSCode 側邊欄 Extensions → 右上角 `...` → **Install from VSIX...** →
 選檔案 → 重新載入視窗。或用命令列：
@@ -104,9 +121,10 @@
 ```sh
 code --install-extension poly-syntax-highlight-0.8.0.vsix
 code --install-extension poly-lsp-darwin-arm64-0.8.0.vsix
+code --install-extension poly-editor-0.8.0.vsix
 ```
 
-之後的版本由 poly-lsp 自己提示更新，不必再手動抓。
+之後的版本由 poly-lsp 自己提示更新，不必再手動抓——它只更新你已經裝了的那幾個。
 
 ### 從 0.5.0 以前升上來
 

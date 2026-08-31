@@ -1,0 +1,8 @@
+# Same decision as extensions/lsp: pnpm wants dependency lifecycle scripts
+# recorded rather than left implicit, and the only one here is esbuild's
+# postinstall, which fetches a platform binary its optional dependency already
+# provides. false rather than true, so an install runs no third-party code --
+# this repo is developed with ignore-scripts on globally, and a dependency that
+# only works when a postinstall runs would work in CI and nowhere else.
+allowBuilds:
+  esbuild: false

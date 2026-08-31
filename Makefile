@@ -64,6 +64,13 @@ probe: build ## Language server proxy, against whichever servers are installed
 e2e: ## Typecheck and run the extension tests in a real extension host
 	cd extensions/lsp && pnpm run typecheck && pnpm test
 
+# poly-editor has no daemon and no extension-host test, so what there is to
+# prove is that it compiles and that vsce will take it -- a manifest VSCode
+# would reject is not something to discover during a release.
+editor: ## Typecheck, build and package poly-editor
+	cd extensions/editor && pnpm run typecheck && pnpm run build && \
+		pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository
+
 # Given the binary as well, so this asks the same question CI asks: not just
 # whether the files agree with each other, but whether the thing users run
 # agrees with them.
@@ -73,7 +80,7 @@ version: build ## Check every version string agrees, binary included
 # The order is ci.yml's, so a failure here fails at the same point CI would.
 # The list is ci.yml's too: this claims a green run means the push is already
 # checked the way CI checks it, and a gate missing from here makes that a lie.
-gates: lint test notices pins smoke probe dogfood version e2e ## Everything above, in CI's order
+gates: lint test notices pins smoke probe dogfood version e2e editor ## Everything above, in CI's order
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0

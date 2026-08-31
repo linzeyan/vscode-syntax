@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Move every version string in the repo to a new release, or check they agree.
 
-The version lives in places none of which can be derived from another: two
-package.json, the cargo workspace, the lockfile cargo regenerates, and a
-handful of spots in prose. A release that bumps all but one ships an extension
+The version lives in places none of which can be derived from another: one
+package.json per extension, the cargo workspace, the lockfile cargo
+regenerates, and a handful of spots in prose. A release that bumps all but one ships an extension
 whose binary reports a different version than its manifest, which is a state
 the daemon has a whole status-bar colour for.
 
@@ -40,6 +40,7 @@ CARGO = ROOT / "cli" / "Cargo.toml"
 MANIFESTS = [
     ROOT / "extensions" / "lsp" / "package.json",
     ROOT / "extensions" / "syntax" / "package.json",
+    ROOT / "extensions" / "editor" / "package.json",
 ]
 # Listed explicitly rather than globbed: docs/ is a symlink to another repo and
 # its roadmap is full of old version numbers that are evidence of what was

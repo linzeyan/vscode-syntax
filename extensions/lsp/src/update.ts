@@ -4,10 +4,24 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 
-// poly-syntax-highlight and poly-lsp release in lockstep (02 §8); poly-lsp owns the
-// update check for both.
+// Every poly extension releases in lockstep (02 §8); poly-lsp owns the update
+// check for all of them, because it is the one that already runs a daemon and
+// already has a status bar to say something went wrong in.
 const REPO = "linzeyan/vscode-syntax";
-const SYNTAX_EXTENSION = "ricky.poly-syntax-highlight";
+
+/**
+ * The universal VSIX that ship alongside poly-lsp, and the extension id each
+ * one installs as.
+ *
+ * Updated only when the user already has them. poly-lsp works standalone (both
+ * READMEs document that), and installing an extension somebody deliberately
+ * does not have is not an update -- it is poly deciding what belongs on their
+ * machine.
+ */
+const COMPANIONS: readonly [string, string][] = [
+  ["poly-syntax-highlight", "ricky.poly-syntax-highlight"],
+  ["poly-editor", "ricky.poly-editor"],
+];
 const LAST_CHECK = "updateCheck.lastCheck";
 const ETAG = "updateCheck.etag";
 const CACHED_TAG = "updateCheck.cachedTag";
@@ -97,8 +111,13 @@ async function download(url: string, dest: string): Promise<Buffer> {
 /** Download both VSIX, verify against SHA256SUMS, install, prompt reload. */
 async function installUpdate(release: Release): Promise<void> {
   const version = release.tag.replace(/^v/, "");
+  // Companions first, so a reload part-way through an install still has a
+  // grammar and a client that match. Filtered before the download rather than
+  // before the install: there is no reason to spend the bytes on a VSIX this
+  // machine will not take.
   const names = [
-    `poly-syntax-highlight-${version}.vsix`,
+    ...COMPANIONS.filter(([, id]) => vscode.extensions.getExtension(id))
+      .map(([name]) => `${name}-${version}.vsix`),
     `poly-lsp-${vsceTarget()}-${version}.vsix`,
   ];
   const sumsUrl = release.assets.get("SHA256SUMS");
@@ -135,15 +154,7 @@ async function installUpdate(release: Release): Promise<void> {
   );
 
   try {
-    // Syntax first so a mid-update reload still has matching grammar+client.
-    // Skip poly-syntax-highlight if the user never installed it (README documents the
-    // standalone case).
     for (const file of files) {
-      const standalone = file.includes("poly-syntax-highlight")
-        && !vscode.extensions.getExtension(SYNTAX_EXTENSION);
-      if (standalone) {
-        continue;
-      }
       await vscode.commands.executeCommand(
         "workbench.extensions.installExtension",
         vscode.Uri.file(file),

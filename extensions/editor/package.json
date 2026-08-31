@@ -1,0 +1,43 @@
+{
+  "name": "poly-editor",
+  "displayName": "Poly Editor",
+  "description": "Editor-side conveniences with no CI counterpart: copy path:line references in the same shape poly's diagnostics print.",
+  "version": "0.8.0",
+  "publisher": "ricky",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "poly.copyPathWithLine",
+        "title": "Copy Path with Line Numbers",
+        "category": "Poly"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "poly.copyPathWithLine",
+          "group": "9_cutcopypaste"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.4.0"
+  },
+  "packageManager": "pnpm@11.5.3"
+}
