@@ -107,6 +107,35 @@ output "greeting" {
 }
 """
 
+# The doc comment is load-bearing, not decoration: buf answers hover out of the
+# comment above a definition and returns null where there is none, so a sample
+# without it would test the hover path against a server that had nothing to say.
+MAIN_PROTO = """syntax = "proto3";
+
+package demo.v1;
+
+// Greeting is the text returned to the caller.
+message Greeting {
+  string text = 1;
+}
+
+message Response {
+  Greeting greeting = 1;
+}
+"""
+
+# buf.yaml is what makes this a module. Without one buf falls back to the
+# working directory as the module root and PACKAGE_DIRECTORY_MATCH fires on a
+# package that is perfectly fine -- the same trap `buf_files` skips files to
+# avoid. The directory matches the package for the same reason.
+BUF_YAML = """version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+"""
+
 MAIN_LUA = """local function greet(name)
     return "hello " .. name
 end
@@ -159,6 +188,11 @@ class Case:
     # one -- selene and swiftlint are the only linters poly runs in the editor
     # for a proxied language, and no language server looks for what they do.
     merged_source: str = None
+    # Set where poly downloads the server rather than finding it on PATH, which
+    # buf is the only one of. PATH says nothing about whether it will run, so
+    # the skip below has nothing to read -- and a case that can only ever skip
+    # is the vacuous check this probe keeps having to remove.
+    managed: bool = False
     # Exactly what poly must register for this server, `textDocument/` dropped.
     # Measured from each server's own initialize result, then written down --
     # discovering it at runtime would make the check agree with whatever poly
@@ -280,6 +314,23 @@ CASES = [
         # The thinnest of the six: no rename, no code actions, and none of the
         # position-scoped extras beyond signatureHelp.
         registers=COMMON | {"declaration"},
+    ),
+    # The one server poly pins itself, and the one that is not a toolchain's:
+    # a .proto has no build behind it for buf to match. `buf lsp serve`, so
+    # like terraform-ls it needs its subcommand.
+    Case(
+        language="protobuf",
+        server="buf",
+        managed=True,
+        files={"buf.yaml": BUF_YAML, "demo/v1/main.proto": MAIN_PROTO},
+        entry="demo/v1/main.proto",
+        definition_line=5,
+        call_line=10,
+        call_character=4,  # inside `Greeting` on the field's type
+        hover_needle="Greeting",
+        # No implementation and no signatureHelp: protobuf has neither an
+        # interface to implement nor a call to fill in arguments for.
+        registers=FULL - {"implementation", "signatureHelp"},
     ),
     Case(
         language="lua",
@@ -938,9 +989,27 @@ def run(case, logs=True, graceful=True):
 
 ran = []
 for probe in CASES:
-    if not shutil.which(probe.server):
+    # A managed server is poly's to produce, so there is nothing to skip on:
+    # if it does not run, that is the finding, not a reason to stay quiet.
+    if not probe.managed and not shutil.which(probe.server):
         print(f"SKIPPED {probe.language}: {probe.server} is not on PATH")
         continue
+    if probe.managed:
+        # Make poly produce it up front rather than during the case. Two
+        # reasons, both learned from watching this hang: a server that cannot
+        # be resolved surfaces as a case that sits until settle's 120s
+        # deadline -- several times over, once per request -- instead of one
+        # readable line; and on a cold cache the download itself would land
+        # inside that deadline and could fail the case for being slow.
+        got = subprocess.run(
+            [BIN, "tools", "install", probe.server],
+            capture_output=True,
+            text=True,
+            check=False,  # the exit code is the answer, not an exception
+        )
+        assert got.returncode == 0, (
+            f"poly could not produce {probe.server}: {got.stderr.strip()}"
+        )
     print(f"{probe.language} via {probe.server}:")
     run(probe)
     ran.append(probe.language)

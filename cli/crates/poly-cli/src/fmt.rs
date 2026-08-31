@@ -15,7 +15,16 @@ pub fn formattable(lang: &str) -> bool {
     poly_engines::supported_language(lang)
         || matches!(
             lang,
-            "rust" | "shellscript" | "go" | "lua" | "c" | "cpp" | "terraform" | "swift" | "jupyter"
+            "rust"
+                | "shellscript"
+                | "go"
+                | "lua"
+                | "c"
+                | "cpp"
+                | "terraform"
+                | "swift"
+                | "jupyter"
+                | "protobuf"
         )
 }
 
@@ -94,11 +103,28 @@ fn dispatch(
     // overriding those from poly.toml would put us in a fight with the repo's
     // .prettierrc / rustfmt.toml that the tool itself would win anyway.
     if poly_engines::supported_language(lang) {
-        return poly_engines::format(lang, path, text, config.format_options(lang));
+        // poly.toml over .editorconfig: an explicit setting beats an inherited
+        // one. The inherited half is filtered to what this engine can act on
+        // first, so a repo-wide `indent_size` does not make poly refuse to
+        // format XML -- see `drop_unhonored`.
+        let inherited = poly_engines::drop_unhonored(lang, poly_core::editorconfig_options(path));
+        let opts = config.format_options(lang).over(inherited);
+        return poly_engines::format(lang, path, text, opts);
     }
 
     // Layer 3: managed external formatters (or toolchain-only ones resolved
     // from PATH — clang-format/terraform/swift-format are never downloaded).
+
+    // buf takes the whole call rather than a row in the table below: it is the
+    // one formatter here that will not read stdin, so the buffer has to reach
+    // it as a file. See `buf_format`.
+    if lang == "protobuf" {
+        let Some(bin) = cached_tool("buf", config) else {
+            return Ok(None);
+        };
+        return poly_tools::run::buf_format(&bin, path, text);
+    }
+
     let path_arg = path.to_string_lossy();
     let (tool, args): (&str, Vec<&str>) = match lang {
         "shellscript" => ("shfmt", vec!["--filename", &path_arg]),

@@ -42,6 +42,7 @@ const LANGUAGES = [
   "cpp",
   "terraform",
   "swift",
+  "protobuf",
 ];
 
 // Format-on-save is declared, not written: contributes.configurationDefaults
@@ -336,6 +337,66 @@ export async function activate(context: vscode.ExtensionContext) {
         terminal.sendText(`"${serverPath}" check "${target}"`);
       },
     ),
+    // Minify is the inverse of what every other command here does, so it is
+    // driven by the user rather than by a save: nothing about it belongs in
+    // format-on-save, and `poly fmt` would undo it on the next run.
+    vscode.commands.registerCommand("poly.minifyJson", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.uri.scheme !== "file") {
+        return;
+      }
+      // Checked here so the message can say which of the two things went
+      // wrong: the daemon answers "no edits" for a file that is already
+      // minified and for one that was never JSON, and those deserve different
+      // words.
+      if (!["json", "jsonc"].includes(editor.document.languageId)) {
+        vscode.window.showWarningMessage(
+          `Poly: Minify JSON needs a JSON file (this one is ${editor.document.languageId})`,
+        );
+        return;
+      }
+      if (!client || health !== "ready") {
+        await reportDaemonFailure(health);
+        return;
+      }
+      try {
+        const edits = (await client.sendRequest("workspace/executeCommand", {
+          // Not "poly.minifyJson": the client registers every command the
+          // server advertises as an editor command, so an id shared with the
+          // one registered above would collide and stop the client starting.
+          command: "poly.minifyJsonEdits",
+          arguments: [{ uri: editor.document.uri.toString() }],
+        })) as {
+          range: {
+            start: { line: number; character: number };
+            end: { line: number; character: number };
+          };
+          newText: string;
+        }[];
+        if (edits.length === 0) {
+          vscode.window.setStatusBarMessage("Poly: already minified", 3000);
+          return;
+        }
+        // An editor edit rather than a WorkspaceEdit: undo stays a single
+        // keystroke, which is the first thing anyone reaches for after
+        // watching a file collapse into one line.
+        await editor.edit((builder) => {
+          for (const edit of edits) {
+            builder.replace(
+              new vscode.Range(
+                edit.range.start.line,
+                edit.range.start.character,
+                edit.range.end.line,
+                edit.range.end.character,
+              ),
+              edit.newText,
+            );
+          }
+        });
+      } catch (err) {
+        vscode.window.showErrorMessage(`Poly: minify failed: ${err}`);
+      }
+    }),
     vscode.commands.registerCommand("poly.checkForUpdates", () => checkForUpdates(context, false)),
   );
 

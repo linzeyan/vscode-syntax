@@ -14,6 +14,13 @@ dprint-plugin-json = "0.23"
 dprint-plugin-markdown = "0.22"
 dprint-plugin-toml = "0.8"
 dprint-plugin-typescript = "0.96"
+# .editorconfig parsing. Worth a dependency rather than a hand-rolled INI
+# reader: the format's globs are their own dialect ({a,b} and {n1..n2}, which
+# globset does not do), the file chain stops at `root = true`, and
+# `indent_size = tab` defers to tab_width. Getting 95% of that right is the bad
+# outcome -- it reads a project's real config and quietly formats to something
+# else.
+ec4rs = "1.2"
 globset = "0.4"
 ignore = "0.4"
 lsp-server = "0.7"

@@ -191,6 +191,42 @@ assert summary and summary["changed"], f"expected batch change: {resp}"
 with open(batch_file) as f:
     assert f.read() == '{ "b": 1, "a": 2 }\n', "batch format did not rewrite file"
 
+# Minify via executeCommand: the editor command that replaces a JSON Tools
+# install. Edits rather than a file write, because the buffer it acts on may
+# never have been saved -- so this asserts on what comes back, not on disk.
+MINIFY_URI = "file:///tmp/smoke-minify.json"
+send(
+    {
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {
+            "textDocument": {
+                "uri": MINIFY_URI,
+                "languageId": "json",
+                "version": 1,
+                # Key order and the spaces inside the string are the two things
+                # a round-trip through a JSON map type would quietly destroy.
+                "text": '{\n  "b": 1,\n  "a": "two  spaces"\n}\n',
+            }
+        },
+    }
+)
+send(
+    {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "workspace/executeCommand",
+        "params": {
+            "command": "poly.minifyJsonEdits",
+            "arguments": [{"uri": MINIFY_URI}],
+        },
+    }
+)
+resp = recv_response(11)
+edits = resp.get("result")
+assert edits, f"expected minify edits: {resp}"
+assert edits[0]["newText"] == '{"b":1,"a":"two  spaces"}', edits[0]["newText"]
+
 # Every request gets an answer, including the ones poly does not implement.
 # Silence is not a polite decline: the editor keeps waiting on that id, so the
 # feature looks hung rather than absent. Caught for real by a probe that hung
@@ -219,5 +255,5 @@ except subprocess.TimeoutExpired:
 assert proc.returncode == 0, f"server exit code {proc.returncode}"
 print(
     "LSP SMOKE PASS: formatting, diagnostics, rule hover, batch executeCommand,"
-    " unhandled methods declined, clean shutdown"
+    " minify, unhandled methods declined, clean shutdown"
 )

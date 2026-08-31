@@ -42,7 +42,8 @@
     "onLanguage:c",
     "onLanguage:cpp",
     "onLanguage:terraform",
-    "onLanguage:swift"
+    "onLanguage:swift",
+    "onLanguage:protobuf"
   ],
   "contributes": {
     "commands": [
@@ -69,6 +70,10 @@
       {
         "command": "poly.lintPath",
         "title": "Poly: Lint (poly check)"
+      },
+      {
+        "command": "poly.minifyJson",
+        "title": "Poly: Minify JSON"
       },
       {
         "command": "poly.checkForUpdates",
@@ -156,7 +161,8 @@
       "[c]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[cpp]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[swift]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
-      "[terraform]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true }
+      "[terraform]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[protobuf]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true }
     }
   },
   "packageManager": "pnpm@11.5.3",

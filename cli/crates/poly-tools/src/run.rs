@@ -1174,6 +1174,195 @@ fn eslint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
     Ok(out)
 }
 
+/// Distinguishes concurrent `buf format` calls. See `buf_format`.
+static FORMAT_SCRATCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Format a buffer by handing buf a file, because it will not read stdin.
+///
+/// `buf format -` reads `-` as a path to a binary image rather than as stdin,
+/// and no flag changes that -- so unlike every other formatter poly
+/// dispatches to, the text has to reach this one through the filesystem.
+///
+/// The scratch file gets a directory of its own, and both halves of that
+/// matter. Not next to the original, because a stray `.proto` inside the
+/// user's module is something `buf lint` and every glob in their build would
+/// pick up. Not loose in the system temp directory either: buf is
+/// module-oriented and reads the *directory* around whatever file it is given,
+/// so on macOS it walks into `$TMPDIR` and fails on `TemporaryItems`, which no
+/// process is allowed to open. A directory holding exactly one file is the
+/// only input shape with no second file to trip over. Unique per call for the
+/// same reason the tool installer's is -- files are formatted concurrently.
+///
+/// buf resolves nothing about a format from the module (there is no `format`
+/// section in buf.yaml -- the style is fixed, like gofmt's), so a file
+/// formatted in isolation comes back the same as one formatted in place.
+pub fn buf_format(cmd: &Path, path: &Path, text: &str) -> Result<Option<String>> {
+    let dir = std::env::temp_dir().join(format!(
+        "poly-proto-{}-{}",
+        std::process::id(),
+        FORMAT_SCRATCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    // The real filename, so a message that escapes the rewrite below still
+    // names something the user recognizes.
+    let scratch = dir.join(path.file_name().unwrap_or("buffer.proto".as_ref()));
+    let outcome = std::fs::write(&scratch, text)
+        .with_context(|| format!("writing {}", scratch.display()))
+        .and_then(|()| {
+            Command::new(cmd)
+                .arg("format")
+                .arg(&scratch)
+                .output()
+                .with_context(|| format!("running {}", cmd.display()))
+        });
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let out = outcome?;
+    if !out.status.success() {
+        // buf names the file it was given in every line of a parse error, and
+        // the file it was given is a scratch path that no longer exists.
+        // Pointing the user at their own file is the difference between a
+        // message they can act on and one that looks like a poly bug.
+        anyhow::bail!(
+            "buf failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+                .trim()
+                .replace(&*scratch.to_string_lossy(), &path.to_string_lossy())
+        );
+    }
+    let formatted = String::from_utf8(out.stdout).context("buf output not UTF-8")?;
+    Ok((formatted != text).then_some(formatted))
+}
+
+/// Lint `.proto` files, one invocation per buf module.
+///
+/// Grouped rather than batched because `buf lint` accepts exactly one input
+/// and resolves the module by walking up from it. `--path` then narrows that
+/// module to the files poly was asked about, so a module of two hundred
+/// `.proto` files costs one invocation and one image build rather than two
+/// hundred of each.
+///
+/// A file with no `buf.yaml` above it is skipped, loudly. That is not
+/// squeamishness: with no module, buf falls back to treating the working
+/// directory as the root, and `PACKAGE_DIRECTORY_MATCH` then fires on every
+/// file whose package does not happen to match a path relative to wherever
+/// poly was invoked from. Findings that move when the caller's cwd moves are
+/// worse than no findings (R5/A4) -- and buf's own language server, running
+/// against the same file, would report the same nothing.
+pub fn buf_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
+    let mut modules: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
+    let mut orphans = 0usize;
+    for file in files {
+        match nearest_ancestor_file(file, "buf.yaml")
+            .and_then(|c| c.parent().map(Path::to_path_buf))
+        {
+            Some(module) => modules.entry(module).or_default().push(file.clone()),
+            None => orphans += 1,
+        }
+    }
+    if orphans > 0 {
+        eprintln!("[poly] buf: skipping {orphans} .proto files with no buf.yaml above them");
+    }
+
+    let mut issues = Vec::new();
+    for (module, group) in modules {
+        let mut args = vec![
+            "lint".to_string(),
+            module.to_string_lossy().into_owned(),
+            "--error-format=json".to_string(),
+        ];
+        for file in &group {
+            args.push("--path".to_string());
+            // Absolute, because the module path already is. buf resolves a
+            // relative --path against the *working directory* and then
+            // re-expresses it relative to the input, so mixing the two bases
+            // produces "../../../..: is outside the context directory" -- and
+            // on macOS they differ by default, where /tmp resolves to
+            // /private/tmp on the way to the module but not on the way to the
+            // file.
+            args.push(
+                std::path::absolute(file)
+                    .unwrap_or_else(|_| file.clone())
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        issues.extend(buf_parse(&buf_run(cmd, &args)?)?);
+    }
+    Ok(issues)
+}
+
+/// Run buf, telling "found violations" apart from "could not check".
+///
+/// The other linters here can be read off stdout alone, because anything they
+/// could not check they still report on. buf exits 100 for violations and 1
+/// for a module it refused to build -- and in the second case stdout is empty,
+/// which is byte-for-byte what a clean module looks like. Swallowing that
+/// would let a pipeline go green having checked nothing, which is the one
+/// outcome A10 rules out. Its stderr is kept for the same reason: it is the
+/// only place buf says what went wrong.
+fn buf_run(cmd: &Path, args: &[&str]) -> Result<Vec<u8>> {
+    let out = Command::new(cmd)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("running {}", cmd.display()))?;
+    if !out.status.success() && out.status.code() != Some(100) {
+        anyhow::bail!("buf lint: {}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    Ok(out.stdout)
+}
+
+/// One page per rule, anchored by the lowercased rule id. Not derived by poly:
+/// it is the same URL buf's own language server attaches to the same finding
+/// as a `codeDescription`, and the CLI's JSON is the only output of the two
+/// that leaves it out.
+fn buf_url(rule: &str) -> String {
+    format!(
+        "https://buf.build/docs/lint/rules/#{}",
+        rule.to_ascii_lowercase()
+    )
+}
+
+/// buf emits one JSON object per line, 1-based, with no severity field: every
+/// record is a lint violation. Its own language server reports them as
+/// warnings, and poly says the same thing the editor would.
+fn buf_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
+    let mut out = Vec::new();
+    for line in stdout.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
+        let item: BufViolation = serde_json::from_slice(line).context("parsing buf lint output")?;
+        out.push(FileIssue {
+            file: PathBuf::from(item.path),
+            issue: Issue {
+                line: item.start_line.saturating_sub(1),
+                col: item.start_column.saturating_sub(1),
+                end_line: item.end_line.saturating_sub(1),
+                end_col: item.end_column.saturating_sub(1),
+                url: Some(buf_url(&item.r#type)),
+                code: item.r#type,
+                message: item.message,
+                severity: Severity::Warning,
+                source: "buf",
+                fix: None,
+            },
+        });
+    }
+    Ok(out)
+}
+
+#[derive(Deserialize)]
+struct BufViolation {
+    path: String,
+    start_line: u32,
+    start_column: u32,
+    end_line: u32,
+    end_column: u32,
+    r#type: String,
+    message: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1185,6 +1374,44 @@ mod tests {
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].issue.code, "SC2086");
         assert_eq!(issues[0].issue.line, 1);
+    }
+
+    #[test]
+    fn parses_buf_lint_ndjson() {
+        // One object per line, 1-based, and no severity field -- the shape the
+        // parser has to keep agreeing with. The docs link is derived here and
+        // handed over by buf's own language server for the same finding, so a
+        // change in the anchor would make the two disagree about one rule.
+        let raw = br#"{"path":"demo/v1/a.proto","start_line":3,"start_column":9,"end_line":3,"end_column":13,"type":"MESSAGE_PASCAL_CASE","message":"Message name \"ping\" should be PascalCase, such as \"Ping\"."}
+{"path":"demo/v1/a.proto","start_line":4,"start_column":10,"end_line":4,"end_column":14,"type":"FIELD_LOWER_SNAKE_CASE","message":"Field name \"Name\" should be lower_snake_case, such as \"name\"."}"#;
+        let issues = buf_parse(raw).unwrap();
+        assert_eq!(issues.len(), 2);
+        assert_eq!(issues[0].issue.code, "MESSAGE_PASCAL_CASE");
+        assert_eq!((issues[0].issue.line, issues[0].issue.col), (2, 8));
+        assert_eq!(
+            issues[0].issue.url.as_deref(),
+            Some("https://buf.build/docs/lint/rules/#message_pascal_case")
+        );
+        assert_eq!(issues[1].issue.severity, Severity::Warning);
+    }
+
+    /// A `.proto` with no `buf.yaml` above it must be skipped, not linted
+    /// against whatever directory poly happens to have been invoked from --
+    /// buf falls back to the cwd as the module root, and PACKAGE_DIRECTORY_MATCH
+    /// then fires on a package that is perfectly correct.
+    ///
+    /// The binary path is deliberately one that cannot be spawned: if the skip
+    /// ever regresses into an invocation, this fails with a spawn error rather
+    /// than passing quietly. It is also what lets the test run with no buf
+    /// installed.
+    #[test]
+    fn a_proto_outside_a_module_is_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("orphan.proto");
+        std::fs::write(&file, "syntax = \"proto3\";\n").unwrap();
+
+        let issues = buf_files(Path::new("/nonexistent/buf"), &[file]).unwrap();
+        assert!(issues.is_empty(), "linted a file with no module");
     }
 
     #[test]

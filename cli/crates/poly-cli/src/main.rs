@@ -49,6 +49,7 @@ fn run() -> Result<i32> {
     match cmd.as_str() {
         "fmt" => cmd_fmt(&split_flags("fmt", &rest)?),
         "check" => cmd_check(&split_flags("check", &rest)?),
+        "minify" => cmd_minify(&split_flags("minify", &rest)?),
         "tools" => cmd_tools(&rest),
         "bench" => {
             let path = rest.first().context("usage: poly bench <file> [iters]")?;
@@ -139,6 +140,11 @@ fn split_flags<'a>(cmd: &str, rest: &'a [String]) -> Result<Invocation<'a>> {
             paths.push(PathBuf::from(arg));
             continue;
         };
+        // Before the `--flag=value` forms below, which would otherwise consume
+        // these two without ever reaching the match.
+        if cmd == "minify" && (flag.starts_with("--fail-on") || flag.starts_with("--format")) {
+            bail!("{flag} does not apply to `poly minify`");
+        }
         if let Some(value) = flag.strip_prefix("--fail-on=") {
             fail_on = Some(FailOn::parse(value).map_err(|e| anyhow::anyhow!(e))?);
             continue;
@@ -148,6 +154,13 @@ fn split_flags<'a>(cmd: &str, rest: &'a [String]) -> Result<Invocation<'a>> {
             continue;
         }
         match flag {
+            // minify produces no findings to shape and runs entirely on
+            // embedded engines, so there is nothing for these to act on. Same
+            // reasoning as the `--compact` check below: a flag spelled right
+            // that silently does nothing is worse than one that is rejected.
+            "--fail-on" | "--format" | "--strict" | "--compact" if cmd == "minify" => {
+                bail!("{flag} does not apply to `poly minify`")
+            }
             "--fail-on" | "--format" => expecting = Some(flag),
             "--strict" | "--changed" | "--compact" | "--no-ignore" | "--hidden" => flags.push(flag),
             "--check" if cmd == "fmt" => flags.push(flag),
@@ -351,6 +364,48 @@ fn cmd_fmt(inv: &Invocation) -> Result<i32> {
     Ok(if fatal { 1 } else { 0 })
 }
 
+/// `poly minify <paths>`: strip JSON down to what a machine needs.
+///
+/// Its own command rather than a `poly fmt` flag because the two have opposite
+/// contracts -- `fmt` makes a file match the project's style, and nobody's
+/// style is one 40KB line. Sharing the walk with `fmt` is what makes it worth
+/// having in the CLI at all: the same paths, the same excludes, the same
+/// answer as the editor command (R5/A4).
+fn cmd_minify(inv: &Invocation) -> Result<i32> {
+    init_thread_pool();
+    let paths: Vec<PathBuf> = if inv.has("--changed") {
+        match changed_scope(&inv.paths)? {
+            Some(files) => files,
+            None => return Ok(0),
+        }
+    } else {
+        inv.paths.clone()
+    };
+    let tally = crate::batch::minify_paths(&paths, inv.walk())?;
+
+    let base = std::env::current_dir().and_then(|d| d.canonicalize()).ok();
+    let shown = |path: &Path| match &base {
+        Some(base) => relative_to_base(path, base),
+        None => path.to_path_buf(),
+    };
+    for path in &tally.changed {
+        println!("minified {}", shown(path).display());
+    }
+    for (path, err) in &tally.errors {
+        eprintln!("{}: {err}", shown(path).display());
+    }
+    eprintln!(
+        "{} files: {} minified, {} unchanged, {} errors",
+        tally.total,
+        tally.changed.len(),
+        tally.unchanged,
+        tally.errors.len()
+    );
+    // A file that could not be parsed is the only failure here; "already
+    // minified" is a normal outcome, not a finding.
+    Ok(if tally.errors.is_empty() { 0 } else { 2 })
+}
+
 fn is_workflow_file(path: &Path) -> bool {
     let mut comps = path.components().rev();
     let file_ok = path
@@ -481,6 +536,11 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             "swiftlint",
             group("swift"),
             Box::new(poly_tools::run::swiftlint_files),
+        ),
+        (
+            "buf",
+            group("protobuf"),
+            Box::new(poly_tools::run::buf_files),
         ),
         (
             "typos",

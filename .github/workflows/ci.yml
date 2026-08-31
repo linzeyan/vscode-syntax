@@ -212,6 +212,11 @@ jobs:
           # swift is the one language left out: there is no Swift toolchain on
           # these runners. It stays verified locally on macOS, and the probe
           # prints the skip rather than passing quietly.
+          #
+          # buf is absent from this list on purpose, not by oversight: poly
+          # downloads it rather than finding it on PATH, so PATH has nothing to
+          # assert. Its case runs unconditionally for the same reason -- if buf
+          # does not come up, that is the finding.
           gopls version
           rust-analyzer --version
           clangd --version

@@ -65,6 +65,7 @@ pub fn text(lang: Lang) -> String {
 usage:
   poly fmt   [paths...] [flags]         format in place
   poly check [paths...] [flags]         run the linters
+  poly minify [paths...] [flags]        strip JSON to one line, in place
   poly tools <list|install> [tool...]   inspect or pre-fetch external tools
   poly lsp                              language server for the editor
   poly bench <file> [iters]             time the formatter on one file
@@ -98,6 +99,7 @@ language: POLY_LANG=en or POLY_LANG=zh-TW (defaults to the system locale).
 用法：
   poly fmt   [路徑...] [旗標]           就地格式化
   poly check [路徑...] [旗標]           跑 linter
+  poly minify [路徑...] [旗標]          把 JSON 壓成一行，就地改寫
   poly tools <list|install> [工具...]   查看或預先抓取外部工具
   poly lsp                              給編輯器用的 language server
   poly bench <檔案> [次數]              量單一檔案的格式化耗時
@@ -184,6 +186,7 @@ mod tests {
         for token in [
             "fmt",
             "check",
+            "minify",
             "tools",
             "lsp",
             "bench",

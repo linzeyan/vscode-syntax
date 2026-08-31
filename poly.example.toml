@@ -57,6 +57,14 @@ fail-on = "warning"
 # Setting a knob the engine does not have fails the run and names the key,
 # rather than applying two of three and leaving you to diff the output.
 #
+# A project with a .editorconfig gets its indent_style / indent_size /
+# max_line_length for free -- those three keys are exactly these three knobs, so
+# there is nothing to copy over. Keys written here win, key by key: poly.toml
+# setting line-width and .editorconfig setting the indent means both apply. The
+# asymmetry is deliberate -- a value the engine cannot act on is dropped quietly
+# when .editorconfig said it and fails the run when this file did. That file is
+# aimed at every editor the repo has ever opened; this one is aimed at poly.
+#
 # Defaults are each engine's own, applied when the key is absent:
 #
 #   language                      line-width  indent-width  use-tabs
@@ -169,7 +177,12 @@ include-hidden = false
 #   typos 1.49.0          shfmt 3.13.1         ruff 0.16.4
 #   tflint 0.64.0         gofumpt 0.11.0       golangci-lint 2.13.1
 #   stylua 2.5.2          selene 0.31.0        swiftlint 0.65.1
-#   terraform system      clang-format system  swift-format system
+#   buf 1.72.0            terraform system     clang-format system
+#   swift-format system
+#
+# buf is one binary doing three jobs -- it formats protobuf, lints it, and is
+# the language server `poly lsp` starts for it -- so an entry here governs all
+# three at once. "off" leaves .proto files untouched by every one of them.
 #
 # prettier, biome, eslint and rustfmt are not listed here on purpose: poly uses
 # them only when it finds them installed in the project alongside their own

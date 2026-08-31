@@ -27,21 +27,29 @@
 ### poly-lsp — 編輯器整合
 
 - **Format**：Format Document／`editor.formatOnSave`，加上批次命令 Format
-  File／Folder／Workspace／Git Repo／Git Changed Files。
+  File／Folder／Workspace／Git Repo／Git Changed Files。專案有 `.editorconfig`
+  的話直接沿用，縮排與行寬不必再抄一份到 `poly.toml`。
 - **Lint**：存檔即時 diagnostics 進 Problems panel；`Poly: Lint (poly check)`
   在終端跑完整 CLI。
+- **`Poly: Minify JSON`**：把當前 JSON／JSONC buffer 壓成一行。刻意**不**進
+  format-on-save——它是格式化的反向操作，`poly fmt` 下一次就會把它還原。改動以編輯器
+  edit 送出而非寫檔，所以 undo 是一個按鍵，未存檔的 buffer 也能用。
 - **規則說明**：滑鼠移到 SQL 的波浪線上會顯示 sqruff 該條規則的 anti-pattern／
   best-practice 全文。sqruff 沒有文件站可連，那份說明編在 binary 裡，版本精確、
   離線可讀。其他工具有自己的規則頁，走規則代碼上的超連結。
 - **語言伺服器（預設關閉）**：`poly.languageServers` 打開後，poly 會啟動專案自己
   toolchain 裡的 language server，把 hover、go-to-definition、declaration、type
   definition、implementation、references、outline、completion、signature help、
-  symbol highlight、folding、expand selection、rename、code action 路由給它。目前六個：
+  symbol highlight、folding、expand selection、rename、code action 路由給它。目前七個：
   gopls（Go）、rust-analyzer（Rust）、clangd（C／C++）、sourcekit-lsp（Swift）、terraform-ls
-  （Terraform）、lua-language-server（Lua）。poly **不實作**這些功能也不代裝
-  server——只從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。實際能用
+  （Terraform）、lua-language-server（Lua）、buf（Protobuf）。poly **不實作**這些功能，
+  server 一律從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。
+  **buf 是唯一的例外**，poly 會代抓：其他 server 都得配合建置專案的 toolchain（gopls 讀
+  go.mod 的 Go 版本、rust-analyzer 要編譯該 crate 的 rustc），而 `.proto` 背後沒有建置，
+  buf 也早就是 poly 釘死版本代抓的 protobuf formatter／linter，所以 protobuf 不必先裝
+  任何東西。實際能用
   哪幾項由 server 自己宣告，十四項裡：clangd 與 rust-analyzer 給滿 14、gopls 13、
-  sourcekit-lsp 12、lua-language-server 12、terraform-ls 只有 7。有一個例外值得知道：
+  sourcekit-lsp 12、lua-language-server 12、buf 10、terraform-ls 只有 7。有一個例外值得知道：
   Swift 的 Go to Declaration 會失敗，Go to Definition 正常。**code action 只給燈泡那
   些**：`editor.codeActionsOnSave` 跑的 `source.*` 一律不轉，否則會跟 poly 的格式化在
   同一次存檔搶同一段程式碼；代價是 gopls 的「Source Action…」選單在 poly 下是空的。
@@ -62,11 +70,21 @@
   Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
   Python、SQL、XML、GraphQL、Dockerfile。
 - **外部工具**（受管下載）：shellcheck、shfmt、hadolint、actionlint、typos、
-  ruff、tflint、gofumpt、golangci-lint、stylua、selene、swiftlint。版本釘死，
+  ruff、tflint、gofumpt、golangci-lint、stylua、selene、swiftlint、buf
+  （Protobuf 的格式化與 lint，同一支 binary 也是上面那個 language server）。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
   信任第一次抓到的東西。
 - **只用專案 toolchain、不代裝**：rustfmt、clang-format、swift-format、
   terraform fmt。
+- **Protobuf 的 lint 需要 buf module**：`.proto` 上方沒有 `buf.yaml` 就大聲跳過。
+  沒有 module 時 buf 會拿當前工作目錄當根目錄，`PACKAGE_DIRECTORY_MATCH` 會對正常的
+  package 亂噴，而且結果隨你從哪執行而變——會漂移的檢查比沒有檢查更糟（R5／A4）。
+  格式化不受影響，`.proto` 一律格式化。
+- **`poly minify [路徑...]`**：把 JSON／JSONC 就地壓成一行，移除空白與註解。走跟
+  `poly fmt` 同一套 walk 與 `[format] exclude`，所以 CLI 與編輯器命令答案一致。
+  獨立命令而不是 `poly fmt` 的旗標——兩者契約相反，`fmt` 是「符合專案風格」，而沒有
+  人的風格是一行 40KB。不支援 `--strict`／`--format`／`--fail-on`（沒有 findings 可
+  塑形，也沒有外部工具會缺席），拼對了卻無效的旗標一律拒絕。
 - 工具解析順序：`poly.toml` 指定 → 專案內工具 → 內嵌引擎 → 受管下載 → PATH。
 
 ## 安裝
@@ -415,6 +433,14 @@ exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同�
 三個鍵，拼錯或超出範圍都會直接讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部
 工具的語言請用該工具自己的設定檔。VSCode settings 只放個人偏好
 （`poly.serverPath`、`poly.lintOnSave`、`poly.updateCheck.*`）。
+
+專案已經有 `.editorconfig` 的話什麼都不用做：內嵌引擎會沿用它的 `indent_style`／
+`indent_size`／`max_line_length`，這三個鍵剛好就是上面那三個 knob，不是另一套要維護
+的設定表面。`[format.<lang>]` 寫過的鍵逐鍵壓過它，所以 poly.toml 設 `line-width`、
+`.editorconfig` 設縮排時兩邊都算數。引擎吃不下的值（例如 XML 沒有 `line-width`）在
+這裡是安靜丟掉，而不像寫在 poly.toml 裡會讓解析失敗——`.editorconfig` 是寫給這個 repo
+用過的每一個編輯器看的，不是寫給 poly 的，為了它拒絕格式化整個專案只會讓人以為是
+poly 壞了。走外部工具的語言不經過這條路，那些工具自己就會讀 `.editorconfig`。
 
 完整的鍵、可填的值、每個引擎的預設值都寫在
 [poly.example.toml](poly.example.toml) 裡。

@@ -55,6 +55,7 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("graphql", "graphql"),
     ("gql", "graphql"),
     ("graphqls", "graphql"),
+    ("proto", "protobuf"),
     ("sh", "shellscript"),
     ("bash", "shellscript"),
     ("zsh", "shellscript"),
@@ -72,6 +73,61 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("tfvars", "terraform"),
     ("hcl", "hcl"),
 ];
+
+/// Formatter knobs inherited from whatever `.editorconfig` covers `path`.
+///
+/// poly's three knobs are exactly three EditorConfig keys, so this is a
+/// mapping rather than a new configuration surface. Nothing else is read, and
+/// each omission has a reason: `end_of_line` is already handled by
+/// `format_text`'s CRLF round-trip, `insert_final_newline` and
+/// `trim_trailing_whitespace` are things every formatter here does
+/// unconditionally, and `charset` is not poly's to change.
+///
+/// Values poly cannot act on are dropped rather than raised, which is the
+/// opposite of what poly.toml does with the same number. That asymmetry is the
+/// point: poly.toml is the project talking to poly, so a value it cannot act
+/// on is a mistake worth stopping for; `.editorconfig` is the project talking
+/// to every editor it has ever used, and `max_line_length = 0` -- a common way
+/// to write "no limit" -- must not stop a poly run.
+///
+/// Returns defaults for any error at all, including an unreadable or malformed
+/// file. poly is a reader of this file, not its owner; refusing to format a
+/// repo because some other tool's config file has a typo in it would be poly
+/// enforcing a standard it does not define.
+pub fn editorconfig_options(path: &Path) -> FormatOptions {
+    use ec4rs::property::{IndentSize, IndentStyle, MaxLineLen, TabWidth};
+
+    let Ok(props) = ec4rs::properties_of(path) else {
+        return FormatOptions::default();
+    };
+    let use_tabs = match props.get::<IndentStyle>() {
+        Ok(IndentStyle::Tabs) => Some(true),
+        Ok(IndentStyle::Spaces) => Some(false),
+        Err(_) => None,
+    };
+    // `indent_size = tab` defers to tab_width, which is the one place these
+    // two keys interact.
+    let indent = match props.get::<IndentSize>() {
+        Ok(IndentSize::Value(n)) => Some(n),
+        Ok(IndentSize::UseTabWidth) => match props.get::<TabWidth>() {
+            Ok(TabWidth::Value(n)) => Some(n),
+            Err(_) => None,
+        },
+        Err(_) => None,
+    };
+    let indent_width = indent
+        .and_then(|n| u8::try_from(n).ok())
+        .filter(|n| INDENT_WIDTH.contains(n));
+    let line_width = match props.get::<MaxLineLen>() {
+        Ok(MaxLineLen::Value(n)) => u16::try_from(n).ok().filter(|n| LINE_WIDTH.contains(n)),
+        Ok(MaxLineLen::Off) | Err(_) => None,
+    };
+    FormatOptions {
+        line_width,
+        indent_width,
+        use_tabs,
+    }
+}
 
 /// Detect by built-in rules only (no config). Filename rules run before
 /// extension rules so `Dockerfile.dev` is dockerfile, not a "dev" extension.
@@ -203,6 +259,19 @@ impl FormatOptions {
     /// Nothing set: engines can keep using their cached default configuration.
     pub fn is_default(&self) -> bool {
         *self == FormatOptions::default()
+    }
+
+    /// `self` wins field by field; `base` fills the rest.
+    ///
+    /// Field-wise rather than all-or-nothing for the same reason nested
+    /// poly.toml files merge that way: a project that sets `line-width` in
+    /// poly.toml and `indent_style` in `.editorconfig` means both.
+    pub fn over(self, base: FormatOptions) -> FormatOptions {
+        FormatOptions {
+            line_width: self.line_width.or(base.line_width),
+            indent_width: self.indent_width.or(base.indent_width),
+            use_tabs: self.use_tabs.or(base.use_tabs),
+        }
     }
 
     /// Reject values no formatter could act on.
@@ -395,6 +464,10 @@ impl Config {
     /// Formatter knobs for `lang`, from `[format.<lang>]`. Nested poly.toml
     /// files field-merge like everything else, so a package can override just
     /// `line-width` and keep the repo's `indent-width`.
+    ///
+    /// This is what the project said explicitly. What a `.editorconfig` says
+    /// is separate on purpose -- see `editorconfig_options`, and the caller
+    /// that merges the two.
     pub fn format_options(&self, lang: &str) -> FormatOptions {
         self.format_options.get(lang).copied().unwrap_or_default()
     }
@@ -927,5 +1000,103 @@ mod tests {
         );
         // Reaching hidden files must not mean walking the object store.
         assert!(!names.iter().any(|n| n.starts_with(".git/")), "{names:?}");
+    }
+
+    #[test]
+    fn editorconfig_maps_three_keys_and_drops_what_it_cannot_use() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // `root = true` keeps this test off whatever .editorconfig happens to
+        // sit above the temp directory.
+        std::fs::write(
+            root.join(".editorconfig"),
+            "root = true\n\
+             \n\
+             [*]\n\
+             indent_style = tab\n\
+             indent_size = 4\n\
+             max_line_length = 100\n\
+             \n\
+             [*.py]\n\
+             indent_style = space\n\
+             indent_size = tab\n\
+             tab_width = 2\n\
+             max_line_length = off\n\
+             \n\
+             [*.js]\n\
+             indent_size = 999\n\
+             max_line_length = 2000\n",
+        )
+        .unwrap();
+
+        let opts = |name: &str| editorconfig_options(&root.join(name));
+
+        assert_eq!(
+            opts("a.ts"),
+            FormatOptions {
+                line_width: Some(100),
+                indent_width: Some(4),
+                use_tabs: Some(true),
+            }
+        );
+        assert_eq!(
+            opts("a.py"),
+            FormatOptions {
+                // `max_line_length = off` is a real answer -- "no limit" --
+                // not a missing one, so it must leave poly's default alone
+                // rather than become a width.
+                line_width: None,
+                // indent_size = tab defers to tab_width.
+                indent_width: Some(2),
+                use_tabs: Some(false),
+            }
+        );
+        // Out-of-range values are dropped, not raised: this file belongs to
+        // every editor the repo has used, so poly reads what it can and stays
+        // out of the way of the rest. The narrower section still inherits
+        // indent_style from [*].
+        assert_eq!(
+            opts("a.js"),
+            FormatOptions {
+                line_width: None,
+                indent_width: None,
+                use_tabs: Some(true),
+            }
+        );
+    }
+
+    #[test]
+    fn poly_toml_beats_editorconfig_key_by_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(
+            root.join(".editorconfig"),
+            "root = true\n[*]\nindent_style = tab\nindent_size = 8\nmax_line_length = 120\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("poly.toml"),
+            "[format.typescript]\nline-width = 80\n",
+        )
+        .unwrap();
+
+        let file = root.join("a.ts");
+        let config = Config::discover(&file).unwrap();
+        let merged = config
+            .format_options("typescript")
+            .over(editorconfig_options(&file));
+
+        assert_eq!(
+            merged,
+            FormatOptions {
+                // Named in poly.toml: the explicit setting wins.
+                line_width: Some(80),
+                // Absent from poly.toml: inherited rather than reset to poly's
+                // own default, which is what makes .editorconfig worth reading
+                // at all.
+                indent_width: Some(8),
+                use_tabs: Some(true),
+            }
+        );
     }
 }

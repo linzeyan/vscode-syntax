@@ -21,7 +21,18 @@ use lsp_types::{
 
 const INTERNAL_ERROR: i32 = -32603;
 const METHOD_NOT_FOUND: i32 = -32601;
+/// Command ids the daemon answers `workspace/executeCommand` for.
+///
+/// They must not collide with the ids the extension contributes: an LSP client
+/// registers every command a server advertises as an editor command of the same
+/// name, so sharing an id with `vscode.commands.registerCommand` makes that
+/// registration throw and the client never finishes starting -- no formatter,
+/// no diagnostics, no error anyone can see. Hence `poly.minifyJsonEdits` here
+/// against `poly.minifyJson` in package.json: the server hands back edits, the
+/// editor command is what applies them.
 const FORMAT_PATHS: &str = "poly.formatPaths";
+const MINIFY_JSON: &str = "poly.minifyJsonEdits";
+const EXECUTE_COMMANDS: &[&str] = &[FORMAT_PATHS, MINIFY_JSON];
 
 pub fn run() -> Result<()> {
     let (connection, io_threads) = Connection::stdio();
@@ -39,6 +50,14 @@ pub fn run() -> Result<()> {
 /// clang-format already follow (01 §4.3). A language server has to match the
 /// toolchain that built the project, and a version poly chose would be a
 /// version poly chose wrong.
+///
+/// buf is the one entry that reason does not reach, so it is the one entry
+/// poly resolves through the tool registry instead. A `.proto` is a
+/// declaration with no build behind it: there is no toolchain for
+/// `buf lsp serve` to be out of step with, and poly already pins that exact
+/// binary as protobuf's formatter and linter. Making it PATH-only would mean
+/// downloading buf to format a file and then refusing to use it to navigate
+/// the same file. See `server_command`.
 const LANGUAGE_SERVERS: &[(&str, &str)] = &[
     ("go", "gopls"),
     ("rust", "rust-analyzer"),
@@ -50,14 +69,34 @@ const LANGUAGE_SERVERS: &[(&str, &str)] = &[
     // module that makes no sense.
     ("terraform", "terraform-ls"),
     ("lua", "lua-language-server"),
+    ("protobuf", "buf"),
 ];
 
 /// What a binary needs before it is a language server at all.
 ///
 /// Not a preference and not poly's opinion: `terraform-ls` on its own prints
 /// its usage and exits, because the language server is a subcommand of it.
-/// Every other server here is its own entry point.
-const LAUNCH: &[(&str, &[&str])] = &[("terraform-ls", &["serve"])];
+/// buf is the same shape -- it is a whole protobuf toolkit, and the server is
+/// one verb of it. Every other server here is its own entry point.
+const LAUNCH: &[(&str, &[&str])] = &[("terraform-ls", &["serve"]), ("buf", &["lsp", "serve"])];
+
+/// How poly gets hold of a language server binary.
+///
+/// The tool registry when poly pins the binary, PATH when the project does.
+/// Membership in the registry is the test rather than a name check: it is
+/// exactly the statement "poly chose this version", and buf is the only
+/// language server that statement is true of. It also means `poly.toml` can
+/// turn buf off or point it somewhere else through the same `[tools]` entry
+/// that governs it as a formatter, rather than through a second setting that
+/// says the same thing.
+fn server_command(name: &str, config: &poly_core::Config) -> Option<PathBuf> {
+    if poly_tools::tool(name).is_some() {
+        return poly_tools::resolve(name, config, false)
+            .command()
+            .map(Path::to_path_buf);
+    }
+    poly_tools::find_on_path(name)
+}
 
 fn args_for(table: &'static [(&str, &[&str])], name: &str) -> &'static [&'static str] {
     table
@@ -191,7 +230,7 @@ fn serve(connection: Connection) -> Result<()> {
         // linter that produced the squiggle has to say about its own rule.
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         execute_command_provider: Some(ExecuteCommandOptions {
-            commands: vec![FORMAT_PATHS.to_string()],
+            commands: EXECUTE_COMMANDS.iter().map(|c| c.to_string()).collect(),
             ..Default::default()
         }),
         ..Default::default()
@@ -394,7 +433,7 @@ impl Server {
     /// one message rather than one spawn attempt per keystroke — and it is a
     /// message, because a silently absent feature is the failure this project
     /// keeps refusing to ship.
-    fn ensure_downstream(&mut self, language: &str) {
+    fn ensure_downstream(&mut self, language: &str, uri: &Url) {
         let Some(name) = server_for(language) else {
             return;
         };
@@ -402,9 +441,14 @@ impl Server {
             return;
         }
         let languages = languages_for(name);
-        let Some(command) = poly_tools::find_on_path(name) else {
+        // The document's own config, so a `[tools]` entry disabling or
+        // relocating a registry-resolved server is honoured the same way it is
+        // for the formatter (R5/A4).
+        let config = poly_core::Config::discover(&uri_path(uri))
+            .unwrap_or_else(|_| poly_core::Config::empty());
+        let Some(command) = server_command(name, &config) else {
             eprintln!(
-                "[poly] {name} is not on PATH — no language features for {}",
+                "[poly] {name} is unavailable — no language features for {}",
                 languages.join(", ")
             );
             self.downstream.insert(name.to_string(), None);
@@ -544,16 +588,65 @@ impl Server {
             Ok(params) => params,
             Err(e) => return Response::new_err(request.id, INTERNAL_ERROR, e.to_string()),
         };
-        if params.command != FORMAT_PATHS {
-            return Response::new_err(
+        match params.command.as_str() {
+            FORMAT_PATHS => match run_format_paths(params.arguments.first()) {
+                Ok(summary) => Response::new_ok(request.id, summary),
+                Err(e) => Response::new_err(request.id, INTERNAL_ERROR, format!("{e:#}")),
+            },
+            MINIFY_JSON => self.run_minify(request.id, params.arguments.first()),
+            other => Response::new_err(
                 request.id,
                 INTERNAL_ERROR,
-                format!("unknown command {:?}", params.command),
-            );
+                format!("unknown command {other:?}"),
+            ),
         }
-        match run_format_paths(params.arguments.first()) {
-            Ok(summary) => Response::new_ok(request.id, summary),
-            Err(e) => Response::new_err(request.id, INTERNAL_ERROR, format!("{e:#}")),
+    }
+
+    /// Minify an open document, returning edits for the editor to apply.
+    ///
+    /// Edits rather than a file write, for two reasons that both come down to
+    /// this being an editor command: the buffer may be dirty, and writing to
+    /// disk behind it would either lose those changes or fight them; and an
+    /// edit leaves undo as one keystroke, which is what a user reaches for
+    /// first after seeing a whole file collapse to one line.
+    ///
+    /// The language comes from poly's own detection rather than the editor's
+    /// language id, so the command answers for exactly the files `poly minify`
+    /// would (R5/A4) -- including a `.json` the project remapped in poly.toml.
+    fn run_minify(
+        &mut self,
+        id: lsp_server::RequestId,
+        argument: Option<&serde_json::Value>,
+    ) -> Response {
+        let uri = argument
+            .and_then(|a| a.get("uri"))
+            .and_then(serde_json::Value::as_str)
+            .and_then(|u| Url::parse(u).ok());
+        let Some(uri) = uri else {
+            return Response::new_err(
+                id,
+                INTERNAL_ERROR,
+                format!("{MINIFY_JSON} needs a uri argument"),
+            );
+        };
+        let Some(text) = self.documents.get(&uri).cloned() else {
+            return Response::new_err(id, INTERNAL_ERROR, format!("{uri} is not open"));
+        };
+        let Some(language) = self.language_of(&uri) else {
+            return Response::new_ok(id, serde_json::json!([]));
+        };
+        match poly_engines::minify(&language, &uri_path(&uri), &text) {
+            Ok(Some(minified)) => Response::new_ok(
+                id,
+                serde_json::json!([TextEdit {
+                    range: full_range(&text),
+                    new_text: minified,
+                }]),
+            ),
+            // Already minified, or a language with nothing to strip: no edits
+            // rather than an error, so the command is a quiet no-op.
+            Ok(None) => Response::new_ok(id, serde_json::json!([])),
+            Err(e) => Response::new_err(id, INTERNAL_ERROR, format!("{e:#}")),
         }
     }
 
@@ -611,18 +704,20 @@ impl Server {
         if !crate::proxy::SYNCED.contains(&notification.method.as_str()) {
             return;
         }
-        let Some(language) = notification
+        let Some(uri) = notification
             .params
             .get("textDocument")
             .and_then(|d| d.get("uri"))
             .and_then(serde_json::Value::as_str)
             .and_then(|uri| Url::parse(uri).ok())
-            .and_then(|uri| self.language_of(&uri))
         else {
             return;
         };
+        let Some(language) = self.language_of(&uri) else {
+            return;
+        };
         if notification.method == "textDocument/didOpen" {
-            self.ensure_downstream(&language);
+            self.ensure_downstream(&language, &uri);
         }
         let Some(name) = server_for(&language) else {
             return;
@@ -1101,6 +1196,36 @@ mod tests {
 
     fn uri() -> Url {
         Url::parse("file:///a.lua").expect("valid uri")
+    }
+
+    /// A server command id must never be an id the extension contributes.
+    ///
+    /// An LSP client registers every command the server advertises as an editor
+    /// command of the same name, so a shared id makes that registration throw
+    /// and the client never finishes starting -- no formatter, no diagnostics,
+    /// and nothing in the UI that says why. Found the expensive way, by a
+    /// six-minute extension-host run; this asks the same question in
+    /// milliseconds.
+    #[test]
+    fn no_server_command_collides_with_a_contributed_one() {
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../extensions/lsp/package.json");
+        let text = std::fs::read_to_string(&manifest).expect("the extension manifest");
+        let package: serde_json::Value = serde_json::from_str(&text).expect("valid package.json");
+        let contributed: Vec<&str> = package["contributes"]["commands"]
+            .as_array()
+            .expect("contributes.commands")
+            .iter()
+            .filter_map(|c| c["command"].as_str())
+            .collect();
+        assert!(!contributed.is_empty(), "no contributed commands parsed");
+
+        for command in EXECUTE_COMMANDS {
+            assert!(
+                !contributed.contains(command),
+                "{command} is both a server command and one the extension registers"
+            );
+        }
     }
 
     /// Turning the proxy on must not cost the user findings it never replaces.

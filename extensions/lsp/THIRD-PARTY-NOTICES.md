@@ -95,6 +95,7 @@ named inline.
 - dtoa 1.0.11 (MIT OR Apache-2.0) — https://github.com/dtolnay/dtoa
 - dtoa-short 0.3.5 (MPL-2.0) — https://github.com/upsuper/dtoa-short
 - dunce 1.0.5 (CC0-1.0 OR MIT-0 OR Apache-2.0) — https://gitlab.com/kornelski/dunce
+- ec4rs 1.2.0 (Apache-2.0) — https://github.com/TheDaemoness/ec4rs
 - either 1.18.0 (MIT OR Apache-2.0) — https://github.com/rayon-rs/either
 - enum_dispatch 0.3.13 (MIT OR Apache-2.0) — https://gitlab.com/antonok/enum_dispatch
 - equivalent 1.0.2 (Apache-2.0 OR MIT) — https://github.com/indexmap-rs/equivalent

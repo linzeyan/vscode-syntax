@@ -112,6 +112,52 @@ pub fn format_paths(paths: &[PathBuf], check: bool, walk: Walk) -> Result<FmtSum
     Ok(summary)
 }
 
+/// Walk `paths` and minify every file an engine can minify, in place.
+///
+/// Deliberately the same walk, excludes and per-file config as `format_paths`
+/// -- `[format] exclude` covers a file whose bytes another program owns, and
+/// that is no less true when the rewrite is a minify. Kept as its own function
+/// rather than a flag on `format_paths`: sharing one would mean a `check`
+/// parameter that means nothing here and a `minify` parameter that means
+/// nothing there.
+pub fn minify_paths(paths: &[PathBuf], walk: Walk) -> Result<FmtSummary> {
+    let targets = resolve_targets(
+        paths,
+        Scope::Format,
+        walk,
+        poly_engines::minifiable_language,
+    )?;
+
+    let mut summary = targets
+        .par_iter()
+        .map(|(path, lang, _)| {
+            let mut s = FmtSummary::default();
+            let attempt = std::fs::read_to_string(path)
+                .map_err(anyhow::Error::from)
+                .and_then(|text| match poly_engines::minify(lang, path, &text)? {
+                    Some(minified) => std::fs::write(path, minified)
+                        .map(|_| true)
+                        .map_err(Into::into),
+                    None => Ok(false),
+                });
+            match attempt {
+                Ok(true) => s.changed.push(path.clone()),
+                Ok(false) => s.unchanged += 1,
+                Err(e) => s.errors.push((path.clone(), format!("{e:#}"))),
+            }
+            s
+        })
+        .reduce(FmtSummary::default, |mut a, b| {
+            a.changed.extend(b.changed);
+            a.errors.extend(b.errors);
+            a.unchanged += b.unchanged;
+            a
+        });
+    summary.total = targets.len();
+    summary.changed.sort();
+    Ok(summary)
+}
+
 /// Files changed vs HEAD plus untracked (the "Git Changed Files" scope).
 pub fn git_changed_files(root: &Path) -> Result<Vec<PathBuf>> {
     let run = |args: &[&str]| -> Result<Vec<PathBuf>> {

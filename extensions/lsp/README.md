@@ -7,11 +7,19 @@
 - **Lint**：存檔即時 diagnostics（shellcheck／hadolint／actionlint／ruff／
   selene／sqruff，以及專案內的 biome／eslint）；`Poly: Lint (poly check)`
   在終端跑完整 CLI，輸出與 CI 一致。
+- **`Poly: Minify JSON`**：把當前 JSON／JSONC buffer 壓成一行（移除空白與註解，
+  保留 key 順序與字串內容）。命令面板執行。刻意不進 format-on-save：它是格式化的
+  反向，下一次 `poly fmt` 就會還原。CLI 對應 `poly minify <路徑>`。
 - 專案內工具（biome／prettier／eslint／rustfmt）優先於內嵌引擎，與團隊 CI
   對齊；外部工具受管下載並以 sha256 lock 驗證。
 - rust／go／c／c++／swift／terraform 也能格式化（走各自的 toolchain），但不會
   自動搶走 rust-analyzer／gopls／clangd 的預設 formatter——用
   「Format Document With...」選 Poly 即可。
+- **Protobuf**（`.proto`）由 buf 處理：格式化免設定，開箱即用。**lint 只在 buf
+  module 裡跑**——`.proto` 上方要有 `buf.yaml`，否則會大聲跳過。這不是保守：沒有
+  module 時 buf 會拿當前工作目錄當根目錄，`PACKAGE_DIRECTORY_MATCH` 就會對完全正常
+  的 package 亂噴，而且噴什麼取決於你從哪個目錄執行。導航、補全與 hover 另外由
+  `poly.languageServers`（預設關閉）控制，打開後走的是同一支 buf。
 - Jupyter notebook（`.ipynb`）由 ruff 整份處理：cell 內的 Python 會被格式化與
   檢查，outputs／markdown cell 原樣保留。VSCode 的 notebook editor 不走 LSP
   文字文件，所以要用批次命令（Format Folder／Workspace）或 `poly fmt`。

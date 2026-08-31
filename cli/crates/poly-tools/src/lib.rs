@@ -333,6 +333,35 @@ pub const TOOLS: &[Tool] = &[
             })
         },
     },
+    // The only tool here that is also a language server (`buf lsp serve`).
+    // Every other server poly proxies resolves from PATH because it has to
+    // match the toolchain that built the project -- gopls reads the Go version
+    // out of go.mod, rust-analyzer wants the rustc that compiled the crate,
+    // clangd wants the compile database. A .proto file is a declaration with
+    // no build behind it, so buf has nothing to match and poly can pin it like
+    // any other formatter. That is what makes protobuf work out of the box
+    // instead of only for people who already ran `brew install buf`.
+    Tool {
+        name: "buf",
+        version: "1.72.0",
+        language: Some("protobuf"),
+        // Bare binaries on every platform poly knows, Windows included.
+        asset: |v, p| {
+            let suffix = match p {
+                "darwin-arm64" => "Darwin-arm64",
+                "darwin-x64" => "Darwin-x86_64",
+                "linux-arm64" => "Linux-aarch64",
+                "linux-x64" => "Linux-x86_64",
+                "win-x64" => "Windows-x86_64.exe",
+                "win-arm64" => "Windows-arm64.exe",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!("https://github.com/bufbuild/buf/releases/download/v{v}/buf-{suffix}"),
+                kind: Kind::Raw,
+            })
+        },
+    },
     // Toolchain-only tools (never downloaded, spec §4.3): registry entries so
     // poly.toml [tools] can still pin/disable them; resolution lands on PATH.
     Tool {

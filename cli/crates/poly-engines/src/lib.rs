@@ -36,11 +36,10 @@ pub fn supported_language(lang: &str) -> bool {
     )
 }
 
-/// Which of `[format.<lang>]`'s three knobs this engine can actually honor.
-/// Silently dropping one would mean poly.toml and the output disagree, so
-/// `format` rejects the file instead and names the key.
-fn unsupported_option(lang: &str, opts: &FormatOptions) -> Option<&'static str> {
-    let (width, indent, tabs) = match lang {
+/// Which of the three knobs this engine can act on: (line-width, indent-width,
+/// use-tabs).
+fn honored(lang: &str) -> (bool, bool, bool) {
+    match lang {
         // xmlem pretty-prints at a fixed width and always indents with spaces.
         "xml" => (false, true, false),
         // sqruff owns its layout rules; point people at its own config rather
@@ -52,7 +51,31 @@ fn unsupported_option(lang: &str, opts: &FormatOptions) -> Option<&'static str> 
         "yaml" => (true, true, false),
         "dockerfile" => (true, true, false),
         _ => (true, true, true),
-    };
+    }
+}
+
+/// Drop the knobs `lang` cannot act on, quietly.
+///
+/// For inherited settings only -- the ones that came from a `.editorconfig`
+/// rather than from `[format.<lang>]`. A repo-wide `indent_size = 2` is aimed
+/// at every editor that ever opens the file, not at poly's XML engine, so
+/// refusing to format XML over it would make adopting poly look like it broke
+/// the repo. The same value written in poly.toml still stops the run, because
+/// there it was aimed at poly and poly cannot do it.
+pub fn drop_unhonored(lang: &str, opts: FormatOptions) -> FormatOptions {
+    let (width, indent, tabs) = honored(lang);
+    FormatOptions {
+        line_width: opts.line_width.filter(|_| width),
+        indent_width: opts.indent_width.filter(|_| indent),
+        use_tabs: opts.use_tabs.filter(|_| tabs),
+    }
+}
+
+/// Which of `[format.<lang>]`'s three knobs this engine can actually honor.
+/// Silently dropping one would mean poly.toml and the output disagree, so
+/// `format` rejects the file instead and names the key.
+fn unsupported_option(lang: &str, opts: &FormatOptions) -> Option<&'static str> {
+    let (width, indent, tabs) = honored(lang);
     match opts {
         FormatOptions {
             line_width: Some(_),
@@ -163,6 +186,95 @@ fn format_json(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<St
         &overridden
     };
     dprint_plugin_json::format_text(path, text, config).map_err(Into::into)
+}
+
+/// Languages `minify` can act on. JSON only, and deliberately: minifying is
+/// only meaningful where whitespace is purely presentational and something
+/// downstream reads the result by machine. Markdown and YAML are whitespace-
+/// significant, and a "minified" TOML is a file nobody has a use for.
+pub fn minifiable_language(lang: &str) -> bool {
+    lang == "json"
+}
+
+/// Strip everything a machine reading this JSON does not need.
+///
+/// The inverse of formatting rather than a mode of it, which is why it is its
+/// own entry point instead of a `FormatOptions` knob: `poly fmt`'s contract is
+/// "make this file match the project's style", and a caller who wanted that
+/// would not want one line of 40KB.
+///
+/// Validation runs through the same engine that formats the file, so a JSON
+/// poly refuses to minify is exactly one it refuses to format, reported at the
+/// same position in the same words -- rather than a second parser with its own
+/// opinions about what counts as JSON.
+///
+/// What comes out is the same document with whitespace and comments removed;
+/// nothing is re-serialized. That is what keeps key order intact -- a
+/// round-trip through a map type would quietly sort them, and a diff of a
+/// minified file is unreadable enough without also being reordered.
+pub fn minify(lang: &str, path: &Path, text: &str) -> Result<Option<String>> {
+    if !minifiable_language(lang) {
+        return Ok(None);
+    }
+    format_json(path, text, FormatOptions::default())?;
+    let stripped = strip_json(text);
+    Ok((stripped != text).then_some(stripped))
+}
+
+/// Remove whitespace and comments that are not inside a string.
+///
+/// Comments are removed because poly reads `.jsonc` as json too, and a comment
+/// is the one thing in such a file that is unambiguously for a human. Note
+/// that this is the only respect in which the output can change dialect: a
+/// trailing comma survives, because removing it would mean parsing structure
+/// rather than scanning text, and the file it came from was not strict JSON in
+/// the first place.
+fn strip_json(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            // Copy a string verbatim: whitespace inside it is data, and an
+            // escaped quote does not end it.
+            '"' => {
+                out.push(c);
+                while let Some(s) = chars.next() {
+                    out.push(s);
+                    match s {
+                        '\\' => {
+                            if let Some(escaped) = chars.next() {
+                                out.push(escaped);
+                            }
+                        }
+                        '"' => break,
+                        _ => {}
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'/') => {
+                for next in chars.by_ref() {
+                    if next == '\n' {
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                let mut prev = '\0';
+                for next in chars.by_ref() {
+                    if prev == '*' && next == '/' {
+                        break;
+                    }
+                    prev = next;
+                }
+            }
+            // JSON's whitespace is exactly these four, so nothing else can be
+            // dropped without dropping data.
+            ' ' | '\t' | '\n' | '\r' => {}
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 fn format_markdown(text: &str, opts: FormatOptions) -> Result<Option<String>> {
@@ -466,6 +578,52 @@ mod tests {
         }
     }
 
+    /// The three things minifying must not do: reorder keys, touch what is
+    /// inside a string, or be fooled by an escaped quote into thinking a string
+    /// has ended.
+    #[test]
+    fn minify_strips_only_what_is_outside_strings() {
+        let text =
+            "{\n  \"b\": 1,\n  \"a\": \"keep  me\",\n  \"q\": \"a \\\" b\",\n  \"n\": [1, 2]\n}\n";
+        let out = minify("json", Path::new("a.json"), text).unwrap().unwrap();
+        assert_eq!(
+            out,
+            "{\"b\":1,\"a\":\"keep  me\",\"q\":\"a \\\" b\",\"n\":[1,2]}"
+        );
+    }
+
+    /// `.jsonc` reads as json here, so a comment is the one thing in the file
+    /// that is unambiguously for a human and the one thing to drop.
+    #[test]
+    fn minify_drops_comments_but_not_urls_inside_strings() {
+        let text =
+            "{\n  // leading\n  \"u\": \"https://example.com/a\", /* trailing */\n  \"v\": 2\n}";
+        let out = minify("json", Path::new("a.jsonc"), text).unwrap().unwrap();
+        assert_eq!(out, "{\"u\":\"https://example.com/a\",\"v\":2}");
+    }
+
+    #[test]
+    fn minify_declines_other_languages_and_already_minified_json() {
+        // Not a failure: a caller batching a directory hands over every file.
+        assert!(minify("markdown", Path::new("a.md"), "# t\n")
+            .unwrap()
+            .is_none());
+        // Nothing to remove means no edit, so an editor command is a no-op
+        // rather than a change that dirties the buffer.
+        assert!(minify("json", Path::new("a.json"), "{\"a\":1}")
+            .unwrap()
+            .is_none());
+    }
+
+    /// Invalid JSON must fail rather than produce confidently broken output,
+    /// and it has to fail the way `poly fmt` already fails on the same file.
+    #[test]
+    fn minify_rejects_json_the_formatter_rejects() {
+        let broken = "{\"a\": }";
+        assert!(minify("json", Path::new("a.json"), broken).is_err());
+        assert!(format_file(Path::new("a.json"), broken).is_err());
+    }
+
     #[test]
     fn byte_offsets_become_line_and_column() {
         let text = "ab\ncde\n";
@@ -519,5 +677,46 @@ mod tests {
         let input = "# t\n\n```json\n{\"a\":1,   \"b\":2}\n```\n";
         let out = format_file(Path::new("a.md"), input).unwrap().unwrap();
         assert!(out.contains("{ \"a\": 1, \"b\": 2 }"), "got: {out}");
+    }
+
+    /// The same three numbers must stop the run when poly.toml wrote them and
+    /// pass through quietly when a `.editorconfig` did. Without the second
+    /// half, one repo-wide `indent_size` would make poly refuse every XML and
+    /// SQL file in the project.
+    #[test]
+    fn unhonored_options_fail_when_explicit_and_drop_when_inherited() {
+        let all = FormatOptions {
+            line_width: Some(100),
+            indent_width: Some(4),
+            use_tabs: Some(true),
+        };
+
+        let err = format("xml", Path::new("a.xml"), "<root><a>1</a></root>", all)
+            .expect_err("explicit line-width on xml must be rejected");
+        assert!(err.to_string().contains("line-width"), "{err}");
+
+        let inherited = drop_unhonored("xml", all);
+        assert_eq!(
+            inherited,
+            FormatOptions {
+                line_width: None,
+                // xmlem does indent; it is width and tabs it cannot do.
+                indent_width: Some(4),
+                use_tabs: None,
+            }
+        );
+        let out = format(
+            "xml",
+            Path::new("a.xml"),
+            "<root><a>1</a></root>",
+            inherited,
+        )
+        .expect("the same settings inherited must still format")
+        .expect("expected a formatting change");
+        assert!(out.contains("\n    <a>"), "got: {out}");
+
+        // sql honors none of the three, so an inherited set empties out and
+        // the file formats with the engine's own defaults.
+        assert!(drop_unhonored("sql", all).is_default());
     }
 }
