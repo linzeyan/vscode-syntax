@@ -313,6 +313,51 @@ func main() {
     }
   });
 
+  // .editorconfig is resolved by the daemon and applied here, and neither half
+  // is observable outside a real editor: `editor.options` exists only on a live
+  // TextEditor, and an onWillSaveTextDocument participant only runs inside a
+  // real save. An .ini is deliberately the subject -- poly does not format it,
+  // so this is the whole of what poly does for the file, and it is the case an
+  // editor-side EditorConfig extension was there for.
+  function writeEditorConfig(): void {
+    writeFile(
+      ".editorconfig",
+      "root = true\n\n[*.ini]\nindent_style = space\nindent_size = 3\n"
+        + "trim_trailing_whitespace = true\ninsert_final_newline = true\n",
+    );
+  }
+
+  test("applies .editorconfig indentation to a file poly does not format", async () => {
+    writeEditorConfig();
+    const document = await vscode.workspace.openTextDocument(
+      writeFile("indent.ini", "[section]\n"),
+    );
+    const editor = await vscode.window.showTextDocument(document);
+    // 3 is a width nothing arrives at by accident: editor.detectIndentation
+    // guesses from the file, and this file has no indentation to guess from.
+    await eventually(
+      "the .editorconfig indent width",
+      () => (editor.options.tabSize === 3 ? true : undefined),
+    );
+    assert.strictEqual(editor.options.insertSpaces, true);
+  });
+
+  test("applies .editorconfig save fixes to a file poly does not format", async () => {
+    writeEditorConfig();
+    const uri = writeFile("save.ini", "[section]\n");
+    const document = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(document);
+    // Dirty the buffer first: saving a clean document runs no participants, so
+    // writing the trailing whitespace straight to disk would prove nothing.
+    await editor.edit((builder) => builder.insert(new vscode.Position(1, 0), "key = value   "));
+    assert.ok(await document.save(), "the save was rejected");
+    assert.strictEqual(
+      readFileSync(uri.fsPath, "utf8"),
+      "[section]\nkey = value\n",
+      "trailing whitespace trimmed and the file terminated",
+    );
+  });
+
   // Two lists in package.json describe the same set of languages, and nothing
   // else notices when one grows without the other: a language added to
   // activationEvents but not to configurationDefaults activates poly and then

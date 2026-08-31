@@ -134,6 +134,111 @@ pub fn editorconfig_options(path: &Path) -> FormatOptions {
     }
 }
 
+/// What `.editorconfig` asks an *editor* to do, as opposed to a formatter.
+///
+/// Every field is optional and `None` means the file said nothing, which is
+/// not the same as saying a default: the editor already has settings of its
+/// own, and overwriting them with EditorConfig's defaults would make a
+/// `.editorconfig` that mentions only `indent_size` silently reset four other
+/// things.
+///
+/// Names are LSP's (`FormattingOptions.tabSize`, `insertSpaces`) rather than
+/// EditorConfig's, because this is the side of the mapping the editor speaks.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct EditorSettings {
+    /// `indent_style`. Spaces is `true`, tabs is `false`.
+    pub insert_spaces: Option<bool>,
+    /// How wide one indent level is, or how wide a tab is drawn — the editor
+    /// has one number for both. See `editorconfig_editor_settings`.
+    pub tab_size: Option<u8>,
+    pub trim_trailing_whitespace: Option<bool>,
+    pub insert_final_newline: Option<bool>,
+    /// `"\n"` or `"\r\n"`. `end_of_line = cr` resolves to `None`: no editor
+    /// this targets offers it, and guessing at one of the other two would be
+    /// poly rewriting every line ending in the file to something the project
+    /// did not ask for.
+    pub end_of_line: Option<&'static str>,
+}
+
+/// Editor behaviour inherited from whatever `.editorconfig` covers `path`.
+///
+/// The sibling of `editorconfig_options`, which reads the same file for the
+/// three knobs poly formats with. Two functions rather than one because the
+/// two answers are consumed at different moments and one of them can be wrong
+/// without the other being: formatting happens on demand and can be checked,
+/// while these govern what the editor does as the user types, before poly has
+/// been asked anything.
+///
+/// This is what makes poly able to replace an EditorConfig extension rather
+/// than sit next to one. The value is not that the properties get read — any
+/// implementation reads them — it is that they are read *here*, by the same
+/// ec4rs call and the same file chain `poly fmt` obeys. A second resolver in
+/// the extension would be a second answer, and the two would disagree on
+/// exactly the projects with complicated configs, which are the projects that
+/// wrote one for a reason.
+///
+/// `charset` and `max_line_length` are deliberately absent. Changing a file's
+/// encoding after the editor has already decoded it is how a file gets
+/// corrupted, and a ruler is `editor.rulers`, which is a setting rather than a
+/// per-file option — honouring it would mean writing to the user's
+/// settings.json.
+pub fn editorconfig_editor_settings(path: &Path) -> EditorSettings {
+    use ec4rs::property::{
+        EndOfLine, FinalNewline, IndentSize, IndentStyle, TabWidth, TrimTrailingWs,
+    };
+
+    // Same failure policy as `editorconfig_options`: poly reads this file, it
+    // does not own it, so a malformed one leaves the editor's own settings alone
+    // rather than raising.
+    let Ok(props) = ec4rs::properties_of(path) else {
+        return EditorSettings::default();
+    };
+    let insert_spaces = match props.get::<IndentStyle>() {
+        Ok(IndentStyle::Tabs) => Some(false),
+        Ok(IndentStyle::Spaces) => Some(true),
+        Err(_) => None,
+    };
+    let width = |n: usize| u8::try_from(n).ok().filter(|n| INDENT_WIDTH.contains(n));
+    let indent_size = match props.get::<IndentSize>() {
+        Ok(IndentSize::Value(n)) => width(n),
+        // `indent_size = tab` is a deferral, not a number.
+        Ok(IndentSize::UseTabWidth) | Err(_) => None,
+    };
+    let tab_width = match props.get::<TabWidth>() {
+        Ok(TabWidth::Value(n)) => width(n),
+        Err(_) => None,
+    };
+    // EditorConfig has two numbers where the editor has one, and they mean
+    // different things: `indent_size` is how far one level indents,
+    // `tab_width` is how wide a tab character is drawn. Which one
+    // `editor.tabSize` stands for depends on which character is doing the
+    // indenting, so the answer follows `indent_style`. Each falls back to the
+    // other, which is the spec's own rule and also the only sane reading of a
+    // file that sets just one.
+    let tab_size = if insert_spaces == Some(false) {
+        tab_width.or(indent_size)
+    } else {
+        indent_size.or(tab_width)
+    };
+    EditorSettings {
+        insert_spaces,
+        tab_size,
+        trim_trailing_whitespace: match props.get::<TrimTrailingWs>() {
+            Ok(TrimTrailingWs::Value(on)) => Some(on),
+            Err(_) => None,
+        },
+        insert_final_newline: match props.get::<FinalNewline>() {
+            Ok(FinalNewline::Value(on)) => Some(on),
+            Err(_) => None,
+        },
+        end_of_line: match props.get::<EndOfLine>() {
+            Ok(EndOfLine::Lf) => Some("\n"),
+            Ok(EndOfLine::CrLf) => Some("\r\n"),
+            Ok(EndOfLine::Cr) | Err(_) => None,
+        },
+    }
+}
+
 /// Detect by built-in rules only (no config). Filename rules run before
 /// extension rules so `Dockerfile.dev` is dockerfile, not a "dev" extension.
 pub fn builtin_language(path: &Path) -> Option<&'static str> {
@@ -1067,6 +1172,87 @@ mod tests {
                 indent_width: None,
                 use_tabs: Some(true),
             }
+        );
+    }
+
+    /// The editor half of the same file: what poly tells VSCode to do while the
+    /// user types, rather than what it formats with.
+    ///
+    /// The point of resolving it here is that these answers come from the same
+    /// ec4rs call and the same file chain as the formatter's. A second resolver
+    /// in the extension would disagree on exactly this test's fixture -- glob
+    /// sections, inheritance, and the two width keys deferring to each other.
+    #[test]
+    fn editorconfig_answers_what_the_editor_asks() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(
+            root.join(".editorconfig"),
+            "root = true\n\
+             \n\
+             [*]\n\
+             indent_style = space\n\
+             indent_size = 2\n\
+             trim_trailing_whitespace = true\n\
+             insert_final_newline = true\n\
+             end_of_line = lf\n\
+             \n\
+             [*.go]\n\
+             indent_style = tab\n\
+             tab_width = 8\n\
+             \n\
+             [*.md]\n\
+             trim_trailing_whitespace = false\n\
+             \n\
+             [*.bat]\n\
+             end_of_line = crlf\n\
+             \n\
+             [*.odd]\n\
+             end_of_line = cr\n",
+        )
+        .unwrap();
+
+        let settings = |name: &str| editorconfig_editor_settings(&root.join(name));
+
+        assert_eq!(
+            settings("a.ts"),
+            EditorSettings {
+                insert_spaces: Some(true),
+                tab_size: Some(2),
+                trim_trailing_whitespace: Some(true),
+                insert_final_newline: Some(true),
+                end_of_line: Some("\n"),
+            }
+        );
+        // Tabs: the editor's one number is how wide a tab is drawn, so
+        // tab_width answers rather than the indent_size inherited from [*].
+        // Everything else still inherits.
+        assert_eq!(
+            settings("a.go"),
+            EditorSettings {
+                insert_spaces: Some(false),
+                tab_size: Some(8),
+                trim_trailing_whitespace: Some(true),
+                insert_final_newline: Some(true),
+                end_of_line: Some("\n"),
+            }
+        );
+        // Markdown turning trimming off is the reason this property is read at
+        // all: two trailing spaces are a hard line break, and a global "trim on
+        // save" deletes them.
+        assert_eq!(settings("a.md").trim_trailing_whitespace, Some(false));
+        assert_eq!(settings("a.bat").end_of_line, Some("\r\n"));
+        // `cr` is a real answer poly has no way to give, so it says nothing
+        // rather than pick one of the other two and rewrite every line ending.
+        assert_eq!(settings("a.odd").end_of_line, None);
+
+        // No file, nothing said: every field stays None so the editor keeps the
+        // settings the user chose. A default here would silently reset them.
+        let bare = tempfile::tempdir().unwrap();
+        std::fs::write(bare.path().join(".editorconfig"), "root = true\n").unwrap();
+        assert_eq!(
+            editorconfig_editor_settings(&bare.path().join("a.ts")),
+            EditorSettings::default()
         );
     }
 

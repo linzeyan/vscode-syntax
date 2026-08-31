@@ -32,7 +32,8 @@ const METHOD_NOT_FOUND: i32 = -32601;
 /// editor command is what applies them.
 const FORMAT_PATHS: &str = "poly.formatPaths";
 const MINIFY_JSON: &str = "poly.minifyJsonEdits";
-const EXECUTE_COMMANDS: &[&str] = &[FORMAT_PATHS, MINIFY_JSON];
+const EDITOR_CONFIG: &str = "poly.editorConfig";
+const EXECUTE_COMMANDS: &[&str] = &[FORMAT_PATHS, MINIFY_JSON, EDITOR_CONFIG];
 
 pub fn run() -> Result<()> {
     let (connection, io_threads) = Connection::stdio();
@@ -636,6 +637,10 @@ impl Server {
                 Err(e) => Response::new_err(request.id, INTERNAL_ERROR, format!("{e:#}")),
             },
             MINIFY_JSON => self.run_minify(request.id, params.arguments.first()),
+            EDITOR_CONFIG => match editor_config(params.arguments.first()) {
+                Ok(settings) => Response::new_ok(request.id, settings),
+                Err(e) => Response::new_err(request.id, INTERNAL_ERROR, format!("{e:#}")),
+            },
             other => Response::new_err(
                 request.id,
                 INTERNAL_ERROR,
@@ -1227,6 +1232,44 @@ fn covers(range: Range, position: Position) -> bool {
     after_start && before_end
 }
 
+/// `poly.editorConfig` argument: `{"uri": "file:///..."}`.
+///
+/// What `.editorconfig` asks the editor to do about this file, so the extension
+/// can apply it without parsing the file itself. The whole point is that this
+/// resolves through the same ec4rs call and the same file chain `poly fmt`
+/// obeys: a resolver on the TypeScript side would be a second answer to the
+/// same question, and the two would part company on exactly the projects with
+/// enough config to need one.
+///
+/// Answers for any path, open or not and in any language — the files this
+/// matters most for are the ones poly does not format, which are also the ones
+/// it never sees.
+///
+/// `formatted` is that distinction, handed over rather than guessed at: poly's
+/// formatters already trim trailing whitespace and terminate the file, so the
+/// editor must not do it a second time for a document poly is about to rewrite.
+fn editor_config(argument: Option<&serde_json::Value>) -> Result<serde_json::Value> {
+    let uri = argument
+        .and_then(|a| a.get("uri"))
+        .and_then(serde_json::Value::as_str)
+        .and_then(|u| Url::parse(u).ok())
+        .ok_or_else(|| anyhow::anyhow!("{EDITOR_CONFIG} needs a uri argument"))?;
+    let path = uri_path(&uri);
+    let settings = poly_core::editorconfig_editor_settings(&path);
+    let config = poly_core::Config::discover(&path).unwrap_or_else(|_| poly_core::Config::empty());
+    let formatted = config
+        .language(&path)
+        .is_some_and(|lang| crate::fmt::formattable(&lang));
+    Ok(serde_json::json!({
+        "insertSpaces": settings.insert_spaces,
+        "tabSize": settings.tab_size,
+        "trimTrailingWhitespace": settings.trim_trailing_whitespace,
+        "insertFinalNewline": settings.insert_final_newline,
+        "endOfLine": settings.end_of_line,
+        "formatted": formatted,
+    }))
+}
+
 /// `poly.formatPaths` argument: `{"mode": "paths"|"gitRepo"|"gitChanged",
 /// "paths": [...]}`. Git scopes resolve from the first path.
 fn run_format_paths(arg: Option<&serde_json::Value>) -> Result<serde_json::Value> {
@@ -1344,6 +1387,52 @@ mod tests {
                 "{command} is both a server command and one the extension registers"
             );
         }
+    }
+
+    /// The extension asks for a file it may never have shown poly, so this has
+    /// to answer for any path — and it has to say whether poly is the formatter,
+    /// because that decides who trims the file on save. Both doing it is not
+    /// harmless: a project that turned trimming off for one glob would get it
+    /// done anyway by whichever side was not told.
+    #[test]
+    fn editor_config_answers_for_any_path_and_says_who_formats_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join(".editorconfig"),
+            "root = true\n\
+             \n\
+             [*]\n\
+             indent_style = space\n\
+             indent_size = 2\n\
+             \n\
+             [*.ini]\n\
+             trim_trailing_whitespace = false\n",
+        )
+        .expect("write .editorconfig");
+        let ask = |name: &str| {
+            let uri = Url::from_file_path(dir.path().join(name)).expect("absolute path");
+            editor_config(Some(&serde_json::json!({ "uri": uri.to_string() })))
+                .expect("settings for an existing path")
+        };
+
+        let ts = ask("a.ts");
+        assert_eq!(ts["formatted"], true);
+        assert_eq!(ts["tabSize"], 2);
+        assert_eq!(ts["insertSpaces"], true);
+        // Said nothing, so it stays null: a default here would overwrite the
+        // setting the user chose in their own editor.
+        assert!(ts["endOfLine"].is_null(), "{ts}");
+
+        // .ini is not a language poly formats, and it is exactly the case this
+        // exists for -- nothing else in poly would ever look at this file.
+        let ini = ask("a.ini");
+        assert_eq!(ini["formatted"], false);
+        assert_eq!(ini["trimTrailingWhitespace"], false);
+        assert_eq!(ini["tabSize"], 2, "still inherits [*]: {ini}");
+
+        // No uri is the caller's bug. An error, not an empty answer the
+        // extension would go on to apply to the document.
+        assert!(editor_config(None).is_err());
     }
 
     /// Turning the proxy on must not cost the user findings it never replaces.

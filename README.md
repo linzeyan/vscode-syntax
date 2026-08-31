@@ -35,6 +35,7 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 - **Format**：Format Document／`editor.formatOnSave`，加上批次命令 Format
   File／Folder／Workspace／Git Repo／Git Changed Files。專案有 `.editorconfig`
   的話直接沿用，縮排與行寬不必再抄一份到 `poly.toml`。
+- **Format Selection**：只格式化選取的範圍，其餘的行原封不動。
 - **Lint**：存檔即時 diagnostics 進 Problems panel；`Poly: Lint (poly check)`
   在終端跑完整 CLI。
 - **`Poly: Minify JSON`**：把當前 JSON／JSONC buffer 壓成一行。刻意**不**進
@@ -473,6 +474,10 @@ exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同�
 這裡是安靜丟掉，而不像寫在 poly.toml 裡會讓解析失敗——`.editorconfig` 是寫給這個 repo
 用過的每一個編輯器看的，不是寫給 poly 的，為了它拒絕格式化整個專案只會讓人以為是
 poly 壞了。走外部工具的語言不經過這條路，那些工具自己就會讀 `.editorconfig`。
+
+編輯器那半也一併沿用：打字時的 tab 寬度、存檔時的行尾空白與檔尾換行、行尾字元，
+連 poly 不格式化的檔案（`.ini`、Makefile……）都算。`charset` 與 `max_line_length`
+不處理。
 
 完整的鍵、可填的值、每個引擎的預設值都寫在
 [poly.example.toml](poly.example.toml) 裡。

@@ -4,6 +4,13 @@
 
 - **Format**：右鍵 Format Document／`editor.formatOnSave`；批次命令
   （Format File / Folder / Workspace / Git Repo / Git Changed Files）。
+- **Format Selection**：格整份文件，但只交回落在選取範圍內的變更，所以結果永遠是
+  `poly fmt` 會寫的東西。跨在選取邊界上的一整塊變更會整塊套用——那一塊裡沒有可以切開
+  的對齊點。`editor.formatOnSaveMode: modifications` 走同一條路。
+- **`.editorconfig`**：打字時的 tab 寬度與 tab／空白選擇，以及存檔時的行尾空白、檔尾
+  換行、行尾字元。**包括 poly 不格式化的檔案**（`.ini`、Makefile……）——poly 會格的
+  檔案交給 formatter，不會兩邊同時改一次存檔。答案與 `poly fmt` 出自同一次解析，所以
+  打字時的行為跟存檔後的結果不會各說各話。`charset` 與 `max_line_length` 不處理。
 - **Lint**：存檔即時 diagnostics（shellcheck／hadolint／actionlint／ruff／
   selene／sqruff，以及專案內的 biome／eslint）；`Poly: Lint (poly check)`
   在終端跑完整 CLI，輸出與 CI 一致。

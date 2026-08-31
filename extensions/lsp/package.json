@@ -43,7 +43,8 @@
     "onLanguage:cpp",
     "onLanguage:terraform",
     "onLanguage:swift",
-    "onLanguage:protobuf"
+    "onLanguage:protobuf",
+    "workspaceContains:.editorconfig"
   ],
   "contributes": {
     "commands": [

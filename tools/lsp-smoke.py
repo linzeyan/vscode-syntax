@@ -228,6 +228,42 @@ edits = resp.get("result")
 assert edits, f"expected minify edits: {resp}"
 assert edits[0]["newText"] == '{"b":1,"a":"two  spaces"}', edits[0]["newText"]
 
+# .editorconfig, resolved by the daemon so the extension does not need a second
+# parser. Asked about a path that was never opened and in a language poly does
+# not format, because that is the case the feature exists for -- an editor-side
+# EditorConfig extension is there for the files poly never touches.
+ec_dir = tempfile.mkdtemp(prefix="poly-smoke-ec-")
+with open(os.path.join(ec_dir, ".editorconfig"), "w") as f:
+    f.write(
+        "root = true\n\n[*]\nindent_style = space\nindent_size = 2\n"
+        "insert_final_newline = true\n\n[*.ini]\ntrim_trailing_whitespace = false\n"
+    )
+send(
+    {
+        "jsonrpc": "2.0",
+        "id": 14,
+        "method": "workspace/executeCommand",
+        "params": {
+            "command": "poly.editorConfig",
+            "arguments": [{"uri": "file://" + os.path.join(ec_dir, "settings.ini")}],
+        },
+    }
+)
+ec = recv_response(14).get("result")
+assert ec, f"expected editorconfig settings: {ec}"
+assert ec["insertSpaces"] is True and ec["tabSize"] == 2, ec
+# Inherited from [*] while [*.ini] overrides its own key: the file chain and
+# section precedence are the parts a second implementation gets wrong.
+assert ec["trimTrailingWhitespace"] is False, ec
+assert ec["insertFinalNewline"] is True, ec
+# Unset stays null. A default would have the extension overwrite the setting
+# the user chose.
+assert ec["endOfLine"] is None, ec
+# poly does not format .ini, so the extension is the one that has to apply the
+# save-time properties. Getting this backwards means two participants editing
+# one save.
+assert ec["formatted"] is False, ec
+
 # Format Selection. Two things have to be true at once and only a round trip
 # shows both: the selected line comes back formatted, and the identical problem
 # on another line does not. A unit test can check the narrowing logic, but not
@@ -315,5 +351,6 @@ except subprocess.TimeoutExpired:
 assert proc.returncode == 0, f"server exit code {proc.returncode}"
 print(
     "LSP SMOKE PASS: formatting, Format Selection, diagnostics, rule hover,"
-    " batch executeCommand, minify, unhandled methods declined, clean shutdown"
+    " batch executeCommand, minify, .editorconfig, unhandled methods declined,"
+    " clean shutdown"
 )

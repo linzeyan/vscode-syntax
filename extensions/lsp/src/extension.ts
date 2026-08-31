@@ -206,6 +206,157 @@ function workspacePaths(): string[] {
   return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
 }
 
+// ── .editorconfig ──────────────────────────────────────────────────────────
+//
+// The daemon resolves it, this side applies it. Not a division of labour for
+// its own sake: poly already reads .editorconfig for the three knobs it formats
+// with, and a second parser here would be a second answer to the same question
+// — one the editor obeys while typing, one the formatter obeys on save. They
+// would agree on simple files and part company on the projects with enough
+// config to have needed one.
+//
+// `null` means the file said nothing about that property, which is not the same
+// as saying the default: the user's own settings have to survive a
+// .editorconfig that only mentions indent_size.
+//
+// `workspaceContains:.editorconfig` is in the manifest for this: the files
+// these properties matter most for are the ones poly does not format -- an
+// .ini, a Makefile -- and none of them fire an onLanguage event. Root only
+// rather than `**/.editorconfig`, because VSCode searches the workspace for
+// those patterns and a project with a nested one has a poly language in it
+// somewhere anyway.
+type EditorConfig = {
+  insertSpaces: boolean | null;
+  tabSize: number | null;
+  trimTrailingWhitespace: boolean | null;
+  insertFinalNewline: boolean | null;
+  endOfLine: "\n" | "\r\n" | null;
+  // Whether poly formats this file, which decides who trims it on save.
+  formatted: boolean;
+};
+
+async function editorConfig(
+  uri: vscode.Uri,
+): Promise<EditorConfig | undefined> {
+  if (!client || health !== "ready" || uri.scheme !== "file") {
+    return undefined;
+  }
+  try {
+    return (await client.sendRequest("workspace/executeCommand", {
+      command: "poly.editorConfig",
+      arguments: [{ uri: uri.toString() }],
+    })) as EditorConfig;
+  } catch (err) {
+    // A settings lookup is not worth a modal. It fails the same way for every
+    // file, so the log is where someone would look after noticing indentation
+    // is not being applied at all.
+    client.outputChannel.appendLine(`[editorconfig] ${uri.fsPath}: ${err}`);
+    return undefined;
+  }
+}
+
+/// Indentation, applied per editor rather than per setting.
+///
+/// `editor.options` is the only per-file surface VSCode offers for this;
+/// `editor.tabSize` is a setting, and honouring .editorconfig by writing to the
+/// user's settings.json would be a cure worse than the disease. This is also
+/// the half `editor.detectIndentation` guesses at — it reads the file and is
+/// usually right, which is exactly why being wrong on a new or empty file is so
+/// hard to notice.
+async function applyIndentation(editor: vscode.TextEditor): Promise<void> {
+  const config = await editorConfig(editor.document.uri);
+  if (!config) {
+    return;
+  }
+  const options: vscode.TextEditorOptions = {};
+  if (config.insertSpaces !== null) {
+    options.insertSpaces = config.insertSpaces;
+  }
+  if (config.tabSize !== null) {
+    options.tabSize = config.tabSize;
+  }
+  if (options.insertSpaces !== undefined || options.tabSize !== undefined) {
+    editor.options = options;
+  }
+}
+
+function applyIndentationToVisible(): void {
+  for (const editor of vscode.window.visibleTextEditors) {
+    void applyIndentation(editor);
+  }
+}
+
+/// Trailing whitespace, a final newline, and line endings, at save time.
+///
+/// Returned as edits for `onWillSaveTextDocument` rather than done with a
+/// WorkspaceEdit, so they land inside the save the user asked for instead of
+/// dirtying the file again immediately after it.
+///
+/// Nothing happens unless .editorconfig asked for it. `insert_final_newline =
+/// false` does not mean "remove the one that is there" — the property that
+/// means that is `trim_final_newlines`, and it is a different property.
+function saveEdits(
+  document: vscode.TextDocument,
+  config: EditorConfig,
+): vscode.TextEdit[] {
+  const edits: vscode.TextEdit[] = [];
+  // poly's formatters already trim every line and terminate every file they
+  // touch, so for a document poly formats there is nothing here to add — and
+  // trying would mean two participants rewriting one save.
+  if (!config.formatted) {
+    // `files.*` are settings, not per-file options, so a .editorconfig saying
+    // "off" cannot switch one off — the extension this replaces cannot either,
+    // it prints the same warning. Saying so matters most for markdown, where
+    // the two trailing spaces that make a hard line break are the whole reason
+    // anyone writes `trim_trailing_whitespace = false`.
+    for (
+      const [property, setting] of [
+        ["trimTrailingWhitespace", config.trimTrailingWhitespace],
+        ["insertFinalNewline", config.insertFinalNewline],
+      ] as const
+    ) {
+      const on = vscode.workspace
+        .getConfiguration("files", document.uri)
+        .get<boolean>(property, false);
+      if (setting === false && on) {
+        client?.outputChannel.appendLine(
+          `[editorconfig] ${document.uri.fsPath}: files.${property} is on and overrides .editorconfig`,
+        );
+      }
+    }
+    if (config.trimTrailingWhitespace) {
+      for (let line = 0; line < document.lineCount; line++) {
+        const { text } = document.lineAt(line);
+        const trimmed = text.replace(/[ \t]+$/, "");
+        if (trimmed.length !== text.length) {
+          edits.push(
+            vscode.TextEdit.delete(
+              new vscode.Range(line, trimmed.length, line, text.length),
+            ),
+          );
+        }
+      }
+    }
+    const last = document.lineAt(document.lineCount - 1);
+    // A document whose last line is empty already ends in a newline.
+    if (config.insertFinalNewline && last.text.length > 0) {
+      const eol = document.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n";
+      edits.push(vscode.TextEdit.insert(last.range.end, eol));
+    }
+  }
+  // Line endings are not covered by the formatter: poly round-trips whatever
+  // the file already had, deliberately, so a repo that wrote `end_of_line = lf`
+  // and has a CRLF file gets no help from `poly fmt`. This is the one place it
+  // can be honoured.
+  const wanted = config.endOfLine === "\r\n"
+    ? vscode.EndOfLine.CRLF
+    : vscode.EndOfLine.LF;
+  if (config.endOfLine !== null && document.eol !== wanted) {
+    edits.push(vscode.TextEdit.setEndOfLine(wanted));
+  }
+  return edits;
+}
+
 /// Scope for git commands: the folder of the active file, else the workspace.
 function gitBase(): string[] {
   const active = vscode.window.activeTextEditor?.document.uri;
@@ -288,7 +439,27 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     status,
-    vscode.window.onDidChangeActiveTextEditor(() => refreshStatus()),
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      refreshStatus();
+      applyIndentationToVisible();
+    }),
+    // Covers splits and restored tabs, which never become active on their own.
+    // Overlaps with the line above by design: applying the same options twice
+    // is a no-op, and missing an editor is a file being typed into with the
+    // wrong indentation.
+    vscode.window.onDidChangeVisibleTextEditors(applyIndentationToVisible),
+    vscode.workspace.onWillSaveTextDocument((event) => {
+      if (event.document.uri.scheme !== "file") {
+        return;
+      }
+      // waitUntil holds the save until the edits arrive. The daemon answers in
+      // well under a millisecond and VSCode caps the wait at 1.5s, after which
+      // it saves without us -- a slow answer costs the .editorconfig fixes for
+      // that save, never the save itself.
+      event.waitUntil(
+        editorConfig(event.document.uri).then((config) => config ? saveEdits(event.document, config) : []),
+      );
+    }),
     vscode.commands.registerCommand("poly.showOutput", () => client?.outputChannel.show()),
     vscode.commands.registerCommand("poly.formatFile", async () => {
       const doc = vscode.window.activeTextEditor?.document;
@@ -413,6 +584,9 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
   await reportVersionSkew(serverPath, context.extension.packageJSON.version);
+  // The editors already open when the window was restored: they fired their
+  // events before the daemon could answer, so nothing above has seen them.
+  applyIndentationToVisible();
   scheduleUpdateCheck(context);
 }
 
