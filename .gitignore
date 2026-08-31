@@ -7,3 +7,4 @@ node_modules/
 extensions/lsp/bin/
 extensions/lsp/out/
 extensions/lsp/.vscode-test/
+extensions/editor/out/

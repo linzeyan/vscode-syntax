@@ -80,6 +80,12 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   `路徑:42-51`。VSCode 內建的 Copy Relative Path 只到路徑為止，`:42` 是唯一的差別，
   但那一截才是重點——`src/lib.rs:42` 正是 `rg` 印的、CI annotation 連過去的、終端機
   能點的，也是 poly 自己診斷輸出的形狀。預設沒綁快捷鍵，命令面板與編輯器右鍵都有。
+- **`Poly: Insert Table of Contents`**：在游標處插入 markdown 目錄，用註釋標記框住，
+  再跑一次就地更新。錨點照 VSCode 自己的 slug 規則產生，所以連結一定跳得到；front
+  matter 與 code block 裡的 `#` 不會被誤認成標題。
+- **`Poly: Toggle Bold` ／ `Toggle Italic`**：`cmd/ctrl+b`、`cmd/ctrl+i`，只在
+  markdown 檔生效。產生 `**bold**` 與 `_italic_`——就是 `poly fmt` 正規化出來的那兩種，
+  不會被下一次存檔改掉。
 
 ### poly — CLI
 

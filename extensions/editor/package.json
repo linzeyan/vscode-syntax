@@ -18,6 +18,21 @@
         "command": "poly.copyPathWithLine",
         "title": "Copy Path with Line Numbers",
         "category": "Poly"
+      },
+      {
+        "command": "poly.insertTableOfContents",
+        "title": "Insert Table of Contents",
+        "category": "Poly"
+      },
+      {
+        "command": "poly.toggleBold",
+        "title": "Toggle Bold",
+        "category": "Poly"
+      },
+      {
+        "command": "poly.toggleItalic",
+        "title": "Toggle Italic",
+        "category": "Poly"
       }
     ],
     "menus": {
@@ -27,11 +42,26 @@
           "group": "9_cutcopypaste"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "poly.toggleBold",
+        "key": "ctrl+b",
+        "mac": "cmd+b",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      },
+      {
+        "command": "poly.toggleItalic",
+        "key": "ctrl+i",
+        "mac": "cmd+i",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      }
+    ]
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test out/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^20",

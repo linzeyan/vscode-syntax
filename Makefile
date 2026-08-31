@@ -64,11 +64,13 @@ probe: build ## Language server proxy, against whichever servers are installed
 e2e: ## Typecheck and run the extension tests in a real extension host
 	cd extensions/lsp && pnpm run typecheck && pnpm test
 
-# poly-editor has no daemon and no extension-host test, so what there is to
-# prove is that it compiles and that vsce will take it -- a manifest VSCode
-# would reject is not something to discover during a release.
-editor: ## Typecheck, build and package poly-editor
-	cd extensions/editor && pnpm run typecheck && pnpm run build && \
+# poly-editor has no daemon and no extension host to run in, so its logic
+# lives in modules that do not import vscode and is tested with node's own
+# runner -- no new dependency, and no half-minute boot to find a typo. The
+# package step is the other half: a manifest VSCode would reject is not
+# something to discover during a release.
+editor: ## Typecheck, test, build and package poly-editor
+	cd extensions/editor && pnpm run typecheck && pnpm test && pnpm run build && \
 		pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository
 
 # Given the binary as well, so this asks the same question CI asks: not just
