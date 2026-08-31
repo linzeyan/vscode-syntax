@@ -1,7 +1,11 @@
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { imageReferences } from "./images";
+import { indentSpans } from "./indent";
 import { toc, TOC_END, TOC_START } from "./markdown";
+import { registerTodoTree } from "./todoTree";
 
 /**
  * A `path:line` reference, in the shape poly's diagnostics already print.
@@ -176,7 +180,196 @@ function withEditor(
   };
 }
 
+/**
+ * Indent tinting, wired to the editor.
+ *
+ * Only the visible lines are decorated. A decoration per indent level over a
+ * whole file is thousands of ranges that nobody is looking at, and the events
+ * that change what is visible are the same ones that would have to invalidate
+ * a cache anyway.
+ */
+function tintIndentation(context: vscode.ExtensionContext): void {
+  const tints = [1, 2, 3, 4].map((n) =>
+    vscode.window.createTextEditorDecorationType({
+      backgroundColor: new vscode.ThemeColor(`poly.indentLevel${n}`),
+    })
+  );
+  const partial = vscode.window.createTextEditorDecorationType({
+    backgroundColor: new vscode.ThemeColor("poly.indentPartial"),
+  });
+  context.subscriptions.push(partial, ...tints);
+
+  const paint = (editor: vscode.TextEditor) => {
+    const byLevel: vscode.Range[][] = tints.map(() => []);
+    const odd: vscode.Range[] = [];
+    const on = vscode.workspace
+      .getConfiguration("poly")
+      .get<boolean>("indentTint.enabled", true);
+    if (on) {
+      // `editor.options.tabSize` is what the editor resolved -- from the
+      // language, the file, or `editor.detectIndentation` -- so this follows
+      // the same width the reader is actually looking at.
+      const tabSize = typeof editor.options.tabSize === "number"
+        ? editor.options.tabSize
+        : 4;
+      for (const visible of editor.visibleRanges) {
+        for (let line = visible.start.line; line <= visible.end.line; line++) {
+          for (const span of indentSpans(editor.document.lineAt(line).text, tabSize)) {
+            const range = new vscode.Range(line, span.start, line, span.end);
+            if (span.partial) {
+              odd.push(range);
+            } else {
+              byLevel[span.level % byLevel.length].push(range);
+            }
+          }
+        }
+      }
+    }
+    tints.forEach((tint, i) => editor.setDecorations(tint, byLevel[i]));
+    editor.setDecorations(partial, odd);
+  };
+
+  // Typing produces a change event per keystroke, and repainting on each one
+  // is work thrown away by the next. One frame of lag is not visible; the
+  // repaints are.
+  let pending: NodeJS.Timeout | undefined;
+  const repaintAll = () => {
+    clearTimeout(pending);
+    pending = setTimeout(() => vscode.window.visibleTextEditors.forEach(paint), 50);
+  };
+  context.subscriptions.push({ dispose: () => clearTimeout(pending) });
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeVisibleTextEditors(repaintAll),
+    vscode.window.onDidChangeTextEditorVisibleRanges((event) => paint(event.textEditor)),
+    vscode.window.onDidChangeTextEditorOptions((event) => paint(event.textEditor)),
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      if (vscode.window.visibleTextEditors.some((e) => e.document === event.document)) {
+        repaintAll();
+      }
+    }),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("poly.indentTint")) {
+        repaintAll();
+      }
+    }),
+  );
+  vscode.window.visibleTextEditors.forEach(paint);
+}
+
+/**
+ * The image a line refers to, if exactly one of its candidates is a real file.
+ *
+ * Resolved against the document's own directory first and the workspace root
+ * second, which covers both `./logo.png` next to the file and `/assets/logo.png`
+ * written the way a web server will serve it.
+ */
+function imageOnLine(document: vscode.TextDocument, text: string): string | undefined {
+  const here = path.dirname(document.uri.fsPath);
+  const root = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
+  for (const reference of imageReferences(text)) {
+    const bases = path.isAbsolute(reference.path)
+      // An absolute path in source is usually server-absolute, not disk-
+      // absolute, so the workspace root is the more useful reading of it --
+      // but try the literal one too, because sometimes it is just a path.
+      ? [root, undefined]
+      : [here, root];
+    for (const base of bases) {
+      const file = base === undefined
+        ? reference.path
+        : path.join(base, reference.path.replace(/^[/\\]+/, ""));
+      try {
+        if (fs.statSync(file).isFile()) {
+          return file;
+        }
+      } catch {
+        // Not there. That is the filter, not an error.
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * A thumbnail in the gutter for every visible line that names an image.
+ *
+ * `gutterIconPath` belongs to the decoration *type*, not to a range, so there
+ * has to be one type per distinct image. They are cached across repaints and
+ * disposed with the extension; the cache is bounded because a file only has so
+ * many visible lines.
+ */
+function previewImages(context: vscode.ExtensionContext): void {
+  const types = new Map<string, vscode.TextEditorDecorationType>();
+  context.subscriptions.push({
+    dispose: () => types.forEach((type) => type.dispose()),
+  });
+
+  const paint = (editor: vscode.TextEditor) => {
+    const shown = new Map<string, vscode.Range[]>();
+    const on = vscode.workspace
+      .getConfiguration("poly")
+      .get<boolean>("imagePreview.enabled", true);
+    if (on && editor.document.uri.scheme === "file") {
+      for (const visible of editor.visibleRanges) {
+        for (let line = visible.start.line; line <= visible.end.line; line++) {
+          const file = imageOnLine(editor.document, editor.document.lineAt(line).text);
+          if (!file) {
+            continue;
+          }
+          if (!types.has(file)) {
+            types.set(
+              file,
+              vscode.window.createTextEditorDecorationType({
+                gutterIconPath: vscode.Uri.file(file),
+                gutterIconSize: "contain",
+              }),
+            );
+          }
+          const ranges = shown.get(file) ?? [];
+          ranges.push(new vscode.Range(line, 0, line, 0));
+          shown.set(file, ranges);
+        }
+      }
+    }
+    // Every known type is set on this editor, including to nothing: a type
+    // left alone keeps whatever it was showing the last time this editor
+    // scrolled past that line.
+    for (const [file, type] of types) {
+      editor.setDecorations(type, shown.get(file) ?? []);
+    }
+  };
+
+  let pending: NodeJS.Timeout | undefined;
+  const repaintAll = () => {
+    clearTimeout(pending);
+    // Slower than the indent repaint on purpose: this one stats files, and
+    // nobody needs a thumbnail to keep up with typing.
+    pending = setTimeout(() => vscode.window.visibleTextEditors.forEach(paint), 250);
+  };
+  context.subscriptions.push({ dispose: () => clearTimeout(pending) });
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeVisibleTextEditors(repaintAll),
+    vscode.window.onDidChangeTextEditorVisibleRanges((event) => paint(event.textEditor)),
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      if (vscode.window.visibleTextEditors.some((e) => e.document === event.document)) {
+        repaintAll();
+      }
+    }),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("poly.imagePreview")) {
+        repaintAll();
+      }
+    }),
+  );
+  vscode.window.visibleTextEditors.forEach(paint);
+}
+
 export function activate(context: vscode.ExtensionContext) {
+  tintIndentation(context);
+  previewImages(context);
+  registerTodoTree(context);
+
   const commands: [string, () => Promise<void>][] = [
     [
       "poly.copyPathWithLine",

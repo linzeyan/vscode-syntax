@@ -12,7 +12,86 @@
     "Other"
   ],
   "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
+    "configuration": {
+      "title": "Poly Editor",
+      "properties": {
+        "poly.indentTint.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Tint each level of leading whitespace, and mark whitespace that does not fill a level. Colours are the poly.indentLevel* / poly.indentPartial theme colours, overridable in workbench.colorCustomizations."
+        },
+        "poly.imagePreview.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a thumbnail in the gutter for lines that name an image file which exists."
+        },
+        "poly.todo.tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "TODO",
+            "FIXME",
+            "HACK",
+            "XXX",
+            "BUG"
+          ],
+          "description": "Markers the TODOs view lists. Matched as whole words, case-sensitively; entries that are not plain words are ignored."
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "poly.indentLevel1",
+        "description": "Background of the first indent level.",
+        "defaults": {
+          "dark": "#FFFF4012",
+          "light": "#FFFF4012",
+          "highContrast": "#FFFF4020"
+        }
+      },
+      {
+        "id": "poly.indentLevel2",
+        "description": "Background of the second indent level.",
+        "defaults": {
+          "dark": "#7FFF7F12",
+          "light": "#7FFF7F12",
+          "highContrast": "#7FFF7F20"
+        }
+      },
+      {
+        "id": "poly.indentLevel3",
+        "description": "Background of the third indent level.",
+        "defaults": {
+          "dark": "#FF7FFF12",
+          "light": "#FF7FFF12",
+          "highContrast": "#FF7FFF20"
+        }
+      },
+      {
+        "id": "poly.indentLevel4",
+        "description": "Background of the fourth indent level; levels beyond it cycle.",
+        "defaults": {
+          "dark": "#4FECEC12",
+          "light": "#4FECEC12",
+          "highContrast": "#4FECEC20"
+        }
+      },
+      {
+        "id": "poly.indentPartial",
+        "description": "Background of leading whitespace that does not fill an indent level.",
+        "defaults": {
+          "dark": "#80202099",
+          "light": "#80202066",
+          "highContrast": "#802020CC"
+        }
+      }
+    ],
     "commands": [
       {
         "command": "poly.copyPathWithLine",
@@ -33,13 +112,34 @@
         "command": "poly.toggleItalic",
         "title": "Toggle Italic",
         "category": "Poly"
+      },
+      {
+        "command": "poly.refreshTodos",
+        "title": "Refresh TODOs",
+        "category": "Poly",
+        "icon": "$(refresh)"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "polyTodos",
+          "name": "TODOs"
+        }
+      ]
+    },
     "menus": {
       "editor/context": [
         {
           "command": "poly.copyPathWithLine",
           "group": "9_cutcopypaste"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "poly.refreshTodos",
+          "when": "view == polyTodos",
+          "group": "navigation"
         }
       ]
     },

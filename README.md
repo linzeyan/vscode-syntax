@@ -86,6 +86,14 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 - **`Poly: Toggle Bold` ／ `Toggle Italic`**：`cmd/ctrl+b`、`cmd/ctrl+i`，只在
   markdown 檔生效。產生 `**bold**` 與 `_italic_`——就是 `poly fmt` 正規化出來的那兩種，
   不會被下一次存檔改掉。
+- **縮排上色**：每層縮排的空白塗底色，四色循環；**填不滿一層的空白另外標色**，那正是
+  「縮排改到一半」的樣子。內建的 indent guides 畫線回答「block 從哪開始」，上色回答的
+  是「我在第幾層」。只畫可見範圍，顏色走 theme color。
+- **Gutter 圖片預覽**：某行提到的圖檔存在就在 gutter 放縮圖。不寫語法解析器——
+  markdown／HTML／CSS 各有寫法，而檔案存不存在才是真正的過濾器。
+- **TODOs 檢視**：檔案總管多一個面板，列出整個 workspace 的 `TODO`／`FIXME`／`HACK`／
+  `XXX`／`BUG`。只在面板顯示時才掃描，排除規則沿用 `files.exclude`／`search.exclude`，
+  而且掃描上限會寫在標題上——「清單很短」跟「清單被截斷」不該長得一樣。
 
 ### poly — CLI
 
