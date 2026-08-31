@@ -189,8 +189,13 @@ export async function checkForUpdates(
 ): Promise<void> {
   const state = context.globalState;
   try {
-    await state.update(LAST_CHECK, Date.now());
     const release = await fetchLatest(state);
+    // Recorded only once GitHub has answered. Written before the fetch, a
+    // check that never got there -- offline, or the unauthenticated 60/hr API
+    // budget exhausted -- still spent the whole interval, and the background
+    // path only console.warns, so the next check moved a week out with nothing
+    // on screen to say why. A 304 and a 404 both count: those reached GitHub.
+    await state.update(LAST_CHECK, Date.now());
     if (!release) {
       if (!quiet) {
         vscode.window.setStatusBarMessage("Poly: no new release", 5000);
