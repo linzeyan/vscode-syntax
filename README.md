@@ -21,8 +21,7 @@
   （上游要嘛不存在，要嘛沒有授權檔）。
 - 輸出標準 TextMate scope，**任何現有 color theme 直接生效**，不自帶配色。
 - 部分語言改採比內建更好的社群文法（如 rust 用 dustypomerleau/rust-syntax）。
-- 文法一律由 `tools/grammar-sync.py` 從上游 repo／marketplace VSIX 以 pinned
-  commit 同步，`grammars/sources.json` 是單一真相；CI 有 drift gate 擋手改。
+- 文法一律以 pinned commit 從上游 repo／marketplace VSIX 同步，不手改。
 - **零執行期程式碼**，不佔 extension host 資源。
 
 ### poly-lsp — 編輯器整合
@@ -43,15 +42,11 @@
   server——只從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。實際能用
   哪幾項由 server 自己宣告，十四項裡：clangd 與 rust-analyzer 給滿 14、gopls 13、
   sourcekit-lsp 12、lua-language-server 12、terraform-ls 只有 7。有一個例外值得知道：
-  sourcekit-lsp 宣告了 declaration 卻在被問時回「unsupported method」，poly 照樣轉發
-  它自己說過的話，所以 Swift 的 Go to Declaration 會失敗（Go to Definition 正常）。**code
-  action 只給燈泡那些**：`editor.codeActionsOnSave` 跑的 `source.*` 一律不轉，因為 VSCode
-  會在 formatter **之前**跑它們，等於 gopls 的 organizeImports 跟 poly 的 gofumpt 在同一次
-  存檔改同一段 import——兩者對 std import 的分組意見不同，誰贏只取決於誰後跑。代價是
-  gopls 的「Source Action…」選單在 poly 下是空的。**poly 自己
-  的 lint 不會因此消失**：server 的診斷是跟 poly 的合併，不是取代，所以 lua 的
-  selene 與 swift 的 swiftlint 照常回報（LSP 的診斷通知會整批取代同一個檔案的舊
-  結果，所以這件事得由 poly 主動合併才會成立）。預設關閉是因為它會跟你八成已經裝了
+  Swift 的 Go to Declaration 會失敗，Go to Definition 正常。**code action 只給燈泡那
+  些**：`editor.codeActionsOnSave` 跑的 `source.*` 一律不轉，否則會跟 poly 的格式化在
+  同一次存檔搶同一段程式碼；代價是 gopls 的「Source Action…」選單在 poly 下是空的。
+  **poly 自己的 lint 不會因此消失**：server 的診斷是跟 poly 的合併，不是取代，所以
+  lua 的 selene 與 swift 的 swiftlint 照常回報。預設關閉是因為它會跟你八成已經裝了
   的官方 extension 重疊，要用請先移除那個 extension。改完要重新載入視窗。
 - **`poly.languageServerLogs`（預設開啟）**：把 language server 自己的 stderr 轉進
   Poly 輸出面板。clangd 與 terraform-ls 每個請求寫一行，嫌吵就關掉——關掉是整份丟棄，
@@ -69,9 +64,9 @@
 - **外部工具**（受管下載）：shellcheck、shfmt、hadolint、actionlint、typos、
   ruff、tflint、gofumpt、golangci-lint、stylua、selene、swiftlint。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
-  信任第一次抓到的東西。上游有新版時由 weekly 的 `tool-sync.yml` 開 PR。
-- **只用專案 toolchain、不代裝**：rustfmt／clippy、clang-format／clang-tidy、
-  swift-format、terraform fmt。
+  信任第一次抓到的東西。
+- **只用專案 toolchain、不代裝**：rustfmt、clang-format、swift-format、
+  terraform fmt。
 - 工具解析順序：`poly.toml` 指定 → 專案內工具 → 內嵌引擎 → 受管下載 → PATH。
 
 ## 安裝
@@ -212,10 +207,11 @@ poly --help                    # 完整說明
 poly --version                 # 版本（確認 PATH 上是哪一支）
 ```
 
-`fmt` 與 `check` 共用五個旗標：`--format` 決定 stdout 的形狀（見下），`--compact`
-每個問題只印一行，`--no-ignore` 連 git 忽略的檔案也處理，`--hidden` 連點開頭的
-檔案／目錄也處理，`--strict` 讓「工具找不到」變成錯誤而不是跳過該檔。`--check`
-只有 `fmt` 認得——`check` 本來就不寫檔，給它 `--check` 會直接報錯而不是靜默忽略。
+`fmt` 與 `check` 共用的旗標裡，這五個值得說明：`--format` 決定 stdout 的形狀（見
+下），`--compact` 每個問題只印一行，`--no-ignore` 連 git 忽略的檔案也處理，
+`--hidden` 連點開頭的檔案／目錄也處理，`--strict` 讓「工具找不到」變成錯誤而不是
+跳過該檔。`--check` 只有 `fmt` 認得——`check` 本來就不寫檔，給它 `--check` 會直接
+報錯而不是靜默忽略。
 
 `--strict` 值得特別說：預設情況下 gofumpt 或 swift-format 沒裝，poly 會在 stderr
 說一聲然後跳過那些檔案，exit code 不受影響。這對「不是每台機器都裝了每套
@@ -348,10 +344,6 @@ code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`
 - run: poly check --format table_markdown . >> "$GITHUB_STEP_SUMMARY"
 ```
 
-poly 自己的 CI 就是這樣做的：`--format json` 餵給 [`tools/ci-annotate.py`](tools/ci-annotate.py)
-產生逐行的 annotation，`--format table_markdown` 直接進 job summary。兩者都是公開可見的，
-不像 job log 需要 token。
-
 ## 設定
 
 `poly.toml` 是選用的。完全沒有設定檔時，語言用內建副檔名表判斷，格式化用各引擎
@@ -415,7 +407,7 @@ exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同�
 
 語言伺服器只認 VSCode settings 的 `poly.languageServers`，不進 `poly.toml`——那是
 「這台機器上我要不要讓 poly 接管 Go」的個人偏好，CI 根本不跑 `poly lsp`，寫進專案設定
-只會讓兩邊看到一個對方不在乎的鍵（A4）。server 一律從 PATH 找，poly 永遠不代裝：它必須
+只會讓兩邊看到一個對方不在乎的鍵。server 一律從 PATH 找，poly 永遠不代裝：它必須
 跟蓋出這個專案的 toolchain 對得上，poly 選版本就是 poly 選錯版本。找不到會在
 `Poly` 輸出頻道說一聲，不會靜默沒作用。
 
@@ -425,7 +417,7 @@ exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同�
 （`poly.serverPath`、`poly.lintOnSave`、`poly.updateCheck.*`）。
 
 完整的鍵、可填的值、每個引擎的預設值都寫在
-[poly.example.toml](poly.example.toml) 裡——那份檔案有測試綁著，不會跟程式碼走散。
+[poly.example.toml](poly.example.toml) 裡。
 
 ## 從原始碼建置
 
