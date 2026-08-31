@@ -2,7 +2,7 @@
   "name": "poly-editor",
   "displayName": "Poly Editor",
   "description": "Editor-side conveniences with no CI counterpart: copy path:line references in the same shape poly's diagnostics print.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "ricky",
   "license": "MIT",
   "engines": {
