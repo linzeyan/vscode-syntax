@@ -47,6 +47,15 @@
     "workspaceContains:.editorconfig"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "shellscript",
+        "extensions": [
+          ".bats",
+          ".azcli"
+        ]
+      }
+    ],
     "commands": [
       {
         "command": "poly.formatFile",

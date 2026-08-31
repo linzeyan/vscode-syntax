@@ -1389,6 +1389,49 @@ mod tests {
         }
     }
 
+    /// A language poly detects but the editor does not is a file poly formats
+    /// from the CLI and never in an editor.
+    ///
+    /// `.bats` and `.azcli` are shell that VSCode's built-in shellscript does
+    /// not claim, so both extensions declare them: poly-syntax-highlight owns
+    /// language declarations, but the three extensions are independent and
+    /// someone running only poly-lsp would otherwise get a plain-text file with
+    /// no formatter bound to it. Two manifests saying the same thing is the
+    /// cost, and this is what stops them drifting -- a third extension added to
+    /// one and not the other formats or does not depending on what is installed.
+    #[test]
+    fn both_manifests_teach_the_editor_the_same_shell_extensions() {
+        let declared = |extension: &str| -> Vec<String> {
+            let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("../../../extensions/{extension}/package.json"));
+            let text = std::fs::read_to_string(&manifest).expect("the extension manifest");
+            let package: serde_json::Value =
+                serde_json::from_str(&text).expect("valid package.json");
+            package["contributes"]["languages"]
+                .as_array()
+                .expect("contributes.languages")
+                .iter()
+                .filter(|l| l["id"] == "shellscript")
+                .flat_map(|l| l["extensions"].as_array().cloned().unwrap_or_default())
+                .filter_map(|e| e.as_str().map(str::to_string))
+                .collect()
+        };
+
+        let lsp = declared("lsp");
+        assert_eq!(lsp, declared("syntax"), "the two manifests have drifted");
+        // And what they declare has to be what poly itself detects, or the
+        // editor names a language the CLI would not have picked.
+        for extension in &lsp {
+            let name = format!("a{extension}");
+            assert_eq!(
+                poly_core::builtin_language(Path::new(&name)),
+                Some("shellscript"),
+                "{extension} is declared to the editor but poly does not detect it"
+            );
+        }
+        assert!(lsp.contains(&".bats".to_string()), "{lsp:?}");
+    }
+
     /// The extension asks for a file it may never have shown poly, so this has
     /// to answer for any path — and it has to say whether poly is the formatter,
     /// because that decides who trims the file on save. Both doing it is not

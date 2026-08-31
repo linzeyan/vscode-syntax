@@ -56,6 +56,11 @@ M = r"(?P<m>\d+\.\d+)"
 SITES = [
     rf"poly-syntax-highlight-{V}\.vsix",
     rf"poly-lsp-[a-z0-9-]+-{V}\.vsix",
+    # Added a version late: poly-editor arrived at 0.8.0 and its install line
+    # sat at 0.8.0 through the 0.9.0 bump. An empty pattern is an error here,
+    # but a pattern nobody wrote is the one thing this cannot catch itself --
+    # so a new VSIX means a new line here, in the same commit.
+    rf"poly-editor-{V}\.vsix",
     # The asset name the frozen 0.5.0 installer asks for, quoted in both files.
     rf"poly-syntax-{V}\.vsix",
     rf"POLY_VERSION={V}",

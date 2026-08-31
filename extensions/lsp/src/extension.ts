@@ -45,6 +45,14 @@ const LANGUAGES = [
   "protobuf",
 ];
 
+// `.bats` and `.azcli` are in this extension's `contributes.languages` as well
+// as poly-syntax-highlight's, which is the one place the three extensions
+// deliberately repeat each other. VSCode's built-in shellscript claims neither,
+// so without the mapping the file opens as plain text and no formatter is bound
+// to it -- and the three extensions are independent, so someone running only
+// poly-lsp would get nothing. VSCode merges identical language contributions,
+// and a Rust test compares the two manifests.
+//
 // Format-on-save is declared, not written: contributes.configurationDefaults
 // in package.json covers every language in this list. Adding one here means
 // adding it there too, and a test compares the two.
