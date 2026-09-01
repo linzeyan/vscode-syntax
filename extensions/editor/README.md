@@ -43,6 +43,30 @@ VSCode 的側邊欄開關）。沒有選取時作用於游標所在的單字。
 產生的是 `**bold**` 與 `_italic_`——正是 `poly fmt` 對 markdown 正規化出來的那兩種，
 所以按下去的結果不會被下一次存檔改掉。
 
+### 跨檔案 next／previous change ＋ Revert and Save
+
+`cmd/ctrl+alt+z` 跳到下一個有改動的檔案，`cmd/ctrl+alt+a` 跳到上一個，`alt+q` 把游標
+所在的那個 hunk 還原並存檔。
+
+VSCode 內建的 **Go to Next/Previous Change**（`workbench.action.editor.nextChange`／
+`previousChange`）處理的是「同一個檔案裡的下一處改動」；**跨檔案那一步沒有內建命令**，
+而那正是 review 一個 branch 時按最多次的一步。要單檔的那組，直接在
+`keybindings.json` 綁內建命令即可，這裡不重做。
+
+- 順序是**路徑排序**，不是 git 回報的順序——同一顆按鍵按兩次得走同一條路，git 的順序
+  不保證，而「下一個」有時候往回跳比沒有這個命令還糟。
+- 游標所在的檔案**不必**在清單裡：從一個沒改動的檔案開始 review 是常態，所以會落在
+  該方向上最近的那一個，而不是跳回清單開頭。
+- 兩端都會繞回去。停在最後一個只會讓按鍵看起來壞掉，而且沒地方說明為什麼。
+- 同一個檔案同時有 staged 與 unstaged 改動時只算一站。
+- 開檔後會落在該檔的第一處（往回時是最後一處）改動上。剛開的檔案 quick diff 是非同步
+  算出來的，所以這裡會短暫重試——否則第一次按下去會停在檔案開頭，那是我們唯一確定
+  改動不在的地方。
+- **Revert and Save** 是 `git.revertSelectedRanges` ＋存檔兩件內建動作合成一個手勢。
+  只還原不存檔的話，真正算數的是下一次存檔，在那之前磁碟上的檔案跟編輯器裡看到的不一致。
+
+需要內建的 git extension；它被停用時會講出來，不會靜靜地沒反應。
+
 ### 縮排上色
 
 把每一層縮排的空白塗上底色，四色循環。VSCode 內建的 `editor.guides.indentation`

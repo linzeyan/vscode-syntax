@@ -118,6 +118,21 @@
         "title": "Refresh TODOs",
         "category": "Poly",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "poly.nextChangedFile",
+        "title": "Go to Next Changed File",
+        "category": "Poly"
+      },
+      {
+        "command": "poly.previousChangedFile",
+        "title": "Go to Previous Changed File",
+        "category": "Poly"
+      },
+      {
+        "command": "poly.revertAndSave",
+        "title": "Revert Selected Changes and Save",
+        "category": "Poly"
       }
     ],
     "views": {
@@ -155,6 +170,23 @@
         "key": "ctrl+i",
         "mac": "cmd+i",
         "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      },
+      {
+        "command": "poly.nextChangedFile",
+        "key": "ctrl+alt+z",
+        "mac": "cmd+alt+z",
+        "when": "config.git.enabled && !git.missing"
+      },
+      {
+        "command": "poly.previousChangedFile",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "config.git.enabled && !git.missing"
+      },
+      {
+        "command": "poly.revertAndSave",
+        "key": "alt+q",
+        "when": "editorTextFocus && !editorReadonly && config.git.enabled && !git.missing && resourceScheme == file"
       }
     ]
   },

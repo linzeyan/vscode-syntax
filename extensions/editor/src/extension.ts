@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { nextChangedFile } from "./changes";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import { toc, TOC_END, TOC_START } from "./markdown";
@@ -365,6 +366,89 @@ function previewImages(context: vscode.ExtensionContext): void {
   vscode.window.visibleTextEditors.forEach(paint);
 }
 
+/**
+ * As much of the built-in git extension's API as the two commands below need.
+ *
+ * Declared here rather than pulled in from `@types/vscode.git`: this is four
+ * fields, and the alternative is a dependency whose whole job is to describe an
+ * extension that may not even be enabled.
+ */
+interface GitChange {
+  readonly uri: vscode.Uri;
+}
+interface GitRepository {
+  readonly state: {
+    readonly workingTreeChanges: readonly GitChange[];
+    readonly indexChanges: readonly GitChange[];
+  };
+}
+interface GitExtension {
+  getAPI(version: 1): { readonly repositories: readonly GitRepository[] };
+}
+
+/** Every path git reports as changed, across all open repositories. */
+async function changedFiles(): Promise<string[] | undefined> {
+  const git = vscode.extensions.getExtension<GitExtension>("vscode.git");
+  if (!git) {
+    return undefined;
+  }
+  const exports = git.isActive ? git.exports : await git.activate();
+  return exports.getAPI(1).repositories.flatMap((repo) =>
+    [...repo.state.workingTreeChanges, ...repo.state.indexChanges]
+      // Staged deletions and merge conflicts show up here too; a path with no
+      // file behind it would open an empty editor.
+      .filter((change) => change.uri.scheme === "file")
+      .map((change) => change.uri.fsPath)
+  );
+}
+
+/**
+ * Open the next (or previous) file with changes and land on a change in it.
+ *
+ * VSCode has next/previous change within a file and a list of changed files in
+ * the SCM view; what it has no command for is the step between two files, which
+ * is the one a review pass makes most often.
+ */
+async function stepChangedFile(direction: 1 | -1): Promise<void> {
+  const files = await changedFiles();
+  if (files === undefined) {
+    vscode.window.showWarningMessage(
+      "Poly: the built-in git extension is disabled, so there are no changes to walk",
+    );
+    return;
+  }
+  const here = vscode.window.activeTextEditor?.document.uri;
+  const target = nextChangedFile(
+    files,
+    here?.scheme === "file" ? here.fsPath : undefined,
+    direction,
+  );
+  if (target === undefined) {
+    vscode.window.setStatusBarMessage("Poly: no changed files", 3000);
+    return;
+  }
+
+  const editor = await vscode.window.showTextDocument(
+    await vscode.workspace.openTextDocument(target),
+  );
+  // The quick diff for a file that was not open yet is computed asynchronously,
+  // and the built-in navigation does nothing while it has no changes -- so a
+  // single call would leave the cursor at the top of the file it just opened,
+  // which is the one place we know the change is not. Retry briefly instead of
+  // guessing a delay long enough to always work.
+  const command = direction === 1
+    ? "workbench.action.editor.nextChange"
+    : "workbench.action.editor.previousChange";
+  const before = editor.selection.active;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await vscode.commands.executeCommand(command);
+    if (!editor.selection.active.isEqual(before)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 export function activate(context: vscode.ExtensionContext) {
   tintIndentation(context);
   previewImages(context);
@@ -390,6 +474,20 @@ export function activate(context: vscode.ExtensionContext) {
     [
       "poly.toggleItalic",
       withEditor("Toggle Italic", (editor) => toggleEmphasis(editor, "_")),
+    ],
+    ["poly.nextChangedFile", () => stepChangedFile(1)],
+    ["poly.previousChangedFile", () => stepChangedFile(-1)],
+    [
+      "poly.revertAndSave",
+      withEditor("Revert and Save", async () => {
+        // Both halves are built in; what is missing is that they are one
+        // gesture. Reverting a hunk and leaving the file dirty means the next
+        // save is what actually decides, so the undo is only half done until a
+        // second keystroke -- and the file on disk disagrees with the editor in
+        // between.
+        await vscode.commands.executeCommand("git.revertSelectedRanges");
+        await vscode.commands.executeCommand("workbench.action.files.save");
+      }),
     ],
   ];
   for (const [id, handler] of commands) {
