@@ -739,6 +739,26 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     Ok(if fatal == 0 { 0 } else { 1 })
 }
 
+/// Was this tool one `poly tools install` was ever going to fetch here?
+///
+/// Naming a tool asks about that tool, so failing to resolve it is a failure.
+/// A bare `poly tools install` is a sweep, and a tool with no managed build for
+/// this platform is not a failed download -- it is one poly never downloads
+/// anywhere (terraform, clang-format, swift-format, which must match the
+/// project's own toolchain) or not on this one (swiftlint has no Linux build,
+/// shellcheck no Windows one). Counting those made the sweep exit 2 on every
+/// machine that had not installed all three by hand, which is most of them, and
+/// it is why Tool Sync's download gate could never pass on a Linux runner.
+///
+/// Same policy as `batch::resolve_targets`: naming something beats the filter,
+/// and the sweep's case is not that one.
+fn installable(name: &str, explicit: bool) -> bool {
+    explicit
+        || poly_tools::tool(name)
+            .and_then(|t| t.asset(t.version, poly_tools::current_platform()))
+            .is_some()
+}
+
 fn cmd_tools(rest: &[String]) -> Result<i32> {
     let action = rest.first().map(String::as_str).unwrap_or("list");
     let config = poly_core::Config::discover(Path::new("."))?;
@@ -758,7 +778,8 @@ fn cmd_tools(rest: &[String]) -> Result<i32> {
             Ok(0)
         }
         "install" => {
-            let names: Vec<&str> = if rest.len() > 1 {
+            let explicit = rest.len() > 1;
+            let names: Vec<&str> = if explicit {
                 rest[1..].iter().map(String::as_str).collect()
             } else {
                 poly_tools::TOOLS.iter().map(|t| t.name).collect()
@@ -775,10 +796,12 @@ fn cmd_tools(rest: &[String]) -> Result<i32> {
                     }
                     poly_tools::Resolved::Pinned(p) => println!("{name}: pinned {}", p.display()),
                     poly_tools::Resolved::Disabled => println!("{name}: disabled in poly.toml"),
-                    poly_tools::Resolved::Missing(reason) => {
+                    poly_tools::Resolved::Missing(reason) if installable(name, explicit) => {
                         eprintln!("{name}: FAILED — {reason}");
                         failed += 1;
                     }
+                    // Said out loud, because silence would read as installed.
+                    poly_tools::Resolved::Missing(reason) => println!("{name}: skipped — {reason}"),
                 }
             }
             Ok(if failed > 0 { 2 } else { 0 })
@@ -819,6 +842,27 @@ fn bench(path: &Path, iters: usize) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sweep_does_not_fail_on_tools_poly_never_downloads() {
+        // These three have to match the project's own toolchain, so no platform
+        // has a managed build for them. Counting them made `poly tools install`
+        // exit 2 on any machine missing one -- including every Linux runner,
+        // which is what Tool Sync's download gate ran on.
+        for name in ["terraform", "clang-format", "swift-format"] {
+            assert!(!installable(name, false), "{name} in a sweep");
+            assert!(installable(name, true), "{name} asked for by name");
+        }
+        // The gaps that are the platform's rather than the tool's read the same
+        // way: swiftlint's Linux build would not run without a Swift toolchain,
+        // so the registry ships none.
+        assert_eq!(
+            installable("swiftlint", false),
+            poly_tools::current_platform().starts_with("darwin"),
+        );
+        // Non-vacuity: a predicate stuck at false would pass everything above.
+        assert!(installable("typos", false));
+    }
 
     #[test]
     fn issue_paths_collapse_to_one_shape() {
