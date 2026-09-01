@@ -31,6 +31,7 @@ pub fn supported_language(lang: &str) -> bool {
             | "svelte"
             | "astro"
             | "jinja"
+            | "handlebars"
             | "graphql"
             | "dockerfile"
     )
@@ -109,7 +110,9 @@ pub fn format(lang: &str, path: &Path, text: &str, opts: FormatOptions) -> Resul
         "python" => format_python(path, text, opts),
         "sql" => format_sql(text),
         "xml" => format_xml(text, opts),
-        "html" | "vue" | "svelte" | "astro" | "jinja" => format_markup(text, lang, opts),
+        "html" | "vue" | "svelte" | "astro" | "jinja" | "handlebars" => {
+            format_markup(text, lang, opts)
+        }
         "graphql" => format_graphql(text, opts),
         "dockerfile" => format_dockerfile(path, text, opts),
         other => Err(anyhow!("no embedded formatter for language {other:?}")),
@@ -491,6 +494,13 @@ fn format_markup(text: &str, lang: &str, opts: FormatOptions) -> Result<Option<S
         "svelte" => markup_fmt::Language::Svelte,
         "astro" => markup_fmt::Language::Astro,
         "jinja" => markup_fmt::Language::Jinja,
+        // Handlebars is a superset of Mustache, and markup_fmt's Mustache
+        // parser covers the superset: block helpers indent their bodies,
+        // `{{else}}` dedents, block params (`as |item idx|`) and partials with
+        // arguments survive. Falling through to Html instead would treat every
+        // `{{#if}}` as prose and run the block onto one line -- which is what
+        // this arm exists to stop, and what its test asserts.
+        "handlebars" => markup_fmt::Language::Mustache,
         _ => markup_fmt::Language::Html,
     };
     let mut options = markup_fmt::config::FormatOptions::default();
@@ -571,11 +581,62 @@ mod tests {
             ("a.html", "<div><p>hi</p><style>a{color:red}</style></div>"),
             ("a.graphql", "query { user(id:1){name email} }"),
             ("Dockerfile", "FROM  alpine:3\nrun echo hi\n"),
+            (
+                "a.hbs",
+                "<div  class=\"a\">{{#if x}}<p>{{y}}</p>{{/if}}</div>",
+            ),
         ];
         for (name, input) in cases {
             let out = format_file(Path::new(name), input).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert!(out.is_some(), "{name}: expected a formatting change");
         }
+    }
+
+    /// Handlebars routes to markup_fmt's Mustache parser rather than falling
+    /// through to Html. The difference is not cosmetic: Html reads `{{#if}}` as
+    /// prose, so it neither indents the block nor keeps it on its own line, and
+    /// the result is a template whose structure has been flattened. Asserting
+    /// the Html output is *different* is what makes this a test of the arm and
+    /// not of markup_fmt.
+    #[test]
+    fn handlebars_blocks_are_parsed_not_treated_as_prose() {
+        let text =
+            "<div>\n{{#if user}}\n<p>{{user.name}}</p>\n{{else}}\n<p>anon</p>\n{{/if}}\n</div>\n";
+        let opts = FormatOptions::default();
+        let handlebars = format_markup(text, "handlebars", opts)
+            .expect("handlebars formats")
+            .expect("handlebars changes something");
+        // The block body is indented under its opener, and `{{else}}` comes
+        // back out -- neither happens when the braces are just text.
+        assert!(
+            handlebars.contains("  {{#if user}}\n    <p>{{user.name}}</p>\n  {{else}}"),
+            "{handlebars}"
+        );
+        let html = format_markup(text, "html", opts)
+            .expect("html formats")
+            .expect("html changes something");
+        assert_ne!(handlebars, html, "Mustache and Html cannot agree here");
+    }
+
+    /// MDX goes through the markdown engine, so the question is not whether it
+    /// formats but whether it destroys anything: an ESM import line and a JSX
+    /// block both have to come back byte-identical while the prose around them
+    /// is still normalized. prettier does more than this when a project has it
+    /// (poly hands over the real path, so prettier picks its mdx parser); this
+    /// is the floor for everyone else.
+    #[test]
+    fn mdx_keeps_its_imports_and_jsx() {
+        let text = "import { Chart } from './chart'\n\n# Title\n\nSome   text.\n\n<Chart data={[1,2,3]}   kind=\"bar\" />\n\n-   a\n";
+        let out = format_file(Path::new("a.mdx"), text)
+            .expect("mdx formats")
+            .expect("the prose needs normalizing");
+        assert!(out.contains("import { Chart } from './chart'"), "{out}");
+        assert!(
+            out.contains("<Chart data={[1,2,3]}   kind=\"bar\" />"),
+            "{out}"
+        );
+        assert!(out.contains("Some text."), "{out}");
+        assert!(out.contains("- a"), "{out}");
     }
 
     /// The three things minifying must not do: reorder keys, touch what is

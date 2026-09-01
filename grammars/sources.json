@@ -95,10 +95,10 @@
     {
       "id": "markdown",
       "override": true,
-      "rationale": "Same upstream as built-in; embeddedLanguages map copied from upstream package.json so fenced blocks keep editor behavior. Adds onEnterRules list continuation via configuration.",
+      "rationale": "Same upstream as built-in; embeddedLanguages map copied from upstream package.json so fenced blocks keep editor behavior. Adds onEnterRules list continuation via configuration. .mdx is ours to add: nothing built-in claims it, so it opens as plain text, and MDX is markdown plus ESM imports and JSX blocks -- both of which the markdown engine passes through untouched as block-level HTML while still normalizing the prose. Reading MDX as markdown costs JSX-aware highlighting inside those blocks and buys a formatter, a linter and a grammar for everything else in the file; a dedicated mdx id would need its own grammar, which is a bigger decision than an association.",
       "repo": "microsoft/vscode",
       "license": "MIT",
-      "language": { "configuration": "markdown.json" },
+      "language": { "configuration": "markdown.json", "extensions": [".mdx"] },
       "files": [
         { "src": "extensions/markdown-basics/syntaxes/markdown.tmLanguage.json", "out": "markdown.tmLanguage.json", "scopeName": "text.html.markdown", "language": "markdown", "contributesFrom": "extensions/markdown-basics/package.json" }
       ]

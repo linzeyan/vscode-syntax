@@ -1425,21 +1425,27 @@ mod tests {
     /// A language poly detects but the editor does not is a file poly formats
     /// from the CLI and never in an editor.
     ///
-    /// `.bats` and `.azcli` are shell that VSCode's built-in shellscript does
-    /// not claim, so both extensions declare them: poly-syntax-highlight owns
-    /// language declarations, but the three extensions are independent and
-    /// someone running only poly-lsp would otherwise get a plain-text file with
-    /// no formatter bound to it. Two manifests saying the same thing is the
-    /// cost, and this is what stops them drifting -- a third extension added to
-    /// one and not the other formats or does not depending on what is installed.
+    /// Some associations are ours to add: `.bats` and `.azcli` are shell that
+    /// VSCode's built-in shellscript does not claim, `.mdx` is markdown that
+    /// nothing built-in claims. Both extensions have to declare them.
+    /// poly-syntax-highlight owns language declarations, but the three
+    /// extensions are independent, and someone running only poly-lsp would
+    /// otherwise get a plain-text file with no formatter bound to it. Two
+    /// manifests saying the same thing is the cost, and this is what stops them
+    /// drifting -- an extension added to one and not the other formats or does
+    /// not depending on what is installed.
     ///
-    /// Only one of the two is edited by hand. extensions/syntax/package.json is
-    /// generated from grammars/sources.json, and CI regenerates it and fails on
-    /// any diff -- a hand edit there survives `make gates` and dies in the
-    /// grammars job.
+    /// Keyed off whatever poly-lsp declares rather than a list written here:
+    /// the next association to be added is covered without anyone remembering
+    /// to widen this test, which is the failure mode a hard-coded list has.
+    ///
+    /// Only one of the two manifests is edited by hand.
+    /// extensions/syntax/package.json is generated from grammars/sources.json,
+    /// and CI regenerates it and fails on any diff -- a hand edit there
+    /// survives `make gates` and dies in the grammars job.
     #[test]
-    fn both_manifests_teach_the_editor_the_same_shell_extensions() {
-        let declared = |extension: &str| -> Vec<String> {
+    fn both_manifests_teach_the_editor_the_same_extensions() {
+        let declared = |extension: &str, id: &str| -> Vec<String> {
             let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join(format!("../../../extensions/{extension}/package.json"));
             let text = std::fs::read_to_string(&manifest).expect("the extension manifest");
@@ -1449,25 +1455,52 @@ mod tests {
                 .as_array()
                 .expect("contributes.languages")
                 .iter()
-                .filter(|l| l["id"] == "shellscript")
+                .filter(|l| l["id"] == id)
                 .flat_map(|l| l["extensions"].as_array().cloned().unwrap_or_default())
                 .filter_map(|e| e.as_str().map(str::to_string))
                 .collect()
         };
+        let ids = |extension: &str| -> Vec<String> {
+            let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("../../../extensions/{extension}/package.json"));
+            let text = std::fs::read_to_string(&manifest).expect("the extension manifest");
+            let package: serde_json::Value =
+                serde_json::from_str(&text).expect("valid package.json");
+            package["contributes"]["languages"]
+                .as_array()
+                .expect("contributes.languages")
+                .iter()
+                .filter_map(|l| l["id"].as_str().map(str::to_string))
+                .collect()
+        };
 
-        let lsp = declared("lsp");
-        assert_eq!(lsp, declared("syntax"), "the two manifests have drifted");
-        // And what they declare has to be what poly itself detects, or the
-        // editor names a language the CLI would not have picked.
-        for extension in &lsp {
-            let name = format!("a{extension}");
+        let declaring = ids("lsp");
+        assert!(!declaring.is_empty(), "poly-lsp declares no languages");
+        for id in &declaring {
+            let lsp = declared("lsp", id);
             assert_eq!(
-                poly_core::builtin_language(Path::new(&name)),
-                Some("shellscript"),
-                "{extension} is declared to the editor but poly does not detect it"
+                lsp,
+                declared("syntax", id),
+                "{id}: the two manifests have drifted"
             );
+            // And what they declare has to be what poly itself detects, or the
+            // editor names a language the CLI would not have picked.
+            for extension in &lsp {
+                let name = format!("a{extension}");
+                assert_eq!(
+                    poly_core::builtin_language(Path::new(&name)),
+                    Some(id.as_str()),
+                    "{extension} is declared to the editor but poly does not detect it as {id}"
+                );
+            }
         }
-        assert!(lsp.contains(&".bats".to_string()), "{lsp:?}");
+        // The two that motivated this, so the loop above cannot pass by
+        // iterating over nothing.
+        assert!(
+            declaring.contains(&"shellscript".to_string()),
+            "{declaring:?}"
+        );
+        assert!(declaring.contains(&"markdown".to_string()), "{declaring:?}");
     }
 
     /// The extension asks for a file it may never have shown poly, so this has

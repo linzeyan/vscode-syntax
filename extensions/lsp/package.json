@@ -44,6 +44,9 @@
     "onLanguage:terraform",
     "onLanguage:swift",
     "onLanguage:protobuf",
+    "onLanguage:handlebars",
+    "onLanguage:dockercompose",
+    "onLanguage:github-actions-workflow",
     "workspaceContains:.editorconfig"
   ],
   "contributes": {
@@ -53,6 +56,12 @@
         "extensions": [
           ".bats",
           ".azcli"
+        ]
+      },
+      {
+        "id": "markdown",
+        "extensions": [
+          ".mdx"
         ]
       }
     ],
@@ -172,7 +181,10 @@
       "[cpp]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[swift]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[terraform]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
-      "[protobuf]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true }
+      "[protobuf]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[handlebars]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[dockercompose]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[github-actions-workflow]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true }
     }
   },
   "packageManager": "pnpm@11.5.3",

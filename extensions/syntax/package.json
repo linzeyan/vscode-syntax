@@ -15,6 +15,9 @@
     "languages": [
       {
         "id": "markdown",
+        "extensions": [
+          ".mdx"
+        ],
         "configuration": "./language-configuration/markdown.json"
       },
       {

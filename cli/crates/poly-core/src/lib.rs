@@ -27,6 +27,12 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("jsonc", "json"),
     ("md", "markdown"),
     ("markdown", "markdown"),
+    // MDX is markdown with ESM imports and JSX blocks. The markdown engine
+    // leaves both untouched -- they are block-level HTML as far as it is
+    // concerned -- while still normalizing the prose around them, and a
+    // project carrying prettier gets the full job because poly hands prettier
+    // the real path and prettier picks its mdx parser from the extension.
+    ("mdx", "markdown"),
     ("toml", "toml"),
     ("css", "css"),
     ("scss", "scss"),
@@ -52,6 +58,11 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("jinja", "jinja"),
     ("jinja2", "jinja"),
     ("j2", "jinja"),
+    // VSCode's built-in handlebars extension owns the id and this exact
+    // extension list; poly only adds a formatter for it.
+    ("hbs", "handlebars"),
+    ("handlebars", "handlebars"),
+    ("hjs", "handlebars"),
     ("graphql", "graphql"),
     ("gql", "graphql"),
     ("graphqls", "graphql"),

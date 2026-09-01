@@ -43,6 +43,16 @@ const LANGUAGES = [
   "terraform",
   "swift",
   "protobuf",
+  // Built-in id; poly only adds the formatter (markup_fmt's Mustache parser).
+  "handlebars",
+  // Neither id is poly's, and neither is guaranteed to exist -- they arrive
+  // with ms-azuretools.vscode-docker and github.vscode-github-actions. Listing
+  // an id nothing declares costs nothing (the selector simply never matches),
+  // and leaving them out costs the A4 guarantee: the files are `.yml`, so
+  // `poly fmt` formats them from the CLI while the editor hands them to
+  // whichever extension contributed the specialised id.
+  "dockercompose",
+  "github-actions-workflow",
 ];
 
 // `.bats` and `.azcli` are in this extension's `contributes.languages` as well
