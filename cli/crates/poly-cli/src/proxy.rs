@@ -86,6 +86,20 @@ pub const PROXIED: &[(&str, &str)] = &[
     ("textDocument/foldingRange", "foldingRangeProvider"),
     ("textDocument/declaration", "declarationProvider"),
     ("textDocument/selectionRange", "selectionRangeProvider"),
+    // gopls's `assignVariableTypes` writes the inferred type onto every `:=`,
+    // which is the one thing a reader of unfamiliar Go cannot get from the
+    // text in front of them. Declared by gopls and rust-analyzer; neither asks
+    // for resolution, but `inlayHint/resolve` is routed anyway, because the
+    // flag that would trigger it lives in the server's own options and poly
+    // passes those through verbatim.
+    ("textDocument/inlayHint", "inlayHintProvider"),
+    // The two hierarchies are what the editor's References panel offers beside
+    // the reference list, and they are the half of "who uses this" that spans
+    // files. Both are a `prepare` whose result the editor hands back as the
+    // `item` of a follow-up request; those route by the file the item names,
+    // which is exact rather than "whichever server answered last".
+    ("textDocument/prepareCallHierarchy", "callHierarchyProvider"),
+    ("textDocument/prepareTypeHierarchy", "typeHierarchyProvider"),
 ];
 
 // Capabilities the servers declare that poly leaves alone, so the next person
@@ -98,23 +112,48 @@ pub const PROXIED: &[(&str, &str)] = &[
 //   means asking every running server and merging. A different shape, not a
 //   row in the table above.
 // - `codeLens` (6 of 6): a lens carries a command the server runs through
-//   `workspace/executeCommand`, which poly already occupies with its own.
+//   `workspace/executeCommand`, which poly already occupies with its own. The
+//   one lens worth having anyway — the reference count — needs no server at
+//   all: poly-editor asks the editor for the references it already has a
+//   provider for and renders the number. See its `references.ts`.
 // - `semanticTokens` (4 of 6): routable, but a whole token set per change is
 //   a different traffic profile, and it lands on top of the TextMate layer
 //   poly-syntax-highlight already paints. Worth its own decision.
 
 /// Requests poly routes but never registers.
 ///
-/// The editor sends these because of a flag inside somebody else's
-/// registration — `renameProvider.prepareProvider` for the first,
-/// `completionProvider.resolveProvider` for the second,
-/// `codeActionProvider.resolveProvider` for the third — so registering them
-/// separately would claim a capability the server never declared.
+/// The editor sends these because of something inside somebody else's
+/// registration: a flag (`renameProvider.prepareProvider`,
+/// `completionProvider.resolveProvider`, and the two other `resolveProvider`s)
+/// or, for the hierarchy follow-ups, the items a `prepare` request returned.
+/// Registering any of them separately would claim a capability no server
+/// declared.
 pub const EXTRA_ROUTED: &[&str] = &[
     "textDocument/prepareRename",
     "completionItem/resolve",
     "codeAction/resolve",
+    "inlayHint/resolve",
+    "callHierarchy/incomingCalls",
+    "callHierarchy/outgoingCalls",
+    "typeHierarchy/supertypes",
+    "typeHierarchy/subtypes",
 ];
+
+/// Notifications every running server needs, rather than the one that owns a
+/// document.
+///
+/// `didChangeWatchedFiles` arrives because a *server* asked for it: gopls
+/// registers a watcher for `**/*.{go,mod,sum,work}`, and poly forwards that
+/// registration to the editor like any other server-to-client request. Until
+/// now the notification that came back was dropped, which left every such
+/// server blind to anything that did not arrive as a keystroke — a `git
+/// checkout`, a `go mod tidy`, and a go.work appearing beside two modules that
+/// until that moment could not see each other.
+///
+/// Broadcast rather than routed, because the notification names a list of
+/// files rather than a document, and each server already filters by the globs
+/// it registered for.
+pub const BROADCAST: &[&str] = &["workspace/didChangeWatchedFiles"];
 
 /// A code action kind the editor runs on save rather than on request.
 ///

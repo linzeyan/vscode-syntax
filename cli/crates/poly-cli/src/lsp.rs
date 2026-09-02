@@ -158,6 +158,10 @@ struct Server {
     last_completion: Option<String>,
     /// The same, for `codeAction/resolve`.
     last_code_action: Option<String>,
+    /// The same, for `inlayHint/resolve`. No server measured so far asks for
+    /// resolution, but the flag that turns it on is the server's own and rides
+    /// through the registration untouched, so the route has to exist.
+    last_inlay_hint: Option<String>,
     /// Editor ids of `textDocument/codeAction` requests still in flight.
     ///
     /// A response carries an id and no method, so this is the only way the pump
@@ -264,6 +268,7 @@ fn serve(connection: Connection) -> Result<()> {
         downstream: HashMap::new(),
         last_completion: None,
         last_code_action: None,
+        last_inlay_hint: None,
         code_action_ids: Arc::new(Mutex::new(HashSet::new())),
         lint_hashes: HashMap::new(),
         diagnostics: Arc::new(Mutex::new(Diagnostics::default())),
@@ -354,12 +359,8 @@ impl Server {
             // "whichever server answered last" would be the wrong one. The
             // lightbulb is one list at a time, like a completion list.
             "codeAction/resolve" => self.last_code_action.clone(),
-            _ => request
-                .params
-                .get("textDocument")
-                .and_then(|d| d.get("uri"))
-                .and_then(serde_json::Value::as_str)
-                .and_then(|uri| Url::parse(uri).ok())
+            "inlayHint/resolve" => self.last_inlay_hint.clone(),
+            _ => request_uri(&request.params)
                 .and_then(|uri| self.server_of(&uri))
                 .map(str::to_string),
         };
@@ -368,6 +369,9 @@ impl Server {
         };
         if request.method == "textDocument/completion" {
             self.last_completion = Some(name.clone());
+        }
+        if request.method == "textDocument/inlayHint" {
+            self.last_inlay_hint = Some(name.clone());
         }
         if request.method == "textDocument/codeAction" {
             if crate::proxy::only_source_actions(&request.params) {
@@ -699,6 +703,7 @@ impl Server {
 
     fn on_notification(&mut self, notification: Notification) -> Result<()> {
         self.sync_downstream(&notification);
+        self.broadcast_downstream(&notification);
         match notification.method.as_str() {
             "textDocument/didOpen" => {
                 let params: DidOpenTextDocumentParams =
@@ -747,6 +752,22 @@ impl Server {
     /// editor holds unsaved edits, and every answer is quietly one save
     /// behind. `didOpen` is also the only signal poly gets that this session
     /// is going to need the server at all.
+    /// Hand a notification to every running server.
+    ///
+    /// Nothing in it says which one it is for, and that is not a gap: each
+    /// server registered the globs it cares about, so a file it has no interest
+    /// in is one it ignores.
+    fn broadcast_downstream(&mut self, notification: &Notification) {
+        if !crate::proxy::BROADCAST.contains(&notification.method.as_str()) {
+            return;
+        }
+        for server in self.downstream.values_mut().flatten() {
+            if let Err(e) = server.send(Message::Notification(notification.clone())) {
+                eprintln!("[poly] {}: {e:#}", server.name);
+            }
+        }
+    }
+
     fn sync_downstream(&mut self, notification: &Notification) {
         if !crate::proxy::SYNCED.contains(&notification.method.as_str()) {
             return;
@@ -847,6 +868,23 @@ impl Server {
 fn uri_path(uri: &Url) -> PathBuf {
     uri.to_file_path()
         .unwrap_or_else(|_| PathBuf::from(uri.path()))
+}
+
+/// The document a routed request is about.
+///
+/// `textDocument.uri` is the ordinary shape. The hierarchy follow-ups name no
+/// textDocument at all — `callHierarchy/incomingCalls` carries the item a
+/// `prepare` handed back — but that item names its own file, which is what
+/// makes them routable at all. They could have gone the way of
+/// `completionItem/resolve` and followed the last server to answer; they do
+/// not, because "the file this item is in" is the true answer and "whoever
+/// spoke last" is only usually the same thing.
+fn request_uri(params: &serde_json::Value) -> Option<Url> {
+    let uri = params
+        .get("textDocument")
+        .and_then(|document| document.get("uri"))
+        .or_else(|| params.get("item").and_then(|item| item.get("uri")))?;
+    Url::parse(uri.as_str()?).ok()
 }
 
 /// Underline from the reported position to the end of that line.
@@ -1372,6 +1410,36 @@ fn full_range(text: &str) -> Range {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The hierarchy follow-ups are routable only because their item names a
+    /// file. Without this the request falls through to poly, which answers
+    /// nothing, and the References panel's call tree is empty for no visible
+    /// reason.
+    #[test]
+    fn a_hierarchy_item_routes_by_its_own_file() {
+        let ordinary = serde_json::json!({
+            "textDocument": {"uri": "file:///p/main.go"},
+            "position": {"line": 1, "character": 2},
+        });
+        assert_eq!(
+            request_uri(&ordinary).unwrap().as_str(),
+            "file:///p/main.go"
+        );
+
+        // callHierarchy/incomingCalls and the three like it.
+        let follow_up = serde_json::json!({
+            "item": {"name": "Greet", "uri": "file:///p/other.go", "kind": 12},
+        });
+        assert_eq!(
+            request_uri(&follow_up).unwrap().as_str(),
+            "file:///p/other.go"
+        );
+
+        // completionItem/resolve names neither, which is why it is routed by
+        // the last server to answer instead.
+        assert!(request_uri(&serde_json::json!({"label": "x"})).is_none());
+        assert!(request_uri(&serde_json::json!({"item": {"name": "x"}})).is_none());
+    }
 
     fn diagnostic(source: &str) -> lsp_types::Diagnostic {
         lsp_types::Diagnostic {

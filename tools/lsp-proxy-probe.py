@@ -205,6 +205,11 @@ class Case:
     # moment they fix it. Recorded here so the lie is visible, and so the
     # probe fails loudly if it ever becomes true.
     unsupported: set = field(default_factory=set)
+    # Servers whose call hierarchy is served from an index store this probe
+    # never builds. Not a lie like `unsupported` -- they route correctly and
+    # answer `null`, which is the truth for an unbuilt fixture. Routing is
+    # still asserted; only the follow-up, which needs an item to carry, is not.
+    unindexed: bool = False
     edit: tuple = field(default=("world", "there"))
 
 
@@ -228,6 +233,10 @@ FULL = COMMON | {
     "documentHighlight",
     "foldingRange",
 }
+# The two hierarchies, added 2026-09-02. Deliberately not folded into FULL:
+# only gopls, clangd and sourcekit-lsp declare both, rust-analyzer has call
+# hierarchy and no type hierarchy, and the three thin servers have neither.
+HIERARCHY = {"prepareCallHierarchy", "prepareTypeHierarchy"}
 
 CASES = [
     Case(
@@ -242,7 +251,7 @@ CASES = [
         diagnostics=True,
         # No declarationProvider: in Go a declaration and a definition are the
         # same thing, so gopls has nothing separate to point at.
-        registers=FULL | {"selectionRange"},
+        registers=FULL | {"selectionRange", "inlayHint"} | HIERARCHY,
     ),
     Case(
         language="rust",
@@ -256,7 +265,10 @@ CASES = [
         call_line=5,
         call_character=20,  # inside `greet` on the call line
         hover_needle="greet",
-        registers=FULL | {"selectionRange", "declaration"},
+        # Call hierarchy but no type hierarchy: Rust traits are not a class
+        # tree, and rust-analyzer declares nothing for one.
+        registers=FULL
+        | {"selectionRange", "declaration", "inlayHint", "prepareCallHierarchy"},
     ),
     # No compile_commands.json on purpose. clangd falls back to default flags
     # for a standalone file, which is enough for a same-file definition, and
@@ -279,7 +291,7 @@ CASES = [
             call_character=13,  # inside `twice` on the call line
         ),
         chatty="[clangd] I[",
-        registers=FULL | {"selectionRange", "declaration"},
+        registers=FULL | {"selectionRange", "declaration", "inlayHint"} | HIERARCHY,
     ),
     Case(
         language="swift",
@@ -292,11 +304,14 @@ CASES = [
         hover_needle="greet",
         # No typeDefinition and no selectionRange; it is the only server here
         # that has declaration but not selectionRange.
-        registers=(FULL - {"typeDefinition"}) | {"declaration"},
+        registers=(FULL - {"typeDefinition"})
+        | {"declaration", "inlayHint"}
+        | HIERARCHY,
         # Declares declarationProvider, then answers -32001 "unsupported
         # method". Measured 2026-08-29 against sourcekit-lsp from the Xcode
         # toolchain.
         unsupported={"declaration"},
+        unindexed=True,
     ),
     # The one server here that is not its own entry point: poly has to run
     # `terraform-ls serve`, and without the subcommand the binary prints usage
@@ -342,7 +357,10 @@ CASES = [
         call_character=18,  # inside `greet` on the call line
         hover_needle="greet",
         merged_source="selene",
-        registers=FULL,
+        # The only server measured that asks for inlay hints to be resolved
+        # (`inlayHintProvider.resolveProvider`), which is why poly routes
+        # `inlayHint/resolve` even though nothing registers it.
+        registers=FULL | {"inlayHint"},
     ),
 ]
 
@@ -721,6 +739,35 @@ def run(case, logs=True, graceful=True):
         print(f"  completion resolved: {resolved['result']['label']}")
     else:
         print(f"  {case.server} declares no resolveProvider; resolve not asked")
+
+    # The hierarchy follow-ups are the only routed requests that name no
+    # textDocument at all: `callHierarchy/incomingCalls` carries the item a
+    # prepare handed back, and poly routes it by the file that item names.
+    # Nothing else here exercises that branch, and getting it wrong means the
+    # request falls through to poly, which has no answer for it.
+    #
+    # Inlay hints get no such check on purpose. gopls ships them off and turns
+    # them on from `workspace/configuration`, which this probe answers with
+    # `[None]` -- so an empty list is the correct reply and asserting on it
+    # would be the vacuous check this file keeps having to delete.
+    if "prepareCallHierarchy" in case.registers and case.unindexed:
+        prepared = ask(11, "textDocument/prepareCallHierarchy", at_call)
+        assert "result" in prepared, f"prepareCallHierarchy was not routed: {prepared}"
+        print(f"  call hierarchy routed; {case.server} has no index for this fixture")
+    elif "prepareCallHierarchy" in case.registers:
+        items = settle(
+            11,
+            "textDocument/prepareCallHierarchy",
+            at_call,
+            bool,
+            "call hierarchy",
+        )
+        incoming = ask(12, "callHierarchy/incomingCalls", {"item": items[0]})
+        assert "result" in incoming, f"incomingCalls was not routed: {incoming}"
+        callers = [call["from"]["name"] for call in incoming["result"] or []]
+        print(f"  call hierarchy: {items[0]['name']} <- {callers or 'no callers'}")
+    else:
+        print(f"  {case.server} declares no callHierarchyProvider, as expected")
 
     # Rename is the one proxied request that answers with an edit rather than a
     # location. poly never applies it -- the editor does -- but it has to come
