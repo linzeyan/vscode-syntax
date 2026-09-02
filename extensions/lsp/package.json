@@ -101,6 +101,10 @@
       {
         "command": "poly.showOutput",
         "title": "Poly: Show Log"
+      },
+      {
+        "command": "poly.createGoWork",
+        "title": "Poly: Create go.work for the Open Go Modules"
       }
     ],
     "menus": {
@@ -192,7 +196,7 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
     "typecheck": "tsc --noEmit",
     "test:build": "pnpm run build && tsc -p tsconfig.test.json",
-    "test": "pnpm run test:build && node out/runTest.js"
+    "test": "pnpm run test:build && node out/test/runTest.js"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

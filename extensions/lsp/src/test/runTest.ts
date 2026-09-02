@@ -27,8 +27,8 @@ function stripHostEnvironment(): void {
 
 async function main(): Promise<void> {
   stripHostEnvironment();
-  // Compiled to out/runTest.js, so one level up is the extension root.
-  const extensionDevelopmentPath = resolve(__dirname, "..");
+  // Compiled to out/test/runTest.js, so two levels up is the extension root.
+  const extensionDevelopmentPath = resolve(__dirname, "..", "..");
   const extensionTestsPath = resolve(__dirname, "suite", "index");
   const repo = resolve(extensionDevelopmentPath, "..", "..");
   const serverPath = process.env.POLY_BIN

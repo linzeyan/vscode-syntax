@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { LanguageClient, State, TransportKind } from "vscode-languageclient/node";
+import { commonRoot, useLines } from "./gowork";
 import { checkForUpdates, scheduleUpdateCheck } from "./update";
 
 // Everything the extension does goes through the daemon, so a daemon that
@@ -405,6 +406,88 @@ async function reportVersionSkew(
   refreshStatus();
 }
 
+/// Tie every Go module in this window into one build, so references cross
+/// between them.
+///
+/// Two projects side by side is the case this exists for, and it is the case
+/// gopls answers nothing for on its own: it builds a view per module and a
+/// reference search stays inside it, `replace` directive or not (see
+/// `gowork.ts` for the measurement). A go.work is what makes them one build,
+/// and it works from the common parent — gopls walks up to find it.
+///
+/// Confirmed before writing, and the dialog names the exact path, because that
+/// parent is usually *outside* every folder the window has open. Restarting
+/// afterwards rather than waiting for a watcher is for the same reason: a file
+/// outside the workspace is a file the editor is not watching.
+async function createGoWork(): Promise<void> {
+  const found = await vscode.workspace.findFiles(
+    "**/go.mod",
+    "**/{vendor,node_modules,testdata}/**",
+  );
+  const dirs = [
+    ...new Set(
+      found
+        .filter((uri) => uri.scheme === "file")
+        .map((uri) => path.dirname(uri.fsPath)),
+    ),
+  ].sort();
+  if (dirs.length < 2) {
+    vscode.window.showInformationMessage(
+      dirs.length === 1
+        ? "Poly: only one Go module is open, so a go.work would tie it to nothing."
+        : "Poly: no go.mod in this window.",
+    );
+    return;
+  }
+  const root = commonRoot(dirs);
+  if (!root) {
+    vscode.window.showWarningMessage(
+      "Poly: these modules share no parent directory, so one go.work cannot cover them.",
+    );
+    return;
+  }
+  const target = path.join(root, "go.work");
+  const existing = fs.existsSync(target);
+  const verb = existing ? "Update" : "Create";
+  const choice = await vscode.window.showWarningMessage(
+    `${verb} ${target}?`,
+    {
+      modal: true,
+      detail: `${dirs.length} modules become one build, so gopls can resolve `
+        + `references between them:\n\n${useLines(root, dirs).join("\n")}`,
+    },
+    verb,
+  );
+  if (choice !== verb) {
+    return;
+  }
+  // `go work` writes the file, including the `go` directive poly would only be
+  // guessing at. Requiring the toolchain costs nothing: gopls shells out to
+  // `go list`, so a machine without go has no cross-module references to fix.
+  const written = await new Promise<boolean>((resolve) => {
+    execFile(
+      "go",
+      ["work", existing ? "use" : "init", ...dirs],
+      { cwd: root },
+      (error, _stdout, stderr) => {
+        if (error) {
+          vscode.window.showErrorMessage(
+            `Poly: go work failed — ${stderr.trim() || error.message}`,
+          );
+        }
+        resolve(!error);
+      },
+    );
+  });
+  if (!written) {
+    return;
+  }
+  vscode.window.showInformationMessage(
+    `Poly: wrote ${target}; restarting the language server so gopls picks it up.`,
+  );
+  await client?.restart();
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   const serverPath = resolveServerPath(context);
   client = new LanguageClient(
@@ -479,6 +562,7 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     }),
     vscode.commands.registerCommand("poly.showOutput", () => client?.outputChannel.show()),
+    vscode.commands.registerCommand("poly.createGoWork", createGoWork),
     vscode.commands.registerCommand("poly.formatFile", async () => {
       const doc = vscode.window.activeTextEditor?.document;
       if (doc?.uri.scheme === "file") {

@@ -43,6 +43,30 @@ VSCode 的側邊欄開關）。沒有選取時作用於游標所在的單字。
 產生的是 `**bold**` 與 `_italic_`——正是 `poly fmt` 對 markdown 正規化出來的那兩種，
 所以按下去的結果不會被下一次存檔改掉。
 
+### 引用計數 CodeLens
+
+每個宣告上方一行 `11 refs`／`1 ref`／`no refs`，點下去開引用清單。
+
+**poly 不做任何分析。** 它問編輯器要 `vscode.executeReferenceProvider` 的結果，編輯器
+去問該語言已經註冊的 provider——Go 的話那就是 poly-lsp 前面那層轉給 gopls 的 proxy——
+poly 只負責數與畫。所以這不是「poly 實作了引用搜尋」，是把手上已經有的答案交出去。
+
+副作用是它**與語言無關**：任何有 reference provider 的語言都會亮。VSCode 內建只有
+TypeScript 有這個 lens，其他語言都沒有。
+
+- 預設語言：`go`／`rust`／`c`／`cpp`／`swift`／`lua`／`protobuf`／`terraform`
+  （`poly.referencesCodeLens.languages` 可改）。TS／JS 刻意不列——VSCode 自己有。
+- 只算**檔案自己的宣告與它們的方法**，函式裡的區域變數不算：那些的引用本來就在畫面上，
+  一個區域變數一條 lens 只會把真正該看的埋掉。struct field 也不算——「誰寫這個欄位」
+  跟「這個型別到底有沒有人用」是兩個問題。
+- 數字**不含宣告自己**。`executeReferenceProvider` 是帶 `includeDeclaration: true` 問的，
+  不扣掉的話沒人用的東西會顯示成 `1 ref`——而那正是這個計數最該讓人看見的一種。
+- 點下去開 peek 還是開 References 面板，由 VSCode 自己的
+  `references.preferredLocation`（`peek`／`view`）決定，不是 poly 選的。要圖上那種樹狀
+  面板就設成 `"view"`。
+- `poly.referencesCodeLens.enabled` 可關。編輯器只解析**看得見**的那幾條 lens，所以成本
+  是「畫面上幾個宣告」而不是「檔案裡幾個宣告」。
+
 ### 跨檔案 next／previous change ＋ Revert and Save
 
 `cmd/ctrl+alt+z` 跳到下一個有改動的檔案，`cmd/ctrl+alt+a` 跳到上一個，`alt+q` 把游標

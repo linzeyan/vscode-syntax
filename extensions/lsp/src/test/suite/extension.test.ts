@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import * as vscode from "vscode";
 
+import { commonRoot, useLines } from "../../gowork";
+
 const EXTENSION_ID = "ricky.poly-lsp";
 
 const COMMANDS = [
@@ -16,6 +18,7 @@ const COMMANDS = [
   "poly.lintPath",
   "poly.checkForUpdates",
   "poly.showOutput",
+  "poly.createGoWork",
 ];
 
 function workspaceRoot(): string {
@@ -115,6 +118,31 @@ suite("poly-lsp in a real editor", () => {
   // VSCode ships no formatter for either language, so any edit at all can only
   // have come from poly's client — which is exactly the registration that
   // broke twice while the protocol tests stayed green.
+  // The go.work command's own body needs a modal answer and two real modules,
+  // neither of which a test host can supply. What it can pin down is the part
+  // that decides where the file lands -- and landing it in the wrong directory
+  // is the failure mode that matters, because that directory is usually
+  // outside every folder the window has open.
+  test("a go.work goes to the deepest directory covering every module", () => {
+    const root = commonRoot([join("/a", "liba"), join("/a", "appb")]);
+    assert.strictEqual(root, "/a");
+    assert.deepStrictEqual(useLines(root!, [join("/a", "liba"), join("/a", "appb")]), [
+      "./appb",
+      "./liba",
+    ]);
+
+    // A module at the root itself is `.`, which is what go writes.
+    assert.deepStrictEqual(useLines("/a", ["/a", join("/a", "sub")]), [".", "./sub"]);
+
+    // One module is its own root; nested modules resolve to the outer one.
+    assert.strictEqual(commonRoot([join("/a", "one")]), join("/a", "one"));
+    assert.strictEqual(commonRoot([join("/a", "one"), join("/a", "one", "in")]), join("/a", "one"));
+
+    // Nothing to cover, and nothing in common: both have to say so rather than
+    // return a root that would put the file somewhere arbitrary.
+    assert.strictEqual(commonRoot([]), undefined);
+  });
+
   test("registers a formatter for sql", async () => {
     const text = await formatted(writeFile("messy.sql", "select a,b from t\n"));
     assert.strictEqual(text, "select a, b from t\n");

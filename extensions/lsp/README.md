@@ -31,6 +31,60 @@
   檢查，outputs／markdown cell 原樣保留。VSCode 的 notebook editor 不走 LSP
   文字文件，所以要用批次命令（Format Folder／Workspace）或 `poly fmt`。
 
+## 語言功能（`poly.languageServers`，預設關閉）
+
+打開之後，poly 把請求轉給**專案自己 toolchain 裡的** language server——gopls、
+rust-analyzer、clangd、sourcekit-lsp、terraform-ls、lua-language-server，以及 poly
+自己代管的 buf。poly 不實作任何一行語意分析（A6），只做路由，所以答案的品質是那些
+server 的，不是 poly 的。
+
+轉的是：hover、definition／typeDefinition／implementation／declaration、
+**references**、documentSymbol、completion、rename、code action、signatureHelp、
+documentHighlight、foldingRange、selectionRange，以及 **inlay hints**、
+**call hierarchy**、**type hierarchy**。註冊哪些由 server 自己宣告什麼決定——poly
+不會替它宣稱一個它沒有的能力。
+
+### Inlay hints 要另外開
+
+**gopls 預設不出 inlay hint**，而且它是跟 client 要設定的（`workspace/configuration`
+的 `gopls` 區段），所以要在 `settings.json` 裡開：
+
+```jsonc
+{
+  "gopls": {
+    "hints": {
+      "assignVariableTypes": true,
+      "compositeLiteralFields": true,
+      "constantValues": true,
+      "parameterNames": true,
+      "rangeVariableTypes": true
+    }
+  }
+}
+```
+
+rust-analyzer 與 clangd 的 hint 預設是開的，不必動。
+
+### 一個 window 開多個 Go 專案：`Poly: Create go.work for the Open Go Modules`
+
+**跨 module 的引用只有在有 `go.work` 時才找得到。** 實測 gopls 1.26，兩個 module
+當成兩個 workspace folder、`appb` 用 `replace` 指向 `liba`，問誰呼叫 `liba.Hello`：
+
+| 情境                              | 結果       |
+| --------------------------------- | ---------- |
+| 兩個 module ＋ replace，只開 liba | 找不到     |
+| 兩個 module ＋ replace，兩邊都開  | 找不到     |
+| 上面兩個 module ＋ `go.work`      | **找得到** |
+
+原因是 gopls 每個 module 建一個 view，reference 搜尋不出那個 view。`go.work` 才讓兩者
+變成同一個 build——而且它**不必是 workspace folder**，放在共同父目錄就行，gopls 會
+往上走去找。
+
+這個命令就是把 window 裡所有 `go.mod` 找出來、算出共同父目錄、跑 `go work init`／
+`use`。**寫檔前一定會問**，而且對話框寫明完整路徑，因為那個父目錄通常在你開的資料夾
+**外面**。寫完會重啟 language server（外面的檔案編輯器不會 watch，所以不能等通知）。
+需要 `go` 在 PATH 上——gopls 本來就要它。
+
 ## 更新
 
 啟動後背景檢查 GitHub Releases（預設每 7 天至多一次；

@@ -3,8 +3,12 @@
   "compilerOptions": {
     "noEmit": false,
     "outDir": "out",
-    "rootDir": "src/test",
+    // `src`, not `src/test`: a test that wants to check a module of its own
+    // extension has to be able to import it, and rootDir is what decides
+    // whether that is even expressible. The cost is one directory level in
+    // `out`, which runTest.js accounts for.
+    "rootDir": "src",
     "types": ["node", "mocha"]
   },
-  "include": ["src/test"]
+  "include": ["src"]
 }

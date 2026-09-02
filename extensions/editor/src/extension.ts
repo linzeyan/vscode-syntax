@@ -6,6 +6,7 @@ import { nextChangedFile } from "./changes";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import { toc, TOC_END, TOC_START } from "./markdown";
+import { countReferences, lensTargets, refLabel } from "./references";
 import { registerTodoTree } from "./todoTree";
 
 /**
@@ -367,6 +368,106 @@ function previewImages(context: vscode.ExtensionContext): void {
 }
 
 /**
+ * A lens that remembers which declaration it is counting.
+ *
+ * `vscode.CodeLens` carries only a range, and resolution happens later and out
+ * of order; the editor hands back the same object, so the uri rides on it.
+ */
+class ReferenceLens extends vscode.CodeLens {
+  constructor(readonly uri: vscode.Uri, range: vscode.Range) {
+    super(range);
+  }
+}
+
+/**
+ * How many declarations in one file may carry a lens.
+ *
+ * A generated protobuf stub is thousands of symbols and a lens each is a wall
+ * of grey above code nobody reads. It caps the list, not the cost: the editor
+ * resolves only the lenses on screen, which is what keeps this to one reference
+ * query per visible declaration rather than one per declaration in the file.
+ */
+const MAX_LENSES = 300;
+
+/**
+ * `N refs` over every declaration, for any language that can answer.
+ *
+ * The count comes from `vscode.executeReferenceProvider`, which is to say from
+ * whichever provider is registered — for Go that is poly-lsp's proxy in front
+ * of gopls. poly analyses nothing here; see `references.ts`.
+ */
+function countReferencesInGutter(context: vscode.ExtensionContext): void {
+  const changed = new vscode.EventEmitter<void>();
+  const provider: vscode.CodeLensProvider = {
+    onDidChangeCodeLenses: changed.event,
+
+    async provideCodeLenses(document) {
+      const config = vscode.workspace.getConfiguration("poly");
+      if (!config.get<boolean>("referencesCodeLens.enabled", true)) {
+        return [];
+      }
+      const languages = config.get<string[]>("referencesCodeLens.languages", []);
+      if (!languages.includes(document.languageId)) {
+        return [];
+      }
+      const symbols = await vscode.commands.executeCommand<
+        vscode.DocumentSymbol[]
+      >("vscode.executeDocumentSymbolProvider", document.uri);
+      // No symbol provider, or one that has not finished loading the project.
+      // Either way there is nothing to hang a count on yet.
+      if (!symbols) {
+        return [];
+      }
+      return lensTargets(symbols, MAX_LENSES).map(
+        (symbol) => new ReferenceLens(document.uri, symbol.selectionRange),
+      );
+    },
+
+    async resolveCodeLens(lens) {
+      const at = (lens as ReferenceLens).uri;
+      const start = lens.range.start;
+      const locations = await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeReferenceProvider",
+        at,
+        start,
+      );
+      const count = countReferences(
+        (locations ?? []).map((location) => ({
+          uri: location.uri.toString(),
+          line: location.range.start.line,
+        })),
+        { uri: at.toString(), line: start.line },
+      );
+      lens.command = {
+        title: refLabel(count),
+        // The built-in references-view activates on this command and shows its
+        // tree instead of the peek when `references.preferredLocation` is
+        // "view", so the user's own setting decides which one opens rather than
+        // poly picking for them. It is the command VSCode's own TypeScript
+        // reference lens uses, and that setting exists to steer exactly this.
+        // Nothing to open when nothing refers to it, so the lens is text.
+        command: count > 0 ? "editor.action.showReferences" : "",
+        arguments: [at, start, locations ?? []],
+      };
+      return lens;
+    },
+  };
+
+  context.subscriptions.push(
+    changed,
+    // Every file scheme, filtered by language inside: the setting is a list of
+    // language ids, and a selector built from it at registration time would go
+    // stale the moment it changed.
+    vscode.languages.registerCodeLensProvider({ scheme: "file" }, provider),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("poly.referencesCodeLens")) {
+        changed.fire();
+      }
+    }),
+  );
+}
+
+/**
  * As much of the built-in git extension's API as the two commands below need.
  *
  * Declared here rather than pulled in from `@types/vscode.git`: this is four
@@ -452,6 +553,7 @@ async function stepChangedFile(direction: 1 | -1): Promise<void> {
 export function activate(context: vscode.ExtensionContext) {
   tintIndentation(context);
   previewImages(context);
+  countReferencesInGutter(context);
   registerTodoTree(context);
 
   const commands: [string, () => Promise<void>][] = [
