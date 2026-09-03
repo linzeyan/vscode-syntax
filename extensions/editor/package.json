@@ -32,7 +32,7 @@
         "poly.referencesCodeLens.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show a reference count above each declaration. The count comes from whatever reference provider the language already has; poly analyses nothing. Whether clicking it opens the peek or the References panel is controlled by references.preferredLocation."
+          "description": "Show a reference count above each declaration, and an implementation count above each interface and interface method. Both come from whatever providers the language already has; poly analyses nothing. Whether clicking one opens the peek or the References panel is controlled by references.preferredLocation."
         },
         "poly.referencesCodeLens.languages": {
           "type": "array",

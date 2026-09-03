@@ -6,7 +6,7 @@ import { nextChangedFile } from "./changes";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import { toc, TOC_END, TOC_START } from "./markdown";
-import { countReferences, lensTargets, refLabel } from "./references";
+import { countElsewhere, implLabel, lensTargets, refLabel } from "./references";
 import { registerTodoTree } from "./todoTree";
 
 /**
@@ -368,13 +368,21 @@ function previewImages(context: vscode.ExtensionContext): void {
 }
 
 /**
- * A lens that remembers which declaration it is counting.
+ * A lens that remembers which declaration it is counting, and what about it.
  *
  * `vscode.CodeLens` carries only a range, and resolution happens later and out
  * of order; the editor hands back the same object, so the uri rides on it.
+ *
+ * One lens counts one thing, so `N refs | N impls` over a declaration is two of
+ * these sharing a range. The editor renders same-range lenses in the order they
+ * were provided, which is what puts refs first.
  */
 class ReferenceLens extends vscode.CodeLens {
-  constructor(readonly uri: vscode.Uri, range: vscode.Range) {
+  constructor(
+    readonly uri: vscode.Uri,
+    readonly counts: "refs" | "impls",
+    range: vscode.Range,
+  ) {
     super(range);
   }
 }
@@ -390,11 +398,13 @@ class ReferenceLens extends vscode.CodeLens {
 const MAX_LENSES = 300;
 
 /**
- * `N refs` over every declaration, for any language that can answer.
+ * `N refs` over every declaration and `N impls` over every interface, for any
+ * language that can answer.
  *
- * The count comes from `vscode.executeReferenceProvider`, which is to say from
- * whichever provider is registered — for Go that is poly-lsp's proxy in front
- * of gopls. poly analyses nothing here; see `references.ts`.
+ * The counts come from `vscode.executeReferenceProvider` and
+ * `vscode.executeImplementationProvider`, which is to say from whichever
+ * providers are registered — for Go that is poly-lsp's proxy in front of gopls.
+ * poly analyses nothing here; see `references.ts`.
  */
 function countReferencesInGutter(context: vscode.ExtensionContext): void {
   const changed = new vscode.EventEmitter<void>();
@@ -418,28 +428,48 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
       if (!symbols) {
         return [];
       }
-      return lensTargets(symbols, MAX_LENSES).map(
-        (symbol) => new ReferenceLens(document.uri, symbol.selectionRange),
-      );
+      return lensTargets(symbols, MAX_LENSES).flatMap((target) => {
+        const range = target.symbol.selectionRange;
+        const lenses = [new ReferenceLens(document.uri, "refs", range)];
+        if (target.implementable) {
+          lenses.push(new ReferenceLens(document.uri, "impls", range));
+        }
+        return lenses;
+      });
     },
 
     async resolveCodeLens(lens) {
-      const at = (lens as ReferenceLens).uri;
+      const { uri: at, counts } = lens as ReferenceLens;
       const start = lens.range.start;
-      const locations = await vscode.commands.executeCommand<vscode.Location[]>(
-        "vscode.executeReferenceProvider",
+      const found = await vscode.commands.executeCommand<
+        (vscode.Location | vscode.LocationLink)[]
+      >(
+        counts === "refs"
+          ? "vscode.executeReferenceProvider"
+          : "vscode.executeImplementationProvider",
         at,
         start,
       );
-      const count = countReferences(
-        (locations ?? []).map((location) => ({
+      // A reference provider answers in `Location`s, an implementation provider
+      // may answer in `LocationLink`s, and the command below only understands
+      // the first.
+      const locations = (found ?? []).map((one) =>
+        "targetUri" in one
+          ? new vscode.Location(
+            one.targetUri,
+            one.targetSelectionRange ?? one.targetRange,
+          )
+          : one
+      );
+      const count = countElsewhere(
+        locations.map((location) => ({
           uri: location.uri.toString(),
           line: location.range.start.line,
         })),
         { uri: at.toString(), line: start.line },
       );
       lens.command = {
-        title: refLabel(count),
+        title: counts === "refs" ? refLabel(count) : implLabel(count),
         // The built-in references-view activates on this command and shows its
         // tree instead of the peek when `references.preferredLocation` is
         // "view", so the user's own setting decides which one opens rather than
@@ -447,7 +477,7 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         // reference lens uses, and that setting exists to steer exactly this.
         // Nothing to open when nothing refers to it, so the lens is text.
         command: count > 0 ? "editor.action.showReferences" : "",
-        arguments: [at, start, locations ?? []],
+        arguments: [at, start, locations],
       };
       return lens;
     },

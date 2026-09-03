@@ -45,7 +45,8 @@ VSCode 的側邊欄開關）。沒有選取時作用於游標所在的單字。
 
 ### 引用計數 CodeLens
 
-每個宣告上方一行 `11 refs`／`1 ref`／`no refs`，點下去開引用清單。
+每個宣告上方一行 `11 refs`／`1 ref`／`no refs`，點下去開引用清單。interface 與它的
+方法再多一顆 `1 impl`／`3 impls`／`no impls`，點下去列出實作它的型別。
 
 **poly 不做任何分析。** 它問編輯器要 `vscode.executeReferenceProvider` 的結果，編輯器
 去問該語言已經註冊的 provider——Go 的話那就是 poly-lsp 前面那層轉給 gopls 的 proxy——
@@ -64,8 +65,12 @@ TypeScript 有這個 lens，其他語言都沒有。
 - 點下去開 peek 還是開 References 面板，由 VSCode 自己的
   `references.preferredLocation`（`peek`／`view`）決定，不是 poly 選的。要圖上那種樹狀
   面板就設成 `"view"`。
-- `poly.referencesCodeLens.enabled` 可關。編輯器只解析**看得見**的那幾條 lens，所以成本
-  是「畫面上幾個宣告」而不是「檔案裡幾個宣告」。
+- **`N impl` 只掛在 interface 與 interface 的成員上。** 一顆 lens 只掛一個命令，所以
+  `1 ref | 1 impl` 其實是兩顆共用同一行的 lens。問一個普通 function「有幾個型別滿足它」
+  沒有答案，整份檔案掛滿 `no impls` 等於沒說話；而「interface，或它底下的成員」在 Go 的
+  interface、Rust 的 trait、Java／TypeScript 的 interface 都成立。
+- `poly.referencesCodeLens.enabled` 可關（兩種 lens 一起）。編輯器只解析**看得見**的那幾條
+  lens，所以成本是「畫面上幾個宣告」而不是「檔案裡幾個宣告」。
 
 ### 跨檔案 next／previous change ＋ Revert and Save
 

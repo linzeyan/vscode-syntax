@@ -20,6 +20,22 @@ export interface LensSymbol {
   readonly children?: readonly LensSymbol[];
 }
 
+/** A declaration that gets a lens, and which lenses it gets. */
+export interface LensTarget<T extends LensSymbol> {
+  readonly symbol: T;
+  /**
+   * Whether an implementation count belongs above it.
+   *
+   * "How many types satisfy this" is a question only an abstract declaration
+   * has an answer to, and asking it of every function would put `no impls` over
+   * most of the file. An interface and the methods declared inside one are that
+   * case in every language measured -- Go's interface, Rust's trait, Java's and
+   * TypeScript's interface all arrive as `SymbolKind.Interface` with their
+   * methods as children.
+   */
+  readonly implementable: boolean;
+}
+
 /** A reference location, and the declaration it might be. */
 export interface At {
   readonly uri: string;
@@ -48,6 +64,15 @@ export const COUNTED_KINDS: ReadonlySet<number> = new Set([
 ]);
 
 /**
+ * `vscode.SymbolKind.Interface`.
+ *
+ * 10 and not 11: the wire protocol numbers these from 1 and `vscode` from 0,
+ * and vscode-languageclient subtracts one on the way in. Every number in this
+ * file is on the editor's side of that subtraction.
+ */
+const INTERFACE = 10;
+
+/**
  * How deep a declaration can sit and still get a lens.
  *
  * The file's own declarations, and the methods on them. A local inside a
@@ -68,42 +93,44 @@ const MAX_DEPTH = 2;
 export function lensTargets<T extends LensSymbol>(
   symbols: readonly T[],
   cap: number,
-): T[] {
-  const found: T[] = [];
-  const walk = (level: readonly T[], depth: number) => {
+): LensTarget<T>[] {
+  const found: LensTarget<T>[] = [];
+  const walk = (level: readonly T[], depth: number, insideInterface: boolean) => {
     for (const symbol of level) {
       if (found.length >= cap) {
         return;
       }
+      const isInterface = symbol.kind === INTERFACE;
       if (COUNTED_KINDS.has(symbol.kind)) {
-        found.push(symbol);
+        found.push({ symbol, implementable: isInterface || insideInterface });
       }
       if (depth < MAX_DEPTH && symbol.children) {
         // A symbol's children are the same concrete type it is; the interface
         // cannot say so without making itself recursive in `T`, and the caller
         // wants its own type back rather than this file's view of it.
-        walk(symbol.children as readonly T[], depth + 1);
+        walk(symbol.children as readonly T[], depth + 1, isInterface);
       }
     }
   };
-  walk(symbols, 1);
+  walk(symbols, 1, false);
   return found;
 }
 
 /**
- * References to a declaration, not counting the declaration itself.
+ * Answers about a declaration that are not the declaration itself.
  *
  * `vscode.executeReferenceProvider` asks with `includeDeclaration: true`, so
  * the symbol's own line comes back in the list. Leaving it in would put "1 ref"
  * over something nothing uses, which is the exact case the count exists to make
- * visible.
+ * visible. An implementation provider is not supposed to name the declaration
+ * back, but it costs nothing to hold both to the same rule.
  *
  * Matched by line rather than by exact position: the declaration's range as the
  * symbol provider reports it and as the reference provider reports it are the
  * same identifier in every server measured, but they are two answers to two
  * questions and only one of them has to be the identifier.
  */
-export function countReferences(
+export function countElsewhere(
   locations: readonly At[],
   declaration: At,
 ): number {
@@ -112,7 +139,7 @@ export function countReferences(
   ).length;
 }
 
-/** What the lens says. */
+/** What the reference lens says. */
 export function refLabel(count: number): string {
   if (count === 0) {
     // Not "0 refs": an unused declaration is the one result here worth
@@ -120,4 +147,17 @@ export function refLabel(count: number): string {
     return "no refs";
   }
   return count === 1 ? "1 ref" : `${count} refs`;
+}
+
+/**
+ * What the implementation lens says.
+ *
+ * Same shape as `refLabel` for the same reason: an interface nothing implements
+ * is worth a word, not a nought.
+ */
+export function implLabel(count: number): string {
+  if (count === 0) {
+    return "no impls";
+  }
+  return count === 1 ? "1 impl" : `${count} impls`;
 }
