@@ -50,19 +50,23 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 /// typing produces. What poly formats afterwards is whatever the file then says.
 ///
 /// Code actions carry the one exception to "the proxy interprets nothing":
-/// `source.*` kinds are stripped, from the registration and again from every
-/// reply. Those are the kinds `editor.codeActionsOnSave` runs, and VSCode runs
-/// them *before* `editor.formatOnSave` — so gopls's `source.organizeImports`
-/// and poly's gofumpt would both be rewriting the import block on one
-/// keystroke, and they disagree about it: goimports keeps a hand-split group
-/// inside the std imports, gofumpt merges it. Save ordering would decide, which
-/// is not a thing to leave to save ordering.
+/// the two kind families in `is_withheld_kind` are stripped, from the
+/// registration and again from every reply. `editor.codeActionsOnSave` runs
+/// them, and VSCode runs it *before* `editor.formatOnSave` — so gopls's
+/// `source.organizeImports` and poly's gofumpt would both be rewriting the
+/// import block on one keystroke, and they disagree about it: goimports keeps a
+/// hand-split group inside the std imports, gofumpt merges it. Save ordering
+/// would decide, which is not a thing to leave to save ordering.
 ///
 /// What is left is the lightbulb, where the user asks for one action at a time
 /// and nothing else is rewriting the file at that moment. It also keeps
 /// `codeAction/resolve` routable: with the on-save kinds gone there is one
 /// action list on screen, so it can use the same trick
 /// `completionItem/resolve` does.
+///
+/// A code action mostly carries a `command` rather than an `edit` — every one
+/// of gopls's does, measured — so `workspace/executeCommand` has to route too,
+/// or the lightbulb offers refactorings that do nothing. See `server_commands`.
 pub const PROXIED: &[(&str, &str)] = &[
     ("textDocument/hover", "hoverProvider"),
     ("textDocument/definition", "definitionProvider"),
@@ -111,11 +115,12 @@ pub const PROXIED: &[(&str, &str)] = &[
 // - `workspaceSymbol` (6 of 6): the request names no document, so routing it
 //   means asking every running server and merging. A different shape, not a
 //   row in the table above.
-// - `codeLens` (6 of 6): a lens carries a command the server runs through
-//   `workspace/executeCommand`, which poly already occupies with its own. The
-//   one lens worth having anyway — the reference count — needs no server at
-//   all: poly-editor asks the editor for the references it already has a
-//   provider for and renders the number. See its `references.ts`.
+// - `codeLens` (6 of 6): a lens carries a command, and those now route — so
+//   the old reason here is gone and this is a live decision again. What holds
+//   it back is traffic shape: a lens set is recomputed per change for the whole
+//   document. The one lens worth having anyway — the reference count — needs no
+//   server at all: poly-editor asks the editor for the references it already
+//   has a provider for and renders the number. See its `references.ts`.
 // - `semanticTokens` (4 of 6): routable, but a whole token set per change is
 //   a different traffic profile, and it lands on top of the TextMate layer
 //   poly-syntax-highlight already paints. Worth its own decision.
@@ -155,13 +160,37 @@ pub const EXTRA_ROUTED: &[&str] = &[
 /// it registered for.
 pub const BROADCAST: &[&str] = &["workspace/didChangeWatchedFiles"];
 
-/// A code action kind the editor runs on save rather than on request.
+/// A code action kind poly keeps to itself, because running it would rewrite
+/// the file the formatter is about to rewrite.
 ///
-/// Prefix match down the LSP kind hierarchy, which is dot-separated: `source`
-/// and `source.organizeImports` are both on-save kinds, while a vendor kind
+/// Two families, not every `source.*`. The first version withheld the whole
+/// namespace, which was over-broad by a lot: gopls puts `Browse documentation`,
+/// `Add test for run`, `Browse assembly`, `Browse free symbols` and
+/// `Split package` under `source.*` too, and none of them touches formatting.
+/// Withholding those meant the Go lightbulb had almost nothing in it and nobody
+/// noticed, because an absent action looks the same as one the server did not
+/// offer.
+///
+/// What has to stay withheld is what `editor.codeActionsOnSave` runs *before*
+/// `editor.formatOnSave`: gopls's `source.organizeImports` and poly's gofumpt
+/// disagree about import grouping, and save ordering would pick the winner.
+/// `source.fixAll` is here for the same reason — it adds imports too — and
+/// `source.formatAll` because it is the formatter: terraform-ls declares
+/// `source.formatAll.terraform`, which is `terraform fmt` racing poly's own.
+///
+/// Prefix match down the dot-separated kind hierarchy, so `source` (which means
+/// all of them) and `source.fixAll.foo` are both withheld, while a vendor kind
 /// that merely starts with the same letters is not.
-fn is_source_kind(kind: &str) -> bool {
-    kind == "source" || kind.starts_with("source.")
+fn is_withheld_kind(kind: &str) -> bool {
+    // Bare `source` means every source action, so it covers the three below.
+    kind == "source"
+        || [
+            "source.organizeImports",
+            "source.fixAll",
+            "source.formatAll",
+        ]
+        .iter()
+        .any(|family| kind == *family || kind.starts_with(&format!("{family}.")))
 }
 
 /// Is the editor asking only for the kinds poly does not hand over?
@@ -170,7 +199,7 @@ fn is_source_kind(kind: &str) -> bool {
 /// else is that save arriving. Answering it here keeps a server poly is about
 /// to ignore off the save path entirely, rather than paying for a round trip
 /// whose whole answer gets thrown away.
-pub fn only_source_actions(params: &serde_json::Value) -> bool {
+pub fn only_withheld_actions(params: &serde_json::Value) -> bool {
     let Some(only) = params
         .get("context")
         .and_then(|context| context.get("only"))
@@ -181,7 +210,7 @@ pub fn only_source_actions(params: &serde_json::Value) -> bool {
     !only.is_empty()
         && only
             .iter()
-            .all(|kind| kind.as_str().is_some_and(is_source_kind))
+            .all(|kind| kind.as_str().is_some_and(is_withheld_kind))
 }
 
 /// A code action reply with the on-save kinds taken out.
@@ -189,7 +218,7 @@ pub fn only_source_actions(params: &serde_json::Value) -> bool {
 /// The registration already tells the editor poly does not offer them, but
 /// `codeActionKinds` is optional — a server that declared none gets asked for
 /// everything, and this is what keeps the promise on its behalf.
-pub fn without_source_actions(mut result: serde_json::Value) -> serde_json::Value {
+pub fn without_withheld_actions(mut result: serde_json::Value) -> serde_json::Value {
     let Some(actions) = result.as_array_mut() else {
         return result;
     };
@@ -198,7 +227,7 @@ pub fn without_source_actions(mut result: serde_json::Value) -> serde_json::Valu
         !action
             .get("kind")
             .and_then(serde_json::Value::as_str)
-            .is_some_and(is_source_kind)
+            .is_some_and(is_withheld_kind)
     });
     result
 }
@@ -474,7 +503,7 @@ pub fn registrations(
                     .get_mut("codeActionKinds")
                     .and_then(serde_json::Value::as_array_mut)
                 {
-                    kinds.retain(|kind| !kind.as_str().is_some_and(is_source_kind));
+                    kinds.retain(|kind| !kind.as_str().is_some_and(is_withheld_kind));
                     if kinds.is_empty() {
                         return None;
                     }
@@ -486,7 +515,62 @@ pub fn registrations(
                 "registerOptions": options,
             }))
         })
+        .chain(execute_command_registration(capabilities, name))
         .collect()
+}
+
+/// The commands a server says it can run.
+///
+/// Empty for a server that declared none, which is most of the thin ones; gopls
+/// declares 47.
+pub fn server_commands(capabilities: &serde_json::Value) -> Vec<String> {
+    capabilities
+        .get("executeCommandProvider")
+        .and_then(|provider| provider.get("commands"))
+        .and_then(serde_json::Value::as_array)
+        .map(|commands| {
+            commands
+                .iter()
+                .filter_map(|command| command.as_str())
+                // poly declared its own three at initialize, and the editor
+                // registers a real VSCode command per id -- a duplicate throws
+                // there and takes the whole client down with it. No server has
+                // ever collided (theirs are `gopls.*`, `rust-analyzer.*`), but
+                // the failure would be total and silent-looking, so it is
+                // cheaper to make it unrepresentable.
+                .filter(|command| !crate::lsp::EXECUTE_COMMANDS.contains(command))
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The registration that makes a downstream server's commands runnable.
+///
+/// Without it the lightbulb is decoration. A code action mostly carries a
+/// `command` rather than an `edit` -- for gopls it is *always* a command, all
+/// eight measured -- and the editor only turns a command into a request if some
+/// registration named it, because that is what makes it a VSCode command in the
+/// first place. So poly registering nothing here meant clicking `Extract
+/// declarations to new file` did nothing at all.
+///
+/// Not part of the `PROXIED` loop: `ExecuteCommandRegistrationOptions` carries
+/// a command list and no documentSelector, which is the one place the "scope it
+/// to this server's languages" rule does not apply -- a command is global, and
+/// routing it by name is exact anyway.
+fn execute_command_registration(
+    capabilities: &serde_json::Value,
+    name: &str,
+) -> Option<serde_json::Value> {
+    let commands = server_commands(capabilities);
+    if commands.is_empty() {
+        return None;
+    }
+    Some(serde_json::json!({
+        "id": format!("{POLY_ID}{name}:workspace/executeCommand"),
+        "method": "workspace/executeCommand",
+        "registerOptions": { "commands": commands },
+    }))
 }
 
 /// A downstream response on its way to the editor, with a null result put back.
@@ -666,6 +750,10 @@ mod tests {
             {"title": "Organize Imports", "kind": "source.organizeImports"},
             {"title": "Fix All", "kind": "source.fixAll"},
             {"title": "Everything source", "kind": "source"},
+            // terraform-ls's, and it is `terraform fmt` under another name.
+            {"title": "Format Document", "kind": "source.formatAll.terraform"},
+            // gopls's, and none of them touch formatting.
+            {"title": "Browse documentation", "kind": "source.doc"},
             {"title": "Extract function", "kind": "refactor.extract"},
             {"title": "Add missing import", "kind": "quickfix"},
             // A vendor kind that merely starts with the same letters, and a
@@ -673,7 +761,7 @@ mod tests {
             {"title": "Sourcery thing", "kind": "sourcery.refactor"},
             {"title": "A Command", "command": "gopls.tidy"},
         ]);
-        let filtered = without_source_actions(reply);
+        let filtered = without_withheld_actions(reply);
         let kept: Vec<&str> = filtered
             .as_array()
             .expect("still a list")
@@ -683,6 +771,7 @@ mod tests {
         assert_eq!(
             kept,
             [
+                "Browse documentation",
                 "Extract function",
                 "Add missing import",
                 "Sourcery thing",
@@ -691,7 +780,7 @@ mod tests {
         );
 
         // A server answering `null` says nothing, and nothing is not a list.
-        assert!(without_source_actions(serde_json::Value::Null).is_null());
+        assert!(without_withheld_actions(serde_json::Value::Null).is_null());
     }
 
     /// The save path, recognised by what it asks for. Getting this wrong in
@@ -700,23 +789,30 @@ mod tests {
     #[test]
     fn a_request_for_only_on_save_kinds_is_recognised() {
         let only = |kinds: serde_json::Value| serde_json::json!({"context": {"only": kinds}});
-        assert!(only_source_actions(&only(serde_json::json!([
+        assert!(only_withheld_actions(&only(serde_json::json!([
             "source.organizeImports"
         ]))));
-        assert!(only_source_actions(&only(serde_json::json!([
+        assert!(only_withheld_actions(&only(serde_json::json!([
             "source.organizeImports",
             "source.fixAll"
         ]))));
 
-        // The lightbulb asks for these, or for nothing in particular.
-        assert!(!only_source_actions(&only(serde_json::json!(["quickfix"]))));
-        assert!(!only_source_actions(&serde_json::json!({"context": {}})));
-        assert!(!only_source_actions(&serde_json::json!({})));
+        // The lightbulb asks for these, or for nothing in particular. The
+        // narrowing that let gopls's `source.doc` through has to reach here too,
+        // or the request carrying it is answered `[]` without ever being sent.
+        assert!(!only_withheld_actions(&only(serde_json::json!([
+            "quickfix"
+        ]))));
+        assert!(!only_withheld_actions(&only(serde_json::json!([
+            "source.doc"
+        ]))));
+        assert!(!only_withheld_actions(&serde_json::json!({"context": {}})));
+        assert!(!only_withheld_actions(&serde_json::json!({})));
         // An empty `only` is not "only the on-save kinds".
-        assert!(!only_source_actions(&only(serde_json::json!([]))));
+        assert!(!only_withheld_actions(&only(serde_json::json!([]))));
         // Mixed has something poly does hand over, so it goes downstream and
         // the reply filter takes the rest.
-        assert!(!only_source_actions(&only(serde_json::json!([
+        assert!(!only_withheld_actions(&only(serde_json::json!([
             "quickfix",
             "source.fixAll"
         ]))));
@@ -785,5 +881,45 @@ mod tests {
             .map(|entry| entry["language"].as_str().unwrap())
             .collect();
         assert_eq!(covered, ["c", "cpp"]);
+    }
+
+    /// Registering the server's commands is what makes its code actions do
+    /// anything: gopls answers every one of them with a `command` and no `edit`,
+    /// so an unregistered command id is a lightbulb entry that silently no-ops.
+    #[test]
+    fn a_servers_commands_are_registered_but_never_polys_own() {
+        let declared = serde_json::json!({
+            "executeCommandProvider": {
+                "commands": [
+                    "gopls.extract_to_new_file",
+                    "gopls.change_signature",
+                    // A server that somehow named one of poly's: registering it
+                    // twice in the editor throws and kills the whole client.
+                    crate::lsp::EXECUTE_COMMANDS[0],
+                ],
+            },
+        });
+        let declares_commands = registrations(&declared, "gopls", &["go".to_string()]);
+        assert_eq!(declares_commands.len(), 1);
+        let registration = &declares_commands[0];
+        assert_eq!(registration["method"], "workspace/executeCommand");
+        assert_eq!(registration["id"], "poly:gopls:workspace/executeCommand");
+        assert_eq!(
+            registration["registerOptions"]["commands"],
+            serde_json::json!(["gopls.extract_to_new_file", "gopls.change_signature"])
+        );
+        // A command list is global, so unlike every other registration it must
+        // not be scoped to a language.
+        assert!(registration["registerOptions"]
+            .get("documentSelector")
+            .is_none());
+
+        // Nothing to register for a server that runs no commands, and that
+        // empty list is also how `route` decides a command is poly's own.
+        let no_commands = registrations(&serde_json::json!({"hoverProvider": true}), "x", &[]);
+        assert!(no_commands
+            .iter()
+            .all(|r| r["method"] != "workspace/executeCommand"));
+        assert!(server_commands(&serde_json::json!({})).is_empty());
     }
 }

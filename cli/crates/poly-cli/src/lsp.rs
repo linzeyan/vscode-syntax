@@ -33,7 +33,7 @@ const METHOD_NOT_FOUND: i32 = -32601;
 const FORMAT_PATHS: &str = "poly.formatPaths";
 const MINIFY_JSON: &str = "poly.minifyJsonEdits";
 const EDITOR_CONFIG: &str = "poly.editorConfig";
-const EXECUTE_COMMANDS: &[&str] = &[FORMAT_PATHS, MINIFY_JSON, EDITOR_CONFIG];
+pub(crate) const EXECUTE_COMMANDS: &[&str] = &[FORMAT_PATHS, MINIFY_JSON, EDITOR_CONFIG];
 
 pub fn run() -> Result<()> {
     let (connection, io_threads) = Connection::stdio();
@@ -91,7 +91,15 @@ const LAUNCH: &[(&str, &[&str])] = &[("terraform-ls", &["serve"]), ("buf", &["ls
 /// that governs it as a formatter, rather than through a second setting that
 /// says the same thing.
 fn server_command(name: &str, config: &poly_core::Config) -> Option<PathBuf> {
-    if poly_tools::tool(name).is_some() {
+    // A `[tools]` entry decides first, registry member or not. For buf that is
+    // the version poly pins; for the PATH-only servers it is the two answers a
+    // project may need and previously had no way to give: `off` turns one
+    // server off without turning the proxy off, and a path runs a different
+    // binary in its place -- which is how a drop-in replacement (rust-glancer
+    // for rust-analyzer) gets used without poly holding an opinion about which
+    // of them is better. Both were silently ignored before, because `resolve`
+    // was only consulted for tools poly downloads.
+    if poly_tools::tool(name).is_some() || config.tools.contains_key(name) {
         return poly_tools::resolve(name, config, false)
             .command()
             .map(Path::to_path_buf);
@@ -338,11 +346,15 @@ impl Server {
     /// replies to one id is a protocol violation, and the editor believes the
     /// first. `Ok(Some(request))` hands it back for poly to answer itself.
     fn route(&mut self, request: lsp_server::Request) -> Result<Option<lsp_server::Request>> {
-        if !crate::proxy::PROXIED
+        let routable = crate::proxy::PROXIED
             .iter()
             .any(|(method, _)| *method == request.method)
-            && !crate::proxy::EXTRA_ROUTED.contains(&request.method.as_str())
-        {
+            || crate::proxy::EXTRA_ROUTED.contains(&request.method.as_str())
+            // The one method both sides answer: poly declared three commands of
+            // its own at initialize and each server registers its own list, so
+            // the gate lets it through and the command name decides below.
+            || request.method == "workspace/executeCommand";
+        if !routable {
             return Ok(Some(request));
         }
         // completionItem/resolve names no document -- it is a follow-up about
@@ -360,6 +372,7 @@ impl Server {
             // lightbulb is one list at a time, like a completion list.
             "codeAction/resolve" => self.last_code_action.clone(),
             "inlayHint/resolve" => self.last_inlay_hint.clone(),
+            "workspace/executeCommand" => self.server_for_command(&request.params),
             _ => request_uri(&request.params)
                 .and_then(|uri| self.server_of(&uri))
                 .map(str::to_string),
@@ -374,7 +387,7 @@ impl Server {
             self.last_inlay_hint = Some(name.clone());
         }
         if request.method == "textDocument/codeAction" {
-            if crate::proxy::only_source_actions(&request.params) {
+            if crate::proxy::only_withheld_actions(&request.params) {
                 // The save asking for kinds poly does not hand over. An empty
                 // list is the honest answer and it costs no round trip.
                 let empty = Response {
@@ -534,6 +547,28 @@ impl Server {
     /// The server poly would route this document to, running or not.
     fn server_of(&self, uri: &Url) -> Option<&'static str> {
         self.language_of(uri).as_deref().and_then(server_for)
+    }
+
+    /// Which running server declared this command, if any.
+    ///
+    /// A command names no document, so nothing in the request locates it: the
+    /// only thing that can is the list each server declared at initialize. Those
+    /// are namespaced (`gopls.*`, `rust-analyzer.*`) so a name matches at most
+    /// one, and poly's own three are in nobody's list — `None` here is what
+    /// hands them to `on_execute_command`.
+    ///
+    /// This is what makes gopls's refactorings work at all. Every code action it
+    /// offers carries a `command` and no `edit`, so `Extract declarations to new
+    /// file` and `Change signature` are one request each and were doing nothing
+    /// until poly forwarded it.
+    fn server_for_command(&self, params: &serde_json::Value) -> Option<String> {
+        let command = params.get("command")?.as_str()?;
+        self.downstream.iter().find_map(|(name, server)| {
+            crate::proxy::server_commands(&server.as_ref()?.capabilities)
+                .iter()
+                .any(|declared| declared == command)
+                .then(|| name.clone())
+        })
     }
 
     fn stop_downstream(&mut self) {
@@ -1193,7 +1228,7 @@ fn strip_source_actions(
     {
         return Message::Response(response);
     }
-    response.result = response.result.map(crate::proxy::without_source_actions);
+    response.result = response.result.map(crate::proxy::without_withheld_actions);
     Message::Response(response)
 }
 
@@ -1768,6 +1803,39 @@ mod tests {
         assert_eq!(server_for("c"), server_for("cpp"));
         // A language poly formats but has no server for stays poly's alone.
         assert_eq!(server_for("typescript"), None);
+    }
+
+    /// `[tools]` reaches the language servers too, not just the tools poly
+    /// downloads.
+    ///
+    /// Both answers were silently ignored before: a project could not turn one
+    /// server off without turning the whole proxy off, and could not point at a
+    /// drop-in replacement at all. Silently, because a server that never starts
+    /// looks exactly like a server that is not installed.
+    #[test]
+    fn a_project_can_disable_or_replace_a_path_only_server() {
+        let entry = |value: &str| {
+            let mut config = poly_core::Config::empty();
+            config
+                .tools
+                .insert("rust-analyzer".to_string(), value.to_string());
+            config
+        };
+        assert_eq!(server_command("rust-analyzer", &entry("off")), None);
+
+        // A path that is not there is a failure, not a fall back to PATH: the
+        // project said which binary it wanted.
+        assert_eq!(
+            server_command("rust-analyzer", &entry("./bin/rust-glancer")),
+            None
+        );
+
+        // No entry, so PATH decides as it always did.
+        let empty = poly_core::Config::empty();
+        assert_eq!(
+            server_command("rust-analyzer", &empty),
+            poly_tools::find_on_path("rust-analyzer")
+        );
     }
 
     /// poly passes arguments only where the binary is not itself the server.

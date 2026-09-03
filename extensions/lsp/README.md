@@ -41,8 +41,21 @@ server 的，不是 poly 的。
 轉的是：hover、definition／typeDefinition／implementation／declaration、
 **references**、documentSymbol、completion、rename、code action、signatureHelp、
 documentHighlight、foldingRange、selectionRange，以及 **inlay hints**、
-**call hierarchy**、**type hierarchy**。註冊哪些由 server 自己宣告什麼決定——poly
-不會替它宣稱一個它沒有的能力。
+**call hierarchy**、**type hierarchy**、**server 自己的命令**。註冊哪些由 server
+自己宣告什麼決定——poly 不會替它宣稱一個它沒有的能力。
+
+### 重構為什麼要靠「server 自己的命令」
+
+燈泡裡的東西大多不是一份編輯，而是一個**命令**——gopls 的每一個 code action 都是。
+所以 `Extract declarations to new file`（`gopls.extract_to_new_file`）、
+`Change signature`（`gopls.change_signature`）這些能不能用，取決於 poly 有沒有把
+`workspace/executeCommand` 轉下去。**0.9.0 之前沒有**，點下去毫無反應也沒有錯誤訊息。
+現在 poly 照每個 server 自己宣告的命令清單註冊，依命令名稱路由。
+
+存檔時會跑的三族 code action（`source.organizeImports`／`source.fixAll`／
+`source.formatAll`）poly 不轉——VSCode 在 formatter **之前**跑它們，等於讓 gopls 的
+organizeImports 跟 poly 的 gofumpt 在同一次存檔搶著改同一段 import。其餘的 `source.*`
+（`Browse documentation`、`Add test`、`Split package`……）照常出現在燈泡裡。
 
 ### Inlay hints 要另外開
 

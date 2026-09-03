@@ -184,6 +184,17 @@ include-hidden = false
 # the language server `poly lsp` starts for it -- so an entry here governs all
 # three at once. "off" leaves .proto files untouched by every one of them.
 #
+# The language servers `poly lsp` starts take the same two answers, by the name
+# poly runs them under -- gopls, rust-analyzer, clangd, sourcekit-lsp,
+# terraform-ls, lua-language-server:
+#
+#   rust-analyzer = "off"                turn off one language's features
+#                                        without turning off the whole proxy
+#   rust-analyzer = "/opt/rust-glancer"  run a drop-in replacement instead
+#
+# A version is not one of them: these come from the project's own toolchain and
+# poly never downloads them.
+#
 # prettier, biome, eslint and rustfmt are not listed here on purpose: poly uses
 # them only when it finds them installed in the project alongside their own
 # config, and never downloads them. Removing the config is how you turn those

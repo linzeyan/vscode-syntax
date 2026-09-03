@@ -210,6 +210,12 @@ class Case:
     # answer `null`, which is the truth for an unbuilt fixture. Routing is
     # still asserted; only the follow-up, which needs an item to carry, is not.
     unindexed: bool = False
+    # A command this server declares that needs arguments, fired with none.
+    # Named here rather than taken off the registered list so the probe never
+    # runs something with a side effect -- `terraform-ls.terraform.init` is on
+    # that list too. `None` means "declares commands, none written down", which
+    # is buf: poly pins it and its list is not measured on this machine.
+    command: str = None
     edit: tuple = field(default=("world", "there"))
 
 
@@ -237,6 +243,11 @@ FULL = COMMON | {
 # only gopls, clangd and sourcekit-lsp declare both, rust-analyzer has call
 # hierarchy and no type hierarchy, and the three thin servers have neither.
 HIERARCHY = {"prepareCallHierarchy", "prepareTypeHierarchy"}
+# The one registration that is not a `textDocument/` method, added 2026-09-03.
+# Every server here declares commands except rust-analyzer, which declares
+# `executeCommandProvider` with an empty list -- so poly registers nothing for
+# it, which is the honest answer and not a gap.
+COMMANDS = {"workspace/executeCommand"}
 
 CASES = [
     Case(
@@ -251,7 +262,11 @@ CASES = [
         diagnostics=True,
         # No declarationProvider: in Go a declaration and a definition are the
         # same thing, so gopls has nothing separate to point at.
-        registers=FULL | {"selectionRange", "inlayHint"} | HIERARCHY,
+        registers=FULL | {"selectionRange", "inlayHint"} | HIERARCHY | COMMANDS,
+        # What Tooltitude calls `move...`, and the reason commands are
+        # routed at all: gopls answers the code action with this command
+        # and no edit.
+        command="gopls.extract_to_new_file",
     ),
     Case(
         language="rust",
@@ -291,7 +306,11 @@ CASES = [
             call_character=13,  # inside `twice` on the call line
         ),
         chatty="[clangd] I[",
-        registers=FULL | {"selectionRange", "declaration", "inlayHint"} | HIERARCHY,
+        registers=FULL
+        | {"selectionRange", "declaration", "inlayHint"}
+        | HIERARCHY
+        | COMMANDS,
+        command="clangd.applyTweak",
     ),
     Case(
         language="swift",
@@ -306,7 +325,9 @@ CASES = [
         # that has declaration but not selectionRange.
         registers=(FULL - {"typeDefinition"})
         | {"declaration", "inlayHint"}
-        | HIERARCHY,
+        | HIERARCHY
+        | COMMANDS,
+        command="semantic.refactor.command",
         # Declares declarationProvider, then answers -32001 "unsupported
         # method". Measured 2026-08-29 against sourcekit-lsp from the Xcode
         # toolchain.
@@ -328,7 +349,10 @@ CASES = [
         chatty="[terraform-ls] ",
         # The thinnest of the six: no rename, no code actions, and none of the
         # position-scoped extras beyond signatureHelp.
-        registers=COMMON | {"declaration"},
+        registers=COMMON | {"declaration"} | COMMANDS,
+        # Read-only, and the init/validate commands next to it on the list
+        # are exactly why the probe never fires an unnamed one.
+        command="terraform-ls.module.callers",
     ),
     # The one server poly pins itself, and the one that is not a toolchain's:
     # a .proto has no build behind it for buf to match. `buf lsp serve`, so
@@ -345,7 +369,7 @@ CASES = [
         hover_needle="Greeting",
         # No implementation and no signatureHelp: protobuf has neither an
         # interface to implement nor a call to fill in arguments for.
-        registers=FULL - {"implementation", "signatureHelp"},
+        registers=(FULL - {"implementation", "signatureHelp"}) | COMMANDS,
     ),
     Case(
         language="lua",
@@ -360,7 +384,8 @@ CASES = [
         # The only server measured that asks for inlay hints to be resolved
         # (`inlayHintProvider.resolveProvider`), which is why poly routes
         # `inlayHint/resolve` even though nothing registers it.
-        registers=FULL | {"inlayHint"},
+        registers=FULL | {"inlayHint"} | COMMANDS,
+        command="lua.getConfig",
     ),
 ]
 
@@ -445,10 +470,26 @@ def ask(rid, method, params):
 def on_save_kind(kind):
     """A code action kind VSCode runs on save rather than on request.
 
-    Dot-separated prefix match down the LSP kind hierarchy, the same rule poly
-    applies -- a vendor kind that merely starts with the same letters is not one.
+    Three families, not the whole `source.*` namespace, the same rule poly
+    applies -- `source.organizeImports` and `source.fixAll` are what
+    `codeActionsOnSave` runs before the formatter and what would fight gofumpt
+    over import grouping, and `source.formatAll` *is* a formatter
+    (terraform-ls's `source.formatAll.terraform` is `terraform fmt`). gopls's
+    `source.doc`, `source.addTest`, `source.assembly`, `source.freesymbols` and
+    `source.splitPackage` touch no formatting and belong in the lightbulb.
+
+    Dot-separated prefix match down the LSP kind hierarchy: `source` means all
+    of them and `source.fixAll.foo` is one, while a vendor kind that merely
+    starts with the same letters is not.
     """
-    return bool(kind) and (kind == "source" or kind.startswith("source."))
+    if not kind:
+        return False
+    if kind == "source":
+        return True
+    return any(
+        kind == family or kind.startswith(family + ".")
+        for family in ("source.organizeImports", "source.fixAll", "source.formatAll")
+    )
 
 
 def settle(rid, method, params, ready, what):
@@ -843,6 +884,55 @@ def run(case, logs=True, graceful=True):
         )
     else:
         print(f"  {case.server} declares no codeActionProvider, as expected")
+
+    # Commands are the other half of the lightbulb. A code action mostly carries
+    # a `command` rather than an `edit` -- every one of gopls's does -- so an
+    # action nobody can execute is an entry that does nothing when clicked, and
+    # that is what gopls's whole refactoring surface was through poly until it
+    # registered these. Registration is what makes the editor send the request
+    # at all; routing is by declared name, since there is no uri in it to route
+    # by.
+    if "workspace/executeCommand" in case.registers:
+        declared = methods["workspace/executeCommand"]["registerOptions"]["commands"]
+        assert declared, f"{case.server} registered an empty command list"
+        # poly declared its own three at initialize, and the client registers a
+        # real editor command per id -- a duplicate throws there and takes the
+        # whole client down with it.
+        mine = [c for c in declared if c.startswith("poly.")]
+        assert not mine, f"poly's own commands leaked into {case.server}'s list: {mine}"
+        print(f"  {len(declared)} command(s) registered for {case.server}")
+
+        if case.command:
+            assert case.command in declared, f"{case.command} was not registered"
+            # Fired with no arguments on purpose: the server complains about the
+            # arguments, and that complaint is the proof the request left poly.
+            # An unrouted command gets poly's own "unknown command" instead,
+            # which is exactly what this used to be.
+            reply = ask(
+                13,
+                "workspace/executeCommand",
+                {"command": case.command, "arguments": []},
+            )
+            message = (reply.get("error") or {}).get("message", "")
+            assert "unknown command" not in message, (
+                f"{case.command} never reached {case.server}: {message}"
+            )
+            print(
+                f"  {case.command} reached {case.server}: {message[:60] or 'no error'}"
+            )
+        else:
+            print(f"  no argument-checking command written down for {case.server}")
+    else:
+        print(f"  {case.server} declares no commands, as expected")
+
+    # A name nobody declared stays poly's to refuse. Routing by name means the
+    # miss has to fall back rather than land on whichever server happens to be
+    # up, and poly's own three commands depend on that same fallback.
+    unknown = ask(
+        14, "workspace/executeCommand", {"command": "poly.notACommand", "arguments": []}
+    )
+    assert "unknown command" in (unknown.get("error") or {}).get("message", ""), unknown
+    print("  an undeclared command is still poly's to refuse")
 
     # The read-only batch. poly implements none of these, and an unrouted
     # request comes back as METHOD_NOT_FOUND -- an error, with no `result`
