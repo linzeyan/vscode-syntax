@@ -402,6 +402,33 @@ code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`
 
 ## 設定
 
+### 要自己在 `settings.json` 設的
+
+poly **不寫使用者的 `settings.json`**（A8），所以下面這些必須自己來。少了它們，功能是
+接好的，只是畫面上什麼都不會出現：
+
+```jsonc
+{
+  // 語言功能（definition／references／inlay hints／call hierarchy…）預設是關的。
+  "poly.languageServers": true,
+  // gopls 出貨時 inlay hint 全關，而且開關是它跟 client 要的（workspace/configuration
+  // 的 gopls 區段）。rust-analyzer 與 clangd 預設就開，不必動。
+  "gopls": {
+    "hints": {
+      "assignVariableTypes": true,
+      "compositeLiteralFields": true,
+      "constantValues": true,
+      "parameterNames": true,
+      "rangeVariableTypes": true
+    }
+  },
+  // 點 `N refs`／`N impl` CodeLens 時開 peek 還是開 References 面板。預設 "peek"。
+  "references.preferredLocation": "view"
+}
+```
+
+### `poly.toml`
+
 `poly.toml` 是選用的。完全沒有設定檔時，語言用內建副檔名表判斷，格式化用各引擎
 預設值，走訪檔案時尊重 git 會尊重的忽略檔——`.gitignore`、`.ignore`、
 `.git/info/exclude`，以及 `core.excludesFile`（沒設就是
@@ -461,11 +488,17 @@ exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同�
 報。少了工具名的 `"F401"` 會讓 poly.toml 解析失敗，而不是安靜地什麼都沒關掉。編輯
 器與 CI 讀同一份設定，所以關掉的規則在 Problems 裡也不會出現。
 
-語言伺服器只認 VSCode settings 的 `poly.languageServers`，不進 `poly.toml`——那是
-「這台機器上我要不要讓 poly 接管 Go」的個人偏好，CI 根本不跑 `poly lsp`，寫進專案設定
-只會讓兩邊看到一個對方不在乎的鍵。server 一律從 PATH 找，poly 永遠不代裝：它必須
-跟蓋出這個專案的 toolchain 對得上，poly 選版本就是 poly 選錯版本。找不到會在
-`Poly` 輸出頻道說一聲，不會靜默沒作用。
+「要不要開語言伺服器」只認 VSCode settings 的 `poly.languageServers`，不進
+`poly.toml`——那是「這台機器上我要不要讓 poly 接管 Go」的個人偏好，CI 根本不跑
+`poly lsp`，寫進專案設定只會讓兩邊看到一個對方不在乎的鍵。server 一律從 PATH 找，poly
+永遠不代裝：它必須跟蓋出這個專案的 toolchain 對得上，poly 選版本就是 poly 選錯版本。
+找不到會在 `Poly` 輸出頻道說一聲，不會靜默沒作用。
+
+**「用哪一支」則是專案的事，寫在 `[tools]` 裡**，用 poly 啟動它的那個名字
+（`gopls`、`rust-analyzer`、`clangd`、`sourcekit-lsp`、`terraform-ls`、
+`lua-language-server`、`buf`）：`rust-analyzer = "off"` 只關掉 Rust 的語言功能而不動
+其他語言，`rust-analyzer = "/opt/rust-glancer"` 換成別的實作。版本號不是這裡的合法值
+——這些跟著專案 toolchain 走，poly 不下載。
 
 `[format.<lang>]` 只認 `line-width`（1–1000）／`indent-width`（1–16）／`use-tabs`
 三個鍵，拼錯或超出範圍都會直接讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部
