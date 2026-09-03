@@ -78,6 +78,26 @@ organizeImports 跟 poly 的 gofumpt 在同一次存檔搶著改同一段 import
 
 rust-analyzer 與 clangd 的 hint 預設是開的，不必動。
 
+### Code lens
+
+server 對整個檔案提供的動作會出現在程式碼上方。gopls 給的是 `//go:generate` 那一行上的
+`run go generate`，以及 `go.mod` 上的 `go mod tidy`／`govulncheck`。
+
+**`run test` 預設不出**，和 inlay hint 同一個原因——開關在 gopls 跟 client 要的設定裡：
+
+```jsonc
+{
+  "gopls": {
+    "codelenses": { "test": true }
+  }
+}
+```
+
+rust-analyzer 的 `Run | Debug` lens **不是** server 給的，是它自家 extension 註冊的命令，
+所以裝了 poly 也不會出現。
+
+poly-editor 的 `N refs`／`N impls` 是另一回事，兩者會一起顯示。
+
 ### 一個 window 開多個 Go 專案：`Poly: Create go.work for the Open Go Modules`
 
 **跨 module 的引用只有在有 `go.work` 時才找得到。** 實測 gopls 1.26，兩個 module

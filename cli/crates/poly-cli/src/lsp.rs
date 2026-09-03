@@ -170,6 +170,10 @@ struct Server {
     /// resolution, but the flag that turns it on is the server's own and rides
     /// through the registration untouched, so the route has to exist.
     last_inlay_hint: Option<String>,
+    /// The same, for `codeLens/resolve`. Same reason as inlay hints: whether a
+    /// resolve ever arrives is decided by the server's own
+    /// `codeLensProvider.resolveProvider`, which poly relays rather than reads.
+    last_code_lens: Option<String>,
     /// Editor ids of `textDocument/codeAction` requests still in flight.
     ///
     /// A response carries an id and no method, so this is the only way the pump
@@ -302,6 +306,7 @@ fn serve(connection: Connection) -> Result<()> {
         last_completion: None,
         last_code_action: None,
         last_inlay_hint: None,
+        last_code_lens: None,
         code_action_ids: Arc::new(Mutex::new(HashSet::new())),
         lint_hashes: HashMap::new(),
         package_roots: HashSet::new(),
@@ -399,6 +404,7 @@ impl Server {
             // lightbulb is one list at a time, like a completion list.
             "codeAction/resolve" => self.last_code_action.clone(),
             "inlayHint/resolve" => self.last_inlay_hint.clone(),
+            "codeLens/resolve" => self.last_code_lens.clone(),
             "workspace/executeCommand" => self.server_for_command(&request.params),
             _ => request_uri(&request.params)
                 .and_then(|uri| self.server_of(&uri))
@@ -412,6 +418,9 @@ impl Server {
         }
         if request.method == "textDocument/inlayHint" {
             self.last_inlay_hint = Some(name.clone());
+        }
+        if request.method == "textDocument/codeLens" {
+            self.last_code_lens = Some(name.clone());
         }
         if request.method == "textDocument/codeAction" {
             if crate::proxy::only_withheld_actions(&request.params) {

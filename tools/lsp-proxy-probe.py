@@ -51,6 +51,8 @@ func main() {
 \tfmt.Println(strings.ToUpper(os.Getenv("USER")))
 \tunused := 1
 }
+
+//go:generate echo generated
 """
 
 # Same shape in Rust, with the call outside a macro so the definition request
@@ -220,6 +222,13 @@ class Case:
     # written down: it is the server whose hints this probe can turn on (see
     # `editor_settings`), and the one whose hints Ricky went looking for.
     inlay_hint: str = None
+    # A substring that must appear in some code lens title. Only gopls has one:
+    # a lens is a command with a label, and gopls is the server whose commands
+    # this probe already knows how to fire. The others declare the capability
+    # and answer an empty list for these fixtures, which is the truth for a file
+    # with nothing to run -- asserting a lens there would need a fixture built
+    # to produce one, and would be testing the server rather than the route.
+    code_lens: str = None
     edit: tuple = field(default=("world", "there"))
 
 
@@ -252,6 +261,11 @@ HIERARCHY = {"prepareCallHierarchy", "prepareTypeHierarchy"}
 # `executeCommandProvider` with an empty list -- so poly registers nothing for
 # it, which is the honest answer and not a gap.
 COMMANDS = {"workspace/executeCommand"}
+# Added 2026-09-04. Six of the seven servers declare it; clangd is the one that
+# does not, which is why this is its own set rather than folded into FULL. The
+# design note in proxy.rs said "6 of 6" before anyone measured -- it was counting
+# servers that have a codeLens story, not servers that declare the capability.
+LENS = {"codeLens"}
 
 CASES = [
     Case(
@@ -266,7 +280,7 @@ CASES = [
         diagnostics=True,
         # No declarationProvider: in Go a declaration and a definition are the
         # same thing, so gopls has nothing separate to point at.
-        registers=FULL | {"selectionRange", "inlayHint"} | HIERARCHY | COMMANDS,
+        registers=FULL | {"selectionRange", "inlayHint"} | HIERARCHY | COMMANDS | LENS,
         # What Tooltitude calls `move...`, and the reason commands are
         # routed at all: gopls answers the code action with this command
         # and no edit.
@@ -275,6 +289,11 @@ CASES = [
         # assignVariableTypes annotates -- the one thing a reader of unfamiliar
         # Go cannot get from the text in front of them.
         inlay_hint="int",
+        # The `//go:generate` line at the bottom of MAIN_GO is there for this.
+        # gopls's other lenses live on go.mod (`go mod tidy`, `govulncheck`) or
+        # need `codelenses: {test: true}` from the client (`run test`), so a
+        # generate directive is the one lens a .go file can carry by itself.
+        code_lens="generate",
     ),
     Case(
         language="rust",
@@ -291,7 +310,8 @@ CASES = [
         # Call hierarchy but no type hierarchy: Rust traits are not a class
         # tree, and rust-analyzer declares nothing for one.
         registers=FULL
-        | {"selectionRange", "declaration", "inlayHint", "prepareCallHierarchy"},
+        | {"selectionRange", "declaration", "inlayHint", "prepareCallHierarchy"}
+        | LENS,
     ),
     # No compile_commands.json on purpose. clangd falls back to default flags
     # for a standalone file, which is enough for a same-file definition, and
@@ -334,7 +354,8 @@ CASES = [
         registers=(FULL - {"typeDefinition"})
         | {"declaration", "inlayHint"}
         | HIERARCHY
-        | COMMANDS,
+        | COMMANDS
+        | LENS,
         command="semantic.refactor.command",
         # Declares declarationProvider, then answers -32001 "unsupported
         # method". Measured 2026-08-29 against sourcekit-lsp from the Xcode
@@ -357,7 +378,7 @@ CASES = [
         chatty="[terraform-ls] ",
         # The thinnest of the six: no rename, no code actions, and none of the
         # position-scoped extras beyond signatureHelp.
-        registers=COMMON | {"declaration"} | COMMANDS,
+        registers=COMMON | {"declaration"} | COMMANDS | LENS,
         # Read-only, and the init/validate commands next to it on the list
         # are exactly why the probe never fires an unnamed one.
         command="terraform-ls.module.callers",
@@ -377,7 +398,7 @@ CASES = [
         hover_needle="Greeting",
         # No implementation and no signatureHelp: protobuf has neither an
         # interface to implement nor a call to fill in arguments for.
-        registers=(FULL - {"implementation", "signatureHelp"}) | COMMANDS,
+        registers=(FULL - {"implementation", "signatureHelp"}) | COMMANDS | LENS,
     ),
     Case(
         language="lua",
@@ -392,7 +413,7 @@ CASES = [
         # The only server measured that asks for inlay hints to be resolved
         # (`inlayHintProvider.resolveProvider`), which is why poly routes
         # `inlayHint/resolve` even though nothing registers it.
-        registers=FULL | {"inlayHint"} | COMMANDS,
+        registers=FULL | {"inlayHint"} | COMMANDS | LENS,
         command="lua.getConfig",
     ),
 ]
@@ -851,6 +872,42 @@ def run(case, logs=True, graceful=True):
         print(f"  {len(labels)} inlay hint(s), including {case.inlay_hint!r}")
     elif "inlayHint" in case.registers:
         print(f"  {case.server} registers inlayHint; no label written down to check")
+
+    # Code lenses. Two things have to be true and they fail differently: the
+    # lens has to arrive with a title, and it has to carry a command the editor
+    # can actually run. The second is the whole reason this waited for command
+    # routing -- a lens whose click does nothing is worse than no lens, because
+    # the user is told the action exists.
+    if case.code_lens:
+        lenses = settle(
+            15,
+            "textDocument/codeLens",
+            {"textDocument": {"uri": uri}},
+            bool,
+            "code lenses",
+        )
+        titles = [lens.get("command", {}).get("title", "") for lens in lenses]
+        assert any(case.code_lens in title for title in titles), (
+            f"no lens carried {case.code_lens!r}: {titles}"
+        )
+        # Against the registered command list, not against a hardcoded name:
+        # what makes a lens clickable is that some registration named its
+        # command, and that list is what poly sent the editor.
+        commanded = {
+            lens["command"]["command"] for lens in lenses if lens.get("command")
+        }
+        registered = set(
+            methods["workspace/executeCommand"]["registerOptions"]["commands"]
+        )
+        assert commanded <= registered, (
+            f"lens commands the editor was never told about: "
+            f"{sorted(commanded - registered)}"
+        )
+        print(f"  {len(lenses)} code lens(es) {titles}, every command registered")
+    elif "codeLens" in case.registers:
+        lenses = ask(15, "textDocument/codeLens", {"textDocument": {"uri": uri}})
+        assert "result" in lenses, f"codeLens was not routed: {lenses}"
+        print(f"  codeLens routed; {case.server} offers none for this fixture")
 
     if "prepareCallHierarchy" in case.registers and case.unindexed:
         prepared = ask(11, "textDocument/prepareCallHierarchy", at_call)

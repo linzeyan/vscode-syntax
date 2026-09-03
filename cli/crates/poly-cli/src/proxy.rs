@@ -104,6 +104,14 @@ pub const PROXIED: &[(&str, &str)] = &[
     // which is exact rather than "whichever server answered last".
     ("textDocument/prepareCallHierarchy", "callHierarchyProvider"),
     ("textDocument/prepareTypeHierarchy", "typeHierarchyProvider"),
+    // The actions a server offers about a whole file rather than a position:
+    // for gopls, `go generate` on a .go and `go mod tidy` / `govulncheck` on a
+    // go.mod. Held back until commands routed, because a lens is a command with
+    // a label on it and clicking one that goes nowhere is worse than not
+    // offering it. It coexists with poly-editor's own reference-count lens
+    // rather than replacing it: that one needs no server at all, and the editor
+    // shows every provider's lenses together.
+    ("textDocument/codeLens", "codeLensProvider"),
 ];
 
 // Capabilities the servers declare that poly leaves alone, so the next person
@@ -115,12 +123,6 @@ pub const PROXIED: &[(&str, &str)] = &[
 // - `workspaceSymbol` (6 of 6): the request names no document, so routing it
 //   means asking every running server and merging. A different shape, not a
 //   row in the table above.
-// - `codeLens` (6 of 6): a lens carries a command, and those now route — so
-//   the old reason here is gone and this is a live decision again. What holds
-//   it back is traffic shape: a lens set is recomputed per change for the whole
-//   document. The one lens worth having anyway — the reference count — needs no
-//   server at all: poly-editor asks the editor for the references it already
-//   has a provider for and renders the number. See its `references.ts`.
 // - `semanticTokens` (4 of 6): routable, but a whole token set per change is
 //   a different traffic profile, and it lands on top of the TextMate layer
 //   poly-syntax-highlight already paints. Worth its own decision.
@@ -138,6 +140,7 @@ pub const EXTRA_ROUTED: &[&str] = &[
     "completionItem/resolve",
     "codeAction/resolve",
     "inlayHint/resolve",
+    "codeLens/resolve",
     "callHierarchy/incomingCalls",
     "callHierarchy/outgoingCalls",
     "typeHierarchy/supertypes",
@@ -740,6 +743,33 @@ mod tests {
             registrations[0]["registerOptions"]["documentSelector"][0]["scheme"],
             "file"
         );
+    }
+
+    /// clangd is the one server measured that declares no `codeLensProvider`,
+    /// and it is the reason this is worth a test of its own.
+    ///
+    /// A lens registration the server cannot fulfil is not a quiet no-op: the
+    /// editor asks for lenses on every change to every visible document, and
+    /// each one is a round trip to a server that will answer an empty list
+    /// forever. `documentSelector` makes it per-language, so the cost lands on
+    /// exactly the files that can never get an answer.
+    #[test]
+    fn a_server_without_lenses_is_not_registered_for_them() {
+        let gopls = serde_json::json!({"codeLensProvider": {}});
+        let clangd = serde_json::json!({"hoverProvider": true});
+
+        let methods = |declared: &serde_json::Value, name: &str, language: &str| {
+            registrations(declared, name, &[language.to_string()])
+                .iter()
+                .map(|r| r["method"].as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            methods(&gopls, "gopls", "go"),
+            ["textDocument/codeLens"],
+            "an empty options object is a declaration, not an absence"
+        );
+        assert!(!methods(&clangd, "clangd", "c").contains(&"textDocument/codeLens".to_string()));
     }
 
     /// The whole point of proxying code actions at all: the on-save kinds are
