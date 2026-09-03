@@ -181,6 +181,16 @@ struct Server {
     /// thread is where it has to be told, because a downstream response never
     /// reaches the main loop. Shared for the same reason `diagnostics` is.
     code_action_ids: Arc<Mutex<HashSet<lsp_server::RequestId>>>,
+    /// `workspace/symbol` requests still collecting answers, by editor id.
+    ///
+    /// Shared with the pump threads for the same reason `code_action_ids` is:
+    /// the answers arrive there, one per server, and the editor gets one reply
+    /// only once the last of them has landed.
+    symbol_fanouts: Arc<Mutex<HashMap<lsp_server::RequestId, FanOut>>>,
+    /// Whether the editor has been told poly answers `workspace/symbol`.
+    ///
+    /// Once per session, not once per server: see `workspace_symbol_registration`.
+    workspace_symbol_registered: bool,
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
     lint_hashes: HashMap<Url, u64>,
@@ -194,6 +204,15 @@ struct Server {
     /// them blocked on an empty channel.
     package_jobs: Option<std::sync::mpsc::Sender<PackageJob>>,
     diagnostics: Arc<Mutex<Diagnostics>>,
+}
+
+/// One `workspace/symbol` query, waiting on the servers it was sent to.
+struct FanOut {
+    /// How many servers still owe an answer. The editor's reply goes out when
+    /// this reaches zero, whether the answers were symbols, nulls or errors —
+    /// a query that silently never completes leaves Ctrl+T spinning forever.
+    pending: usize,
+    answers: Vec<serde_json::Value>,
 }
 
 /// One whole-package lint to run.
@@ -308,6 +327,8 @@ fn serve(connection: Connection) -> Result<()> {
         last_inlay_hint: None,
         last_code_lens: None,
         code_action_ids: Arc::new(Mutex::new(HashSet::new())),
+        symbol_fanouts: Arc::new(Mutex::new(HashMap::new())),
+        workspace_symbol_registered: false,
         lint_hashes: HashMap::new(),
         package_roots: HashSet::new(),
         package_jobs: None,
@@ -378,6 +399,12 @@ impl Server {
     /// replies to one id is a protocol violation, and the editor believes the
     /// first. `Ok(Some(request))` hands it back for poly to answer itself.
     fn route(&mut self, request: lsp_server::Request) -> Result<Option<lsp_server::Request>> {
+        // The one request that goes to every server instead of one. It names no
+        // document, so there is nothing to pick a server by, and the honest
+        // answer is the union of what they all say.
+        if request.method == "workspace/symbol" {
+            return self.fan_out_symbols(request);
+        }
         let routable = crate::proxy::PROXIED
             .iter()
             .any(|(method, _)| *method == request.method)
@@ -462,6 +489,61 @@ impl Server {
         }
     }
 
+    /// Ask every running server that answers `workspace/symbol`, and reply once.
+    ///
+    /// The one place poly turns a single request into several. Each server gets
+    /// the request with the editor's own id, unchanged, so the answers all come
+    /// back carrying it — which is exactly what the accumulator keys on. Telling
+    /// them apart is not needed; counting them is.
+    fn fan_out_symbols(
+        &mut self,
+        request: lsp_server::Request,
+    ) -> Result<Option<lsp_server::Request>> {
+        let targets: Vec<String> = self
+            .downstream
+            .iter()
+            .filter(|(_, server)| {
+                server.as_ref().is_some_and(|server| {
+                    crate::proxy::answers_workspace_symbol(&server.capabilities)
+                })
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        if targets.is_empty() {
+            // Nothing registered the method, so this should not arrive at all.
+            // Handing it back gets the editor a `-32601` rather than silence.
+            return Ok(Some(request));
+        }
+        // Recorded before the first send, not after the last: the pump threads
+        // are already running, and a fast server can answer while the next one
+        // is still being written to.
+        self.symbol_fanouts.lock().expect("symbol lock").insert(
+            request.id.clone(),
+            FanOut {
+                pending: targets.len(),
+                answers: Vec::new(),
+            },
+        );
+        for name in &targets {
+            let sent = match self.downstream.get_mut(name) {
+                Some(Some(server)) => server.send(Message::Request(request.clone())),
+                // Gone between the filter above and here, which nothing in this
+                // loop can do — but the count is already committed, so it has to
+                // be settled either way.
+                _ => Err(anyhow::anyhow!("{name} is no longer running")),
+            };
+            if let Err(e) = sent {
+                eprintln!("[poly] {name}: {e:#}");
+                // Its share of the reply is never coming. Settle it here or the
+                // fan-out waits on it forever.
+                if let Some(done) = settle_symbols(&self.symbol_fanouts, &request.id, None) {
+                    self.connection.sender.send(Message::Response(done))?;
+                }
+            }
+        }
+        Ok(None)
+    }
+
     /// A reply from the editor: to poly's own registration, or to a request a
     /// downstream server made through poly.
     fn on_client_response(&mut self, response: Response) {
@@ -518,6 +600,7 @@ impl Server {
         let sender = self.connection.sender.clone();
         let diagnostics = Arc::clone(&self.diagnostics);
         let code_action_ids = Arc::clone(&self.code_action_ids);
+        let symbol_fanouts = Arc::clone(&self.symbol_fanouts);
         let started = Instant::now();
         let server = crate::proxy::Downstream::start(
             name,
@@ -527,12 +610,17 @@ impl Server {
             self.language_server_logs,
             &self.init_params,
             Box::new(move |message| {
-                // Two things cannot just be passed along. A publishDiagnostics
+                // Three things cannot just be passed along. A publishDiagnostics
                 // replaces the whole set for the uri, so forwarding it verbatim
                 // erases poly's own findings; a code action list may carry the
-                // on-save kinds poly promised the editor it does not offer.
+                // on-save kinds poly promised the editor it does not offer; and
+                // a workspace symbol answer is one server's share of a reply
+                // the editor must receive exactly once.
                 let message = merge_publish(&diagnostics, message);
-                let _ = sender.send(strip_source_actions(&code_action_ids, message));
+                let message = strip_source_actions(&code_action_ids, message);
+                if let Some(message) = collect_symbols(&symbol_fanouts, message) {
+                    let _ = sender.send(message);
+                }
             }),
         );
         match server {
@@ -557,8 +645,17 @@ impl Server {
     /// languages. Nothing was declared at initialize, so until this lands the
     /// editor offers none of them.
     fn register_downstream(&mut self, server: &crate::proxy::Downstream) {
-        let registrations =
+        let mut registrations =
             crate::proxy::registrations(&server.capabilities, &server.name, &server.languages);
+        // Not part of `registrations`, which is per-server: this one is per
+        // session. Whoever comes up first claims it and every server that
+        // starts later joins the fan-out without registering again.
+        if !self.workspace_symbol_registered
+            && crate::proxy::answers_workspace_symbol(&server.capabilities)
+        {
+            self.workspace_symbol_registered = true;
+            registrations.push(crate::proxy::workspace_symbol_registration());
+        }
         if registrations.is_empty() {
             eprintln!("[poly] {} declared nothing poly proxies", server.name);
             return;
@@ -1452,6 +1549,66 @@ fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn
     }
 }
 
+/// Record one server's share of a fan-out, and hand back the editor's reply
+/// once every server has answered.
+///
+/// `answer` is the server's result, or `None` for a share that is never coming —
+/// a server that errored, or one that could not be written to at all. Both count
+/// as answered: the editor is owed exactly one reply and waiting on a server
+/// that has nothing left to say is how Ctrl+T ends up spinning forever.
+fn settle_symbols(
+    fanouts: &Mutex<HashMap<lsp_server::RequestId, FanOut>>,
+    id: &lsp_server::RequestId,
+    answer: Option<serde_json::Value>,
+) -> Option<Response> {
+    let mut fanouts = fanouts.lock().expect("symbol lock");
+    let fanout = fanouts.get_mut(id)?;
+    fanout.answers.extend(answer);
+    // Saturating, so a server that answers one id twice costs a duplicated
+    // symbol rather than a count that never reaches zero.
+    fanout.pending = fanout.pending.saturating_sub(1);
+    if fanout.pending > 0 {
+        return None;
+    }
+    let fanout = fanouts.remove(id)?;
+    Some(Response {
+        id: id.clone(),
+        result: Some(crate::proxy::merge_symbols(fanout.answers)),
+        error: None,
+    })
+}
+
+/// Hold a downstream response back if it is one server's share of a fan-out.
+///
+/// `None` means the message was swallowed: it was a share, and either more are
+/// outstanding or the merged reply is being returned in its place. Here rather
+/// than in the main loop for the same reason `strip_source_actions` is — a
+/// downstream response only exists on the pump thread.
+///
+/// Every other response travels on. A fan-out is keyed by the editor's own
+/// request id, which is unique across the session, so nothing else can match.
+fn collect_symbols(
+    fanouts: &Mutex<HashMap<lsp_server::RequestId, FanOut>>,
+    message: Message,
+) -> Option<Message> {
+    let Message::Response(response) = &message else {
+        return Some(message);
+    };
+    if !fanouts
+        .lock()
+        .expect("symbol lock")
+        .contains_key(&response.id)
+    {
+        return Some(message);
+    }
+    // An error is a server declining to answer, not a reason to lose the ones
+    // that did — it goes on stderr and its share settles as nothing.
+    if let Some(error) = &response.error {
+        eprintln!("[poly] workspace/symbol: {}", error.message);
+    }
+    settle_symbols(fanouts, &response.id, response.result.clone()).map(Message::Response)
+}
+
 fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     let config = poly_core::Config::discover(path).unwrap_or_else(|_| poly_core::Config::empty());
     // A file `[lint] exclude` drops has to come back clean here too, or
@@ -2043,6 +2200,126 @@ mod tests {
             panic!("untouched");
         };
         assert_eq!(out.method, "window/logMessage");
+    }
+
+    /// One query, several servers, exactly one reply — and not before the last
+    /// of them has spoken.
+    ///
+    /// Replying early is the failure worth guarding: it looks right, because the
+    /// first server's symbols do show up, and the rest are simply missing. A
+    /// second reply on the same id is a protocol violation the editor answers by
+    /// believing the first, so the bug would be invisible from the outside.
+    #[test]
+    fn a_symbol_query_answers_once_the_last_server_has() {
+        let id = lsp_server::RequestId::from(7);
+        let fanouts = Mutex::new(HashMap::from([(
+            id.clone(),
+            FanOut {
+                pending: 2,
+                answers: Vec::new(),
+            },
+        )]));
+        let share = |name: &str| {
+            Message::Response(Response {
+                id: id.clone(),
+                result: Some(serde_json::json!([{"name": name}])),
+                error: None,
+            })
+        };
+
+        assert!(
+            collect_symbols(&fanouts, share("Greet")).is_none(),
+            "one server in, one still owing: nothing may reach the editor yet"
+        );
+        let Some(Message::Response(reply)) = collect_symbols(&fanouts, share("greet")) else {
+            panic!("the last answer completes the query");
+        };
+        assert_eq!(
+            reply.result,
+            Some(serde_json::json!([{"name": "Greet"}, {"name": "greet"}])),
+            "both servers' symbols, in one list"
+        );
+        assert!(
+            fanouts.lock().expect("lock").is_empty(),
+            "a finished query is forgotten, or the map grows for the session"
+        );
+    }
+
+    /// A server that declines still owes the count, or Ctrl+T spins forever.
+    ///
+    /// Three ways to decline and all of them arrive here: an error response, a
+    /// `null` result, and — through `settle_symbols(.., None)` — a server poly
+    /// could not even write to.
+    #[test]
+    fn a_server_that_declines_still_completes_the_query() {
+        let id = lsp_server::RequestId::from(7);
+        let fanouts = Mutex::new(HashMap::from([(
+            id.clone(),
+            FanOut {
+                pending: 3,
+                answers: Vec::new(),
+            },
+        )]));
+
+        let refused = Message::Response(Response {
+            id: id.clone(),
+            result: None,
+            error: Some(lsp_server::ResponseError {
+                code: INTERNAL_ERROR,
+                message: "not indexed".to_string(),
+                data: None,
+            }),
+        });
+        assert!(collect_symbols(&fanouts, refused).is_none());
+
+        let nothing = Message::Response(Response {
+            id: id.clone(),
+            result: Some(serde_json::Value::Null),
+            error: None,
+        });
+        assert!(collect_symbols(&fanouts, nothing).is_none());
+
+        let Some(Message::Response(reply)) = collect_symbols(
+            &fanouts,
+            Message::Response(Response {
+                id: id.clone(),
+                result: Some(serde_json::json!([{"name": "Greet"}])),
+                error: None,
+            }),
+        ) else {
+            panic!("the third answer completes the query");
+        };
+        assert_eq!(
+            reply.result,
+            Some(serde_json::json!([{"name": "Greet"}])),
+            "the one server that answered is not lost to the two that did not"
+        );
+    }
+
+    /// The pump sees every response, and only a fan-out's shares are its
+    /// business. A hover reply held back is a request the editor waits on for
+    /// the rest of the session.
+    #[test]
+    fn only_a_fanned_out_reply_is_held_back() {
+        let fanouts = Mutex::new(HashMap::from([(
+            lsp_server::RequestId::from(7),
+            FanOut {
+                pending: 1,
+                answers: Vec::new(),
+            },
+        )]));
+        let hover = Message::Response(Response {
+            id: lsp_server::RequestId::from(8),
+            result: Some(serde_json::json!({"contents": "docs"})),
+            error: None,
+        });
+        assert!(collect_symbols(&fanouts, hover).is_some());
+
+        let notification = Message::Notification(Notification::new(
+            "window/logMessage".to_string(),
+            serde_json::json!({"type": 3, "message": "hi"}),
+        ));
+        assert!(collect_symbols(&fanouts, notification).is_some());
     }
 
     /// A publishDiagnostics poly cannot parse still has to reach the editor:

@@ -120,9 +120,6 @@ pub const PROXIED: &[(&str, &str)] = &[
 // - `documentOnTypeFormatting` (4 of 6 declare it): poly is the formatter.
 //   This is the `source.organizeImports` collision without even the save
 //   boundary to contain it — it fires mid-keystroke.
-// - `workspaceSymbol` (6 of 6): the request names no document, so routing it
-//   means asking every running server and merging. A different shape, not a
-//   row in the table above.
 // - `semanticTokens` (4 of 6): routable, but a whole token set per change is
 //   a different traffic profile, and it lands on top of the TextMate layer
 //   poly-syntax-highlight already paints. Worth its own decision.
@@ -546,6 +543,61 @@ pub fn server_commands(capabilities: &serde_json::Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Does this server answer `workspace/symbol`?
+///
+/// Read at request time rather than remembered, because which servers are
+/// running changes through the session: opening a .lua an hour in adds one, and
+/// the query has to reach it.
+pub fn answers_workspace_symbol(capabilities: &serde_json::Value) -> bool {
+    !matches!(
+        capabilities.get("workspaceSymbolProvider"),
+        None | Some(serde_json::Value::Null) | Some(serde_json::Value::Bool(false))
+    )
+}
+
+/// The one `workspace/symbol` registration, minted once per session.
+///
+/// Once, not once per server, and the id says so by carrying no server name.
+/// The editor turns each registration into a provider and queries every one of
+/// them, so a second registration would mean a second `workspace/symbol`
+/// request arriving for the same keystroke — and each of those fans out to
+/// every server, so the user would see each symbol twice with two servers up
+/// and three times with three.
+///
+/// `resolveProvider` is deliberately not claimed even when a server offers it.
+/// A `workspaceSymbol/resolve` names no document and carries only the symbol's
+/// own `data`, which belongs to whichever server made it; with the query fanned
+/// out to all of them there is no honest way to route the follow-up. Not
+/// claiming it means the servers must answer with complete locations, which is
+/// what the protocol requires of a provider that does not resolve.
+pub fn workspace_symbol_registration() -> serde_json::Value {
+    serde_json::json!({
+        "id": format!("{POLY_ID}workspace/symbol"),
+        "method": "workspace/symbol",
+        "registerOptions": {},
+    })
+}
+
+/// Every server's answers to one query, as one list.
+///
+/// Concatenated in no particular order: each server ranks its own results and
+/// nothing poly knows would let it rank across projects in different languages.
+/// The editor sorts what it gets.
+pub fn merge_symbols(answers: Vec<serde_json::Value>) -> serde_json::Value {
+    let symbols: Vec<serde_json::Value> = answers
+        .into_iter()
+        .filter_map(|answer| match answer {
+            serde_json::Value::Array(symbols) => Some(symbols),
+            // `null` is a legal answer meaning "nothing", and an error was
+            // already dropped by the caller. Neither is a reason to lose the
+            // servers that did answer.
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    serde_json::Value::Array(symbols)
 }
 
 /// The registration that makes a downstream server's commands runnable.

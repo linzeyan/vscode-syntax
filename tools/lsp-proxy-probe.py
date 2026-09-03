@@ -229,6 +229,11 @@ class Case:
     # with nothing to run -- asserting a lens there would need a fixture built
     # to produce one, and would be testing the server rather than the route.
     code_lens: str = None
+    # A name that must come back from `workspace/symbol`. Set only where the
+    # server answers from what it has already parsed; the ones that answer out
+    # of an index this probe never builds get the routing check and no more,
+    # the same split `unindexed` makes for call hierarchy.
+    workspace_symbol: str = None
     edit: tuple = field(default=("world", "there"))
 
 
@@ -266,6 +271,12 @@ COMMANDS = {"workspace/executeCommand"}
 # design note in proxy.rs said "6 of 6" before anyone measured -- it was counting
 # servers that have a codeLens story, not servers that declare the capability.
 LENS = {"codeLens"}
+# The one thing all seven declare, and the only registration here that is not
+# per-server: poly registers `workspace/symbol` once and fans each query out.
+# Kept separate from COMMON because it is also the only entry that keeps its
+# namespace -- everything else in these sets is a `textDocument/` method with the
+# prefix dropped.
+SYMBOL = {"workspace/symbol"}
 
 CASES = [
     Case(
@@ -280,7 +291,12 @@ CASES = [
         diagnostics=True,
         # No declarationProvider: in Go a declaration and a definition are the
         # same thing, so gopls has nothing separate to point at.
-        registers=FULL | {"selectionRange", "inlayHint"} | HIERARCHY | COMMANDS | LENS,
+        registers=FULL
+        | {"selectionRange", "inlayHint"}
+        | HIERARCHY
+        | COMMANDS
+        | LENS
+        | SYMBOL,
         # What Tooltitude calls `move...`, and the reason commands are
         # routed at all: gopls answers the code action with this command
         # and no edit.
@@ -294,6 +310,7 @@ CASES = [
         # need `codelenses: {test: true}` from the client (`run test`), so a
         # generate directive is the one lens a .go file can carry by itself.
         code_lens="generate",
+        workspace_symbol="Greet",
     ),
     Case(
         language="rust",
@@ -311,7 +328,8 @@ CASES = [
         # tree, and rust-analyzer declares nothing for one.
         registers=FULL
         | {"selectionRange", "declaration", "inlayHint", "prepareCallHierarchy"}
-        | LENS,
+        | LENS
+        | SYMBOL,
     ),
     # No compile_commands.json on purpose. clangd falls back to default flags
     # for a standalone file, which is enough for a same-file definition, and
@@ -337,7 +355,8 @@ CASES = [
         registers=FULL
         | {"selectionRange", "declaration", "inlayHint"}
         | HIERARCHY
-        | COMMANDS,
+        | COMMANDS
+        | SYMBOL,
         command="clangd.applyTweak",
     ),
     Case(
@@ -355,7 +374,8 @@ CASES = [
         | {"declaration", "inlayHint"}
         | HIERARCHY
         | COMMANDS
-        | LENS,
+        | LENS
+        | SYMBOL,
         command="semantic.refactor.command",
         # Declares declarationProvider, then answers -32001 "unsupported
         # method". Measured 2026-08-29 against sourcekit-lsp from the Xcode
@@ -378,7 +398,7 @@ CASES = [
         chatty="[terraform-ls] ",
         # The thinnest of the six: no rename, no code actions, and none of the
         # position-scoped extras beyond signatureHelp.
-        registers=COMMON | {"declaration"} | COMMANDS | LENS,
+        registers=COMMON | {"declaration"} | COMMANDS | LENS | SYMBOL,
         # Read-only, and the init/validate commands next to it on the list
         # are exactly why the probe never fires an unnamed one.
         command="terraform-ls.module.callers",
@@ -398,7 +418,10 @@ CASES = [
         hover_needle="Greeting",
         # No implementation and no signatureHelp: protobuf has neither an
         # interface to implement nor a call to fill in arguments for.
-        registers=(FULL - {"implementation", "signatureHelp"}) | COMMANDS | LENS,
+        registers=(FULL - {"implementation", "signatureHelp"})
+        | COMMANDS
+        | LENS
+        | SYMBOL,
     ),
     Case(
         language="lua",
@@ -413,7 +436,7 @@ CASES = [
         # The only server measured that asks for inlay hints to be resolved
         # (`inlayHintProvider.resolveProvider`), which is why poly routes
         # `inlayHint/resolve` even though nothing registers it.
-        registers=FULL | {"inlayHint"} | COMMANDS | LENS,
+        registers=FULL | {"inlayHint"} | COMMANDS | LENS | SYMBOL,
         command="lua.getConfig",
     ),
 ]
@@ -908,6 +931,25 @@ def run(case, logs=True, graceful=True):
         lenses = ask(15, "textDocument/codeLens", {"textDocument": {"uri": uri}})
         assert "result" in lenses, f"codeLens was not routed: {lenses}"
         print(f"  codeLens routed; {case.server} offers none for this fixture")
+
+    # Ctrl+T. The only request poly sends to every server rather than one, so
+    # "was it routed" and "did it come back exactly once" are different
+    # questions -- `ask` waiting on the id answers the second, because a second
+    # reply on that id would arrive as a stray message the next pump trips over.
+    symbols = ask(16, "workspace/symbol", {"query": case.hover_needle})
+    assert "result" in symbols, f"workspace/symbol was not routed: {symbols}"
+    found = symbols["result"] or []
+    if case.workspace_symbol:
+        # Named, not counted. gopls answers a query over the whole build, so
+        # this fixture comes back with a hundred stdlib symbols that happen to
+        # contain the letters -- a count would pass on any of them.
+        assert any(s["name"] == case.workspace_symbol for s in found), (
+            f"no workspace symbol named {case.workspace_symbol!r} among "
+            f"{len(found)}: {sorted({s['name'] for s in found})[:10]}"
+        )
+        print(f"  workspace symbol {case.workspace_symbol!r} among {len(found)}")
+    else:
+        print(f"  workspace/symbol routed; {len(found)} for this fixture")
 
     if "prepareCallHierarchy" in case.registers and case.unindexed:
         prepared = ask(11, "textDocument/prepareCallHierarchy", at_call)
@@ -1442,6 +1484,147 @@ def cross_module_go():
     shutil.rmtree(root, ignore_errors=True)
 
 
+# One directory, two languages, one query. Go and Lua because both servers
+# answer workspace symbols out of what they have already parsed -- no index to
+# build and no toolchain to resolve -- so the only thing being measured is
+# poly's fan-out.
+FANOUT_GO = """package main
+
+func Symbolic() string {
+\treturn "go"
+}
+
+func main() {
+\tprintln(Symbolic())
+}
+"""
+
+# A global, not a local: lua-language-server reports globals as workspace
+# symbols and a `local function` is not one of them.
+FANOUT_LUA = """function Symbolic()
+    return "lua"
+end
+
+print(Symbolic())
+"""
+
+FANOUT_FILES = {
+    "go.mod": "module example.com/fanout\n\ngo 1.21\n",
+    "main.go": FANOUT_GO,
+    "main.lua": FANOUT_LUA,
+}
+
+
+def one_query_two_servers():
+    """Ctrl+T with two languages open: one reply, and both servers in it.
+
+    The only request poly turns into several, so it is the only one where the
+    editor can be told the wrong thing in two directions. Answering before the
+    slower server replies loses half the results and looks like a server that
+    "just did not find it"; registering the method once per server makes the
+    editor query poly twice and every symbol appears twice. Neither shows up in
+    a session with one server, which is every other case in this file.
+    """
+    global proc, INBOX, STDERR
+    if not all(shutil.which(tool) for tool in ("gopls", "go", "lua-language-server")):
+        print("SKIPPED symbol fan-out: needs gopls, go and lua-language-server")
+        return
+    root = os.path.realpath(tempfile.mkdtemp(prefix="poly-proxy-fanout-"))
+    for name, text in FANOUT_FILES.items():
+        with open(os.path.join(root, name), "w") as f:
+            f.write(text)
+
+    print("workspace symbols, two servers in one window:")
+    INBOX, STDERR = [], []
+    proc = subprocess.Popen(
+        [BIN, "lsp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    threading.Thread(target=watch, args=(proc.stderr,), daemon=True).start()
+    send(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "processId": None,
+                "rootUri": f"file://{root}",
+                "workspaceFolders": [{"uri": f"file://{root}", "name": "fanout"}],
+                "initializationOptions": {"languageServers": True},
+                "capabilities": {
+                    "textDocument": {"synchronization": {"dynamicRegistration": True}},
+                    "workspace": {
+                        "configuration": True,
+                        "symbol": {},
+                        "didChangeConfiguration": {},
+                    },
+                },
+            },
+        }
+    )
+    pump(want_id=1)
+    send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+
+    for name, language in (("main.go", "go"), ("main.lua", "lua")):
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": f"file://{root}/{name}",
+                        "languageId": language,
+                        "version": 1,
+                        "text": FANOUT_FILES[name],
+                    }
+                },
+            }
+        )
+    # One registration message per server, and `workspace/symbol` may appear in
+    # exactly one of them. Two would make the editor build two providers over
+    # one connection, and every query would be asked -- and answered -- twice.
+    claimed = []
+    for _ in range(2):
+        registration, _ = pump(want_method="client/registerCapability")
+        methods = [r["method"] for r in registration["params"]["registrations"]]
+        claimed.append("workspace/symbol" in methods)
+        send({"jsonrpc": "2.0", "id": registration["id"], "result": None})
+    assert claimed.count(True) == 1, (
+        f"workspace/symbol registered {claimed.count(True)} times across two "
+        "servers; it is one provider for the session, not one per server"
+    )
+    print("  registered once for the session, not once per server")
+
+    # Both, so a reply that arrived before the slower server spoke fails here
+    # rather than passing with half an answer.
+    found = settle(
+        60,
+        "workspace/symbol",
+        {"query": "Symbolic"},
+        lambda result: len({s["location"]["uri"] for s in result or []}) >= 2,
+        "symbols from both servers",
+    )
+    files = sorted(
+        {os.path.relpath(s["location"]["uri"][len("file://") :], root) for s in found}
+    )
+    assert "main.go" in files and "main.lua" in files, (
+        f"one query has to reach every running server: {files}"
+    )
+    print(f"  one reply carried {len(found)} symbol(s) from {files}")
+
+    send({"jsonrpc": "2.0", "id": 99, "method": "shutdown", "params": None})
+    pump(want_id=99)
+    send({"jsonrpc": "2.0", "method": "exit", "params": None})
+    try:
+        proc.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise AssertionError("poly did not exit")
+    shutil.rmtree(root, ignore_errors=True)
+
+
 ran = []
 for probe in CASES:
     # A managed server is poly's to produce, so there is nothing to skip on:
@@ -1500,6 +1683,7 @@ elif ran:
     print("SKIPPED rude-exit check: needs rust-analyzer, the server that reports it")
 
 cross_module_go()
+one_query_two_servers()
 
 if not ran:
     print("PROXY PROBE SKIPPED: no language server on PATH")
