@@ -180,7 +180,25 @@ struct Server {
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
     lint_hashes: HashMap<Url, u64>,
+    /// Package roots a whole-package lint has already been asked for. Opening a
+    /// second file in a module poly has already looked at costs nothing;
+    /// golangci-lint type-checks the package, so the first look is the
+    /// expensive one and there is no reason to repeat it until a save.
+    package_roots: HashSet<PathBuf>,
+    /// Queue for the package-lint worker, created on first use. Most sessions
+    /// never open a Go file and should not pay for a thread that would spend
+    /// them blocked on an empty channel.
+    package_jobs: Option<std::sync::mpsc::Sender<PackageJob>>,
     diagnostics: Arc<Mutex<Diagnostics>>,
+}
+
+/// One whole-package lint to run.
+struct PackageJob {
+    root: PathBuf,
+    /// Whether a language server answers for this module's files, read at queue
+    /// time because the worker cannot ask: the map that knows lives on the main
+    /// thread. Every file in a Go module is Go, so one answer covers the run.
+    proxied: bool,
 }
 
 /// Every source of diagnostics for a document, in one place.
@@ -195,6 +213,11 @@ struct Server {
 #[derive(Default)]
 struct Diagnostics {
     lint: HashMap<Url, Vec<lsp_types::Diagnostic>>,
+    /// Findings from a linter that answers about a whole package at once, so
+    /// they arrive for files nobody opened. Kept apart from `lint` because they
+    /// are replaced as a set per module rather than per file: the only way to
+    /// know a finding is fixed is that the next run did not repeat it.
+    package: HashMap<Url, Vec<lsp_types::Diagnostic>>,
     format: HashMap<Url, lsp_types::Diagnostic>,
     downstream: HashMap<Url, Vec<lsp_types::Diagnostic>>,
 }
@@ -210,6 +233,7 @@ impl Diagnostics {
     /// user turned on for *more* information would be the wrong trade.
     fn merged(&self, uri: &Url, proxied: bool) -> Vec<lsp_types::Diagnostic> {
         let mut all = self.lint.get(uri).cloned().unwrap_or_default();
+        all.extend(self.package.get(uri).cloned().unwrap_or_default());
         if !proxied {
             all.extend(self.format.get(uri).cloned());
         }
@@ -219,6 +243,7 @@ impl Diagnostics {
 
     fn forget(&mut self, uri: &Url) {
         self.lint.remove(uri);
+        self.package.remove(uri);
         self.format.remove(uri);
         self.downstream.remove(uri);
     }
@@ -279,6 +304,8 @@ fn serve(connection: Connection) -> Result<()> {
         last_inlay_hint: None,
         code_action_ids: Arc::new(Mutex::new(HashSet::new())),
         lint_hashes: HashMap::new(),
+        package_roots: HashSet::new(),
+        package_jobs: None,
         diagnostics: Arc::new(Mutex::new(Diagnostics::default())),
     };
 
@@ -748,6 +775,7 @@ impl Server {
                     .insert(uri.clone(), params.text_document.text);
                 if self.lint_on_save {
                     self.publish_lint(&uri)?;
+                    self.queue_package_lint(&uri, false);
                 }
             }
             "textDocument/didChange" => {
@@ -763,6 +791,7 @@ impl Server {
                     serde_json::from_value(notification.params)?;
                 if self.lint_on_save {
                     self.publish_lint(&params.text_document.uri)?;
+                    self.queue_package_lint(&params.text_document.uri, true);
                 }
             }
             "textDocument/didClose" => {
@@ -857,6 +886,46 @@ impl Server {
         );
         self.lock().lint.insert(uri.clone(), diagnostics);
         self.publish_all(uri)
+    }
+
+    /// Ask for a whole-package lint of the module this document belongs to.
+    ///
+    /// `fresh` is what separates the two callers. A save wants a new answer and
+    /// says so; an open only wants the module looked at once, because ten files
+    /// opened from one module are one module's worth of findings and ten
+    /// compiles. Nothing happens here beyond queueing — golangci-lint takes
+    /// seconds on a real module, and the main loop is where the editor's
+    /// requests are answered.
+    fn queue_package_lint(&mut self, uri: &Url, fresh: bool) {
+        let path = uri_path(uri);
+        let Some(root) = self
+            .language_of(uri)
+            .and_then(|language| package_lint_scope(&language, &path))
+        else {
+            return;
+        };
+        let first = self.package_roots.insert(root.clone());
+        if !fresh && !first {
+            return;
+        }
+        if self.package_jobs.is_none() {
+            let (jobs, queue) = std::sync::mpsc::channel();
+            let store = Arc::clone(&self.diagnostics);
+            let sender = self.connection.sender.clone();
+            std::thread::spawn(move || {
+                package_lint_worker(&queue, &store, |message| {
+                    let _ = sender.send(message);
+                });
+            });
+            self.package_jobs = Some(jobs);
+        }
+        let job = PackageJob {
+            root,
+            proxied: self.is_proxied(uri),
+        };
+        // A send error means the worker died, which it only does when the queue
+        // is dropped with the server. Nothing useful to say at that point.
+        let _ = self.package_jobs.as_ref().expect("package queue").send(job);
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Diagnostics> {
@@ -1230,6 +1299,148 @@ fn strip_source_actions(
     }
     response.result = response.result.map(crate::proxy::without_withheld_actions);
     Message::Response(response)
+}
+
+/// The scope a whole-package linter would run over for this document, if poly
+/// runs one for the language.
+///
+/// Go only, and not for want of trying elsewhere: golangci-lint is the one
+/// linter poly drives that cannot answer about a single buffer, because it
+/// type-checks the package. That is why Go was the one language where `poly
+/// check` reported findings the editor never showed. tflint has the same shape
+/// but wants `terraform init` run first, so it is a different trade and stays
+/// out until it is made deliberately.
+fn package_lint_scope(language: &str, path: &Path) -> Option<PathBuf> {
+    match language {
+        "go" => poly_tools::run::go_module_root(path),
+        _ => None,
+    }
+}
+
+/// Run queued package lints, one at a time, forever.
+///
+/// Serial on purpose: golangci-lint refuses to run twice at once in the same
+/// module, and two modules compiling in parallel is a lot of machine for
+/// something nobody is waiting on.
+fn package_lint_worker(
+    queue: &std::sync::mpsc::Receiver<PackageJob>,
+    store: &Mutex<Diagnostics>,
+    send: impl Fn(Message),
+) {
+    // A receive error means the queue was dropped with the server.
+    while let Ok(job) = queue.recv() {
+        // Saves that arrived while the previous run was compiling are still
+        // waiting. Collapse them by root: golangci-lint reads the module from
+        // disk, so three saves in a row would compile three times to report the
+        // same thing three times.
+        let mut batch = vec![job];
+        while let Ok(queued) = queue.try_recv() {
+            batch.push(queued);
+        }
+        batch.sort_by(|a, b| a.root.cmp(&b.root));
+        batch.dedup_by(|a, b| a.root == b.root);
+        for job in batch {
+            run_package_lint(&job, store, &send);
+        }
+    }
+}
+
+/// Swap in a module's new findings and say which documents changed hands.
+///
+/// Every package entry under `root` *is* the previous report — nothing else
+/// records what the last run said — so dropping them is how a fixed finding
+/// disappears. The answer is the union of old and new, not just what was found:
+/// a uri that appears only in the previous report needs an empty publish, or the
+/// finding the user just fixed stays on screen until they close the file.
+///
+/// Only `package` is touched. The per-file linters and any language server have
+/// their own entries for these same documents and a whole-module run knows
+/// nothing about what they found.
+fn replace_package_findings(
+    store: &mut Diagnostics,
+    root: &Path,
+    fresh: HashMap<Url, Vec<lsp_types::Diagnostic>>,
+) -> Vec<Url> {
+    let stale: Vec<Url> = store
+        .package
+        .keys()
+        .filter(|uri| uri_path(uri).starts_with(root))
+        .cloned()
+        .collect();
+    let mut affected: HashSet<Url> = HashSet::new();
+    for uri in stale {
+        store.package.remove(&uri);
+        affected.insert(uri);
+    }
+    for (uri, diagnostics) in fresh {
+        affected.insert(uri.clone());
+        store.package.insert(uri, diagnostics);
+    }
+    affected.into_iter().collect()
+}
+
+/// Lint one module and publish what changed.
+fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn(Message)) {
+    let config =
+        poly_core::Config::discover(&job.root).unwrap_or_else(|_| poly_core::Config::empty());
+    let Some(cmd) = resolved_tool("golangci-lint", &config) else {
+        return;
+    };
+    let started = Instant::now();
+    // The same call `poly check` makes over the same module. Anything cheaper —
+    // one package, one file, a cached subset — would be a second opinion, and
+    // the editor and CI holding two of those is what A4 forbids.
+    let found = match poly_tools::run::golangci_module(&cmd, &job.root) {
+        Ok(found) => found,
+        Err(e) => {
+            eprintln!("[poly] golangci-lint {}: {e:#}", job.root.display());
+            return;
+        }
+    };
+    let mut fresh: HashMap<Url, Vec<lsp_types::Diagnostic>> = HashMap::new();
+    for found in found {
+        // The same two filters `lint_document` applies, for the same reason: a
+        // rule silenced in poly.toml has to be silent in Problems too.
+        if config.excluded(&found.file, poly_core::Scope::Lint)
+            || config.lint_ignored(&found.file, found.issue.source, &found.issue.code)
+        {
+            continue;
+        }
+        let Ok(uri) = Url::from_file_path(&found.file) else {
+            continue;
+        };
+        fresh
+            .entry(uri)
+            .or_default()
+            .push(lint_diagnostic(found.issue));
+    }
+    eprintln!(
+        "[poly] golangci-lint {} {:.1}ms ({} files)",
+        job.root.display(),
+        started.elapsed().as_secs_f64() * 1000.0,
+        fresh.len()
+    );
+
+    let publishes = {
+        let mut store = store.lock().expect("diagnostics lock");
+        replace_package_findings(&mut store, &job.root, fresh)
+            .into_iter()
+            .map(|uri| {
+                let diagnostics = store.merged(&uri, job.proxied);
+                (uri, diagnostics)
+            })
+            .collect::<Vec<_>>()
+    };
+    for (uri, diagnostics) in publishes {
+        send(Message::Notification(Notification::new(
+            "textDocument/publishDiagnostics".to_string(),
+            PublishDiagnosticsParams {
+                uri,
+                diagnostics,
+                version: None,
+            },
+        )));
+    }
 }
 
 fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
@@ -1685,6 +1896,102 @@ mod tests {
             ["selene", "poly/format"]
         );
         assert_eq!(sources(&store.merged(&uri(), true)), ["selene"]);
+    }
+
+    /// Four publishers, one uri, and `publishDiagnostics` replaces the whole
+    /// set: every one of them has to survive the others.
+    ///
+    /// This is the shape of the bug package lint could have introduced. gopls
+    /// publishes on its own schedule, the per-file linters publish on save, and
+    /// golangci-lint publishes whenever a module finishes compiling — three
+    /// independent clocks. If any of them sent only its own half, saving a Go
+    /// file would erase the module's findings and the next module run would
+    /// erase gopls's.
+    #[test]
+    fn no_publisher_erases_another() {
+        let mut store = Diagnostics::default();
+        store.lint.insert(uri(), vec![diagnostic("typos")]);
+        store
+            .package
+            .insert(uri(), vec![diagnostic("golangci-lint")]);
+        store.format.insert(uri(), diagnostic("poly/format"));
+        store.downstream.insert(uri(), vec![diagnostic("gopls")]);
+
+        assert_eq!(
+            sources(&store.merged(&uri(), true)),
+            ["typos", "golangci-lint", "gopls"],
+            "the format error is the only thing a server replaces"
+        );
+        assert_eq!(
+            sources(&store.merged(&uri(), false)),
+            ["typos", "golangci-lint", "poly/format", "gopls"]
+        );
+    }
+
+    /// A module's report is replaced as a set, and a fixed finding only
+    /// disappears because the next run did not repeat it.
+    #[test]
+    fn a_fixed_package_finding_is_published_away() {
+        let module = Path::new("/w/api");
+        let fixed = Url::parse("file:///w/api/fixed.go").expect("valid uri");
+        let broken = Url::parse("file:///w/api/broken.go").expect("valid uri");
+        // A second module, mid-run in the same session. Its findings are no
+        // business of this run and must outlive it.
+        let elsewhere = Url::parse("file:///w/cli/main.go").expect("valid uri");
+
+        let mut store = Diagnostics::default();
+        store
+            .package
+            .insert(fixed.clone(), vec![diagnostic("unused")]);
+        store
+            .package
+            .insert(broken.clone(), vec![diagnostic("errcheck")]);
+        store
+            .package
+            .insert(elsewhere.clone(), vec![diagnostic("errcheck")]);
+        // gopls also has something to say about the file that was fixed. The
+        // whole-module run knows nothing about it and must not take it away.
+        store
+            .downstream
+            .insert(fixed.clone(), vec![diagnostic("gopls")]);
+
+        let fresh = HashMap::from([(broken.clone(), vec![diagnostic("errcheck")])]);
+        let mut affected = replace_package_findings(&mut store, module, fresh);
+        affected.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+
+        assert_eq!(
+            affected,
+            [broken.clone(), fixed.clone()],
+            "the cleared file is republished too, or the squiggle never goes away"
+        );
+        assert_eq!(sources(&store.merged(&fixed, true)), ["gopls"]);
+        assert_eq!(sources(&store.merged(&broken, true)), ["errcheck"]);
+        assert_eq!(
+            sources(&store.merged(&elsewhere, true)),
+            ["errcheck"],
+            "another module's report is not this run's to clear"
+        );
+    }
+
+    /// Which files a whole-package linter is asked about has to mean the same
+    /// thing in the editor as in `poly check` (A4), and only Go has one at all.
+    #[test]
+    fn only_go_has_a_package_scope_and_it_is_the_module() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = std::fs::canonicalize(dir.path()).expect("real path");
+        std::fs::write(root.join("go.mod"), "module x\n").expect("write go.mod");
+        let nested = root.join("internal/api");
+        std::fs::create_dir_all(&nested).expect("mkdir");
+        let file = nested.join("api.go");
+        std::fs::write(&file, "package api\n").expect("write api.go");
+
+        assert_eq!(package_lint_scope("go", &file), Some(root.clone()));
+        // Nothing else runs one, so nothing else may queue a compile.
+        assert_eq!(package_lint_scope("terraform", &file), None);
+        assert_eq!(package_lint_scope("python", &file), None);
+        // A .go file outside any module: no root, nothing to run.
+        let orphan = dir.path().parent().expect("parent").join("nowhere.go");
+        assert_eq!(package_lint_scope("go", &orphan), None);
     }
 
     /// The downstream half arrives as a notification poly has to rewrite in

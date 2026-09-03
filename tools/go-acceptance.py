@@ -175,8 +175,16 @@ def golangci_groups_by_module():
     shutil.rmtree(root, ignore_errors=True)
 
 
-def editor_sources(root, name, text, seconds=25):
-    """The `source` of every diagnostic poly publishes for one open Go file."""
+def editor_diagnostics(root, name, text, seconds=25):
+    """Open one Go file and watch what poly publishes about it.
+
+    Two answers, because two different questions are asked of this session.
+    `union` is everything that reached Problems at any point, which is what the
+    editor/CI comparison wants. `final` is the last publish for the file, which
+    is the only thing the user actually ends up looking at -- `publishDiagnostics`
+    replaces the whole set, so a source present in the union and absent from the
+    final publish is one that something else erased.
+    """
     proc = subprocess.Popen(
         [BIN, "lsp"],
         stdin=subprocess.PIPE,
@@ -249,7 +257,7 @@ def editor_sources(root, name, text, seconds=25):
 
     # Collected with a real deadline rather than a blocking read: a server with
     # nothing to say would otherwise hang past every timeout in this file.
-    sources, end = set(), time.time() + seconds
+    union, final, end = set(), set(), time.time() + seconds
     while time.time() < end:
         try:
             message = inbox.get(timeout=max(0.1, end - time.time()))
@@ -261,27 +269,30 @@ def editor_sources(root, name, text, seconds=25):
             answer = [None] if message["method"] == "workspace/configuration" else None
             send({"jsonrpc": "2.0", "id": message["id"], "result": answer})
         if message.get("method") == "textDocument/publishDiagnostics":
-            for diagnostic in message["params"]["diagnostics"]:
-                sources.add(diagnostic.get("source", "?"))
+            params = message["params"]
+            published = {d.get("source", "?") for d in params["diagnostics"]}
+            union |= published
+            if params["uri"] == uri:
+                final = published
     proc.kill()
-    return sources
+    return union, final
 
 
-# What `poly check` finds for a Go file and the editor does not, measured
-# 2026-09-04 and written down rather than discovered per run.
+# What `poly check` finds for a Go file and the editor does not.
 #
-# A4 says the editor and CI must never give different answers, and for Go they
-# do. `external_lint` only drives tools that lint one file from stdin --
-# shellcheck, ruff, selene and the rest -- and golangci-lint is neither of
-# those things: it works per module and needs the whole package. So it runs in
-# `poly check` and has never run in the editor, and closing that needs
-# package-scoped lint on save, which is a feature and not a fix.
+# Empty since 2026-09-04, when package-scoped lint on save landed and
+# golangci-lint started reaching Problems. It was the last entry: `external_lint`
+# drives tools that lint one buffer from stdin, and golangci-lint is neither --
+# it works per module and needs the whole package -- so for as long as the
+# daemon had only that path, Go was the one language where CI could go red over
+# something the editor never mentioned.
 #
-# Recorded as an exact set, the same way the proxy probe records a server that
-# lies about its capabilities. It fails when the gap widens, and it fails when
-# the gap closes -- the second is the point. A gap nobody is failing over is a
-# gap that stops being read.
-EDITOR_NEVER_SEES = {"golangci-lint"}
+# Kept as an exact set rather than deleted, the same way the proxy probe records
+# a server that lies about its capabilities. It fails when the gap widens and it
+# fails when it narrows, and an empty set is a claim worth defending: A4 says the
+# editor and CI must never give different answers, and this is the one gate that
+# measures it for Go.
+EDITOR_NEVER_SEES = set()
 
 
 def editor_and_cli_agree():
@@ -290,6 +301,14 @@ def editor_and_cli_agree():
     Not "does the editor say nothing" -- gopls has analyzers of its own and
     catches some of this under its own names, which is exactly why the
     comparison has to be by source rather than by count.
+
+    The second half is the interference question. Three publishers speak about
+    this one file on three unrelated clocks: the per-file linters on save, gopls
+    whenever it finishes thinking, and golangci-lint whenever the module
+    finishes compiling. `publishDiagnostics` replaces the whole set for a uri, so
+    any of them sending only its own half would erase the other two -- and it
+    would erase them intermittently, which is the kind of bug that survives a
+    gate that only looks at the union.
     """
     root = fixture(
         "poly-go-a4-",
@@ -304,7 +323,7 @@ def editor_and_cli_agree():
         for line in output.splitlines()
         if "] " in line and "[" in line
     }
-    in_editor = editor_sources(root, "main.go", UNUSED_AND_UNCHECKED)
+    in_editor, still_there = editor_diagnostics(root, "main.go", UNUSED_AND_UNCHECKED)
     shutil.rmtree(root, ignore_errors=True)
     print(f"  poly check reports: {sorted(from_check)}")
     print(f"  the editor publishes: {sorted(in_editor)}")
@@ -315,11 +334,24 @@ def editor_and_cli_agree():
     assert missing == EDITOR_NEVER_SEES, (
         f"the editor/CI gap for Go changed: expected {sorted(EDITOR_NEVER_SEES)} "
         f"to be CI-only, measured {sorted(missing)}.\n"
-        "If it shrank, package-scoped lint on save landed — shrink "
-        "EDITOR_NEVER_SEES to match. If it grew, something that used to reach "
-        "Problems no longer does, and that is a regression."
+        "If it grew, something that used to reach Problems no longer does. If it "
+        "shrank, a tool poly could not run in the editor now runs there — shrink "
+        "EDITOR_NEVER_SEES to match."
     )
-    print(f"  known A4 gap, unchanged: {sorted(missing)} is CI-only")
+    print(f"  editor/CI gap: {sorted(missing) or 'none'}")
+
+    print(f"  last publish for main.go: {sorted(still_there)}")
+    assert "golangci-lint" in still_there, (
+        f"golangci-lint reached Problems and was then erased: the final publish "
+        f"for main.go was {sorted(still_there)}. Something republished without "
+        "merging the package findings back in."
+    )
+    assert still_there - {"golangci-lint"}, (
+        f"only golangci-lint survived: the final publish for main.go was "
+        f"{sorted(still_there)}, so package lint erased what gopls and the "
+        "per-file linters had already put there."
+    )
+    print("  every publisher's findings are in it, so none of them erases another")
 
 
 if not shutil.which("go"):

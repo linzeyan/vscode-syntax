@@ -875,39 +875,49 @@ pub fn golangci_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
     roots.dedup();
     let mut out = Vec::new();
     for root in roots {
-        let output = Command::new(cmd)
-            .args([
-                "run",
-                "--output.json.path",
-                "stdout",
-                "--path-mode",
-                "abs",
-                "./...",
-            ])
-            .current_dir(&root)
-            .stdout(Stdio::piped())
-            // Refusals ("parallel golangci-lint is running", bad config, a
-            // module that will not build) only show up on stderr; without it
-            // the failure reads as "empty output" and says nothing useful.
-            .stderr(Stdio::piped())
-            .output()
-            .with_context(|| format!("running {}", cmd.display()))?;
-        // stdout carries the JSON document followed by a text summary; take
-        // only the first JSON value.
-        let parsed: GolangciOutput = serde_json::Deserializer::from_slice(&output.stdout)
-            .into_iter()
-            .next()
-            .with_context(|| {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                match stderr.lines().find(|l| !l.trim().is_empty()) {
-                    Some(line) => format!("golangci-lint produced no output: {line}"),
-                    None => "golangci-lint produced no output".to_string(),
-                }
-            })?
-            .context("parsing golangci-lint output")?;
-        out.extend(golangci_issues(parsed, &root));
+        out.extend(golangci_module(cmd, &root)?);
     }
     Ok(out)
+}
+
+/// One module's findings.
+///
+/// Split out for the daemon, which already knows the root from the file that
+/// was saved. Going back through a file list only to have it mapped to the same
+/// root again is a second place the grouping could drift, and the editor and CI
+/// disagreeing about which files belong together is exactly what A4 forbids.
+pub fn golangci_module(cmd: &Path, root: &Path) -> Result<Vec<FileIssue>> {
+    let output = Command::new(cmd)
+        .args([
+            "run",
+            "--output.json.path",
+            "stdout",
+            "--path-mode",
+            "abs",
+            "./...",
+        ])
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        // Refusals ("parallel golangci-lint is running", bad config, a
+        // module that will not build) only show up on stderr; without it
+        // the failure reads as "empty output" and says nothing useful.
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("running {}", cmd.display()))?;
+    // stdout carries the JSON document followed by a text summary; take
+    // only the first JSON value.
+    let parsed: GolangciOutput = serde_json::Deserializer::from_slice(&output.stdout)
+        .into_iter()
+        .next()
+        .with_context(|| {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            match stderr.lines().find(|l| !l.trim().is_empty()) {
+                Some(line) => format!("golangci-lint produced no output: {line}"),
+                None => "golangci-lint produced no output".to_string(),
+            }
+        })?
+        .context("parsing golangci-lint output")?;
+    Ok(golangci_issues(parsed, root))
 }
 
 /// Kept separate from the run so the shape can be tested: `SuggestedFixes` and
@@ -953,7 +963,12 @@ fn golangci_issues(parsed: GolangciOutput, root: &Path) -> Vec<FileIssue> {
         .collect()
 }
 
-fn go_module_root(file: &Path) -> Option<PathBuf> {
+/// The directory whose `go.mod` governs `file`.
+///
+/// Public because the daemon needs the same answer the batch run uses: it lints
+/// a whole module at a time, and "which module" has to mean the same thing on
+/// both sides or the editor and `poly check` group files differently (A4).
+pub fn go_module_root(file: &Path) -> Option<PathBuf> {
     let start = std::path::absolute(file).ok()?;
     let mut dir = start.parent()?;
     loop {
