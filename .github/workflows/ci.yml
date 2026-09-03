@@ -223,6 +223,16 @@ jobs:
           terraform-ls version
           lua-language-server --version
           python tools/lsp-proxy-probe.py cli/target/release/poly
+      # The other half of Go, and the half no gate touched until now: gofumpt
+      # and golangci-lint are poly's own to drive, and the Rust tests only ever
+      # covered the path where they do not run. `go` is already on the runner
+      # for the gopls install above, and gofmt comes with it -- which the fmt
+      # check needs, because telling gofumpt from gofmt is the point of it.
+      - name: Go support acceptance
+        run: |
+          go version
+          gofmt --help >/dev/null
+          python tools/go-acceptance.py cli/target/release/poly
       # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
       # two commands the README tells users to put in their CI. This was a
       # documented gate that was never actually wired, so every dogfood run was

@@ -59,6 +59,12 @@ smoke: build ## LSP handshake and formatting over stdio
 probe: build ## Language server proxy, against whichever servers are installed
 	python3 tools/lsp-proxy-probe.py $(POLY)
 
+# Its own target rather than more of `probe`: this one is about gofumpt and
+# golangci-lint, which is `poly check`'s side of Go and not the proxy's, and it
+# needs a Go toolchain rather than a language server.
+go: build ## poly's Go support end to end: gofumpt, golangci-lint, editor vs CI
+	python3 tools/go-acceptance.py $(POLY)
+
 # typecheck first, same as CI: the extension host takes half a minute to boot,
 # and a type error does not need it.
 e2e: ## Typecheck and run the extension tests in a real extension host
@@ -100,7 +106,7 @@ version: build ## Check every version string agrees, binary included
 # The order is ci.yml's, so a failure here fails at the same point CI would.
 # The list is ci.yml's too: this claims a green run means the push is already
 # checked the way CI checks it, and a gate missing from here makes that a lie.
-gates: lint test notices pins smoke probe dogfood version grammars e2e editor ## Everything above, in CI's order
+gates: lint test notices pins smoke probe go dogfood version grammars e2e editor ## Everything above, in CI's order
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0

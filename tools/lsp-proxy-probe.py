@@ -216,6 +216,10 @@ class Case:
     # that list too. `None` means "declares commands, none written down", which
     # is buf: poly pins it and its list is not measured on this machine.
     command: str = None
+    # A substring that must appear in some inlay hint label. Only gopls has one
+    # written down: it is the server whose hints this probe can turn on (see
+    # `editor_settings`), and the one whose hints Ricky went looking for.
+    inlay_hint: str = None
     edit: tuple = field(default=("world", "there"))
 
 
@@ -267,6 +271,10 @@ CASES = [
         # routed at all: gopls answers the code action with this command
         # and no edit.
         command="gopls.extract_to_new_file",
+        # `unused := 1` is an untyped assignment, which is what
+        # assignVariableTypes annotates -- the one thing a reader of unfamiliar
+        # Go cannot get from the text in front of them.
+        inlay_hint="int",
     ),
     Case(
         language="rust",
@@ -426,6 +434,25 @@ def recv():
     return json.loads(proc.stdout.read(int(headers["content-length"])))
 
 
+# What an editor carrying the settings poly's README asks for would answer.
+#
+# gopls ships every inlay hint off and reads the switches from the client, so a
+# probe that answered `null` was measuring a server it had just told to stay
+# quiet -- and an empty hint list looks identical to a hint request that was
+# never routed. That is why the inlay check below could not exist before this
+# did. Only the `gopls` section is answered, because it is the only server here
+# that asks for one.
+GOPLS_SETTINGS = {"hints": {"assignVariableTypes": True, "parameterNames": True}}
+
+
+def editor_settings(params):
+    """One answer per requested section, which is the shape the request takes."""
+    return [
+        GOPLS_SETTINGS if item.get("section") == "gopls" else None
+        for item in params.get("items") or [{}]
+    ]
+
+
 def pump(want_id=None, want_method=None, limit=2000):
     """Read until the wanted response or notification, answering server requests.
 
@@ -443,10 +470,15 @@ def pump(want_id=None, want_method=None, limit=2000):
         if want_method is not None and msg.get("method") == want_method:
             return msg, INBOX[start:]
         if "method" in msg and "id" in msg:
-            # A request from the server side. Answer everything the same way:
-            # null is a legal answer to registerCapability and to a
-            # configuration request for settings the editor does not have.
-            result = [None] if msg["method"] == "workspace/configuration" else None
+            # A request from the server side. `null` is a legal answer to
+            # registerCapability and to a configuration request for settings
+            # the editor does not have -- but not to every configuration
+            # request, see `editor_settings`.
+            result = (
+                editor_settings(msg["params"])
+                if msg["method"] == "workspace/configuration"
+                else None
+            )
             send({"jsonrpc": "2.0", "id": msg["id"], "result": result})
     raise AssertionError(f"gave up waiting; last messages: {INBOX[-5:]}")
 
@@ -787,10 +819,39 @@ def run(case, logs=True, graceful=True):
     # Nothing else here exercises that branch, and getting it wrong means the
     # request falls through to poly, which has no answer for it.
     #
-    # Inlay hints get no such check on purpose. gopls ships them off and turns
-    # them on from `workspace/configuration`, which this probe answers with
-    # `[None]` -- so an empty list is the correct reply and asserting on it
-    # would be the vacuous check this file keeps having to delete.
+    # Inlay hints, for a server whose hints this probe can actually turn on.
+    # Routing them was never the hard part -- proving they carry anything was,
+    # and it needed `editor_settings` first. The label is asserted rather than
+    # the count: a hint list of the right length saying nothing useful is the
+    # exact failure a count would wave through.
+    if case.inlay_hint:
+        lines = case.files[case.entry].split("\n")
+        hints = settle(
+            13,
+            "textDocument/inlayHint",
+            {
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": len(lines) - 1, "character": 0},
+                },
+            },
+            bool,
+            "inlay hints",
+        )
+        labels = [
+            hint["label"]
+            if isinstance(hint["label"], str)
+            else "".join(part["value"] for part in hint["label"])
+            for hint in hints
+        ]
+        assert any(case.inlay_hint in label for label in labels), (
+            f"no hint carried {case.inlay_hint!r}: {labels}"
+        )
+        print(f"  {len(labels)} inlay hint(s), including {case.inlay_hint!r}")
+    elif "inlayHint" in case.registers:
+        print(f"  {case.server} registers inlayHint; no label written down to check")
+
     if "prepareCallHierarchy" in case.registers and case.unindexed:
         prepared = ask(11, "textDocument/prepareCallHierarchy", at_call)
         assert "result" in prepared, f"prepareCallHierarchy was not routed: {prepared}"
@@ -1124,6 +1185,206 @@ def run(case, logs=True, graceful=True):
     shutil.rmtree(root, ignore_errors=True)
 
 
+# ── Two Go modules in one window ─────────────────────────────────────────────
+#
+# The scenario the `Poly: Create go.work` command exists for, and the one thing
+# about Go that no other check here touches: every case above is one module in
+# one folder, which is the shape that always worked.
+
+GO_LIB = """package liba
+
+func Hello() string {
+\treturn "hi"
+}
+
+// Greeting refers to Hello from inside the module. It is what makes the
+// negative half of the check below mean anything: without an in-module
+// reference to wait for, "gopls found nothing across the boundary" and "gopls
+// has not finished loading" are the same answer, and the probe would be
+// asserting the second while believing the first.
+func Greeting() string {
+\treturn Hello()
+}
+"""
+
+GO_APP = """package main
+
+import (
+\t"fmt"
+
+\t"example.com/liba"
+)
+
+func main() {
+\tfmt.Println(liba.Hello())
+}
+"""
+
+# `replace` rather than a real version, so nothing here needs the network.
+GO_MODULES = {
+    "liba/go.mod": "module example.com/liba\n\ngo 1.21\n",
+    "liba/lib.go": GO_LIB,
+    "appb/go.mod": (
+        "module example.com/appb\n\ngo 1.21\n\n"
+        "require example.com/liba v0.0.0\n\n"
+        "replace example.com/liba => ../liba\n"
+    ),
+    "appb/main.go": GO_APP,
+}
+
+
+def referrers_to_hello(root, label):
+    """Which files poly reports as referring to `liba.Hello`, relative to root.
+
+    A whole poly session per call. `init_params` is captured at initialize and
+    the go.work appears between the two calls, so reusing one would be asking
+    gopls about a workspace it was never told about -- which is also why the
+    editor command restarts the client rather than waiting for a watcher.
+
+    Two workspace folders and neither of them the root: that is what VSCode
+    sends when someone opens two projects in one window, and it is the reason
+    this is worth measuring at all. The go.work ends up in a directory the
+    editor never mentions.
+    """
+    global proc, INBOX, STDERR
+    INBOX, STDERR = [], []
+    folders = [
+        {"uri": f"file://{root}/liba", "name": "liba"},
+        {"uri": f"file://{root}/appb", "name": "appb"},
+    ]
+    proc = subprocess.Popen(
+        [BIN, "lsp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    threading.Thread(target=watch, args=(proc.stderr,), daemon=True).start()
+    send(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "processId": None,
+                "rootUri": folders[0]["uri"],
+                "workspaceFolders": folders,
+                "initializationOptions": {
+                    "languageServers": True,
+                    "languageServerLogs": True,
+                },
+                "capabilities": {
+                    "textDocument": {
+                        "synchronization": {"dynamicRegistration": True},
+                        "references": {},
+                    },
+                    "workspace": {"configuration": True, "didChangeConfiguration": {}},
+                },
+            },
+        }
+    )
+    pump(want_id=1)
+    send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+
+    # Both opened, because a server only answers about documents it has been
+    # given and the question spans both modules.
+    for name in ("liba/lib.go", "appb/main.go"):
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": f"file://{root}/{name}",
+                        "languageId": "go",
+                        "version": 1,
+                        "text": GO_MODULES[name],
+                    }
+                },
+            }
+        )
+    pump(want_method="client/registerCapability")
+
+    # `func Hello() string {` is line 2, and the name starts at column 5.
+    found = settle(
+        50,
+        "textDocument/references",
+        {
+            "textDocument": {"uri": f"file://{root}/liba/lib.go"},
+            "position": {"line": 2, "character": 5},
+            "context": {"includeDeclaration": False},
+        },
+        bool,
+        f"references ({label})",
+    )
+    files = sorted(
+        {os.path.relpath(location["uri"][len("file://") :], root) for location in found}
+    )
+    send({"jsonrpc": "2.0", "id": 99, "method": "shutdown", "params": None})
+    pump(want_id=99)
+    send({"jsonrpc": "2.0", "method": "exit", "params": None})
+    try:
+        proc.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise AssertionError("poly did not exit")
+    return files
+
+
+def cross_module_go():
+    """Do references cross a module boundary, and does it take a go.work?
+
+    Both halves are asserted. The negative one is not a formality: the whole
+    `Poly: Create go.work` command rests on it, so if gopls ever starts
+    crossing without one, that command stops being load-bearing and this should
+    say so rather than keep passing. Same policy as the `unsupported` field --
+    write the measurement down, and fail when it stops being true.
+    """
+    if not (shutil.which("gopls") and shutil.which("go")):
+        print("SKIPPED cross-module Go: needs gopls and go on PATH")
+        return
+    root = tempfile.mkdtemp(prefix="poly-proxy-gowork-")
+    for name, text in GO_MODULES.items():
+        path = os.path.join(root, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+
+    print("go, two modules in one window:")
+    without = referrers_to_hello(root, "no go.work")
+    assert any(f.startswith("liba/") for f in without), (
+        f"gopls did not even find the in-module reference; nothing here is "
+        f"measuring what it claims to: {without}"
+    )
+    crossed = [f for f in without if f.startswith("appb/")]
+    assert not crossed, (
+        "gopls crossed a module boundary with no go.work — it got better, and "
+        f"`Poly: Create go.work` may no longer be needed: {crossed}"
+    )
+    print(f"  without go.work, `replace` alone: {without}")
+
+    # check=False so the assertion below can quote go's own complaint; a
+    # CalledProcessError here would say only that it failed.
+    written = subprocess.run(
+        ["go", "work", "init", "./liba", "./appb"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert written.returncode == 0, f"go work init failed: {written.stderr}"
+    # In the common parent, which is neither workspace folder: gopls walks up
+    # from the module directory to find it, and the editor command relies on
+    # that -- the directory it writes into is usually outside everything open.
+    assert os.path.exists(os.path.join(root, "go.work"))
+
+    with_work = referrers_to_hello(root, "go.work")
+    assert any(f.startswith("appb/") for f in with_work), (
+        f"a go.work did not make the reference cross: {with_work}"
+    )
+    print(f"  with a go.work one directory up: {with_work}")
+    shutil.rmtree(root, ignore_errors=True)
+
+
 ran = []
 for probe in CASES:
     # A managed server is poly's to produce, so there is nothing to skip on:
@@ -1180,6 +1441,8 @@ if rude:
     print(f"  {rude.server} was shut down properly, not just abandoned")
 elif ran:
     print("SKIPPED rude-exit check: needs rust-analyzer, the server that reports it")
+
+cross_module_go()
 
 if not ran:
     print("PROXY PROBE SKIPPED: no language server on PATH")
