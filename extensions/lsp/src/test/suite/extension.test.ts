@@ -126,13 +126,9 @@ suite("poly-lsp in a real editor", () => {
   // outside every folder the window has open.
   // The lens is the only entry point most people will ever see for
   // `poly deadcode`, and the thing that breaks it is invisible from a unit
-  // test: a build constraint and a license header push the package clause off
-  // line 0, and a lens anchored to the wrong line silently stops rendering.
-  test("every Go file gets an analyze-dead-code lens on its package clause", async () => {
-    const uri = writeFile(
-      "buildtagged.go",
-      "//go:build linux\n\n// Copyright somebody.\n\npackage main\n\nfunc main() {}\n",
-    );
+  // test: headers push the first real line well off line 0, and a lens
+  // anchored to the wrong line silently stops rendering.
+  async function deadCodeLenses(uri: vscode.Uri): Promise<vscode.CodeLens[]> {
     await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
     const lenses = await eventually("the dead code lens", async () => {
       const found = await vscode.commands.executeCommand<vscode.CodeLens[]>(
@@ -142,9 +138,60 @@ suite("poly-lsp in a real editor", () => {
       );
       return found && found.length > 0 ? found : undefined;
     });
-    const mine = lenses.filter((lens) => lens.command?.command === "poly.analyzeDeadCode");
+    return lenses.filter((lens) => lens.command?.command === "poly.analyzeDeadCode");
+  }
+
+  test("a Go file's lens lands past its build tag and licence header", async () => {
+    const mine = await deadCodeLenses(
+      writeFile(
+        "buildtagged.go",
+        "//go:build linux\n\n// Copyright somebody.\n\npackage main\n\nfunc main() {}\n",
+      ),
+    );
     assert.strictEqual(mine.length, 1, "expected exactly one dead code lens");
     assert.strictEqual(mine[0].range.start.line, 4, "lens is not on the package clause");
+  });
+
+  // Every language `poly deadcode` can answer about gets the same lens, and
+  // each one hides its first real line behind something different: a shebang
+  // in Python, a block comment in TypeScript.
+  test("a Python file's lens lands past its shebang and header comment", async () => {
+    const mine = await deadCodeLenses(
+      writeFile(
+        "headed.py",
+        "#!/usr/bin/env python3\n# Copyright somebody.\n\nimport os\n\nprint(os.name)\n",
+      ),
+    );
+    assert.strictEqual(mine.length, 1, "expected exactly one dead code lens");
+    assert.strictEqual(mine[0].range.start.line, 3, "lens is not on the first statement");
+  });
+
+  test("a TypeScript file's lens lands past its block comment", async () => {
+    const mine = await deadCodeLenses(
+      writeFile(
+        "headed.ts",
+        "/*\n * Copyright somebody.\n */\n\nexport const answer = 42;\n",
+      ),
+    );
+    assert.strictEqual(mine.length, 1, "expected exactly one dead code lens");
+    assert.strictEqual(mine[0].range.start.line, 4, "lens is not on the first statement");
+  });
+
+  // Rust has no whole-program dead code analysis to dispatch to, so the lens
+  // must not appear: an entry point to a command that answers "nothing to
+  // analyse" is worse than no entry point.
+  test("a language with no dead code analysis gets no lens", async () => {
+    const uri = writeFile("plain.rs", "pub fn f() {}\n");
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    const found = await vscode.commands.executeCommand<vscode.CodeLens[]>(
+      "vscode.executeCodeLensProvider",
+      uri,
+      10,
+    );
+    const mine = (found ?? []).filter(
+      (lens) => lens.command?.command === "poly.analyzeDeadCode",
+    );
+    assert.deepStrictEqual(mine, [], "Rust has no deadcode tool to offer");
   });
 
   test("a go.work goes to the deepest directory covering every module", () => {

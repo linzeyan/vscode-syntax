@@ -97,6 +97,19 @@ fn prettier_config_signal(dir: &Path) -> bool {
         .is_some_and(|pkg| pkg.get("prettier").is_some())
 }
 
+/// Project-local knip, for `poly deadcode`.
+///
+/// No config guard, unlike every tool above it. The guard exists because those
+/// run on save, and formatting someone's files with a tool their CI never
+/// chose is worse than not formatting them (A3). `poly deadcode` is a command
+/// somebody typed, about a question only knip can answer here, and it works
+/// without a config -- knip reads package.json's own entry points. Requiring
+/// a knip.json would mean the answer is "no" for every project that never
+/// needed one.
+pub fn knip(start: &Path) -> Option<PathBuf> {
+    project_tool(start, "knip", |_| true)
+}
+
 /// Project-local eslint: the binary plus a flat config or legacy .eslintrc*.
 pub fn eslint(start: &Path) -> Option<PathBuf> {
     const CONFIGS: &[&str] = &[

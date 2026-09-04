@@ -92,7 +92,7 @@
       },
       {
         "command": "poly.analyzeDeadCode",
-        "title": "Poly: Analyze Dead Code (Go)"
+        "title": "Poly: Analyze Dead Code"
       },
       {
         "command": "poly.minifyJson",
@@ -139,7 +139,7 @@
         "poly.deadCodeCodeLens.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show an `analyze dead code` link above the package clause of every Go file. Clicking it runs `poly deadcode` in a terminal over that file's module, or over the whole go.work build list when there is one. Nothing runs until it is clicked: whole-program reachability costs a build, so it is asked rather than watched."
+          "description": "Show an `analyze dead code` link on the first line of code in every file poly can answer about: Go (golang.org/x/tools/cmd/deadcode), TypeScript and JavaScript (knip), Python (vulture). Clicking it runs `poly deadcode` in a terminal over that file's whole project — the go.work build list, the npm project, the Python project. Nothing runs until it is clicked: whole-program reachability costs a build, so it is asked rather than watched."
         },
         "poly.languageServers": {
           "type": "boolean",

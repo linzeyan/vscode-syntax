@@ -274,7 +274,7 @@ poly check --strict <paths...> # 工具缺席時視為錯誤，而不是跳過�
 poly fmt --changed             # 只處理 git 變更的檔案（pre-commit 用）
 poly tools list                # 工具解析狀態
 poly tools install [tool...]   # 預先抓好受管工具（離線環境先在有網路的機器跑）
-poly deadcode [路徑]           # 從 main 走不到的 Go 函式（見下）
+poly deadcode [路徑]           # 進入點走不到的程式碼（見下）
 poly lsp                       # 給編輯器用的 LSP daemon
 poly --help                    # 完整說明
 poly --version                 # 版本（確認 PATH 上是哪一支）
@@ -290,30 +290,50 @@ poly --version                 # 版本（確認 PATH 上是哪一支）
 說一聲然後跳過那些檔案，exit code 不受影響。這對「不是每台機器都裝了每套
 toolchain」是對的預設，但 CI 需要的是相反的答案——`--strict` 就是那個開關。
 
-### `poly deadcode`：從 `main` 走不到的 Go 函式
+### `poly deadcode`：進入點走不到的程式碼
 
-跟 `poly check` 分開，因為它回答的是另一個問題。golangci-lint 的 `unused` 問「這個
-package 裡有沒有人提到它」，所以**匯出的函式對它永遠不算 unused**——package 外可能有
-人用。`deadcode` 從所有進入點建 call graph，問「有沒有任何執行路徑會跑到它」，那才是
-刪掉一段程式碼之前要問的問題。代價是它要花一次 build 的時間，而且對 library 來說每個
-匯出的 API 都會是「死的」（呼叫者在別人的 repo 裡）——所以它是你去問的，不是存檔時自
-動跑的，也不進 CI gate。
+跟 `poly check` 分開，因為它回答的是另一個問題。單檔 linter 問「這個 package／模組裡
+有沒有人提到它」，所以**匯出的東西永遠不算 unused**——外面可能有人用。這個命令問的是
+「從進入點有沒有任何路徑會跑到它」，那才是刪掉一段程式碼之前要問的問題。代價是它要花
+一次 build 的時間，而且對 library 來說每個匯出的 API 都會是「死的」（呼叫者在別人的
+repo 裡）——所以它是你去問的，不是存檔時自動跑的，也不進 CI gate。
 
-**跨 module 靠 `go.work`**：有 go.work 的話分析從 workspace 根開始，`liba` 裡只被 `appb`
-呼叫的函式就是活的；沒有 go.work，`liba` 根本不在 build list 裡。這是 `Poly: Create
-go.work for the Open Go Modules` 那個命令的第二個用途。
+**四個語言，三支工具，poly 一支都不自己寫**（R7／A6）：
 
-工具本身跟著 Go toolchain 走，poly 不代裝：
+| 語言           | 工具                              | 範圍怎麼決定                                     |
+| -------------- | --------------------------------- | ------------------------------------------------ |
+| Go             | `golang.org/x/tools/cmd/deadcode` | 往上找到 `go.work` 就用它，否則最近的 `go.mod`   |
+| TypeScript／JS | knip                              | 那個 knip 旁邊的 `package.json`                  |
+| Python         | vulture                           | 最近的 `pyproject.toml`／`setup.py`／`setup.cfg` |
+
+給一個檔案就只跑它那個語言的；給一個目錄，則凡是往上找得到標記的都跑——monorepo 裡
+只回答三個語言中的一個，是沒有人要的子集。
+
+**Rust 沒有，這是誠實的空白**：rustc 自己的 `dead_code` 已經隨 `cargo clippy` 每次存檔
+就到了，而跨 crate 的那一問沒有主流工具在回答。
+
+**Go 的跨 module 靠 `go.work`**：有 go.work 的話分析從 workspace 根開始，`liba` 裡只被
+`appb` 呼叫的函式就是活的；沒有 go.work，`liba` 根本不在 build list 裡。這是
+`Poly: Create go.work for the Open Go Modules` 那個命令的第二個用途。
+
+三支工具都跟著各自的 toolchain 走，poly 不代裝：
 
 ```sh
-go install golang.org/x/tools/cmd/deadcode@latest
-poly deadcode .            # 目前 module，或它上面那個 go.work 的全部 module
+go install golang.org/x/tools/cmd/deadcode@latest   # Go
+npm install --save-dev knip                          # TypeScript／JavaScript
+pip install vulture                                  # Python
+poly deadcode .
 ```
 
-編輯器裡是 `Poly: Analyze Dead Code (Go)`，在終端跑同一行；每個 Go 檔的 `package` 那行
-上面也會有一條 `analyze dead code` lens（`poly.deadCodeCodeLens.enabled` 可關）。一個檔
-一條，不是一個函式一條——分析本來就是整個 program 的，一個函式一條只是同一個答案的 N 個
-入口。
+vulture 是唯一需要 poly 幫忙的：它自己走目錄，而且不知道 venv 是什麼——直接指給它一個
+專案根目錄，會拿到 pip 內建那份 vendored 程式碼的幾千條回報。poly 改成把**自己走出來的
+檔案清單**交給它（同一套 `.gitignore` 與 `[lint] exclude`，跟 `poly check` 一致），再加
+一層 `--exclude` 擋掉 venv／site-packages。
+
+編輯器裡是 `Poly: Analyze Dead Code`，在終端跑同一行；上面這些語言的每個檔案，**第一行
+程式碼**上面也會有一條 `analyze dead code` lens（`poly.deadCodeCodeLens.enabled` 可關）。
+不是第 0 行——shebang、版權標頭、`//go:build` 都在那上面。一個檔一條，不是一個函式一條
+——分析本來就是整個 program 的，一個函式一條只是同一個答案的 N 個入口。
 
 ### 什麼算失敗：`--fail-on`
 

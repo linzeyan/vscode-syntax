@@ -67,7 +67,7 @@ usage:
   poly check [paths...] [flags]         run the linters
   poly minify [paths...] [flags]        strip JSON to one line, in place
   poly tools <list|install> [tool...]   inspect or pre-fetch external tools
-  poly deadcode [path]                  Go funcs no path from main reaches
+  poly deadcode [path]                  code no entry point reaches (go, js/ts, python)
   poly lsp                              language server for the editor
   poly bench <file> [iters]             time the formatter on one file
 
@@ -102,7 +102,7 @@ language: POLY_LANG=en or POLY_LANG=zh-TW (defaults to the system locale).
   poly check [路徑...] [旗標]           跑 linter
   poly minify [路徑...] [旗標]          把 JSON 壓成一行，就地改寫
   poly tools <list|install> [工具...]   查看或預先抓取外部工具
-  poly deadcode [路徑]                  從 main 走不到的 Go 函式
+  poly deadcode [路徑]                  進入點走不到的程式碼（go、js/ts、python）
   poly lsp                              給編輯器用的 language server
   poly bench <檔案> [次數]              量單一檔案的格式化耗時
 

@@ -773,20 +773,139 @@ fn go_analysis_root(from: &Path) -> Option<PathBuf> {
     module
 }
 
-/// Go functions nothing reaches, for the module the path is in.
+/// The project a JS/TS analysis would run over: whichever directory holds the
+/// knip that will answer.
+///
+/// The tool's own location is the root because that is how npm projects are
+/// laid out -- `node_modules/.bin` sits next to the package.json declaring the
+/// entry points knip starts from. A nearer package.json in a monorepo package
+/// has neither.
+fn js_analysis_root(from: &Path) -> Option<PathBuf> {
+    poly_tools::project::knip(from)
+        .and_then(|bin| poly_tools::project::root_of(&bin).map(Path::to_path_buf))
+}
+
+/// The project a Python analysis would run over.
+///
+/// A marker file and not "the directory has .py in it": vulture takes any path
+/// and will happily report on a lone script, but `poly deadcode .` in a
+/// repository with no Python must find nothing to do rather than walk it.
+fn python_analysis_root(from: &Path) -> Option<PathBuf> {
+    const MARKERS: &[&str] = &["pyproject.toml", "setup.py", "setup.cfg"];
+    let mut here = Some(from);
+    while let Some(dir) = here {
+        if MARKERS.iter().any(|name| dir.join(name).is_file()) {
+            return Some(dir.to_path_buf());
+        }
+        here = dir.parent();
+    }
+    None
+}
+
+/// The project's own .py files, as `poly check` would find them.
+///
+/// The same walk and the same excludes, so "which files are this project's"
+/// has one answer. vulture has no notion of a virtualenv and would otherwise
+/// report on every module under `venv/`.
+fn python_sources(root: &Path) -> Result<Vec<PathBuf>> {
+    let walk = Walk {
+        ignores: Ignores::Respect,
+        hidden: Hidden::Skip,
+    };
+    Ok(
+        batch::resolve_targets(&[root.to_path_buf()], Scope::Lint, walk, |_| true)?
+            .into_iter()
+            .filter(|(_, language, _)| language == "python")
+            .map(|(path, _, _)| path)
+            .collect(),
+    )
+}
+
+/// One whole-program analysis to run, and where.
+struct DeadCodeJob {
+    /// The name `[tools]` resolves it under, and the name in the report.
+    tool: &'static str,
+    root: PathBuf,
+    /// What to say when the tool is not installed. Every one of these comes
+    /// from the language's own toolchain, so the instruction is that
+    /// toolchain's, not a poly download.
+    install: &'static str,
+}
+
+/// Which analyses apply to `target`.
+///
+/// A file names its own language, so exactly one applies. A directory can hold
+/// several projects, and running each is the same thing `poly check` does with
+/// its per-language linters -- answering about one of three languages in a
+/// monorepo would be a subset nobody asked for.
+///
+/// Every root is found by walking *up*. A marker below the target is not found,
+/// which is the same limitation `go_analysis_root` always had: the question is
+/// "which project is this path part of", and a project below it is a different
+/// one.
+fn dead_code_jobs(target: &Path, config: &poly_core::Config) -> Vec<DeadCodeJob> {
+    const GO: &str = "It ships with the Go toolchain's own tools:\n  \
+                      go install golang.org/x/tools/cmd/deadcode@latest";
+    const KNIP: &str = "It is a project dependency:\n  npm install --save-dev knip";
+    const VULTURE: &str = "Install it into the project's environment:\n  pip install vulture";
+
+    let language = if target.is_dir() {
+        None
+    } else {
+        config.language(target)
+    };
+    let wanted = |candidates: &[&str]| match &language {
+        Some(found) => candidates.contains(&found.as_str()),
+        None => true,
+    };
+
+    let mut jobs = Vec::new();
+    if wanted(&["go"]) {
+        if let Some(root) = go_analysis_root(target) {
+            jobs.push(DeadCodeJob {
+                tool: "deadcode",
+                root,
+                install: GO,
+            });
+        }
+    }
+    if wanted(&["typescript", "javascript"]) {
+        if let Some(root) = js_analysis_root(target) {
+            jobs.push(DeadCodeJob {
+                tool: "knip",
+                root,
+                install: KNIP,
+            });
+        }
+    }
+    if wanted(&["python"]) {
+        if let Some(root) = python_analysis_root(target) {
+            jobs.push(DeadCodeJob {
+                tool: "vulture",
+                root,
+                install: VULTURE,
+            });
+        }
+    }
+    jobs
+}
+
+/// Code nothing reaches, for whichever projects the path belongs to.
 ///
 /// Its own subcommand rather than another linter in `poly check`, and the line
 /// between them is what each question is worth being wrong about. `unused` asks
 /// whether anything in the package names a symbol, which is cheap and true or
-/// false on its own; deadcode builds the call graph from every entry point and
-/// asks whether anything runs it, which takes as long as a build and is
-/// *false* for every exported function in a library — nothing in the module
+/// false on its own; these tools build the reachability graph from every entry
+/// point and ask whether anything runs it, which takes as long as a build and
+/// is *false* for every exported symbol in a library — nothing in the project
 /// calls it, and the callers are somebody else's repo. A gate that fails on
 /// that would be a gate every library turns off, so this is a thing you run.
 ///
-/// Not managed either: there is no released binary to pin, it comes from the
-/// same golang.org/x/tools the project's own toolchain provides, and the
-/// version that matches the toolchain is the one to use.
+/// Three tools, one question. Go has `golang.org/x/tools/cmd/deadcode`, JS and
+/// TS have knip, Python has vulture; poly runs whichever the path calls for and
+/// implements none of them (R7, A6). None is managed: each has to match the
+/// toolchain that builds the project, and a pinned download would be the wrong
+/// version of the right tool.
 fn cmd_deadcode(rest: &[String]) -> Result<i32> {
     let target = rest
         .iter()
@@ -797,24 +916,50 @@ fn cmd_deadcode(rest: &[String]) -> Result<i32> {
         .with_context(|| format!("{}", target.display()))?;
     let config =
         poly_core::Config::discover(&target).unwrap_or_else(|_| poly_core::Config::empty());
-    // A `[tools]` entry decides first, exactly as it does for a language
-    // server, so a project pinning its own build is honoured. Otherwise PATH.
-    let resolved = if config.tools.contains_key("deadcode") {
-        poly_tools::resolve("deadcode", &config, false)
-            .command()
-            .map(Path::to_path_buf)
-    } else {
-        poly_tools::find_on_path("deadcode")
-    };
-    let Some(cmd) = resolved else {
+    let jobs = dead_code_jobs(&target, &config);
+    if jobs.is_empty() {
         eprintln!(
-            "deadcode is not on PATH. It ships with the Go toolchain's own tools:\n  \
-             go install golang.org/x/tools/cmd/deadcode@latest"
+            "nothing to analyse at {}: no go.mod or go.work above it, no knip in a \
+             node_modules/.bin above it, no pyproject.toml, setup.py or setup.cfg above it",
+            target.display()
         );
         return Ok(2);
-    };
-    let root = go_analysis_root(&target).unwrap_or(target);
-    let mut issues = poly_tools::run::deadcode_module(&cmd, &root)?;
+    }
+
+    let mut issues = Vec::new();
+    let mut missing: Vec<String> = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
+    let mut ran = 0usize;
+    for job in &jobs {
+        let Some(cmd) = dead_code_tool(job, &config, &target) else {
+            eprintln!("{} is not installed. {}", job.tool, job.install);
+            missing.push(job.tool.to_string());
+            continue;
+        };
+        // One tool failing is not a reason to throw away another's answer:
+        // a monorepo where npm install has not been run still has a Go module
+        // worth asking about. Same policy as `poly check`.
+        let found = match job.tool {
+            "deadcode" => poly_tools::run::deadcode_module(&cmd, &job.root),
+            "knip" => poly_tools::run::knip_project(&cmd, &job.root),
+            // The only one poly has to hand a file list to; see
+            // `vulture_files` for what pointing it at a directory costs.
+            "vulture" => python_sources(&job.root)
+                .and_then(|files| poly_tools::run::vulture_files(&cmd, &files)),
+            other => unreachable!("{other} has no runner"),
+        };
+        match found {
+            Ok(found) => {
+                issues.extend(found);
+                ran += 1;
+            }
+            Err(err) => {
+                eprintln!("{}: failed — {err:#}", job.tool);
+                failed.push(job.tool.to_string());
+            }
+        }
+    }
+
     if let Ok(base) = std::env::current_dir().and_then(|d| d.canonicalize()) {
         let mut configs = poly_core::ConfigCache::new();
         // The same two filters `poly check` applies, so a symbol silenced in
@@ -838,13 +983,35 @@ fn cmd_deadcode(rest: &[String]) -> Result<i32> {
     let report = report::Check {
         issues: &issues,
         fail_on: FailOn::Severity(poly_core::diag::Severity::Warning),
-        ran: 1,
-        missing: &[],
-        failed: &[],
+        ran,
+        missing: &missing,
+        failed: &failed,
     };
     print!("{}", report.render(Format::Text, false));
-    eprintln!("deadcode: {} unreachable func(s)", issues.len());
+    // "could not answer" is not "nothing to report", so a tool that was
+    // missing or broke outranks a clean run.
+    if ran == 0 || !failed.is_empty() {
+        return Ok(2);
+    }
     Ok(if issues.is_empty() { 0 } else { 1 })
+}
+
+/// The binary for one job: `[tools]` first, then wherever that tool lives.
+///
+/// knip is looked for in the project rather than on PATH because that is where
+/// npm puts it; the other two are toolchain binaries and live on PATH.
+fn dead_code_tool(job: &DeadCodeJob, config: &poly_core::Config, target: &Path) -> Option<PathBuf> {
+    // A `[tools]` entry decides first, exactly as it does for a language
+    // server, so a project pinning its own build is honoured.
+    if config.tools.contains_key(job.tool) {
+        return poly_tools::resolve(job.tool, config, false)
+            .command()
+            .map(Path::to_path_buf);
+    }
+    match job.tool {
+        "knip" => poly_tools::project::knip(target),
+        other => poly_tools::find_on_path(other),
+    }
 }
 
 /// Was this tool one `poly tools install` was ever going to fetch here?

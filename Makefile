@@ -77,6 +77,11 @@ tf: build ## poly's Terraform lint end to end: editor vs CI, and nested modules
 rust: build ## poly's Rust lint end to end: editor vs CI, workspace scope, no duplicates
 	python3 tools/rust-acceptance.py $(POLY)
 
+# The Go half of `poly deadcode` is inside `make go`, where it has a go.work
+# control. This is knip and vulture; each skips loudly without its tool.
+deadcode: build ## poly deadcode outside Go: knip paths resolve, vulture stays out of the venv
+	python3 tools/deadcode-acceptance.py $(POLY)
+
 # typecheck first, same as CI: the extension host takes half a minute to boot,
 # and a type error does not need it.
 e2e: ## Typecheck and run the extension tests in a real extension host
@@ -118,7 +123,7 @@ version: build ## Check every version string agrees, binary included
 # The order is ci.yml's, so a failure here fails at the same point CI would.
 # The list is ci.yml's too: this claims a green run means the push is already
 # checked the way CI checks it, and a gate missing from here makes that a lie.
-gates: lint test notices pins smoke probe go tf rust dogfood version grammars e2e editor ## Everything above, in CI's order
+gates: lint test notices pins smoke probe go tf rust deadcode dogfood version grammars e2e editor ## Everything above, in CI's order
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0

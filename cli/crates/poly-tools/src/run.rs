@@ -822,6 +822,228 @@ pub fn deadcode_module(cmd: &Path, root: &Path) -> Result<Vec<FileIssue>> {
         .collect())
 }
 
+// ── knip (unused files and exports, JS/TS) ─────────────────────────────────
+
+/// One file's worth of knip findings. knip reports a dozen categories; these
+/// are the three that mean "nothing reaches this code".
+#[derive(Deserialize)]
+struct KnipFile {
+    file: String,
+    #[serde(default)]
+    files: Vec<KnipNamed>,
+    #[serde(default)]
+    exports: Vec<KnipExport>,
+    #[serde(default)]
+    types: Vec<KnipExport>,
+}
+
+#[derive(Deserialize)]
+struct KnipNamed {
+    #[allow(dead_code)]
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct KnipExport {
+    name: String,
+    line: u32,
+    col: u32,
+}
+
+#[derive(Deserialize)]
+struct KnipOutput {
+    issues: Vec<KnipFile>,
+}
+
+/// Files nothing imports and exports nothing imports, for a JS/TS project.
+///
+/// The same question `deadcode` answers for Go, asked the way JavaScript makes
+/// it askable: knip starts from the entry points package.json already declares
+/// and reports what no path from them reaches.
+///
+/// Only `files`, `exports` and `types` are reported. knip also finds unlisted
+/// and unused *dependencies*, which is a real problem and a different one --
+/// dependency hygiene is about package.json, not about code nothing runs, and
+/// mixing them would make this command's answer impossible to act on in one
+/// pass.
+///
+/// Run in the project rather than pointed at it: knip reports paths relative to
+/// its working directory. Same trade as `tflint_dir`, learned the same way.
+pub fn knip_project(cmd: &Path, root: &Path) -> Result<Vec<FileIssue>> {
+    let output = Command::new(cmd)
+        .args(["--reporter", "json"])
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        // A project knip cannot resolve entry points for says so here and
+        // prints nothing usable to stdout.
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("running {}", cmd.display()))?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    // knip exits non-zero *because* it found something, so the status says
+    // nothing on its own; empty stdout is what means it never ran.
+    let Some(start) = text.find('{') else {
+        return Err(anyhow!(
+            "knip: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    };
+    let parsed: KnipOutput = serde_json::from_str(&text[start..]).context("parsing knip output")?;
+    let mut found = Vec::new();
+    for entry in parsed.issues {
+        let file = root.join(&entry.file);
+        // A whole unreachable file is reported at its first line: knip gives no
+        // position for it, and there is nothing inside it to point at.
+        for _ in &entry.files {
+            found.push(FileIssue {
+                file: file.clone(),
+                issue: Issue {
+                    line: 0,
+                    col: 0,
+                    end_line: 0,
+                    end_col: 1,
+                    severity: Severity::Warning,
+                    code: "unused-file".to_string(),
+                    message: format!("nothing imports {}", entry.file),
+                    source: "knip",
+                    fix: None,
+                    url: Some("https://knip.dev/reference/issue-types".to_string()),
+                },
+            });
+        }
+        for (export, kind) in entry
+            .exports
+            .iter()
+            .map(|e| (e, "unused-export"))
+            .chain(entry.types.iter().map(|e| (e, "unused-type")))
+        {
+            found.push(FileIssue {
+                file: file.clone(),
+                issue: Issue {
+                    line: export.line.saturating_sub(1),
+                    col: export.col.saturating_sub(1),
+                    end_line: export.line.saturating_sub(1),
+                    end_col: export.col.saturating_sub(1) + export.name.len() as u32,
+                    severity: Severity::Warning,
+                    code: kind.to_string(),
+                    message: format!("nothing imports {}", export.name),
+                    source: "knip",
+                    // Deleting it is the obvious remedy and often the wrong
+                    // one: the import may be in code knip cannot see, and
+                    // saying "poly can fix this" would be a claim poly cannot
+                    // stand behind. Same reasoning as deadcode.
+                    fix: None,
+                    url: Some("https://knip.dev/reference/issue-types".to_string()),
+                },
+            });
+        }
+    }
+    Ok(found)
+}
+
+// ── vulture (unused code, Python) ──────────────────────────────────────────
+
+/// Python code nothing appears to use, across the files it is given.
+///
+/// A file list and not a directory, which is the whole difference between this
+/// being usable and not. vulture walks a directory itself and has no idea what
+/// a virtualenv is: pointed at a project root it reports on every module inside
+/// `venv/`, which on the fixture that found this was 353KB of findings about
+/// pip's vendored copy of six. poly already knows which files are the
+/// project's -- the same walk `poly check` uses, honouring .gitignore and
+/// `[lint] exclude` -- so it hands them over rather than hoping.
+///
+/// vulture has no machine-readable output, so this parses the one line per
+/// finding it prints:
+///
+///   path/to/app.py:5: unused function 'never_called' (60% confidence)
+///
+/// The confidence is kept in the message rather than dropped or turned into a
+/// severity. It is vulture's own hedge about a dynamically dispatched language
+/// -- 60% means "this name is never written down again", which getattr and
+/// Django's URL routing both make false -- and hiding it would turn a hint into
+/// a verdict poly has no basis for.
+pub fn vulture_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
+    if files.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut command = Command::new(cmd);
+    command
+        // Every other Python tool poly drives already skips these -- ruff has
+        // them in its own defaults -- so this is poly restoring the norm rather
+        // than inventing a rule. It is a second line of defence behind the
+        // walk: a virtualenv that nobody put in .gitignore still reaches this
+        // far, and one such directory is thousands of findings about somebody
+        // else's vendored code.
+        .args([
+            "--exclude",
+            "*/venv/*,*/.venv/*,*/site-packages/*,*/.tox/*,*/node_modules/*,*/__pypackages__/*",
+        ])
+        .args(files.iter().map(|p| p.as_os_str()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let output = command
+        .output()
+        .with_context(|| format!("running {}", cmd.display()))?;
+    // vulture exits 3 when it found something and 1 when it could not parse a
+    // file, so the status alone cannot tell a finding from a failure; an empty
+    // stdout is what means it never got as far as reporting.
+    let text = String::from_utf8_lossy(&output.stdout);
+    if text.trim().is_empty() && !output.status.success() {
+        return Err(anyhow!(
+            "vulture: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let here = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    Ok(text
+        .lines()
+        .filter_map(|line| vulture_line(line, &here))
+        .collect())
+}
+
+/// One reported line, or `None` if it is not one.
+///
+/// Split out so the shape can be tested: the format is prose, and prose is
+/// what changes between releases without anyone calling it a breaking change.
+fn vulture_line(line: &str, root: &Path) -> Option<FileIssue> {
+    // From the right, because a Windows path starts with `C:` and splitting
+    // from the left would take the drive letter for the line number.
+    let (position, rest) = line.split_once(": ")?;
+    let (file, number) = position.rsplit_once(':')?;
+    let number: u32 = number.parse().ok()?;
+    let message = rest.trim().to_string();
+    // "unused function 'x' (60% confidence)" -> "unused-function". The kind is
+    // the only part stable enough to silence a rule by in poly.toml.
+    let code = message
+        .split_whitespace()
+        .take(2)
+        .collect::<Vec<_>>()
+        .join("-");
+    let path = PathBuf::from(file);
+    Some(FileIssue {
+        file: if path.is_absolute() {
+            path
+        } else {
+            root.join(path)
+        },
+        issue: Issue {
+            line: number.saturating_sub(1),
+            col: 0,
+            end_line: number.saturating_sub(1),
+            end_col: 1,
+            severity: Severity::Warning,
+            code,
+            message,
+            source: "vulture",
+            fix: None,
+            url: Some(
+                "https://github.com/jendrikseipp/vulture#handling-false-positives".to_string(),
+            ),
+        },
+    })
+}
+
 /// One package pattern per module in the build list.
 ///
 /// `./...` is not it. From a workspace root — a directory holding go.work and
@@ -1864,6 +2086,40 @@ mod tests {
                 safe: false,
             })
         );
+    }
+
+    /// vulture prints prose, and prose changes between releases without anyone
+    /// calling it a breaking change. This is the shape as of vulture 2.16.
+    #[test]
+    fn a_vulture_line_is_a_position_and_a_sentence() {
+        let root = Path::new("/w");
+        let found = vulture_line(
+            "pkg/app.py:5: unused function 'never_called' (60% confidence)",
+            root,
+        )
+        .expect("a finding");
+        assert_eq!(found.file, Path::new("/w/pkg/app.py"));
+        // 0-based, like every other position poly reports.
+        assert_eq!(found.issue.line, 4);
+        // The kind is the part stable enough to silence in poly.toml; the
+        // confidence stays in the message because it is vulture's own hedge.
+        assert_eq!(found.issue.code, "unused-function");
+        assert!(found.issue.message.contains("60% confidence"));
+
+        // An absolute path is left alone rather than joined onto the root.
+        let absolute = vulture_line(
+            "/elsewhere/a.py:1: unused import 'os' (90% confidence)",
+            root,
+        )
+        .expect("a finding");
+        assert_eq!(absolute.file, Path::new("/elsewhere/a.py"));
+        assert_eq!(absolute.issue.code, "unused-import");
+
+        // Anything that is not a finding is not one: vulture prints its own
+        // errors on stdout too, and a line without a position is one of them.
+        assert!(vulture_line("", root).is_none());
+        assert!(vulture_line("some unrelated sentence", root).is_none());
+        assert!(vulture_line("pkg/app.py:notanumber: unused function 'x'", root).is_none());
     }
 
     /// Found by running it: `--all-targets` compiles a `main.rs` as a bin and

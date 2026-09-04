@@ -252,6 +252,14 @@ jobs:
         run: |
           rustup component add clippy
           python tools/rust-acceptance.py cli/target/release/poly
+      # `poly deadcode` outside Go. Neither tool is a poly download -- knip is
+      # an npm dev dependency and vulture is a pip install -- so both are
+      # installed here the way a project would, and the gate skips loudly if
+      # either step fails rather than passing on nothing.
+      - name: Dead code acceptance (knip, vulture)
+        run: |
+          pip install vulture
+          python tools/deadcode-acceptance.py cli/target/release/poly
       # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
       # two commands the README tells users to put in their CI. This was a
       # documented gate that was never actually wired, so every dogfood run was

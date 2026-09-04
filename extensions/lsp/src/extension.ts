@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { LanguageClient, State, TransportKind } from "vscode-languageclient/node";
+import { firstCodeLine } from "./anchor";
 import { commonRoot, useLines } from "./gowork";
 import { checkForUpdates, scheduleUpdateCheck } from "./update";
 
@@ -489,26 +490,27 @@ async function createGoWork(): Promise<void> {
 }
 
 /**
- * The line a Go file's `package` clause is on.
+ * Languages `poly deadcode` can answer about, and what answers for each.
  *
- * Not always line 0: a license header, a `//go:build` constraint and a blank
- * line before it are all normal. Bounded because a file with no package clause
- * at all is not a Go file, and scanning all of it to find that out is work for
- * nothing. A `package` at column 0 inside a raw string would match first, but
- * a real Go file has its clause before any literal, so the first match is it.
+ * Three tools, one question -- "does anything reach this code" -- and poly
+ * implements none of them. A language is here only if somebody already built
+ * the whole-program analysis for it: Go has golang.org/x/tools/cmd/deadcode,
+ * JS and TS have knip, Python has vulture. Rust is deliberately absent, and
+ * that is an honest absence rather than an oversight -- rustc's own `dead_code`
+ * lint already arrives through `cargo clippy` on every save, and nothing
+ * mainstream answers the cross-crate version of the question.
  */
-function packageClauseLine(document: vscode.TextDocument): number | undefined {
-  const limit = Math.min(document.lineCount, 200);
-  for (let line = 0; line < limit; line++) {
-    if (/^package\s+\w/.test(document.lineAt(line).text)) {
-      return line;
-    }
-  }
-  return undefined;
-}
+const DEAD_CODE_LANGUAGES: Readonly<Record<string, string>> = {
+  go: "this file's module, or its whole go.work build list",
+  typescript: "this file's npm project (knip)",
+  typescriptreact: "this file's npm project (knip)",
+  javascript: "this file's npm project (knip)",
+  javascriptreact: "this file's npm project (knip)",
+  python: "this file's Python project (vulture)",
+};
 
 /**
- * One `analyze dead code` lens per Go file, on its package clause.
+ * One `analyze dead code` lens per file, on the first line that is code.
  *
  * The command is in the palette already; a lens is what makes it something you
  * notice while reading the code you suspect. It is the entry point Tooltitude
@@ -516,9 +518,9 @@ function packageClauseLine(document: vscode.TextDocument): number | undefined {
  * is deliberately one per file instead: the analysis is whole-program, so a
  * lens per function would be N entry points to the same answer.
  *
- * The scope is not the file. `poly deadcode` walks up to the go.work — or the
- * go.mod when there is none — so this lens asks about the whole build list,
- * which is exactly the cross-module question the file's own package cannot
+ * The scope is not the file. `poly deadcode` walks up to the project the file
+ * belongs to -- the go.work, the package.json beside the knip that will answer,
+ * the pyproject.toml -- which is exactly the question the file itself cannot
  * answer.
  */
 function analyzeDeadCodeLens(context: vscode.ExtensionContext): void {
@@ -529,16 +531,17 @@ function analyzeDeadCodeLens(context: vscode.ExtensionContext): void {
       const on = vscode.workspace
         .getConfiguration("poly")
         .get<boolean>("deadCodeCodeLens.enabled", true);
-      const line = on ? packageClauseLine(document) : undefined;
+      const scope = DEAD_CODE_LANGUAGES[document.languageId];
+      const line = on && scope ? firstCodeLine(document) : undefined;
       if (line === undefined) {
         return [];
       }
       // Resolved on the spot: there is nothing to compute, and an unresolved
-      // lens is a spinner over every Go file for no reason.
+      // lens is a spinner over every file for no reason.
       return [
         new vscode.CodeLens(new vscode.Range(line, 0, line, 0), {
           title: "analyze dead code",
-          tooltip: "Run poly deadcode over this file's module, or its whole go.work build list",
+          tooltip: `Run poly deadcode over ${scope}`,
           command: "poly.analyzeDeadCode",
           arguments: [document.uri],
         }),
@@ -548,7 +551,10 @@ function analyzeDeadCodeLens(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     changed,
     vscode.languages.registerCodeLensProvider(
-      { scheme: "file", language: "go" },
+      Object.keys(DEAD_CODE_LANGUAGES).map((language) => ({
+        scheme: "file",
+        language,
+      })),
       provider,
     ),
     vscode.workspace.onDidChangeConfiguration((event) => {

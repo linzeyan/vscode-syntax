@@ -20,13 +20,21 @@
   且不往下走。三者在編輯器與 `poly check` 是同一次呼叫、同一個答案（A4）。它們比
   單檔 linter 慢——clippy 要編譯——所以答案是存檔後幾秒才到，不是即時的。
   clippy 用 `target/poly` 當 build 目錄，才不會跟你自己的 `cargo test` 搶鎖。
-- **`Poly: Analyze Dead Code (Go)`**：從 `main` 走不到的 Go 函式。每個 Go 檔的
-  `package` 那行上面有一條 `analyze dead code` lens，點了在終端跑
-  `poly deadcode`——跟 lint 一樣是同一支 CLI、同一個答案。**範圍不是那個檔**：往上找到
-  `go.work` 就用它（整個 build list），否則用最近的 `go.mod`，所以這也是跨 module 的
-  那一問。一個檔一條 lens，不是一個函式一條：分析本來就是整個 program 的，一個函式一條
-  只是同一個答案的 N 個入口。`poly.deadCodeCodeLens.enabled` 可關。要 `deadcode` 這支
-  工具在 PATH 上（`go install golang.org/x/tools/cmd/deadcode@latest`），poly 不代裝。
+- **`Poly: Analyze Dead Code`**：走不到的程式碼。**Go／TypeScript／JavaScript／Python
+  都有**，因為這三個語言各自已經有人做好了整體可達性分析，poly 只負責調度：Go 是
+  `golang.org/x/tools/cmd/deadcode`，JS／TS 是 knip，Python 是 vulture。每個這些語言的
+  檔案，**第一行程式碼**上面會有一條 `analyze dead code` lens（不是第 0 行——shebang、
+  版權標頭、`//go:build` 都在那上面），點了在終端跑 `poly deadcode`，跟 lint 一樣是同一支
+  CLI、同一個答案。
+  - **範圍不是那個檔，是那個專案**：Go 往上找到 `go.work` 就用它（整個 build list），
+    否則最近的 `go.mod`；JS／TS 是那個 knip 旁邊的 package.json；Python 是最近的
+    `pyproject.toml`／`setup.py`／`setup.cfg`。一個檔一條 lens 不是一個函式一條——分析
+    本來就是整個 program 的，一個函式一條只是同一個答案的 N 個入口。
+  - **Rust 沒有，而且那是誠實的空白**：rustc 自己的 `dead_code` 已經隨 `cargo clippy`
+    每次存檔就到了，而跨 crate 的那一問沒有主流工具在回答。
+  - 三支工具 poly 都不代裝，各自來自該語言的 toolchain：`go install
+    golang.org/x/tools/cmd/deadcode@latest`／`npm install --save-dev knip`／
+    `pip install vulture`。`poly.deadCodeCodeLens.enabled` 可關。
 - **`Poly: Minify JSON`**：把當前 JSON／JSONC buffer 壓成一行（移除空白與註解，
   保留 key 順序與字串內容）。命令面板執行。刻意不進 format-on-save：它是格式化的
   反向，下一次 `poly fmt` 就會還原。CLI 對應 `poly minify <路徑>`。
