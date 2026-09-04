@@ -125,6 +125,16 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "poly.extractVariable",
+        "title": "Extract Variable",
+        "category": "Poly"
+      },
+      {
+        "command": "poly.inlineVariable",
+        "title": "Inline Variable",
+        "category": "Poly"
+      },
+      {
         "command": "poly.nextChangedFile",
         "title": "Go to Next Changed File",
         "category": "Poly"
@@ -192,6 +202,18 @@
         "command": "poly.revertAndSave",
         "key": "alt+q",
         "when": "editorTextFocus && !editorReadonly && config.git.enabled && !git.missing && resourceScheme == file"
+      },
+      {
+        "command": "poly.extractVariable",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "poly.inlineVariable",
+        "key": "ctrl+alt+shift+v",
+        "mac": "cmd+alt+shift+v",
+        "when": "editorTextFocus && !editorReadonly"
       }
     ]
   },

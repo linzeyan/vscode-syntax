@@ -87,6 +87,12 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 - **`Poly: Toggle Bold` ／ `Toggle Italic`**：`cmd/ctrl+b`、`cmd/ctrl+i`，只在
   markdown 檔生效。產生 `**bold**` 與 `_italic_`——就是 `poly fmt` 正規化出來的那兩種，
   不會被下一次存檔改掉。
+- **`Poly: Extract Variable` ／ `Inline Variable`**：`cmd/ctrl+alt+v`、
+  `cmd/ctrl+alt+shift+v`，每個語言都通用。內建的 `editor.action.refactor` 開的是一張選單，
+  而你要的那一項每個 server 講法都不同（`Extract variable`／`Extract into variable`／
+  `Extract subexpression to variable`／`Extract to constant in enclosing scope`），快捷鍵
+  綁不到任何一個。poly 問的是 LSP 標準的 `refactor.extract`／`refactor.inline` kind，
+  過濾掉 `Extract function` 那種不是變數的，剛好一項就直接套用。做事的是語言自己的 server。
 - **跨檔案 next／previous change ＋ `Poly: Revert Selected Changes and Save`**：
   `cmd/ctrl+alt+z`／`cmd/ctrl+alt+a` 跳到上／下一個有改動的檔案並落在改動上，`alt+q`
   還原游標所在的 hunk 並存檔。VSCode 內建的是「同一個檔案裡的下一處改動」，跨檔案那

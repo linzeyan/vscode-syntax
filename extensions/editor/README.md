@@ -77,6 +77,25 @@ TypeScript 有這個 lens，其他語言都沒有。
 - `poly.referencesCodeLens.enabled` 可關（兩種 lens 一起）。編輯器只解析**看得見**的那幾條
   lens，所以成本是「畫面上幾個宣告」而不是「檔案裡幾個宣告」。
 
+### Poly: Extract Variable ／ Inline Variable
+
+`cmd/ctrl+alt+v` 把選取的運算式抽成變數，`cmd/ctrl+alt+shift+v` 把游標所在的變數 inline
+回去。**每個語言都通用**，因為問的是 LSP 標準的 `refactor.extract`／`refactor.inline`
+code action kind——真正做事的是該語言的 server，poly 只負責挑。
+
+- **`editor.action.refactor` 本來就有，缺的是「直接到」。** 它開一張選單，選單內容每個語言
+  不一樣，而你要的那一項每個 server 講法都不同：gopls 是 `Extract variable`、rust-analyzer
+  是 `Extract into variable`、clangd 是 `Extract subexpression to variable`、TypeScript 是
+  `Extract to constant in enclosing scope`。快捷鍵綁不到任何一個，所以那個手勢永遠是「三個
+  按鍵加讀一次選單」。
+- **會過濾掉不是變數的那些。** `refactor.extract` 同時也蓋 `Extract function`／
+  `Extract method`；一個叫 Extract Variable 的命令安靜地抽出一個函式，比什麼都不做更糟。
+  沒有任何一項提到變數時，才把同 kind 的全部列出來讓你選——沒量過的講法應該讓你多按一次，
+  不該讓功能消失。
+- 剛好只有一項就直接套用，多於一項才跳 QuickPick。
+- 選取範圍是空的時候用游標所在的那個字。再寬就是 poly 在決定「運算式從哪裡開始」，那是語言
+  的工作，不是 poly 的。
+
 ### 跨檔案 next／previous change ＋ Revert and Save
 
 `cmd/ctrl+alt+z` 跳到下一個有改動的檔案，`cmd/ctrl+alt+a` 跳到上一個，`alt+q` 把游標

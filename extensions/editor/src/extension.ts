@@ -6,6 +6,7 @@ import { nextChangedFile } from "./changes";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import { toc, TOC_END, TOC_START } from "./markdown";
+import { REFACTOR_KIND, refactorChoices, Refactoring } from "./refactors";
 import { countElsewhere, implLabel, lensTargets, refLabel } from "./references";
 import { registerTodoTree } from "./todoTree";
 
@@ -634,6 +635,85 @@ async function stepChangedFile(direction: 1 | -1): Promise<void> {
   }
 }
 
+/**
+ * How many of the offered actions to have the provider resolve.
+ *
+ * `executeCodeActionProvider` hands back unresolved actions unless it is given
+ * a count, and an unresolved action has no `edit` -- rust-analyzer in
+ * particular computes edits only on resolve, because computing all of them up
+ * front is the expensive thing. The cap keeps that from being unbounded; with
+ * an `only` filter this narrow, no server measured offers close to it.
+ */
+const MAX_RESOLVED = 32;
+
+/**
+ * Run the extract- or inline-variable refactoring, without the menu.
+ *
+ * The work is the language server's; see `refactors.ts` for why choosing among
+ * its answers is a thing poly may do. Applying is in two halves because an
+ * action may carry an edit, a command, or both, and VSCode's own code-action
+ * runner applies them in that order -- a server that returns both means the
+ * command to run *after* the edit lands.
+ */
+async function runRefactor(
+  editor: vscode.TextEditor,
+  want: Refactoring,
+  what: string,
+): Promise<void> {
+  // An empty selection is the common case for inline (the cursor is on the
+  // binding) and a mistake for extract, but the word under the cursor is a
+  // legal expression to extract and is what `editor.action.refactor` would
+  // have offered from the same position. Guessing wider than one word would be
+  // poly deciding where an expression begins, which is the language's job.
+  const range = editor.selection.isEmpty
+    ? editor.document.getWordRangeAtPosition(editor.selection.active)
+      ?? editor.selection
+    : editor.selection;
+
+  const offered = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+    "vscode.executeCodeActionProvider",
+    editor.document.uri,
+    range,
+    REFACTOR_KIND[want],
+    MAX_RESOLVED,
+  );
+  const choices = refactorChoices(
+    (offered ?? []).map((action) => ({
+      action,
+      title: action.title,
+      kind: action.kind?.value,
+    })),
+    want,
+  );
+  if (choices.length === 0) {
+    // Named rather than generic: "nothing here" and "this language server does
+    // not do this" look identical from the outside, and the selection is the
+    // half the user can change.
+    vscode.window.showWarningMessage(
+      `Poly: no ${what} offered at this selection — select an expression, or this language's server has none.`,
+    );
+    return;
+  }
+  const chosen = choices.length === 1
+    ? choices[0]
+    : await vscode.window.showQuickPick(
+      choices.map((one) => ({ label: one.action.title, one })),
+      { title: `Poly: ${what}`, placeHolder: "More than one applies here" },
+    ).then((picked) => picked?.one);
+  if (!chosen) {
+    return;
+  }
+  if (chosen.action.edit) {
+    await vscode.workspace.applyEdit(chosen.action.edit);
+  }
+  if (chosen.action.command) {
+    await vscode.commands.executeCommand(
+      chosen.action.command.command,
+      ...(chosen.action.command.arguments ?? []),
+    );
+  }
+}
+
 export function activate(context: vscode.ExtensionContext) {
   tintIndentation(context);
   previewImages(context);
@@ -660,6 +740,20 @@ export function activate(context: vscode.ExtensionContext) {
     [
       "poly.toggleItalic",
       withEditor("Toggle Italic", (editor) => toggleEmphasis(editor, "_")),
+    ],
+    [
+      "poly.extractVariable",
+      withEditor(
+        "Extract Variable",
+        (editor) => runRefactor(editor, "extract", "extract-variable refactoring"),
+      ),
+    ],
+    [
+      "poly.inlineVariable",
+      withEditor(
+        "Inline Variable",
+        (editor) => runRefactor(editor, "inline", "inline-variable refactoring"),
+      ),
     ],
     ["poly.nextChangedFile", () => stepChangedFile(1)],
     ["poly.previousChangedFile", () => stepChangedFile(-1)],
