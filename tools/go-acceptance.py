@@ -354,6 +354,81 @@ def editor_and_cli_agree():
     print("  every publisher's findings are in it, so none of them erases another")
 
 
+LIBA = """package liba
+
+// Called from appb, which is a different module entirely.
+func Used() string { return "used" }
+
+// Exported, and nothing anywhere calls it.
+func Orphan() string { return "dead" }
+"""
+
+APPB_MAIN = """package main
+
+import (
+\t"fmt"
+
+\t"example.com/liba"
+)
+
+func main() { fmt.Println(liba.Used()) }
+"""
+
+GO_WORK = "go 1.21\n\nuse (\n\t./liba\n\t./appb\n)\n"
+
+
+def deadcode_crosses_modules():
+    """`poly deadcode`, and the go.work that decides what "reachable" means.
+
+    This is the whole cross-module story in one measurement. golangci-lint's
+    `unused` cannot answer it -- an exported function is never unused to it,
+    because someone outside the package might call it -- so the question "does
+    anything actually run this" needs the call graph, and the call graph needs
+    every module in one build list.
+
+    The control is the point: the same two modules with the go.work deleted
+    still build -- `replace` sees to that -- but the sibling module is no longer
+    in the build list, so its dead function cannot be found at all. Without that
+    half, finding `Orphan` above would prove the analysis ran, not that it
+    crossed a module boundary.
+    """
+    root = fixture(
+        "poly-go-deadcode-",
+        {
+            "liba/go.mod": GO_MOD.format(name="example.com/liba"),
+            "liba/lib.go": LIBA,
+            # `replace` so the control below still compiles: what changes when
+            # go.work goes away has to be the build list, not the build.
+            "appb/go.mod": GO_MOD.format(name="example.com/appb")
+            + "\nrequire example.com/liba v0.0.0\n"
+            + "\nreplace example.com/liba => ../liba\n",
+            "appb/main.go": APPB_MAIN,
+            "go.work": GO_WORK,
+        },
+    )
+    # Asked from inside one module: finding the other module's dead function
+    # means the analysis walked up to the workspace on its own.
+    _, joined = poly("deadcode", os.path.join(root, "appb"))
+    print(f"  with go.work: {[line for line in joined.splitlines() if 'func' in line]}")
+    assert "Orphan" in joined, (
+        f"the unreachable function in the sibling module was not found:\n{joined}"
+    )
+    assert "Used" not in joined, (
+        "a function called from the other module was reported as dead, so the "
+        f"modules were analysed apart:\n{joined}"
+    )
+
+    os.remove(os.path.join(root, "go.work"))
+    _, alone = poly("deadcode", os.path.join(root, "appb"))
+    shutil.rmtree(root, ignore_errors=True)
+    assert "Orphan" not in alone, (
+        "without go.work the sibling module is not in the build list, so its "
+        "dead function is not something this run could have found; it found it "
+        f"anyway, which means go.work is not what put it there:\n{alone}"
+    )
+    print("  without go.work: the sibling module is not in the build list")
+
+
 if not shutil.which("go"):
     print("GO ACCEPTANCE SKIPPED: no go toolchain on PATH")
     raise SystemExit(0)
@@ -366,4 +441,12 @@ golangci_reaches_check()
 golangci_groups_by_module()
 print("editor and CI, same file:")
 editor_and_cli_agree()
+# Its own toolchain check: deadcode comes from golang.org/x/tools rather than
+# with go itself, so a runner with a Go toolchain may still not have it. Loud,
+# because a silent skip here is a whole feature nobody measured.
+if shutil.which("deadcode"):
+    print("dead code across modules:")
+    deadcode_crosses_modules()
+else:
+    print("SKIPPED deadcode: go install golang.org/x/tools/cmd/deadcode@latest")
 print("GO ACCEPTANCE PASS")

@@ -610,6 +610,26 @@ export async function activate(context: vscode.ExtensionContext) {
         terminal.sendText(`"${serverPath}" check "${target}"`);
       },
     ),
+    // Dead code goes through the terminal for the same reason lint does, and
+    // for one more: it is asked, not watched. Whole-program reachability costs
+    // a build and answers "nothing calls this anywhere", which is a question
+    // with a moment — before deleting something — rather than a thing to
+    // recompute on every save. It stays out of `poly check` for the same
+    // reason; see `cmd_deadcode`.
+    vscode.commands.registerCommand(
+      "poly.analyzeDeadCode",
+      async (uri?: vscode.Uri) => {
+        const target = uri?.fsPath
+          ?? vscode.window.activeTextEditor?.document.uri.fsPath
+          ?? workspacePaths()[0];
+        if (!target) {
+          return;
+        }
+        const terminal = vscode.window.createTerminal("poly deadcode");
+        terminal.show();
+        terminal.sendText(`"${serverPath}" deadcode "${target}"`);
+      },
+    ),
     // Minify is the inverse of what every other command here does, so it is
     // driven by the user rather than by a save: nothing about it belongs in
     // format-on-save, and `poly fmt` would undo it on the next run.

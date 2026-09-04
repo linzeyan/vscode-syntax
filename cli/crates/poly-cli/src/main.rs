@@ -51,6 +51,7 @@ fn run() -> Result<i32> {
         "check" => cmd_check(&split_flags("check", &rest)?),
         "minify" => cmd_minify(&split_flags("minify", &rest)?),
         "tools" => cmd_tools(&rest),
+        "deadcode" => cmd_deadcode(&rest),
         "bench" => {
             let path = rest.first().context("usage: poly bench <file> [iters]")?;
             let iters: usize = rest.get(1).map_or(Ok(50), |s| s.parse())?;
@@ -737,6 +738,108 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         return Ok(2);
     }
     Ok(if fatal == 0 { 0 } else { 1 })
+}
+
+/// Where a whole-program analysis of `from` has to start.
+///
+/// A `go.work` anywhere above beats the module it contains, and that is the
+/// entire cross-module story: the workspace file is what puts several modules
+/// into one build list, so a function called only from a sibling module is
+/// reachable when the analysis starts there and dead when it starts one level
+/// down. Tooltitude reaches the same answer with an index of its own; this
+/// reaches it with the mechanism the Go team shipped for it.
+///
+/// Without a go.work the module is the whole program, which is the truth for a
+/// single-module repository and an over-report for a library — see the caller.
+fn go_analysis_root(from: &Path) -> Option<PathBuf> {
+    let mut here = Some(from);
+    let mut module = None;
+    while let Some(dir) = here {
+        if dir.join("go.work").is_file() {
+            return Some(dir.to_path_buf());
+        }
+        // Kept rather than returned: a go.work further up is still the better
+        // answer, and this is only what to fall back to.
+        if module.is_none() && dir.join("go.mod").is_file() {
+            module = Some(dir.to_path_buf());
+        }
+        here = dir.parent();
+    }
+    module
+}
+
+/// Go functions nothing reaches, for the module the path is in.
+///
+/// Its own subcommand rather than another linter in `poly check`, and the line
+/// between them is what each question is worth being wrong about. `unused` asks
+/// whether anything in the package names a symbol, which is cheap and true or
+/// false on its own; deadcode builds the call graph from every entry point and
+/// asks whether anything runs it, which takes as long as a build and is
+/// *false* for every exported function in a library — nothing in the module
+/// calls it, and the callers are somebody else's repo. A gate that fails on
+/// that would be a gate every library turns off, so this is a thing you run.
+///
+/// Not managed either: there is no released binary to pin, it comes from the
+/// same golang.org/x/tools the project's own toolchain provides, and the
+/// version that matches the toolchain is the one to use.
+fn cmd_deadcode(rest: &[String]) -> Result<i32> {
+    let target = rest
+        .iter()
+        .find(|arg| !arg.starts_with('-'))
+        .map_or_else(|| PathBuf::from("."), PathBuf::from);
+    let target = target
+        .canonicalize()
+        .with_context(|| format!("{}", target.display()))?;
+    let config =
+        poly_core::Config::discover(&target).unwrap_or_else(|_| poly_core::Config::empty());
+    // A `[tools]` entry decides first, exactly as it does for a language
+    // server, so a project pinning its own build is honoured. Otherwise PATH.
+    let resolved = if config.tools.contains_key("deadcode") {
+        poly_tools::resolve("deadcode", &config, false)
+            .command()
+            .map(Path::to_path_buf)
+    } else {
+        poly_tools::find_on_path("deadcode")
+    };
+    let Some(cmd) = resolved else {
+        eprintln!(
+            "deadcode is not on PATH. It ships with the Go toolchain's own tools:\n  \
+             go install golang.org/x/tools/cmd/deadcode@latest"
+        );
+        return Ok(2);
+    };
+    let root = go_analysis_root(&target).unwrap_or(target);
+    let mut issues = poly_tools::run::deadcode_module(&cmd, &root)?;
+    if let Ok(base) = std::env::current_dir().and_then(|d| d.canonicalize()) {
+        let mut configs = poly_core::ConfigCache::new();
+        // The same two filters `poly check` applies, so a symbol silenced in
+        // poly.toml stays silent here. Nothing else about this command is a
+        // lint, but "which findings did I ask to stop seeing" is one question
+        // with one answer.
+        issues.retain(|found| {
+            !configs.for_file(&found.file).lint_ignored(
+                &found.file,
+                found.issue.source,
+                &found.issue.code,
+            )
+        });
+        for issue in &mut issues {
+            issue.file = relative_to_base(&issue.file, &base);
+        }
+    }
+    issues.sort_by(|a, b| {
+        (&a.file, a.issue.line, a.issue.col).cmp(&(&b.file, b.issue.line, b.issue.col))
+    });
+    let report = report::Check {
+        issues: &issues,
+        fail_on: FailOn::Severity(poly_core::diag::Severity::Warning),
+        ran: 1,
+        missing: &[],
+        failed: &[],
+    };
+    print!("{}", report.render(Format::Text, false));
+    eprintln!("deadcode: {} unreachable func(s)", issues.len());
+    Ok(if issues.is_empty() { 0 } else { 1 })
 }
 
 /// Was this tool one `poly tools install` was ever going to fetch here?

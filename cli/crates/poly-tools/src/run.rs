@@ -727,6 +727,140 @@ pub fn swiftlint_stdin(cmd: &Path, path: &Path, text: &str) -> Result<Vec<Issue>
         .collect())
 }
 
+// ── deadcode (whole-program reachability) ──────────────────────────────────
+
+#[derive(Deserialize)]
+struct DeadPosition {
+    #[serde(rename = "File")]
+    file: String,
+    #[serde(rename = "Line")]
+    line: u32,
+    #[serde(rename = "Col")]
+    col: u32,
+}
+
+#[derive(Deserialize)]
+struct DeadFunc {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "Position")]
+    position: DeadPosition,
+    /// Machine-written code, which nobody is going to delete by hand and which
+    /// is unreachable in every generated stub that ships more than it uses.
+    #[serde(rename = "Generated", default)]
+    generated: bool,
+}
+
+#[derive(Deserialize)]
+struct DeadPackage {
+    #[serde(rename = "Funcs")]
+    funcs: Vec<DeadFunc>,
+}
+
+/// Functions no path from `main` can reach, for one module.
+///
+/// A different question from golangci-lint's `unused`, which is why both exist:
+/// `unused` asks "does anything in this package name it", so an exported
+/// function is never unused to it — someone outside might call it. deadcode
+/// builds the call graph from the entry points and asks "does anything actually
+/// run it", which is the question you ask before deleting something. Tooltitude
+/// answers it with an index of its own; this is the Go team's answer, in
+/// golang.org/x/tools, and poly's job is to run it (R7).
+///
+/// Run in the module rather than pointed at it: deadcode reports paths relative
+/// to its working directory, and joining them is exact. Same trade as
+/// `tflint_dir`, learned the same way.
+pub fn deadcode_module(cmd: &Path, root: &Path) -> Result<Vec<FileIssue>> {
+    let patterns = deadcode_patterns(root)?;
+    if patterns.is_empty() {
+        return Ok(Vec::new());
+    }
+    let output = Command::new(cmd)
+        .arg("-json")
+        .args(&patterns)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        // A module that will not build says so here and prints nothing to
+        // stdout; without this the failure reads as "no dead code".
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("running {}", cmd.display()))?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "deadcode: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    // `null`, not `[]`, is what it prints when it found nothing — and "nothing
+    // unreachable" is the answer this command most wants to be able to give.
+    let packages: Option<Vec<DeadPackage>> =
+        serde_json::from_slice(&output.stdout).context("parsing deadcode output")?;
+    Ok(packages
+        .unwrap_or_default()
+        .into_iter()
+        .flat_map(|package| package.funcs)
+        .filter(|found| !found.generated)
+        .map(|found| FileIssue {
+            file: root.join(&found.position.file),
+            issue: Issue {
+                line: found.position.line.saturating_sub(1),
+                col: found.position.col.saturating_sub(1),
+                end_line: found.position.line.saturating_sub(1),
+                end_col: found.position.col.max(1),
+                severity: Severity::Warning,
+                code: "unreachable".to_string(),
+                message: format!("func {} is never called", found.name),
+                source: "deadcode",
+                // Deleting it is the obvious remedy and often the wrong one:
+                // the call may be in a test, behind a build tag, or in another
+                // module. Saying "poly can fix this" about that would be a
+                // claim poly cannot stand behind.
+                fix: None,
+                url: Some("https://pkg.go.dev/golang.org/x/tools/cmd/deadcode".to_string()),
+            },
+        })
+        .collect())
+}
+
+/// One package pattern per module in the build list.
+///
+/// `./...` is not it. From a workspace root — a directory holding go.work and
+/// nothing else — Go rejects it outright: "directory prefix . does not contain
+/// modules listed in go.work". The modules have to be named, and `go list -m`
+/// is what names them: inside a workspace it lists every module go.work uses,
+/// inside a plain module it lists that one. Reading go.work directly would be
+/// poly reimplementing a file format whose owner ships a query for it.
+///
+/// Relative where it can be, because deadcode reports positions relative to its
+/// working directory and a relative pattern keeps them short and joinable. A
+/// go.work may `use` a directory outside its own tree, which is the case the
+/// absolute arm is for.
+fn deadcode_patterns(root: &Path) -> Result<Vec<String>> {
+    let output = Command::new("go")
+        .args(["list", "-m", "-f", "{{.Dir}}"])
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .context("running go list")?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "go list: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(|dir| match Path::new(dir).strip_prefix(root) {
+            Ok(inside) if inside.as_os_str().is_empty() => "./...".to_string(),
+            Ok(inside) => format!("./{}/...", inside.display()),
+            Err(_) => format!("{dir}/..."),
+        })
+        .collect())
+}
+
 // ── tflint (directory semantics) ───────────────────────────────────────────
 
 #[derive(Deserialize)]

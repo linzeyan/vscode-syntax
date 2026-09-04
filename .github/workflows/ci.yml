@@ -232,6 +232,10 @@ jobs:
         run: |
           go version
           gofmt --help >/dev/null
+          # Not part of the toolchain: deadcode lives in golang.org/x/tools, so
+          # the gate skips loudly without it and the cross-module section would
+          # be the one thing here nobody measures.
+          go install golang.org/x/tools/cmd/deadcode@latest
           python tools/go-acceptance.py cli/target/release/poly
       # The second whole-directory linter. No toolchain line above it because
       # there is nothing to install: poly downloads tflint, and the bundled
