@@ -32,24 +32,7 @@
         "poly.referencesCodeLens.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show a reference count above each declaration, and an implementation count above each interface and interface method. Both come from whatever providers the language already has; poly analyses nothing. Whether clicking one opens the peek or the References panel is controlled by references.preferredLocation."
-        },
-        "poly.referencesCodeLens.languages": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "go",
-            "rust",
-            "c",
-            "cpp",
-            "swift",
-            "lua",
-            "protobuf",
-            "terraform"
-          ],
-          "description": "Language ids that get the reference count. Defaults to the languages poly-lsp runs a real language server for; typescript and javascript are left out because VSCode ships its own reference lens for them. Any language with a reference provider works, so add yours."
+          "description": "Show a reference count above each declaration, and an implementation count above each interface and interface method, in every language whose reference provider can answer. Both counts come from whatever providers the language already has; poly analyses nothing. Whether clicking one opens the peek or the References panel is controlled by references.preferredLocation."
         },
         "poly.todo.tags": {
           "type": "array",

@@ -55,8 +55,13 @@ poly 只負責數與畫。所以這不是「poly 實作了引用搜尋」，是�
 副作用是它**與語言無關**：任何有 reference provider 的語言都會亮。VSCode 內建只有
 TypeScript 有這個 lens，其他語言都沒有。
 
-- 預設語言：`go`／`rust`／`c`／`cpp`／`swift`／`lua`／`protobuf`／`terraform`
-  （`poly.referencesCodeLens.languages` 可改）。TS／JS 刻意不列——VSCode 自己有。
+- **每個語言都有，沒有名單**（2026-09-04 起）。以前是一份寫死的語言 id 清單，而那份清單
+  是在猜你裝了什麼——python、typescript、java 全都有好好的 reference provider，卻被漏在
+  外面。現在改成直接問：拿檔案裡前三個宣告去問一次 `executeReferenceProvider`，一個位置
+  都答不出來就整份檔案不畫。`includeDeclaration: true` 之下，**會回答的 provider 至少會
+  回宣告自己**，所以「零個位置」＝「沒人註冊」，而不是「沒人引用」——後者值得一條
+  `no refs`，前者只值得閉嘴。TS／JS 現在也有了：VSCode 自己那條預設是關的，漏掉它們等於
+  大多數人根本看不到 lens；真的兩條都開就會看到兩個數字，那是看得見也關得掉的。
 - 只算**檔案自己的宣告與它們的方法**，函式裡的區域變數不算：那些的引用本來就在畫面上，
   一個區域變數一條 lens 只會把真正該看的埋掉。struct field 也不算——「誰寫這個欄位」
   跟「這個型別到底有沒有人用」是兩個問題。

@@ -398,13 +398,63 @@ class ReferenceLens extends vscode.CodeLens {
 const MAX_LENSES = 300;
 
 /**
- * `N refs` over every declaration and `N impls` over every interface, for any
- * language that can answer.
+ * How many declarations to ask about before deciding nothing can answer.
+ *
+ * `executeReferenceProvider` asks with `includeDeclaration: true`, so a
+ * provider that answers at all answers with at least the declaration itself.
+ * Zero locations therefore means "nobody is registered for this language",
+ * which is a different thing from "nothing refers to this" -- and the
+ * difference is the whole point, because the second one is worth a `no refs`
+ * lens and the first one is worth silence.
+ *
+ * More than one, because the first declaration in a file can legitimately be a
+ * position no provider considers a symbol. Three, because this runs on every
+ * file that has declarations at all and the answer is the same every time.
+ */
+const REFERENCE_PROBES = 3;
+
+/**
+ * Does anything answer reference queries for this document?
+ *
+ * This is what replaced the list of language ids this lens used to be limited
+ * to (2026-09-04). A list is a guess about somebody else's installed
+ * extensions: it left out python, typescript, java and everything else with a
+ * perfectly good reference provider, and it would have gone on being wrong as
+ * the user's extensions changed. Asking costs one query per file and is right
+ * by construction.
+ */
+async function answersReferences(
+  uri: vscode.Uri,
+  targets: readonly { readonly symbol: vscode.DocumentSymbol }[],
+): Promise<boolean> {
+  for (const target of targets.slice(0, REFERENCE_PROBES)) {
+    const found = await vscode.commands.executeCommand<vscode.Location[]>(
+      "vscode.executeReferenceProvider",
+      uri,
+      target.symbol.selectionRange.start,
+    );
+    if (found && found.length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * `N refs` over every declaration and `N impls` over every interface, in every
+ * language whose provider can answer.
  *
  * The counts come from `vscode.executeReferenceProvider` and
  * `vscode.executeImplementationProvider`, which is to say from whichever
- * providers are registered — for Go that is poly-lsp's proxy in front of gopls.
+ * providers are registered — for Go that is poly-lsp's proxy in front of gopls,
+ * for TypeScript the built-in server, for Python whatever the user installed.
  * poly analyses nothing here; see `references.ts`.
+ *
+ * TypeScript and JavaScript used to be held out on the grounds that VSCode
+ * ships its own reference lens for them. It does, and it is off by default
+ * (`typescript.referencesCodeLens.enabled`), so holding them out meant most
+ * people got no lens at all. Someone who turns the built-in one on now gets two
+ * counts; that is visible and fixable, unlike the silence it replaced.
  */
 function countReferencesInGutter(context: vscode.ExtensionContext): void {
   const changed = new vscode.EventEmitter<void>();
@@ -416,10 +466,6 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
       if (!config.get<boolean>("referencesCodeLens.enabled", true)) {
         return [];
       }
-      const languages = config.get<string[]>("referencesCodeLens.languages", []);
-      if (!languages.includes(document.languageId)) {
-        return [];
-      }
       const symbols = await vscode.commands.executeCommand<
         vscode.DocumentSymbol[]
       >("vscode.executeDocumentSymbolProvider", document.uri);
@@ -428,7 +474,15 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
       if (!symbols) {
         return [];
       }
-      return lensTargets(symbols, MAX_LENSES).flatMap((target) => {
+      const targets = lensTargets(symbols, MAX_LENSES);
+      // Before any lens is drawn, because a file full of `no refs` over a
+      // language nothing can answer for is worse than no lens: it reads as an
+      // answer. JSON and markdown never reach here (their symbols are not the
+      // kinds this counts); CSS and YAML do, and this is what decides them.
+      if (targets.length === 0 || !(await answersReferences(document.uri, targets))) {
+        return [];
+      }
+      return targets.flatMap((target) => {
         const range = target.symbol.selectionRange;
         const lenses = [new ReferenceLens(document.uri, "refs", range)];
         if (target.implementable) {
