@@ -16,6 +16,7 @@ const COMMANDS = [
   "poly.formatGitRepo",
   "poly.formatGitChanged",
   "poly.lintPath",
+  "poly.analyzeDeadCode",
   "poly.checkForUpdates",
   "poly.showOutput",
   "poly.createGoWork",
@@ -123,6 +124,29 @@ suite("poly-lsp in a real editor", () => {
   // that decides where the file lands -- and landing it in the wrong directory
   // is the failure mode that matters, because that directory is usually
   // outside every folder the window has open.
+  // The lens is the only entry point most people will ever see for
+  // `poly deadcode`, and the thing that breaks it is invisible from a unit
+  // test: a build constraint and a license header push the package clause off
+  // line 0, and a lens anchored to the wrong line silently stops rendering.
+  test("every Go file gets an analyze-dead-code lens on its package clause", async () => {
+    const uri = writeFile(
+      "buildtagged.go",
+      "//go:build linux\n\n// Copyright somebody.\n\npackage main\n\nfunc main() {}\n",
+    );
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    const lenses = await eventually("the dead code lens", async () => {
+      const found = await vscode.commands.executeCommand<vscode.CodeLens[]>(
+        "vscode.executeCodeLensProvider",
+        uri,
+        10,
+      );
+      return found && found.length > 0 ? found : undefined;
+    });
+    const mine = lenses.filter((lens) => lens.command?.command === "poly.analyzeDeadCode");
+    assert.strictEqual(mine.length, 1, "expected exactly one dead code lens");
+    assert.strictEqual(mine[0].range.start.line, 4, "lens is not on the package clause");
+  });
+
   test("a go.work goes to the deepest directory covering every module", () => {
     const root = commonRoot([join("/a", "liba"), join("/a", "appb")]);
     assert.strictEqual(root, "/a");

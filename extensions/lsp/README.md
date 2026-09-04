@@ -14,6 +14,13 @@
 - **Lint**：存檔即時 diagnostics（shellcheck／hadolint／actionlint／ruff／
   selene／sqruff，以及專案內的 biome／eslint）；`Poly: Lint (poly check)`
   在終端跑完整 CLI，輸出與 CI 一致。
+- **`Poly: Analyze Dead Code (Go)`**：從 `main` 走不到的 Go 函式。每個 Go 檔的
+  `package` 那行上面有一條 `analyze dead code` lens，點了在終端跑
+  `poly deadcode`——跟 lint 一樣是同一支 CLI、同一個答案。**範圍不是那個檔**：往上找到
+  `go.work` 就用它（整個 build list），否則用最近的 `go.mod`，所以這也是跨 module 的
+  那一問。一個檔一條 lens，不是一個函式一條：分析本來就是整個 program 的，一個函式一條
+  只是同一個答案的 N 個入口。`poly.deadCodeCodeLens.enabled` 可關。要 `deadcode` 這支
+  工具在 PATH 上（`go install golang.org/x/tools/cmd/deadcode@latest`），poly 不代裝。
 - **`Poly: Minify JSON`**：把當前 JSON／JSONC buffer 壓成一行（移除空白與註解，
   保留 key 順序與字串內容）。命令面板執行。刻意不進 format-on-save：它是格式化的
   反向，下一次 `poly fmt` 就會還原。CLI 對應 `poly minify <路徑>`。

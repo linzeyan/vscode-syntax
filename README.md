@@ -300,7 +300,10 @@ go install golang.org/x/tools/cmd/deadcode@latest
 poly deadcode .            # 目前 module，或它上面那個 go.work 的全部 module
 ```
 
-編輯器裡是 `Poly: Analyze Dead Code (Go)`，在終端跑同一行。
+編輯器裡是 `Poly: Analyze Dead Code (Go)`，在終端跑同一行；每個 Go 檔的 `package` 那行
+上面也會有一條 `analyze dead code` lens（`poly.deadCodeCodeLens.enabled` 可關）。一個檔
+一條，不是一個函式一條——分析本來就是整個 program 的，一個函式一條只是同一個答案的 N 個
+入口。
 
 ### 什麼算失敗：`--fail-on`
 

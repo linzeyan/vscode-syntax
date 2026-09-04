@@ -136,6 +136,11 @@
           "default": true,
           "description": "Publish lint diagnostics when a supported file is opened or saved."
         },
+        "poly.deadCodeCodeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an `analyze dead code` link above the package clause of every Go file. Clicking it runs `poly deadcode` in a terminal over that file's module, or over the whole go.work build list when there is one. Nothing runs until it is clicked: whole-program reachability costs a build, so it is asked rather than watched."
+        },
         "poly.languageServers": {
           "type": "boolean",
           "default": false,

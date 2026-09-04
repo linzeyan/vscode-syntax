@@ -488,6 +488,77 @@ async function createGoWork(): Promise<void> {
   await client?.restart();
 }
 
+/**
+ * The line a Go file's `package` clause is on.
+ *
+ * Not always line 0: a license header, a `//go:build` constraint and a blank
+ * line before it are all normal. Bounded because a file with no package clause
+ * at all is not a Go file, and scanning all of it to find that out is work for
+ * nothing. A `package` at column 0 inside a raw string would match first, but
+ * a real Go file has its clause before any literal, so the first match is it.
+ */
+function packageClauseLine(document: vscode.TextDocument): number | undefined {
+  const limit = Math.min(document.lineCount, 200);
+  for (let line = 0; line < limit; line++) {
+    if (/^package\s+\w/.test(document.lineAt(line).text)) {
+      return line;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * One `analyze dead code` lens per Go file, on its package clause.
+ *
+ * The command is in the palette already; a lens is what makes it something you
+ * notice while reading the code you suspect. It is the entry point Tooltitude
+ * puts on every declaration (`analyze unused in file/path/workspace`) and this
+ * is deliberately one per file instead: the analysis is whole-program, so a
+ * lens per function would be N entry points to the same answer.
+ *
+ * The scope is not the file. `poly deadcode` walks up to the go.work — or the
+ * go.mod when there is none — so this lens asks about the whole build list,
+ * which is exactly the cross-module question the file's own package cannot
+ * answer.
+ */
+function analyzeDeadCodeLens(context: vscode.ExtensionContext): void {
+  const changed = new vscode.EventEmitter<void>();
+  const provider: vscode.CodeLensProvider = {
+    onDidChangeCodeLenses: changed.event,
+    provideCodeLenses(document) {
+      const on = vscode.workspace
+        .getConfiguration("poly")
+        .get<boolean>("deadCodeCodeLens.enabled", true);
+      const line = on ? packageClauseLine(document) : undefined;
+      if (line === undefined) {
+        return [];
+      }
+      // Resolved on the spot: there is nothing to compute, and an unresolved
+      // lens is a spinner over every Go file for no reason.
+      return [
+        new vscode.CodeLens(new vscode.Range(line, 0, line, 0), {
+          title: "analyze dead code",
+          tooltip: "Run poly deadcode over this file's module, or its whole go.work build list",
+          command: "poly.analyzeDeadCode",
+          arguments: [document.uri],
+        }),
+      ];
+    },
+  };
+  context.subscriptions.push(
+    changed,
+    vscode.languages.registerCodeLensProvider(
+      { scheme: "file", language: "go" },
+      provider,
+    ),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("poly.deadCodeCodeLens")) {
+        changed.fire();
+      }
+    }),
+  );
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   const serverPath = resolveServerPath(context);
   client = new LanguageClient(
@@ -692,6 +763,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand("poly.checkForUpdates", () => checkForUpdates(context, false)),
   );
+  analyzeDeadCodeLens(context);
 
   refreshStatus();
   try {
