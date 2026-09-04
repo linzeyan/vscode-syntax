@@ -135,6 +135,59 @@ pub const SEMANTIC_TOKENS: &[&str] = &[
     "textDocument/semanticTokens/range",
 ];
 
+/// The file-operation methods, paired with the key a server declares them
+/// under in `capabilities.workspace.fileOperations`.
+///
+/// The editor is the only party that knows a file is about to move — no watcher
+/// sees a rename before it happens — so this is the one class of thing a
+/// server cannot find out for itself. `will*` are requests answered with a
+/// WorkspaceEdit the editor applies *as part of* the move; `did*` are
+/// notifications after the fact.
+///
+/// Measured across the seven servers on 2026-09-04: rust-analyzer declares
+/// `willRename`, over `**/*.rs` and over any folder — that is the one that
+/// rewrites `mod` declarations and the paths that point at them when a file is
+/// dragged somewhere else. gopls declares `didCreate` over `**/*.go`,
+/// lua-language-server `didRename` over the workspace root, and clangd,
+/// terraform-ls and sourcekit-lsp declare none at all.
+pub const FILE_OPERATIONS: &[(&str, &str)] = &[
+    ("workspace/willCreateFiles", "willCreate"),
+    ("workspace/didCreateFiles", "didCreate"),
+    ("workspace/willRenameFiles", "willRename"),
+    ("workspace/didRenameFiles", "didRename"),
+    ("workspace/willDeleteFiles", "willDelete"),
+    ("workspace/didDeleteFiles", "didDelete"),
+];
+
+/// Whether this server asked to hear about one kind of file operation.
+///
+/// The filters are the whole declaration: a server that wants `**/*.rs` and
+/// nothing else says so here, and the editor is what applies them. poly reads
+/// this in two places — once to register the method, and again on every
+/// operation to pick who to hand it to — rather than keeping a list of its own,
+/// for the same reason `server_commands` is read from the capabilities each
+/// time: there is one copy of the truth and it is the server's.
+pub fn answers_file_operation(capabilities: &serde_json::Value, key: &str) -> bool {
+    file_operation_filters(capabilities, key).is_some()
+}
+
+fn file_operation_filters<'a>(
+    capabilities: &'a serde_json::Value,
+    key: &str,
+) -> Option<&'a serde_json::Value> {
+    let filters = capabilities
+        .get("workspace")?
+        .get("fileOperations")?
+        .get(key)?
+        .get("filters")?;
+    // An empty filter list matches no file, so registering it would buy a
+    // request the server has already said it does not want.
+    if filters.as_array()?.is_empty() {
+        return None;
+    }
+    Some(filters)
+}
+
 /// Requests poly routes but never registers.
 ///
 /// The editor sends these because of something inside somebody else's
@@ -548,6 +601,36 @@ pub fn registrations(
         })
         .chain(semantic_tokens_registration(capabilities, name, &selector))
         .chain(execute_command_registration(capabilities, name))
+        .chain(file_operation_registrations(capabilities, name))
+        .collect()
+}
+
+/// One registration per file operation this server asked for.
+///
+/// Registered dynamically like everything else here, and for the usual reason:
+/// the capability is per language server and poly's `initialize` answer is sent
+/// before any of them has started. The alternative the protocol offers —
+/// declaring filters up front — would mean poly guessing which files matter to
+/// a server it has not run yet.
+///
+/// The filters travel verbatim. They are a claim about which paths the server
+/// wants to hear about, made by the only party that knows; poly widening them
+/// would mean requests on every rename in the workspace, and narrowing them
+/// would silently drop the moves that matter.
+fn file_operation_registrations(
+    capabilities: &serde_json::Value,
+    name: &str,
+) -> Vec<serde_json::Value> {
+    FILE_OPERATIONS
+        .iter()
+        .filter_map(|(method, key)| {
+            let filters = file_operation_filters(capabilities, key)?;
+            Some(serde_json::json!({
+                "id": format!("{POLY_ID}{name}:{method}"),
+                "method": method,
+                "registerOptions": { "filters": filters },
+            }))
+        })
         .collect()
 }
 
@@ -917,6 +1000,63 @@ mod tests {
             "an empty options object is a declaration, not an absence"
         );
         assert!(!methods(&clangd, "clangd", "c").contains(&"textDocument/codeLens".to_string()));
+    }
+
+    /// A file operation is registered only where the server asked for one, and
+    /// its filters travel untouched.
+    ///
+    /// The filters are the expensive half to get wrong, and wrong in a way that
+    /// looks like nothing: they decide which renames the editor stops to ask
+    /// about. Widened, every file moved anywhere in the workspace becomes a
+    /// round trip that blocks the move; narrowed, the rename the user actually
+    /// cares about goes through silently and the declarations pointing at the
+    /// old path stay broken. Both are shaped from the real capabilities
+    /// measured on 2026-09-04.
+    #[test]
+    fn only_the_asked_for_file_operations_are_registered() {
+        let rust_analyzer = serde_json::json!({
+            "workspace": {"fileOperations": {"willRename": {"filters": [
+                {"scheme": "file", "pattern": {"glob": "**/*.rs", "matches": "file"}},
+                {"scheme": "file", "pattern": {"glob": "**", "matches": "folder"}},
+            ]}}}
+        });
+        let registered = registrations(&rust_analyzer, "rust-analyzer", &["rust".to_string()]);
+        let rename = registered
+            .iter()
+            .find(|r| r["method"] == "workspace/willRenameFiles")
+            .expect("willRename was declared");
+        assert_eq!(
+            rename["registerOptions"]["filters"],
+            rust_analyzer["workspace"]["fileOperations"]["willRename"]["filters"],
+            "the filters are the server's claim about its own files, not poly's"
+        );
+        // The other five are not implied by declaring one of them.
+        assert_eq!(
+            registered
+                .iter()
+                .filter(|r| r["method"]
+                    .as_str()
+                    .is_some_and(|m| m.starts_with("workspace/")))
+                .count(),
+            1
+        );
+
+        // clangd, terraform-ls and sourcekit-lsp: no `workspace` key at all.
+        // An operation declared with nothing to match is the same as absent —
+        // terraform-ls answers exactly this shape for capabilities the client
+        // did not ask about.
+        for absent in [
+            serde_json::json!({"hoverProvider": true}),
+            serde_json::json!({"workspace": {"fileOperations": {"willRename": {"filters": []}}}}),
+            serde_json::json!({"workspace": {"fileOperations": {}}}),
+        ] {
+            assert!(
+                !registrations(&absent, "clangd", &["c".to_string()])
+                    .iter()
+                    .any(|r| r["method"] == "workspace/willRenameFiles"),
+                "registered a file operation for {absent}"
+            );
+        }
     }
 
     /// The whole point of proxying code actions at all: the on-save kinds are

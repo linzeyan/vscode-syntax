@@ -65,6 +65,18 @@ fn main() {
     let message = greet("world");
     println!("{message}");
 }
+
+mod helper;
+"""
+
+# Declared at the bottom of main.rs on purpose: every line number in the Rust
+# case is written down, and a `mod` at the top would move all of them. It exists
+# so there is something for a rename to break -- rust-analyzer rewrites the
+# declaration when the file behind it moves, which is the whole reason poly
+# relays `workspace/willRenameFiles`.
+HELPER_RS = """pub fn helped() -> u8 {
+    1
+}
 """
 
 
@@ -222,6 +234,12 @@ class Case:
     # written down: it is the server whose hints this probe can turn on (see
     # `editor_settings`), and the one whose hints Ricky went looking for.
     inlay_hint: str = None
+    # `(old, new, needle)` for a `workspace/willRenameFiles` round trip: the
+    # file the probe pretends to move, where to, and something that has to
+    # appear in the WorkspaceEdit that comes back. Only rust-analyzer declares
+    # a `will*` operation, and it is the only one of the six whose answer is an
+    # edit rather than a notification nobody replies to.
+    rename: tuple = None
     # A substring that must appear in some code lens title. Only gopls has one:
     # a lens is a command with a label, and gopls is the server whose commands
     # this probe already knows how to fire. The others declare the capability
@@ -289,6 +307,15 @@ SYMBOL = {"workspace/symbol"}
 # request, so Swift does get semantic highlighting -- just not from a
 # registration poly minted, which is why it is absent here.
 SEMTOK = {"semanticTokens"}
+# File operations, added 2026-09-04. No shared set: the three servers that want
+# any want a different one each, and that is the finding. rust-analyzer asks for
+# `willRename` -- the request answered with a WorkspaceEdit, over `**/*.rs` and
+# over any folder -- while gopls asks only to be told about a .go file that
+# appeared, and lua-language-server only about a rename that already happened.
+# clangd, terraform-ls and sourcekit-lsp declare none.
+WILL_RENAME = {"workspace/willRenameFiles"}
+DID_CREATE = {"workspace/didCreateFiles"}
+DID_RENAME = {"workspace/didRenameFiles"}
 
 CASES = [
     Case(
@@ -309,7 +336,8 @@ CASES = [
         | COMMANDS
         | LENS
         | SYMBOL
-        | SEMTOK,
+        | SEMTOK
+        | DID_CREATE,
         # What Tooltitude calls `move...`, and the reason commands are
         # routed at all: gopls answers the code action with this command
         # and no edit.
@@ -335,6 +363,7 @@ CASES = [
         files={
             "Cargo.toml": '[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2021"\n',
             "src/main.rs": MAIN_RS,
+            "src/helper.rs": HELPER_RS,
         },
         entry="src/main.rs",
         definition_line=0,
@@ -347,7 +376,11 @@ CASES = [
         | {"selectionRange", "declaration", "inlayHint", "prepareCallHierarchy"}
         | LENS
         | SYMBOL
-        | SEMTOK,
+        | SEMTOK
+        | WILL_RENAME,
+        # The one server that answers a file operation with an edit, so the one
+        # case that can check the round trip rather than just the registration.
+        rename=("src/helper.rs", "src/renamed.rs", "renamed"),
     ),
     # No compile_commands.json on purpose. clangd falls back to default flags
     # for a standalone file, which is enough for a same-file definition, and
@@ -456,7 +489,7 @@ CASES = [
         # The only server measured that asks for inlay hints to be resolved
         # (`inlayHintProvider.resolveProvider`), which is why poly routes
         # `inlayHint/resolve` even though nothing registers it.
-        registers=FULL | {"inlayHint"} | COMMANDS | LENS | SYMBOL | SEMTOK,
+        registers=FULL | {"inlayHint"} | COMMANDS | LENS | SYMBOL | SEMTOK | DID_RENAME,
         command="lua.getConfig",
     ),
 ]
@@ -972,6 +1005,31 @@ def run(case, logs=True, graceful=True):
         print(f"  {len(labels)} inlay hint(s), including {case.inlay_hint!r}")
     elif "inlayHint" in case.registers:
         print(f"  {case.server} registers inlayHint; no label written down to check")
+
+    # A file the editor is about to move. Nothing else in this file asks about
+    # something that has not happened yet, and that is the point: a watcher sees
+    # a rename only afterwards, by which time the declarations pointing at the
+    # old path are already broken. The server answers with the edit that keeps
+    # them right, and the editor applies it as part of the move.
+    if case.rename:
+        old, new, needle = case.rename
+        edit = settle(
+            40,
+            "workspace/willRenameFiles",
+            {
+                "files": [
+                    {"oldUri": f"file://{root}/{old}", "newUri": f"file://{root}/{new}"}
+                ]
+            },
+            # Rebuilt from an index, so an empty answer early on means "not
+            # ready", the same as everywhere else in this file.
+            lambda result: bool(result and needle in json.dumps(result)),
+            f"a rename edit mentioning {needle!r}",
+        )
+        # The file itself is never touched: the probe is measuring what the
+        # server would have the editor do, and moving it would have the case
+        # clean up a fixture that no longer matches what was opened.
+        print(f"  {old} → {new}: {len(json.dumps(edit))} bytes of edit")
 
     # Code lenses. Two things have to be true and they fail differently: the
     # lens has to arrive with a title, and it has to carry a command the editor

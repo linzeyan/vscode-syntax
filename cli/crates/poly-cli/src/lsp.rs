@@ -469,6 +469,15 @@ impl Server {
         if request.method == "workspace/symbol" {
             return self.fan_out_symbols(request);
         }
+        // A file operation names files that are about to move rather than a
+        // document that is open, so nothing in `PROXIED` can describe it and
+        // the ordinary uri lookup would come up empty on a folder.
+        if let Some((_, key)) = crate::proxy::FILE_OPERATIONS
+            .iter()
+            .find(|(method, _)| *method == request.method)
+        {
+            return self.route_file_operation(key, request);
+        }
         let routable = crate::proxy::PROXIED
             .iter()
             .any(|(method, _)| *method == request.method)
@@ -552,6 +561,82 @@ impl Server {
             }
             None => Ok(Some(request)),
         }
+    }
+
+    /// Hand a `workspace/will*Files` request to the server that asked for it.
+    ///
+    /// Not a fan-out, unlike `workspace/symbol`: the answer is a WorkspaceEdit
+    /// the editor applies to the user's files, and two servers editing the same
+    /// rename would be two opinions about one set of bytes. One server it is.
+    ///
+    /// Which one is usually not a question — the editor only sends this because
+    /// poly registered the method, with that server's own filters on it, so a
+    /// single registration means a single candidate. The uri is consulted only
+    /// when two servers want the same operation, and it can legitimately fail
+    /// to answer: rust-analyzer registers folders as well as files, and a
+    /// folder has no extension to read a language off.
+    fn route_file_operation(
+        &mut self,
+        key: &str,
+        request: lsp_server::Request,
+    ) -> Result<Option<lsp_server::Request>> {
+        let targets = self.file_operation_servers(key);
+        let name = match targets.as_slice() {
+            // Nothing registered it, so this should not have arrived. Null is
+            // "no edit", which is exactly what poly has to offer, and it lets
+            // the rename go through instead of failing it with an error.
+            [] => {
+                self.connection
+                    .sender
+                    .send(Message::Response(crate::proxy::nothing(request.id)))?;
+                return Ok(None);
+            }
+            [only] => only.clone(),
+            several => {
+                let picked = file_operation_uri(&request.params)
+                    .and_then(|uri| self.server_of(&uri))
+                    .filter(|name| several.iter().any(|target| target == name));
+                match picked {
+                    Some(name) => name.to_string(),
+                    None => {
+                        eprintln!(
+                            "[poly] {}: {} servers want it and the path names no language",
+                            request.method,
+                            several.len()
+                        );
+                        self.connection
+                            .sender
+                            .send(Message::Response(crate::proxy::nothing(request.id)))?;
+                        return Ok(None);
+                    }
+                }
+            }
+        };
+        match self.downstream.get_mut(&name) {
+            Some(Some(server)) => {
+                server.send(Message::Request(request))?;
+                Ok(None)
+            }
+            _ => {
+                self.connection
+                    .sender
+                    .send(Message::Response(crate::proxy::nothing(request.id)))?;
+                Ok(None)
+            }
+        }
+    }
+
+    /// The running servers that asked to hear about one kind of file operation.
+    fn file_operation_servers(&self, key: &str) -> Vec<String> {
+        self.downstream
+            .iter()
+            .filter(|(_, server)| {
+                server.as_ref().is_some_and(|server| {
+                    crate::proxy::answers_file_operation(&server.capabilities, key)
+                })
+            })
+            .map(|(name, _)| name.clone())
+            .collect()
     }
 
     /// Ask every running server that answers `workspace/symbol`, and reply once.
@@ -942,6 +1027,7 @@ impl Server {
     fn on_notification(&mut self, notification: Notification) -> Result<()> {
         self.sync_downstream(&notification);
         self.broadcast_downstream(&notification);
+        self.file_operation_downstream(&notification);
         match notification.method.as_str() {
             "textDocument/didOpen" => {
                 let params: DidOpenTextDocumentParams =
@@ -1011,6 +1097,29 @@ impl Server {
         for server in self.downstream.values_mut().flatten() {
             if let Err(e) = server.send(Message::Notification(notification.clone())) {
                 eprintln!("[poly] {}: {e:#}", server.name);
+            }
+        }
+    }
+
+    /// Deliver a `workspace/did*Files` notification to the servers that asked.
+    ///
+    /// Addressed rather than broadcast, which is the opposite of what
+    /// `didChangeWatchedFiles` does one function up — and the difference is
+    /// that poly knows the answer here. A watcher is registered by the server
+    /// straight through poly, which never sees who wanted what; a file
+    /// operation is declared in the capabilities poly reads at startup.
+    fn file_operation_downstream(&mut self, notification: &Notification) {
+        let Some((_, key)) = crate::proxy::FILE_OPERATIONS
+            .iter()
+            .find(|(method, _)| *method == notification.method)
+        else {
+            return;
+        };
+        for name in self.file_operation_servers(key) {
+            if let Some(Some(server)) = self.downstream.get_mut(&name) {
+                if let Err(e) = server.send(Message::Notification(notification.clone())) {
+                    eprintln!("[poly] {name}: {e:#}");
+                }
             }
         }
     }
@@ -1167,6 +1276,20 @@ fn uri_path(uri: &Url) -> PathBuf {
 /// `completionItem/resolve` and followed the last server to answer; they do
 /// not, because "the file this item is in" is the true answer and "whoever
 /// spoke last" is only usually the same thing.
+/// The first path a file-operation request names.
+///
+/// `oldUri` for a rename, `uri` for a create or a delete. Only the first entry:
+/// the editor batches a multi-file move into one request, and poly picking one
+/// server per request means picking one path to read it off. A batch spanning
+/// two languages would be routed by whichever came first — an honest limit,
+/// and one nothing in the reply could paper over anyway, since a WorkspaceEdit
+/// is one server's answer or the other's.
+fn file_operation_uri(params: &serde_json::Value) -> Option<Url> {
+    let first = params.get("files")?.as_array()?.first()?;
+    let uri = first.get("oldUri").or_else(|| first.get("uri"))?;
+    Url::parse(uri.as_str()?).ok()
+}
+
 fn request_uri(params: &serde_json::Value) -> Option<Url> {
     let uri = params
         .get("textDocument")
@@ -1997,6 +2120,41 @@ mod tests {
             root: PathBuf::from(root),
             proxied: true,
         }
+    }
+
+    /// A file operation names files that are moving, not a document that is
+    /// open, so the ordinary uri lookup finds nothing in it.
+    ///
+    /// The folder case is the one that matters and the one with no answer:
+    /// rust-analyzer registers `**` for folders, and a directory has no
+    /// extension to read a language off. That is survivable only because a
+    /// single registration means a single candidate — `route_file_operation`
+    /// asks this question at all only when two servers want the same operation.
+    #[test]
+    fn a_file_operation_is_located_by_the_path_it_names() {
+        let rename = serde_json::json!({
+            "files": [{"oldUri": "file:///w/src/old.rs", "newUri": "file:///w/src/new.rs"}]
+        });
+        assert_eq!(
+            file_operation_uri(&rename).as_ref().map(Url::as_str),
+            Some("file:///w/src/old.rs"),
+            "the language is the one the file has now, not the one it is moving to"
+        );
+
+        // Create and delete name the file directly.
+        let created = serde_json::json!({"files": [{"uri": "file:///w/src/new.rs"}]});
+        assert_eq!(
+            file_operation_uri(&created).as_ref().map(Url::as_str),
+            Some("file:///w/src/new.rs")
+        );
+
+        // A folder rename parses to a uri like any other; it is `language_of`
+        // that has nothing to say about it, one layer up.
+        let folder = serde_json::json!({
+            "files": [{"oldUri": "file:///w/src", "newUri": "file:///w/lib"}]
+        });
+        assert!(file_operation_uri(&folder).is_some());
+        assert!(file_operation_uri(&serde_json::json!({"files": []})).is_none());
     }
 
     /// A server command id must never be an id the extension contributes.
