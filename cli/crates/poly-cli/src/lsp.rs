@@ -219,21 +219,27 @@ struct FanOut {
 
 /// A linter that answers about a whole directory tree rather than a buffer.
 ///
-/// Two of them, and they disagree about what a scope is: golangci-lint reads a
-/// Go module and everything under it, tflint reads one directory and does not
-/// descend. That difference is why the findings are keyed by the run that
-/// produced them rather than by a path prefix.
+/// Three of them, and they disagree about what a scope is: golangci-lint reads
+/// a Go module and everything under it, clippy reads a cargo workspace and
+/// every crate in it, tflint reads one directory and does not descend. That
+/// difference is why the findings are keyed by the run that produced them
+/// rather than by a path prefix.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum PackageLinter {
     Golangci,
+    Clippy,
     Tflint,
 }
 
 impl PackageLinter {
     /// The name `[tools]` resolves it under, which is also the name in the log.
+    ///
+    /// `cargo` and not `clippy`: clippy is a cargo subcommand, so cargo is the
+    /// binary poly resolves and the one `[tools] cargo = "off"` turns off.
     fn tool(self) -> &'static str {
         match self {
             Self::Golangci => "golangci-lint",
+            Self::Clippy => "cargo",
             Self::Tflint => "tflint",
         }
     }
@@ -244,6 +250,7 @@ impl PackageLinter {
     fn run(self, cmd: &Path, root: &Path) -> Result<Vec<poly_tools::run::FileIssue>> {
         match self {
             Self::Golangci => poly_tools::run::golangci_module(cmd, root),
+            Self::Clippy => poly_tools::run::clippy_workspace(cmd, root),
             Self::Tflint => poly_tools::run::tflint_dir(cmd, root),
         }
     }
@@ -1655,18 +1662,22 @@ fn folders_after(
 /// The scope a whole-package linter would run over for this document, if poly
 /// runs one for the language.
 ///
-/// Two languages, because two of the linters poly drives cannot answer about a
-/// single buffer: golangci-lint type-checks the package, and tflint reads a
-/// directory as one Terraform module. Those were the two languages where `poly
-/// check` reported findings the editor never showed. Every other linter poly
-/// drives takes a file on stdin and is handled by `lint_document`.
+/// Three languages, because three of the linters poly drives cannot answer
+/// about a single buffer: golangci-lint type-checks the package, clippy
+/// compiles the crate, and tflint reads a directory as one Terraform module.
+/// Those are the languages where `poly check` reported findings the editor
+/// never showed. Every other linter poly drives takes a file on stdin and is
+/// handled by `lint_document`.
 ///
-/// The units are the tools' own: a Go module, and one Terraform directory —
-/// tflint does not descend, so neither does this. Both match what `poly check`
-/// groups by, which is the point (A4).
+/// The units are the tools' own: a Go module, a cargo workspace, and one
+/// Terraform directory — tflint does not descend, so neither does this. All
+/// three match what `poly check` groups by, which is the point (A4).
 fn package_lint_scope(language: &str, path: &Path) -> Option<(PackageLinter, PathBuf)> {
     match language {
         "go" => poly_tools::run::go_module_root(path).map(|root| (PackageLinter::Golangci, root)),
+        "rust" => {
+            poly_tools::run::cargo_workspace_root(path).map(|root| (PackageLinter::Clippy, root))
+        }
         "terraform" => path
             .parent()
             .map(|dir| (PackageLinter::Tflint, dir.to_path_buf())),
@@ -2547,6 +2558,24 @@ mod tests {
         assert_eq!(
             package_lint_scope("terraform", &plan),
             Some((PackageLinter::Tflint, nested.clone()))
+        );
+        // Rust: past the member crate to the workspace, because that is the
+        // scope cargo itself resolves. Stopping at the member would give one
+        // scope per crate in a workspace and a target directory each.
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"api\"]\n",
+        )
+        .expect("write workspace");
+        let member = root.join("api");
+        std::fs::create_dir_all(member.join("src")).expect("mkdir");
+        std::fs::write(member.join("Cargo.toml"), "[package]\nname = \"api\"\n")
+            .expect("write member");
+        let source = member.join("src/lib.rs");
+        std::fs::write(&source, "pub fn f() {}\n").expect("write lib.rs");
+        assert_eq!(
+            package_lint_scope("rust", &source),
+            Some((PackageLinter::Clippy, root.clone()))
         );
         // Everything else is a stdin-sized linter, and nothing else may queue a
         // whole-directory run.

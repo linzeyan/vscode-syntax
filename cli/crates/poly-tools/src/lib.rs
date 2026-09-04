@@ -376,6 +376,17 @@ pub const TOOLS: &[Tool] = &[
         language: Some("cpp"),
         asset: |_, _| None,
     },
+    // `cargo clippy`, which is why the entry is named for cargo: clippy is a
+    // subcommand, not a binary poly ever invokes directly. It has to come from
+    // the project's own toolchain for the same reason rust-analyzer does --
+    // clippy is built against one exact rustc, and a downloaded one would
+    // disagree with the compiler that builds the crate.
+    Tool {
+        name: "cargo",
+        version: "system",
+        language: Some("rust"),
+        asset: |_, _| None,
+    },
     Tool {
         name: "swift-format",
         version: "system",

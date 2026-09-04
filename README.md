@@ -122,7 +122,13 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
   信任第一次抓到的東西。
 - **只用專案 toolchain、不代裝**：rustfmt、clang-format、swift-format、
-  terraform fmt。
+  terraform fmt、`cargo clippy`。
+- **Rust 的 lint 是 `cargo clippy`**，範圍是整個 cargo workspace——跟 Go 的
+  golangci-lint（整個 module）、Terraform 的 tflint（一個目錄）同一個機制：存檔時
+  在編輯器裡跑的，跟 `poly check` 在 CI 裡跑的，是同一次呼叫。build 目錄是
+  `target/poly` 而不是預設的 `target/`，這樣你在終端打的 `cargo test` 不會等
+  編輯器（rust-analyzer 也是這麼做的）；代價是多一棵 build tree，第一次會編一次。
+  不想要就 `[tools] cargo = "off"`。
 - **Protobuf 的 lint 需要 buf module**：`.proto` 上方沒有 `buf.yaml` 就大聲跳過。
   沒有 module 時 buf 會拿當前工作目錄當根目錄，`PACKAGE_DIRECTORY_MATCH` 會對正常的
   package 亂噴，而且結果隨你從哪執行而變——會漂移的檢查比沒有檢查更糟（R5／A4）。

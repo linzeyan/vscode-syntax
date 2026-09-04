@@ -244,6 +244,14 @@ jobs:
       # scope nesting, which Go does not have by default and Terraform does.
       - name: Terraform lint acceptance
         run: python tools/tf-acceptance.py cli/target/release/poly
+      # The third one, and the only one that compiles to answer. The clippy
+      # component is already here -- the lint job above runs it -- and the
+      # fixture has no dependencies, so this costs seconds rather than the
+      # minutes a real crate would.
+      - name: Rust lint acceptance
+        run: |
+          rustup component add clippy
+          python tools/rust-acceptance.py cli/target/release/poly
       # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
       # two commands the README tells users to put in their CI. This was a
       # documented gate that was never actually wired, so every dogfood run was

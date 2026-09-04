@@ -14,6 +14,12 @@
 - **Lint**：存檔即時 diagnostics（shellcheck／hadolint／actionlint／ruff／
   selene／sqruff，以及專案內的 biome／eslint）；`Poly: Lint (poly check)`
   在終端跑完整 CLI，輸出與 CI 一致。
+- **整包範圍的 lint**：有三個工具讀不了單一 buffer，所以它們跑的是整個範圍，而那個
+  範圍是工具自己的定義——**golangci-lint** 讀一個 Go module（含底下所有 package）、
+  **cargo clippy** 讀一個 cargo workspace（含所有 crate）、**tflint** 讀一個目錄
+  且不往下走。三者在編輯器與 `poly check` 是同一次呼叫、同一個答案（A4）。它們比
+  單檔 linter 慢——clippy 要編譯——所以答案是存檔後幾秒才到，不是即時的。
+  clippy 用 `target/poly` 當 build 目錄，才不會跟你自己的 `cargo test` 搶鎖。
 - **`Poly: Analyze Dead Code (Go)`**：從 `main` 走不到的 Go 函式。每個 Go 檔的
   `package` 那行上面有一條 `analyze dead code` lens，點了在終端跑
   `poly deadcode`——跟 lint 一樣是同一支 CLI、同一個答案。**範圍不是那個檔**：往上找到

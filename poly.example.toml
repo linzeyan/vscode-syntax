@@ -178,7 +178,13 @@ include-hidden = false
 #   tflint 0.64.0         gofumpt 0.11.0       golangci-lint 2.13.1
 #   stylua 2.5.2          selene 0.31.0        swiftlint 0.65.1
 #   buf 1.72.0            terraform system     clang-format system
-#   swift-format system
+#   swift-format system   cargo system
+#
+# `cargo` is the entry for `cargo clippy`: clippy is a subcommand, not a binary
+# poly invokes on its own, so `cargo = "off"` is how a project turns Rust lint
+# off. It has to come from the project's toolchain -- clippy is built against
+# one exact rustc, and a downloaded one would disagree with the compiler that
+# builds the crate.
 #
 # buf is one binary doing three jobs -- it formats protobuf, lints it, and is
 # the language server `poly lsp` starts for it -- so an entry here governs all

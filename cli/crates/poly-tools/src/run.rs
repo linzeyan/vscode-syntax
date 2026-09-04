@@ -1114,6 +1114,252 @@ fn golangci_issues(parsed: GolangciOutput, root: &Path) -> Vec<FileIssue> {
         .collect()
 }
 
+// ── cargo clippy (whole workspace) ─────────────────────────────────────────
+
+/// One `--message-format=json` line. Only `compiler-message` carries findings;
+/// the artifact and build-finished lines are progress, not output.
+#[derive(Deserialize)]
+struct CargoLine {
+    reason: String,
+    message: Option<RustcDiagnostic>,
+}
+
+#[derive(Deserialize)]
+struct RustcDiagnostic {
+    message: String,
+    level: String,
+    code: Option<RustcCode>,
+    spans: Vec<RustcSpan>,
+    #[serde(default)]
+    children: Vec<RustcDiagnostic>,
+}
+
+#[derive(Deserialize)]
+struct RustcCode {
+    code: String,
+}
+
+#[derive(Deserialize)]
+struct RustcSpan {
+    file_name: String,
+    line_start: u32,
+    line_end: u32,
+    column_start: u32,
+    column_end: u32,
+    #[serde(default)]
+    is_primary: bool,
+    suggested_replacement: Option<String>,
+    suggestion_applicability: Option<String>,
+}
+
+/// Findings for the whole cargo workspace rooted at `root`.
+///
+/// The Go analogue is exact: `golangci-lint ./...` from the module root reads
+/// every package in the module, and `cargo clippy --all-targets` from the
+/// workspace root reads every crate in the workspace. Both include tests, and
+/// both are what `poly check` runs, so the editor cannot answer differently.
+///
+/// `--target-dir target/poly` is not tidiness. Sharing the default `target/`
+/// means poly holds cargo's build lock on every save, and the human who typed
+/// `cargo test` in a terminal waits on the editor. rust-analyzer keeps its own
+/// directory for that exact reason. The cost is one more build tree; cargo
+/// still recompiles it from scratch the first time, which is why this is a
+/// linter you notice starting up rather than one that answers instantly.
+pub fn clippy_workspace(cargo: &Path, root: &Path) -> Result<Vec<FileIssue>> {
+    let output = Command::new(cargo)
+        .args([
+            "clippy",
+            "--all-targets",
+            "--message-format=json",
+            "--quiet",
+            "--target-dir",
+            "target/poly",
+        ])
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        // A missing clippy component, an unparsable Cargo.toml and a locked
+        // target directory all report here and nowhere else; without it the
+        // failure reads as "no findings", which is the opposite of the truth.
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("running {}", cargo.display()))?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    // Nothing on stdout at all means cargo never got as far as compiling.
+    // Exit status alone cannot say so: clippy exits 0 with warnings and
+    // non-zero with errors, and errors are findings poly wants to report.
+    if text.trim().is_empty() && !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let reason = stderr
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("no output");
+        anyhow::bail!("cargo clippy produced no output: {reason}");
+    }
+    let mut found = Vec::new();
+    for line in text.lines().filter(|l| l.starts_with('{')) {
+        // A line poly cannot parse is a cargo message shape it does not know,
+        // not a reason to throw away the findings around it.
+        let Ok(parsed) = serde_json::from_str::<CargoLine>(line) else {
+            continue;
+        };
+        if parsed.reason != "compiler-message" {
+            continue;
+        }
+        if let Some(message) = parsed.message {
+            found.extend(clippy_issues(message, root));
+        }
+    }
+    Ok(dedup_findings(found))
+}
+
+/// Drop the repeats `--all-targets` produces.
+///
+/// Measured, not anticipated: a `main.rs` is compiled as a bin *and* as its own
+/// test harness, so clippy reports every finding in it twice, and a lib with
+/// unit tests does the same. golangci-lint has no equivalent because `./...` is
+/// one compilation of each package. Two identical entries are one mistake
+/// reported from two compilation units, so the second is noise -- and it is
+/// noise the editor would show as two overlapping squiggles.
+fn dedup_findings(found: Vec<FileIssue>) -> Vec<FileIssue> {
+    let mut seen = std::collections::HashSet::new();
+    found
+        .into_iter()
+        .filter(|f| {
+            seen.insert((
+                f.file.clone(),
+                f.issue.line,
+                f.issue.col,
+                f.issue.end_line,
+                f.issue.end_col,
+                f.issue.code.clone(),
+                f.issue.message.clone(),
+            ))
+        })
+        .collect()
+}
+
+/// The URL for a rule, when the code says which fixer produced it.
+///
+/// Only clippy's own lints have a stable page; a plain rustc lint like
+/// `unused_variables` has no per-lint URL, and inventing one would be a link
+/// poly never verified.
+fn clippy_url(code: &str) -> Option<String> {
+    code.strip_prefix("clippy::")
+        .map(|rule| format!("https://rust-lang.github.io/rust-clippy/master/index.html#{rule}"))
+}
+
+/// Kept separate from the run so the shape can be tested.
+///
+/// One diagnostic becomes at most one issue: rustc reports a finding once with
+/// several spans (the expression, the `help` rewrite, the note), and turning
+/// each span into its own entry would put three Problems on one mistake.
+fn clippy_issues(diagnostic: RustcDiagnostic, root: &Path) -> Vec<FileIssue> {
+    let severity = match diagnostic.level.as_str() {
+        "error" | "error: internal compiler error" => Severity::Error,
+        "warning" => Severity::Warning,
+        // note/help arrive as children of something already reported, and a
+        // top-level one is a summary line ("aborting due to 2 errors").
+        _ => return Vec::new(),
+    };
+    let Some(span) = diagnostic.spans.iter().find(|s| s.is_primary) else {
+        // No span means it is about the build rather than about a place in it.
+        return Vec::new();
+    };
+    let code = diagnostic
+        .code
+        .as_ref()
+        .map_or_else(|| diagnostic.level.clone(), |c| c.code.clone());
+    // The child that carries a replacement is the one that says what the fix
+    // does; its own message ("remove `return`") is already the description.
+    let fix = diagnostic
+        .children
+        .iter()
+        .find(|child| {
+            child
+                .spans
+                .iter()
+                .any(|s| s.suggested_replacement.is_some())
+        })
+        .map(|child| Fix::Described {
+            what: child.message.clone(),
+            // rustc's own word. MaybeIncorrect and HasPlaceholders both mean
+            // the rewrite may not compile, which is exactly what ruff's
+            // "unsafe" warns about, so it is passed on rather than softened.
+            safe: child
+                .spans
+                .iter()
+                .any(|s| s.suggestion_applicability.as_deref() == Some("MachineApplicable")),
+        });
+    vec![FileIssue {
+        file: root.join(&span.file_name),
+        issue: Issue {
+            line: span.line_start.saturating_sub(1),
+            col: span.column_start.saturating_sub(1),
+            end_line: span.line_end.saturating_sub(1),
+            end_col: span.column_end.saturating_sub(1),
+            severity,
+            url: clippy_url(&code),
+            code,
+            message: diagnostic.message,
+            source: "clippy",
+            fix,
+        },
+    }]
+}
+
+/// One run per workspace, for `poly check`.
+pub fn clippy_files(cargo: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
+    let mut roots: Vec<PathBuf> = files
+        .iter()
+        .filter_map(|f| cargo_workspace_root(f))
+        .collect();
+    roots.sort();
+    roots.dedup();
+    let mut out = Vec::new();
+    for root in roots {
+        out.extend(clippy_workspace(cargo, &root)?);
+    }
+    Ok(out)
+}
+
+/// The directory whose `Cargo.toml` governs `file`, as cargo itself decides it.
+///
+/// The workspace root and not the nearest crate, because that is the scope
+/// cargo actually operates on: `cargo clippy` from a member directory still
+/// resolves the workspace, shares its target directory, and reads its lint
+/// configuration. Running from the member would mean a different scope per
+/// file in one workspace and a target directory per crate.
+///
+/// Read rather than shelled out to. `cargo locate-project --workspace` is the
+/// authoritative answer, but it needs a toolchain to ask, and this has to give
+/// the same answer inside `package_lint_scope` where there is nothing to ask
+/// with. The rule is cargo's own: the outermost `Cargo.toml` declaring
+/// `[workspace]`, or the nearest one when nothing does.
+pub fn cargo_workspace_root(file: &Path) -> Option<PathBuf> {
+    let start = std::path::absolute(file).ok()?;
+    let mut dir = start.parent()?;
+    let mut nearest = None;
+    let mut workspace = None;
+    loop {
+        let manifest = dir.join("Cargo.toml");
+        if manifest.is_file() {
+            if nearest.is_none() {
+                nearest = Some(dir.to_path_buf());
+            }
+            if std::fs::read_to_string(&manifest)
+                .is_ok_and(|text| text.lines().any(|line| line.trim_end() == "[workspace]"))
+            {
+                workspace = Some(dir.to_path_buf());
+            }
+        }
+        match dir.parent() {
+            Some(up) => dir = up,
+            None => break,
+        }
+    }
+    workspace.or(nearest)
+}
+
 /// The directory whose `go.mod` governs `file`.
 ///
 /// Public because the daemon needs the same answer the batch run uses: it lints
@@ -1532,6 +1778,154 @@ struct BufViolation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Captured from `cargo clippy --message-format=json` (clippy 0.1.97), cut
+    /// down to the fields poly reads. One diagnostic, several spans: the
+    /// finding is the expression, and the rewrite lives on a `help` child.
+    #[test]
+    fn a_rustc_diagnostic_becomes_one_finding_with_the_child_s_fix() {
+        let raw = r#"{"message":"unneeded `return` statement","level":"warning",
+          "code":{"code":"clippy::needless_return"},
+          "spans":[{"file_name":"src/main.rs","line_start":3,"line_end":3,
+                    "column_start":5,"column_end":13,"is_primary":true,
+                    "suggested_replacement":null,"suggestion_applicability":null}],
+          "children":[
+            {"level":"help","message":"for further information visit ...","spans":[]},
+            {"level":"help","message":"remove `return`","spans":[
+              {"file_name":"src/main.rs","line_start":3,"line_end":3,
+               "column_start":5,"column_end":13,"is_primary":false,
+               "suggested_replacement":"y","suggestion_applicability":"MachineApplicable"}]}]}"#;
+        let parsed: RustcDiagnostic = serde_json::from_str(raw).expect("parse");
+        let found = clippy_issues(parsed, Path::new("/w"));
+        assert_eq!(
+            found.len(),
+            1,
+            "one mistake is one Problem, not one per span"
+        );
+        assert_eq!(found[0].file, Path::new("/w/src/main.rs"));
+        assert_eq!(found[0].issue.code, "clippy::needless_return");
+        // 0-based, like every other position poly reports.
+        assert_eq!((found[0].issue.line, found[0].issue.col), (2, 4));
+        assert_eq!(found[0].issue.severity, Severity::Warning);
+        assert_eq!(
+            found[0].issue.fix,
+            Some(Fix::Described {
+                what: "remove `return`".to_string(),
+                safe: true,
+            })
+        );
+        // Only clippy's own lints have a page; a rustc lint has none, and
+        // guessing one would be a link poly never checked.
+        assert!(found[0]
+            .issue
+            .url
+            .as_deref()
+            .is_some_and(|u| u.ends_with("#needless_return")));
+        assert_eq!(clippy_url("unused_variables"), None);
+    }
+
+    /// rustc says "aborting due to 2 previous errors" as a spanless diagnostic,
+    /// and the notes attached to a real finding arrive at top level too. Both
+    /// would become Problems pointing at nothing.
+    #[test]
+    fn a_diagnostic_about_the_build_is_not_a_finding() {
+        let spanless = r#"{"message":"aborting due to 2 previous errors","level":"error",
+          "code":null,"spans":[],"children":[]}"#;
+        let parsed: RustcDiagnostic = serde_json::from_str(spanless).expect("parse");
+        assert!(clippy_issues(parsed, Path::new("/w")).is_empty());
+
+        let note = r#"{"message":"`#[warn(unused)]` on by default","level":"note",
+          "code":null,"spans":[{"file_name":"a.rs","line_start":1,"line_end":1,
+          "column_start":1,"column_end":2,"is_primary":true,
+          "suggested_replacement":null,"suggestion_applicability":null}],"children":[]}"#;
+        let parsed: RustcDiagnostic = serde_json::from_str(note).expect("parse");
+        assert!(clippy_issues(parsed, Path::new("/w")).is_empty());
+    }
+
+    /// A rewrite rustc is not sure about is reported as unsafe, in ruff's
+    /// wording, because it means the same thing: applying it may not compile.
+    #[test]
+    fn an_uncertain_rewrite_is_marked_unsafe() {
+        let raw = r#"{"message":"unused variable: `x`","level":"warning",
+          "code":{"code":"unused_variables"},
+          "spans":[{"file_name":"a.rs","line_start":7,"line_end":7,
+                    "column_start":9,"column_end":10,"is_primary":true,
+                    "suggested_replacement":null,"suggestion_applicability":null}],
+          "children":[{"level":"help","message":"prefix it with an underscore","spans":[
+            {"file_name":"a.rs","line_start":7,"line_end":7,"column_start":9,
+             "column_end":10,"is_primary":false,"suggested_replacement":"_x",
+             "suggestion_applicability":"MaybeIncorrect"}]}]}"#;
+        let parsed: RustcDiagnostic = serde_json::from_str(raw).expect("parse");
+        let found = clippy_issues(parsed, Path::new("/w"));
+        assert_eq!(
+            found[0].issue.fix,
+            Some(Fix::Described {
+                what: "prefix it with an underscore".to_string(),
+                safe: false,
+            })
+        );
+    }
+
+    /// Found by running it: `--all-targets` compiles a `main.rs` as a bin and
+    /// again as its own test harness, so every finding in it arrives twice.
+    /// Two overlapping squiggles on one mistake is what this stops.
+    #[test]
+    fn one_mistake_compiled_twice_is_still_one_finding() {
+        let one = |message: &str, line: u32| FileIssue {
+            file: PathBuf::from("/w/src/main.rs"),
+            issue: Issue {
+                line,
+                col: 4,
+                end_line: line,
+                end_col: 12,
+                severity: Severity::Warning,
+                code: "clippy::needless_return".to_string(),
+                message: message.to_string(),
+                source: "clippy",
+                fix: None,
+                url: None,
+            },
+        };
+        let found = dedup_findings(vec![
+            one("unneeded `return` statement", 2),
+            one("unneeded `return` statement", 2),
+            // Same rule, different place: two mistakes, and both are real.
+            one("unneeded `return` statement", 9),
+        ]);
+        assert_eq!(found.len(), 2);
+        assert_eq!((found[0].issue.line, found[1].issue.line), (2, 9));
+    }
+
+    /// The scope has to be the same one `poly check` groups by, or the editor
+    /// and CI lint different sets of files (A4).
+    #[test]
+    fn a_cargo_scope_is_the_workspace_not_the_crate() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = std::fs::canonicalize(dir.path()).expect("real path");
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"api\"]\n",
+        )
+        .expect("write workspace");
+        let member = root.join("api");
+        std::fs::create_dir_all(member.join("src")).expect("mkdir");
+        std::fs::write(member.join("Cargo.toml"), "[package]\nname = \"api\"\n")
+            .expect("write member");
+        let source = member.join("src/lib.rs");
+        std::fs::write(&source, "pub fn f() {}\n").expect("write lib.rs");
+        assert_eq!(cargo_workspace_root(&source), Some(root.clone()));
+
+        // A crate that belongs to no workspace is its own scope.
+        let alone = root.join("alone");
+        std::fs::create_dir_all(alone.join("src")).expect("mkdir");
+        std::fs::write(alone.join("Cargo.toml"), "[package]\nname = \"alone\"\n")
+            .expect("write alone");
+        let inner = alone.join("src/main.rs");
+        std::fs::write(&inner, "fn main() {}\n").expect("write main.rs");
+        // ...unless one above it claims it, which is exactly what the walk is
+        // for: cargo resolves upward and so does this.
+        assert_eq!(cargo_workspace_root(&inner), Some(root));
+    }
 
     #[test]
     fn parses_shellcheck_json() {

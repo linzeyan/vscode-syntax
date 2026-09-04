@@ -534,6 +534,11 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             Box::new(poly_tools::run::golangci_files),
         ),
         (
+            "cargo",
+            group("rust"),
+            Box::new(poly_tools::run::clippy_files),
+        ),
+        (
             "swiftlint",
             group("swift"),
             Box::new(poly_tools::run::swiftlint_files),
