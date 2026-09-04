@@ -395,7 +395,7 @@ impl Downstream {
                         request.id = tag(&tag_with, &request.id);
                         Message::Request(request)
                     }
-                    Message::Response(response) => Message::Response(forwarded(response)),
+                    Message::Response(response) => Message::Response(answered(response)),
                     other => other,
                 };
                 forward(message);
@@ -628,14 +628,23 @@ fn execute_command_registration(
     }))
 }
 
-/// A downstream response on its way to the editor, with a null result put back.
+/// A response poly is relaying, with a null result put back.
 ///
 /// `lsp_server` parses a JSON `null` result into `None`, and skips the field
 /// entirely when it serializes — so a reply that went in as `"result": null`
 /// comes out carrying neither `result` nor `error`, which is not a legal
-/// response. `null` is a real answer here ("no definition at this position")
-/// and every server sends it eventually.
-fn forwarded(mut response: Response) -> Response {
+/// response.
+///
+/// Both directions need it, and for the same reason from opposite ends.
+/// Downstream to the editor, `null` is a real answer ("no definition at this
+/// position") that every server sends eventually. Editor to downstream, `null`
+/// is the *usual* answer: it is what a client says to `client/registerCapability`,
+/// which is how a server turns on a capability it did not declare at
+/// initialize. sourcekit-lsp registers its semantic tokens that way, and on a
+/// reply with neither field it says "sourcekit-lsp failed to decode a message"
+/// once and then stops answering anything — which reads as a server that is
+/// merely slow.
+pub fn answered(mut response: Response) -> Response {
     if response.result.is_none() && response.error.is_none() {
         response.result = Some(serde_json::Value::Null);
     }
@@ -738,8 +747,16 @@ mod tests {
     /// answered `"result": null` and the editor got `{"jsonrpc":"2.0","id":3}`,
     /// a response with neither field. Nothing Windows-specific about it —
     /// every server sends a null result the moment it has no answer.
+    ///
+    /// The other direction was found later and is worse, because the reply that
+    /// gets mangled is the *ordinary* one: `null` is what a client answers to
+    /// `client/registerCapability`, which is how a server turns on a capability
+    /// it did not declare at initialize. sourcekit-lsp registers its semantic
+    /// tokens that way; on the malformed reply it logged "failed to decode a
+    /// message" once and then answered nothing for the rest of the session,
+    /// which is indistinguishable from a server that is simply slow.
     #[test]
-    fn a_null_result_survives_the_trip_to_the_editor() {
+    fn a_null_result_survives_the_trip_in_either_direction() {
         let raw = r#"{"jsonrpc":"2.0","id":3,"result":null}"#;
         let parsed: Response = serde_json::from_str(raw).expect("a response");
         assert!(
@@ -747,13 +764,13 @@ mod tests {
             "lsp_server started keeping null results; this workaround can go"
         );
 
-        let sent = serde_json::to_string(&forwarded(parsed)).expect("serialises");
+        let sent = serde_json::to_string(&answered(parsed)).expect("serialises");
         assert!(sent.contains(r#""result":null"#), "{sent}");
 
         // An error response must not grow a result alongside its error.
         let raw = r#"{"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"no"}}"#;
         let failed: Response = serde_json::from_str(raw).expect("a response");
-        let sent = serde_json::to_string(&forwarded(failed)).expect("serialises");
+        let sent = serde_json::to_string(&answered(failed)).expect("serialises");
         assert!(!sent.contains("result"), "{sent}");
     }
 

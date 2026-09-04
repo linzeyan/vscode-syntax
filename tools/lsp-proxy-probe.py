@@ -662,6 +662,56 @@ def run(case, logs=True, graceful=True):
                         "definition": {"linkSupport": False},
                         "hover": {"contentFormat": ["markdown", "plaintext"]},
                         "synchronization": {"dynamicRegistration": True},
+                        # The legend a server declares is an answer to what the
+                        # client said it understands, not a fixed property of
+                        # the server: terraform-ls hands back an empty
+                        # `tokenTypes` to a client that did not ask. Under-
+                        # declaring here would have measured a capability no
+                        # real editor would ever see. These are VSCode's own
+                        # lists.
+                        "semanticTokens": {
+                            "dynamicRegistration": True,
+                            "tokenTypes": [
+                                "namespace",
+                                "type",
+                                "class",
+                                "enum",
+                                "interface",
+                                "struct",
+                                "typeParameter",
+                                "parameter",
+                                "variable",
+                                "property",
+                                "enumMember",
+                                "event",
+                                "function",
+                                "method",
+                                "macro",
+                                "keyword",
+                                "modifier",
+                                "comment",
+                                "string",
+                                "number",
+                                "regexp",
+                                "operator",
+                                "decorator",
+                            ],
+                            "tokenModifiers": [
+                                "declaration",
+                                "definition",
+                                "readonly",
+                                "static",
+                                "deprecated",
+                                "abstract",
+                                "async",
+                                "modification",
+                                "documentation",
+                                "defaultLibrary",
+                            ],
+                            "formats": ["relative"],
+                            "requests": {"range": True, "full": {"delta": True}},
+                            "augmentsSyntaxTokens": True,
+                        },
                         # resolveSupport is what makes rust-analyzer turn
                         # resolveProvider on; without it the server declares no
                         # resolve and the check below silently never runs.

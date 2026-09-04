@@ -560,7 +560,12 @@ impl Server {
             return; // not ours and not theirs; nothing to do with it
         };
         if let Some(Some(server)) = self.downstream.get_mut(&name) {
-            let restored = Response { id, ..response };
+            // `answered`, not a bare restore: the editor's reply to a
+            // `client/registerCapability` is `"result": null`, which lsp_server
+            // parses to `None` and then does not serialise at all. The server
+            // receives a response with neither result nor error and is entitled
+            // to reject it — sourcekit-lsp does, once, and then stops answering.
+            let restored = crate::proxy::answered(Response { id, ..response });
             if let Err(e) = server.send(Message::Response(restored)) {
                 eprintln!("[poly] {name}: {e:#}");
             }
