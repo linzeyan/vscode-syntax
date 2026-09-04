@@ -169,7 +169,15 @@ pub const EXTRA_ROUTED: &[&str] = &[
 /// Broadcast rather than routed, because the notification names a list of
 /// files rather than a document, and each server already filters by the globs
 /// it registered for.
-pub const BROADCAST: &[&str] = &["workspace/didChangeWatchedFiles"];
+/// `didChangeWorkspaceFolders` is here for a different reason: it arrives
+/// because *poly* declared `workspace.workspaceFolders`, and every server needs
+/// it because folders are not a per-language thing. A second Go module added to
+/// the window is news to gopls, and the .lua file inside it is news to
+/// lua-language-server.
+pub const BROADCAST: &[&str] = &[
+    "workspace/didChangeWatchedFiles",
+    "workspace/didChangeWorkspaceFolders",
+];
 
 /// A code action kind poly keeps to itself, because running it would rewrite
 /// the file the formatter is about to rewrite.

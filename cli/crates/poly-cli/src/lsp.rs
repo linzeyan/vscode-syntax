@@ -300,6 +300,19 @@ fn serve(connection: Connection) -> Result<()> {
             commands: EXECUTE_COMMANDS.iter().map(|c| c.to_string()).collect(),
             ..Default::default()
         }),
+        // Declared for the downstream servers rather than for poly, which has
+        // no use for a folder list of its own. Without it the editor never
+        // sends `workspace/didChangeWorkspaceFolders` at all, and adding a
+        // second project to the window leaves every running server resolving
+        // imports against the tree that was open at startup — and every server
+        // started afterwards being told the same stale list.
+        workspace: Some(lsp_types::WorkspaceServerCapabilities {
+            workspace_folders: Some(lsp_types::WorkspaceFoldersServerCapabilities {
+                supported: Some(true),
+                change_notifications: Some(OneOf::Left(true)),
+            }),
+            file_operations: None,
+        }),
         ..Default::default()
     };
     let init_params = connection.initialize(serde_json::to_value(capabilities)?)?;
@@ -906,6 +919,13 @@ impl Server {
                     self.queue_package_lint(&params.text_document.uri, true);
                 }
             }
+            "workspace/didChangeWorkspaceFolders" => {
+                // The running servers were told by `broadcast_downstream`
+                // above. This is for the ones not started yet.
+                let folders = folders_after(&self.init_params, &notification.params);
+                eprintln!("[poly] workspace folders: {}", folders.len());
+                self.init_params["workspaceFolders"] = serde_json::Value::Array(folders);
+            }
             "textDocument/didClose" => {
                 let params: DidCloseTextDocumentParams =
                     serde_json::from_value(notification.params)?;
@@ -1411,6 +1431,50 @@ fn strip_source_actions(
     }
     response.result = response.result.map(crate::proxy::without_withheld_actions);
     Message::Response(response)
+}
+
+/// The workspace folders after applying one `didChangeWorkspaceFolders` event.
+///
+/// `init_params` is the editor's own InitializeParams, replayed verbatim to
+/// each server as it starts — and servers start lazily, so one that comes up an
+/// hour into the session would otherwise be handed the folders that happened to
+/// be open at startup. gopls resolves imports against that list; being wrong
+/// about it is being wrong about what the project *is*.
+///
+/// `rootUri` and `rootPath` are left alone. They are deprecated, they name the
+/// folder the window was opened with rather than the current set, and rewriting
+/// them would move the root out from under a server that is already indexing
+/// against it.
+fn folders_after(
+    init_params: &serde_json::Value,
+    params: &serde_json::Value,
+) -> Vec<serde_json::Value> {
+    let uri_of = |folder: &serde_json::Value| {
+        folder
+            .get("uri")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    let mut folders: Vec<serde_json::Value> = init_params
+        .get("workspaceFolders")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let Some(event) = params.get("event") else {
+        return folders;
+    };
+    // Removed before added, and matched by uri rather than by position: the
+    // editor sends the folders it changed, not the list it now has.
+    let removed: HashSet<String> = event
+        .get("removed")
+        .and_then(serde_json::Value::as_array)
+        .map(|list| list.iter().filter_map(uri_of).collect())
+        .unwrap_or_default();
+    folders.retain(|folder| !uri_of(folder).is_some_and(|uri| removed.contains(&uri)));
+    if let Some(added) = event.get("added").and_then(serde_json::Value::as_array) {
+        folders.extend(added.iter().cloned());
+    }
+    folders
 }
 
 /// The scope a whole-package linter would run over for this document, if poly
@@ -2143,6 +2207,50 @@ mod tests {
             ["errcheck"],
             "another module's report is not this run's to clear"
         );
+    }
+
+    /// A server that starts an hour into the session has to be told about the
+    /// folders open now, not the ones open at startup.
+    ///
+    /// The event carries what changed, never the resulting list, so poly has to
+    /// keep the list itself. Matching removals by uri rather than by position
+    /// is the part worth pinning: the editor is under no obligation to send
+    /// back the same object it was given, and a `name` differing by a character
+    /// would leave a removed folder in the list forever.
+    #[test]
+    fn workspace_folders_track_what_the_editor_reports() {
+        let folder =
+            |name: &str| serde_json::json!({"uri": format!("file:///w/{name}"), "name": name});
+        let init = serde_json::json!({
+            "rootUri": "file:///w/api",
+            "workspaceFolders": [folder("api"), folder("cli")],
+        });
+
+        let swap = serde_json::json!({
+            "event": {
+                // Same uri, different name than the editor first sent.
+                "added": [folder("web")],
+                "removed": [{"uri": "file:///w/cli", "name": "renamed since"}],
+            }
+        });
+        let after = folders_after(&init, &swap);
+        assert_eq!(
+            after
+                .iter()
+                .filter_map(|f| f["uri"].as_str())
+                .collect::<Vec<_>>(),
+            ["file:///w/api", "file:///w/web"]
+        );
+
+        // A window opened on a single file has no folders at all, and the first
+        // one added must not be lost to that.
+        let bare = serde_json::json!({"rootUri": serde_json::Value::Null});
+        let added = serde_json::json!({"event": {"added": [folder("api")], "removed": []}});
+        assert_eq!(folders_after(&bare, &added).len(), 1);
+
+        // An event poly cannot read leaves the list as it was. Dropping every
+        // folder would be a far worse answer than ignoring the notification.
+        assert_eq!(folders_after(&init, &serde_json::json!({})).len(), 2);
     }
 
     /// Which files a whole-package linter is asked about has to mean the same

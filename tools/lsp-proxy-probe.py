@@ -1620,6 +1620,168 @@ FANOUT_FILES = {
 }
 
 
+LATE_FOLDER_FILES = {
+    "opened/go.mod": "module example.com/opened\n\ngo 1.21\n",
+    "opened/main.go": 'package main\n\nfunc main() {\n\tprintln("opened")\n}\n',
+    "added/go.mod": "module example.com/added\n\ngo 1.21\n",
+    # The name is deliberately unlike anything in the other module or the
+    # standard library, so a hit can only have come from this folder.
+    "added/lib.go": 'package added\n\nfunc ZarquonBeeblebrox() string {\n\treturn "x"\n}\n',
+}
+
+
+def sees_late_folder(root, announce, start_first):
+    """Does gopls know about a folder that arrived after initialize?
+
+    `announce` sends the didChangeWorkspaceFolders; without it this is the
+    control. `start_first` decides which half is under test: opening the .go
+    before the announcement makes it the broadcast to a running server, opening
+    it after makes it the init_params replay to a server that starts late.
+    """
+    global proc, INBOX, STDERR
+    INBOX, STDERR = [], []
+    opened = f"file://{root}/opened"
+    proc = subprocess.Popen(
+        [BIN, "lsp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    threading.Thread(target=watch, args=(proc.stderr,), daemon=True).start()
+    send(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "processId": None,
+                "rootUri": opened,
+                "workspaceFolders": [{"uri": opened, "name": "opened"}],
+                "initializationOptions": {"languageServers": True},
+                "capabilities": {
+                    "textDocument": {"synchronization": {"dynamicRegistration": True}},
+                    "workspace": {
+                        "configuration": True,
+                        "workspaceFolders": True,
+                        "symbol": {},
+                    },
+                },
+            },
+        }
+    )
+    init, _ = pump(want_id=1)
+    # poly has to say it wants them, or the editor never sends any of this.
+    folders = init["result"]["capabilities"]["workspace"]["workspaceFolders"]
+    assert folders["supported"] and folders["changeNotifications"], folders
+    send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+
+    def open_entry():
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": f"{opened}/main.go",
+                        "languageId": "go",
+                        "version": 1,
+                        "text": LATE_FOLDER_FILES["opened/main.go"],
+                    }
+                },
+            }
+        )
+        pump(want_method="client/registerCapability")
+
+    def announce_folder():
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "workspace/didChangeWorkspaceFolders",
+                "params": {
+                    "event": {
+                        "added": [
+                            {"uri": f"file://{root}/added", "name": "added"},
+                        ],
+                        "removed": [],
+                    }
+                },
+            }
+        )
+
+    if start_first:
+        open_entry()
+        if announce:
+            announce_folder()
+    else:
+        if announce:
+            announce_folder()
+        open_entry()
+
+    # settle, because gopls has to load the new folder before it can answer
+    # about it -- and because the control has to be given the same chance to
+    # succeed as the case, or it proves nothing.
+    deadline = time.time() + (60 if announce else 20)
+    rid = 70
+    found = []
+    while time.time() < deadline:
+        result = ask(rid, "workspace/symbol", {"query": "ZarquonBeeblebrox"})["result"]
+        found = [s for s in result or [] if "/added/" in s["location"]["uri"]]
+        if found:
+            break
+        rid += 1
+        time.sleep(0.5)
+
+    send({"jsonrpc": "2.0", "id": 99, "method": "shutdown", "params": None})
+    pump(want_id=99)
+    send({"jsonrpc": "2.0", "method": "exit", "params": None})
+    try:
+        proc.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise AssertionError("poly did not exit")
+    return bool(found)
+
+
+def a_folder_added_mid_session():
+    """Adding a second project to the window, without reopening it.
+
+    Two halves that fail independently. A server already running is told by the
+    broadcast; a server that starts afterwards is told by `init_params`, which
+    poly has to keep current because it replays it verbatim to each server as it
+    starts. Before this, poly did not even declare `workspace.workspaceFolders`,
+    so the editor sent nothing and both halves were dark.
+
+    The control is what makes it a measurement: the same session without the
+    notification, given a third of the deadline to find the same symbol.
+    """
+    if not (shutil.which("gopls") and shutil.which("go")):
+        print("SKIPPED late workspace folder: needs gopls and go on PATH")
+        return
+    root = os.path.realpath(tempfile.mkdtemp(prefix="poly-proxy-folders-"))
+    for name, text in LATE_FOLDER_FILES.items():
+        path = os.path.join(root, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+
+    print("a workspace folder added mid-session:")
+    assert not sees_late_folder(root, announce=False, start_first=True), (
+        "gopls found a symbol in a folder it was never told about; the control "
+        "is not controlling anything and neither assertion below means much"
+    )
+    print("  control: unannounced, gopls cannot see it")
+    assert sees_late_folder(root, announce=True, start_first=True), (
+        "a running gopls was not told the folder appeared — the broadcast half"
+    )
+    print("  announced to a running gopls: found")
+    assert sees_late_folder(root, announce=True, start_first=False), (
+        "a gopls started after the change was handed the folder list from "
+        "initialize — init_params went stale"
+    )
+    print("  announced before gopls started: found")
+    shutil.rmtree(root, ignore_errors=True)
+
+
 def one_query_two_servers():
     """Ctrl+T with two languages open: one reply, and both servers in it.
 
@@ -1789,6 +1951,7 @@ elif ran:
 
 cross_module_go()
 one_query_two_servers()
+a_folder_added_mid_session()
 
 if not ran:
     print("PROXY PROBE SKIPPED: no language server on PATH")
