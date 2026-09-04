@@ -174,9 +174,21 @@ pub const EXTRA_ROUTED: &[&str] = &[
 /// it because folders are not a per-language thing. A second Go module added to
 /// the window is news to gopls, and the .lua file inside it is news to
 /// lua-language-server.
+///
+/// `$/cancelRequest` names an id rather than a document, and poly forwards
+/// every request with the editor's own id untouched — so the id in the cancel
+/// is the id the server knows the request by, with nothing to rewrite. Sending
+/// it to all of them rather than tracking which server got which id is safe by
+/// construction: editor ids are unique for the session and poly's own
+/// downstream requests are `poly:`-prefixed strings, so a cancel can only ever
+/// match the one request it names, and a `$/` notification about an id a server
+/// never saw is one it is free to ignore. Dropping these was not free —
+/// abandoned work is what makes a large Go project stay busy after the cursor
+/// has moved on.
 pub const BROADCAST: &[&str] = &[
     "workspace/didChangeWatchedFiles",
     "workspace/didChangeWorkspaceFolders",
+    "$/cancelRequest",
 ];
 
 /// A code action kind poly keeps to itself, because running it would rewrite

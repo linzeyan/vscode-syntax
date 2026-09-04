@@ -1892,6 +1892,193 @@ def one_query_two_servers():
     shutil.rmtree(root, ignore_errors=True)
 
 
+# A language server whose only reply is to a cancellation.
+#
+# Every other case in this file measures a real server, on purpose. This one
+# cannot: whether a real server is still working when the cancel lands is a
+# race, so "it answered" would prove nothing and "it answered -32800" would be
+# flaky. A server that holds every request open forever inverts that -- the
+# probe gets an answer only if the notification arrived, and a poly that drops
+# cancels hangs instead of passing. It is reached through poly.toml's `[tools]`
+# override, the same one that swaps rust-analyzer for a drop-in replacement, so
+# no part of poly is in test mode.
+CANCEL_SERVER = r"""#!/usr/bin/env python3
+import json
+import sys
+
+
+def read():
+    headers = {}
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+        if line in (b"\r\n", b"\n"):
+            break
+        key, value = line.decode().split(":", 1)
+        headers[key.strip().lower()] = value.strip()
+    return json.loads(sys.stdin.buffer.read(int(headers["content-length"])))
+
+
+def write(msg):
+    data = json.dumps(msg).encode()
+    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(data) + data)
+    sys.stdout.buffer.flush()
+
+
+held = set()
+while True:
+    message = read()
+    if message is None:
+        break
+    method = message.get("method")
+    if method == "initialize":
+        write({
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "result": {"capabilities": {"definitionProvider": True}},
+        })
+    elif method == "shutdown":
+        write({"jsonrpc": "2.0", "id": message["id"], "result": None})
+    elif method == "exit":
+        break
+    elif method == "$/cancelRequest":
+        # An id this server never saw is one the spec lets it ignore, and
+        # answering it anyway would invent a reply the editor is not waiting
+        # for. That distinction is half of what the probe checks.
+        rid = message["params"]["id"]
+        if rid in held:
+            held.discard(rid)
+            write({
+                "jsonrpc": "2.0",
+                "id": rid,
+                "error": {"code": -32800, "message": "cancelled"},
+            })
+    elif method is not None and "id" in message:
+        held.add(message["id"])
+"""
+
+
+def a_cancelled_request_reaches_the_server():
+    """Escape mid-request: the cancel travels, and only the named one dies.
+
+    An editor cancels constantly -- every keystroke abandons the completion and
+    the symbol query before it. poly forwarded requests and dropped the cancels,
+    so a downstream server kept computing answers for a cursor that had moved
+    on; the editor throws those away, and in a large Go project the work is not
+    small. Cancels are broadcast rather than routed because they name an id and
+    no document, which is only safe because poly forwards requests with the
+    editor's own id untouched -- so the second half of this checks that a server
+    which never saw the id stays quiet about it.
+    """
+    global proc, INBOX, STDERR
+    root = os.path.realpath(tempfile.mkdtemp(prefix="poly-proxy-cancel-"))
+    server = os.path.join(root, "cancel-server.py")
+    with open(server, "w") as f:
+        f.write(CANCEL_SERVER)
+    os.chmod(server, 0o755)
+    with open(os.path.join(root, "poly.toml"), "w") as f:
+        f.write(f'[tools]\nlua-language-server = "{server}"\n')
+    with open(os.path.join(root, "main.lua"), "w") as f:
+        f.write(FANOUT_LUA)
+
+    print("a request cancelled while a server is still holding it:")
+    INBOX, STDERR = [], []
+    proc = subprocess.Popen(
+        [BIN, "lsp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    threading.Thread(target=watch, args=(proc.stderr,), daemon=True).start()
+    send(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "processId": None,
+                "rootUri": f"file://{root}",
+                "workspaceFolders": [{"uri": f"file://{root}", "name": "cancel"}],
+                "initializationOptions": {"languageServers": True},
+                "capabilities": {
+                    "textDocument": {"synchronization": {"dynamicRegistration": True}},
+                    "workspace": {"configuration": True, "didChangeConfiguration": {}},
+                },
+            },
+        }
+    )
+    pump(want_id=1)
+    send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+    send(
+        {
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": f"file://{root}/main.lua",
+                    "languageId": "lua",
+                    "version": 1,
+                    "text": FANOUT_LUA,
+                }
+            },
+        }
+    )
+
+    def cancelled(rid):
+        """Ask, cancel, and insist on the reply the cancel is the only source of."""
+        send(
+            {
+                "jsonrpc": "2.0",
+                "id": rid,
+                "method": "textDocument/definition",
+                "params": {
+                    "textDocument": {"uri": f"file://{root}/main.lua"},
+                    "position": {"line": 4, "character": 6},
+                },
+            }
+        )
+        send({"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": rid}})
+        # Without this the regression is a hang rather than a failure: nothing
+        # else in the session is ever going to answer that id.
+        guard = threading.Timer(30, proc.kill)
+        guard.start()
+        try:
+            reply, _ = pump(want_id=rid)
+        except EOFError:
+            raise AssertionError(
+                f"no reply to request {rid} within 30s — the cancel never "
+                "reached the server, so nothing was left to answer it"
+            ) from None
+        finally:
+            guard.cancel()
+        assert (reply.get("error") or {}).get("code") == -32800, (
+            f"expected the cancelled request to end as -32800, got {reply}"
+        )
+
+    cancelled(61)
+    print("  the cancel reached the server holding the request")
+
+    # An id no request ever used. It goes to the same server, because poly
+    # cannot know which one holds an id without tracking every request; what it
+    # must not do is produce a reply for it.
+    send({"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 777}})
+    cancelled(62)
+    stray = [m for m in INBOX if m.get("id") == 777]
+    assert not stray, f"a cancel for an id nobody asked about was answered: {stray}"
+    print("  a cancel for an unknown id was ignored, and the session survived it")
+
+    send({"jsonrpc": "2.0", "id": 99, "method": "shutdown", "params": None})
+    pump(want_id=99)
+    send({"jsonrpc": "2.0", "method": "exit", "params": None})
+    try:
+        proc.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise AssertionError("poly did not exit")
+    shutil.rmtree(root, ignore_errors=True)
+
+
 ran = []
 for probe in CASES:
     # A managed server is poly's to produce, so there is nothing to skip on:
@@ -1952,6 +2139,7 @@ elif ran:
 cross_module_go()
 one_query_two_servers()
 a_folder_added_mid_session()
+a_cancelled_request_reaches_the_server()
 
 if not ran:
     print("PROXY PROBE SKIPPED: no language server on PATH")
