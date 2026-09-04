@@ -98,6 +98,25 @@ rust-analyzer 的 `Run | Debug` lens **不是** server 給的，是它自家 ext
 
 poly-editor 的 `N refs`／`N impls` 是另一回事，兩者會一起顯示。
 
+### 語意上色（semantic tokens）
+
+語法上色來自文法檔，語意上色來自 language server——文法看到 `strings.ToUpper` 只知道那是
+「點後面的識別字」，只有 gopls 知道那是另一個 package 的函式。兩層會疊在一起，由主題決定
+要不要採用（`editor.semanticHighlighting.enabled`，VSCode 預設 `configuredByTheme`）。
+
+**gopls 出貨時是關的**，第三個這種形狀的設定：
+
+```jsonc
+{
+  "gopls": {
+    "semanticTokens": true
+  }
+}
+```
+
+rust-analyzer、clangd、lua-language-server、terraform-ls、buf 預設就有。Swift 也有，只是
+sourcekit-lsp 是等編輯器表示看得懂之後才自己註冊的，時機比其他 server 晚一點。
+
 ### 一個 window 開多個 Go 專案：`Poly: Create go.work for the Open Go Modules`
 
 **跨 module 的引用只有在有 `go.work` 時才找得到。** 實測 gopls 1.26，兩個 module

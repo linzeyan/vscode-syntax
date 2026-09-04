@@ -234,6 +234,11 @@ class Case:
     # of an index this probe never builds get the routing check and no more,
     # the same split `unindexed` makes for call hierarchy.
     workspace_symbol: str = None
+    # A token type that must appear once the legend is applied. Named rather
+    # than counted for the same reason: the count would be right even if every
+    # index pointed at the wrong entry, which is the failure mode a mangled
+    # legend actually has.
+    semantic_tokens: str = None
     edit: tuple = field(default=("world", "there"))
 
 
@@ -277,6 +282,13 @@ LENS = {"codeLens"}
 # namespace -- everything else in these sets is a `textDocument/` method with the
 # prefix dropped.
 SYMBOL = {"workspace/symbol"}
+# Six of the seven. sourcekit-lsp is the exception and an instructive one: it
+# declares `semanticTokensProvider: null` at initialize and then registers
+# `textDocument/semanticTokens` itself, dynamically, once the client says it
+# understands them. poly forwards that registration like any other server
+# request, so Swift does get semantic highlighting -- just not from a
+# registration poly minted, which is why it is absent here.
+SEMTOK = {"semanticTokens"}
 
 CASES = [
     Case(
@@ -296,7 +308,8 @@ CASES = [
         | HIERARCHY
         | COMMANDS
         | LENS
-        | SYMBOL,
+        | SYMBOL
+        | SEMTOK,
         # What Tooltitude calls `move...`, and the reason commands are
         # routed at all: gopls answers the code action with this command
         # and no edit.
@@ -311,6 +324,10 @@ CASES = [
         # generate directive is the one lens a .go file can carry by itself.
         code_lens="generate",
         workspace_symbol="Greet",
+        # MAIN_GO's `strings.ToUpper` is the one thing here TextMate cannot
+        # know: the grammar sees an identifier after a dot, and only gopls
+        # knows it is a function in another package.
+        semantic_tokens="function",
     ),
     Case(
         language="rust",
@@ -329,7 +346,8 @@ CASES = [
         registers=FULL
         | {"selectionRange", "declaration", "inlayHint", "prepareCallHierarchy"}
         | LENS
-        | SYMBOL,
+        | SYMBOL
+        | SEMTOK,
     ),
     # No compile_commands.json on purpose. clangd falls back to default flags
     # for a standalone file, which is enough for a same-file definition, and
@@ -356,7 +374,8 @@ CASES = [
         | {"selectionRange", "declaration", "inlayHint"}
         | HIERARCHY
         | COMMANDS
-        | SYMBOL,
+        | SYMBOL
+        | SEMTOK,
         command="clangd.applyTweak",
     ),
     Case(
@@ -398,7 +417,7 @@ CASES = [
         chatty="[terraform-ls] ",
         # The thinnest of the six: no rename, no code actions, and none of the
         # position-scoped extras beyond signatureHelp.
-        registers=COMMON | {"declaration"} | COMMANDS | LENS | SYMBOL,
+        registers=COMMON | {"declaration"} | COMMANDS | LENS | SYMBOL | SEMTOK,
         # Read-only, and the init/validate commands next to it on the list
         # are exactly why the probe never fires an unnamed one.
         command="terraform-ls.module.callers",
@@ -421,7 +440,8 @@ CASES = [
         registers=(FULL - {"implementation", "signatureHelp"})
         | COMMANDS
         | LENS
-        | SYMBOL,
+        | SYMBOL
+        | SEMTOK,
     ),
     Case(
         language="lua",
@@ -436,7 +456,7 @@ CASES = [
         # The only server measured that asks for inlay hints to be resolved
         # (`inlayHintProvider.resolveProvider`), which is why poly routes
         # `inlayHint/resolve` even though nothing registers it.
-        registers=FULL | {"inlayHint"} | COMMANDS | LENS | SYMBOL,
+        registers=FULL | {"inlayHint"} | COMMANDS | LENS | SYMBOL | SEMTOK,
         command="lua.getConfig",
     ),
 ]
@@ -486,7 +506,14 @@ def recv():
 # never routed. That is why the inlay check below could not exist before this
 # did. Only the `gopls` section is answered, because it is the only server here
 # that asks for one.
-GOPLS_SETTINGS = {"hints": {"assignVariableTypes": True, "parameterNames": True}}
+GOPLS_SETTINGS = {
+    "hints": {"assignVariableTypes": True, "parameterNames": True},
+    # The third gopls feature that ships off and is switched on from here, after
+    # inlay hints and the `test` codelens. Without it gopls answers
+    # `{"data": []}` -- a legal, complete, entirely empty highlighting, and one
+    # a check that only counted a routed reply would have called a pass.
+    "semanticTokens": True,
+}
 
 
 def editor_settings(params):
@@ -981,6 +1008,34 @@ def run(case, logs=True, graceful=True):
         lenses = ask(15, "textDocument/codeLens", {"textDocument": {"uri": uri}})
         assert "result" in lenses, f"codeLens was not routed: {lenses}"
         print(f"  codeLens routed; {case.server} offers none for this fixture")
+
+    # Semantic tokens. The registration is the whole risk here: a token names
+    # its type as an *index* into the legend poly registered, so a legend that
+    # arrived reordered, deduplicated or trimmed would not fail anywhere -- it
+    # would colour every identifier as something else. Checking the indices
+    # against the registered legend is what makes that visible.
+    if "semanticTokens" in case.registers:
+        legend = methods["textDocument/semanticTokens"]["registerOptions"]["legend"]
+        tokens = ask(
+            17, "textDocument/semanticTokens/full", {"textDocument": {"uri": uri}}
+        )
+        assert "result" in tokens, f"semanticTokens/full was not routed: {tokens}"
+        data = (tokens["result"] or {}).get("data", [])
+        assert len(data) % 5 == 0, f"a token is five integers, got {len(data)}"
+        kinds = data[3::5]
+        assert all(kind < len(legend["tokenTypes"]) for kind in kinds), (
+            f"{case.server} produced token types outside the legend poly "
+            f"registered ({len(legend['tokenTypes'])} entries): {sorted(set(kinds))}"
+        )
+        if case.semantic_tokens:
+            assert kinds, f"{case.server} highlighted nothing: {tokens['result']}"
+            named = sorted({legend["tokenTypes"][kind] for kind in kinds})
+            assert case.semantic_tokens in named, (
+                f"no {case.semantic_tokens!r} token: {named}"
+            )
+            print(f"  {len(kinds)} semantic token(s): {named}")
+        else:
+            print(f"  semanticTokens routed; {len(kinds)} for this fixture")
 
     # Ctrl+T. The only request poly sends to every server rather than one, so
     # "was it routed" and "did it come back exactly once" are different

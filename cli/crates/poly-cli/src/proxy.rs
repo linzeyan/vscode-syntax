@@ -120,9 +120,20 @@ pub const PROXIED: &[(&str, &str)] = &[
 // - `documentOnTypeFormatting` (4 of 6 declare it): poly is the formatter.
 //   This is the `source.organizeImports` collision without even the save
 //   boundary to contain it — it fires mid-keystroke.
-// - `semanticTokens` (4 of 6): routable, but a whole token set per change is
-//   a different traffic profile, and it lands on top of the TextMate layer
-//   poly-syntax-highlight already paints. Worth its own decision.
+
+/// The three requests one `textDocument/semanticTokens` registration covers.
+///
+/// Semantic tokens are the only capability here whose registration method is
+/// not a request method: the editor registers `textDocument/semanticTokens` and
+/// then sends `/full`, `/full/delta` or `/range` depending on what the server's
+/// options and its own capabilities allow. Each of the three names a document
+/// and routes the ordinary way — there is simply no row in `PROXIED` that could
+/// pair them with a capability field, because they all share one.
+pub const SEMANTIC_TOKENS: &[&str] = &[
+    "textDocument/semanticTokens/full",
+    "textDocument/semanticTokens/full/delta",
+    "textDocument/semanticTokens/range",
+];
 
 /// Requests poly routes but never registers.
 ///
@@ -515,8 +526,55 @@ pub fn registrations(
                 "registerOptions": options,
             }))
         })
+        .chain(semantic_tokens_registration(capabilities, name, &selector))
         .chain(execute_command_registration(capabilities, name))
         .collect()
+}
+
+/// The registration that turns on semantic highlighting for this server.
+///
+/// Separate from the `PROXIED` loop because the method poly registers is not a
+/// method anybody sends: `textDocument/semanticTokens` covers three requests at
+/// once, and which of them the editor uses is decided by the options below.
+///
+/// The whole options object is the server's, legend included, and that is the
+/// only part that has to be right. A token's type is an *index* into
+/// `legend.tokenTypes`; poly rewriting, reordering or trimming that list would
+/// not fail — it would silently colour every identifier as something else.
+/// clangd's legend has `variable` three times and `unknown` in the middle of
+/// it, which is exactly the kind of thing a well-meaning normalisation would
+/// tidy up and break.
+///
+/// A provider with an empty `tokenTypes` is dropped. Not poly second-guessing
+/// the server: an empty legend can encode no token at all, so the registration
+/// would buy a request on every keystroke for an answer that cannot say
+/// anything. terraform-ls declares exactly this to a client that did not ask
+/// for semantic tokens — and poly forwards the editor's capabilities verbatim,
+/// so what a real editor gets is decided by what it asked for, not by poly.
+fn semantic_tokens_registration(
+    capabilities: &serde_json::Value,
+    name: &str,
+    selector: &serde_json::Value,
+) -> Option<serde_json::Value> {
+    let declared = capabilities.get("semanticTokensProvider")?;
+    let serde_json::Value::Object(options) = declared else {
+        return None;
+    };
+    if declared
+        .get("legend")?
+        .get("tokenTypes")?
+        .as_array()?
+        .is_empty()
+    {
+        return None;
+    }
+    let mut options = serde_json::Value::Object(options.clone());
+    options["documentSelector"] = selector.clone();
+    Some(serde_json::json!({
+        "id": format!("{POLY_ID}{name}:textDocument/semanticTokens"),
+        "method": "textDocument/semanticTokens",
+        "registerOptions": options,
+    }))
 }
 
 /// The commands a server says it can run.

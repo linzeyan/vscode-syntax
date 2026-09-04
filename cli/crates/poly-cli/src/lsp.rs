@@ -409,6 +409,7 @@ impl Server {
             .iter()
             .any(|(method, _)| *method == request.method)
             || crate::proxy::EXTRA_ROUTED.contains(&request.method.as_str())
+            || crate::proxy::SEMANTIC_TOKENS.contains(&request.method.as_str())
             // The one method both sides answer: poly declared three commands of
             // its own at initialize and each server registers its own list, so
             // the gate lets it through and the command name decides below.
