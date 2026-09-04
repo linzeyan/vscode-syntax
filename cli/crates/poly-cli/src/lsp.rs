@@ -194,14 +194,16 @@ struct Server {
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
     lint_hashes: HashMap<Url, u64>,
-    /// Package roots a whole-package lint has already been asked for. Opening a
-    /// second file in a module poly has already looked at costs nothing;
-    /// golangci-lint type-checks the package, so the first look is the
-    /// expensive one and there is no reason to repeat it until a save.
-    package_roots: HashSet<PathBuf>,
+    /// Scopes a whole-package lint has already been asked for. Opening a second
+    /// file in a module poly has already looked at costs nothing; golangci-lint
+    /// type-checks the package, so the first look is the expensive one and there
+    /// is no reason to repeat it until a save. The linter is part of the key
+    /// because one directory can be both — a Go module with .tf files in it is
+    /// two scopes that happen to share a path.
+    package_roots: HashSet<(PackageLinter, PathBuf)>,
     /// Queue for the package-lint worker, created on first use. Most sessions
-    /// never open a Go file and should not pay for a thread that would spend
-    /// them blocked on an empty channel.
+    /// never open a Go or Terraform file and should not pay for a thread that
+    /// would spend them blocked on an empty channel.
     package_jobs: Option<std::sync::mpsc::Sender<PackageJob>>,
     diagnostics: Arc<Mutex<Diagnostics>>,
 }
@@ -215,12 +217,47 @@ struct FanOut {
     answers: Vec<serde_json::Value>,
 }
 
+/// A linter that answers about a whole directory tree rather than a buffer.
+///
+/// Two of them, and they disagree about what a scope is: golangci-lint reads a
+/// Go module and everything under it, tflint reads one directory and does not
+/// descend. That difference is why the findings are keyed by the run that
+/// produced them rather than by a path prefix.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum PackageLinter {
+    Golangci,
+    Tflint,
+}
+
+impl PackageLinter {
+    /// The name `[tools]` resolves it under, which is also the name in the log.
+    fn tool(self) -> &'static str {
+        match self {
+            Self::Golangci => "golangci-lint",
+            Self::Tflint => "tflint",
+        }
+    }
+
+    /// The same call `poly check` makes over the same scope. Anything cheaper —
+    /// one package, one file, a cached subset — would be a second opinion, and
+    /// the editor and CI holding two of those is what A4 forbids.
+    fn run(self, cmd: &Path, root: &Path) -> Result<Vec<poly_tools::run::FileIssue>> {
+        match self {
+            Self::Golangci => poly_tools::run::golangci_module(cmd, root),
+            Self::Tflint => poly_tools::run::tflint_dir(cmd, root),
+        }
+    }
+}
+
 /// One whole-package lint to run.
 struct PackageJob {
+    linter: PackageLinter,
     root: PathBuf,
-    /// Whether a language server answers for this module's files, read at queue
+    /// Whether a language server answers for this scope's files, read at queue
     /// time because the worker cannot ask: the map that knows lives on the main
-    /// thread. Every file in a Go module is Go, so one answer covers the run.
+    /// thread. A whole-scope linter only reports on the language that queued it
+    /// — .go files in a Go module, .tf files in a Terraform directory — so one
+    /// answer covers the run.
     proxied: bool,
 }
 
@@ -236,11 +273,17 @@ struct PackageJob {
 #[derive(Default)]
 struct Diagnostics {
     lint: HashMap<Url, Vec<lsp_types::Diagnostic>>,
-    /// Findings from a linter that answers about a whole package at once, so
-    /// they arrive for files nobody opened. Kept apart from `lint` because they
-    /// are replaced as a set per module rather than per file: the only way to
-    /// know a finding is fixed is that the next run did not repeat it.
-    package: HashMap<Url, Vec<lsp_types::Diagnostic>>,
+    /// Findings from a linter that answers about a whole scope at once, so they
+    /// arrive for files nobody opened. Kept apart from `lint` because they are
+    /// replaced as a set per run rather than per file: the only way to know a
+    /// finding is fixed is that the next run did not repeat it.
+    ///
+    /// Keyed by the run — the linter and the directory it ran in — because that
+    /// is the unit being replaced. Asking "which findings did the last run own"
+    /// with a path prefix is wrong as soon as scopes nest, and with tflint they
+    /// nest by default: linting `envs/prod` must not erase what the run in
+    /// `envs/prod/modules/db` found and is not going to repeat.
+    package: HashMap<(PackageLinter, PathBuf), HashMap<Url, Vec<lsp_types::Diagnostic>>>,
     format: HashMap<Url, lsp_types::Diagnostic>,
     downstream: HashMap<Url, Vec<lsp_types::Diagnostic>>,
 }
@@ -256,7 +299,13 @@ impl Diagnostics {
     /// user turned on for *more* information would be the wrong trade.
     fn merged(&self, uri: &Url, proxied: bool) -> Vec<lsp_types::Diagnostic> {
         let mut all = self.lint.get(uri).cloned().unwrap_or_default();
-        all.extend(self.package.get(uri).cloned().unwrap_or_default());
+        all.extend(
+            self.package
+                .values()
+                .filter_map(|found| found.get(uri))
+                .flatten()
+                .cloned(),
+        );
         if !proxied {
             all.extend(self.format.get(uri).cloned());
         }
@@ -266,7 +315,9 @@ impl Diagnostics {
 
     fn forget(&mut self, uri: &Url) {
         self.lint.remove(uri);
-        self.package.remove(uri);
+        for found in self.package.values_mut() {
+            found.remove(uri);
+        }
         self.format.remove(uri);
         self.downstream.remove(uri);
     }
@@ -1030,13 +1081,13 @@ impl Server {
     /// requests are answered.
     fn queue_package_lint(&mut self, uri: &Url, fresh: bool) {
         let path = uri_path(uri);
-        let Some(root) = self
+        let Some((linter, root)) = self
             .language_of(uri)
             .and_then(|language| package_lint_scope(&language, &path))
         else {
             return;
         };
-        let first = self.package_roots.insert(root.clone());
+        let first = self.package_roots.insert((linter, root.clone()));
         if !fresh && !first {
             return;
         }
@@ -1052,6 +1103,7 @@ impl Server {
             self.package_jobs = Some(jobs);
         }
         let job = PackageJob {
+            linter,
             root,
             proxied: self.is_proxied(uri),
         };
@@ -1480,15 +1532,21 @@ fn folders_after(
 /// The scope a whole-package linter would run over for this document, if poly
 /// runs one for the language.
 ///
-/// Go only, and not for want of trying elsewhere: golangci-lint is the one
-/// linter poly drives that cannot answer about a single buffer, because it
-/// type-checks the package. That is why Go was the one language where `poly
-/// check` reported findings the editor never showed. tflint has the same shape
-/// but wants `terraform init` run first, so it is a different trade and stays
-/// out until it is made deliberately.
-fn package_lint_scope(language: &str, path: &Path) -> Option<PathBuf> {
+/// Two languages, because two of the linters poly drives cannot answer about a
+/// single buffer: golangci-lint type-checks the package, and tflint reads a
+/// directory as one Terraform module. Those were the two languages where `poly
+/// check` reported findings the editor never showed. Every other linter poly
+/// drives takes a file on stdin and is handled by `lint_document`.
+///
+/// The units are the tools' own: a Go module, and one Terraform directory —
+/// tflint does not descend, so neither does this. Both match what `poly check`
+/// groups by, which is the point (A4).
+fn package_lint_scope(language: &str, path: &Path) -> Option<(PackageLinter, PathBuf)> {
     match language {
-        "go" => poly_tools::run::go_module_root(path),
+        "go" => poly_tools::run::go_module_root(path).map(|root| (PackageLinter::Golangci, root)),
+        "terraform" => path
+            .parent()
+            .map(|dir| (PackageLinter::Tflint, dir.to_path_buf())),
         _ => None,
     }
 }
@@ -1513,63 +1571,52 @@ fn package_lint_worker(
         while let Ok(queued) = queue.try_recv() {
             batch.push(queued);
         }
-        batch.sort_by(|a, b| a.root.cmp(&b.root));
-        batch.dedup_by(|a, b| a.root == b.root);
+        batch.sort_by(|a, b| (a.linter.tool(), &a.root).cmp(&(b.linter.tool(), &b.root)));
+        batch.dedup_by(|a, b| a.linter == b.linter && a.root == b.root);
         for job in batch {
             run_package_lint(&job, store, &send);
         }
     }
 }
 
-/// Swap in a module's new findings and say which documents changed hands.
+/// Swap in a run's new findings and say which documents changed hands.
 ///
-/// Every package entry under `root` *is* the previous report — nothing else
-/// records what the last run said — so dropping them is how a fixed finding
-/// disappears. The answer is the union of old and new, not just what was found:
-/// a uri that appears only in the previous report needs an empty publish, or the
-/// finding the user just fixed stays on screen until they close the file.
+/// What that run recorded last time *is* the previous report — nothing else
+/// records what it said — so dropping it is how a fixed finding disappears. The
+/// answer is the union of old and new, not just what was found: a uri that
+/// appears only in the previous report needs an empty publish, or the finding
+/// the user just fixed stays on screen until they close the file.
 ///
-/// Only `package` is touched. The per-file linters and any language server have
-/// their own entries for these same documents and a whole-module run knows
-/// nothing about what they found.
+/// Only this run's own entry is touched. The per-file linters, any language
+/// server, and any *other* whole-scope run have their own entries for these
+/// same documents, and this run knows nothing about what they found.
 fn replace_package_findings(
     store: &mut Diagnostics,
-    root: &Path,
+    job: &PackageJob,
     fresh: HashMap<Url, Vec<lsp_types::Diagnostic>>,
 ) -> Vec<Url> {
-    let stale: Vec<Url> = store
+    let previous = store
         .package
-        .keys()
-        .filter(|uri| uri_path(uri).starts_with(root))
-        .cloned()
-        .collect();
-    let mut affected: HashSet<Url> = HashSet::new();
-    for uri in stale {
-        store.package.remove(&uri);
-        affected.insert(uri);
-    }
-    for (uri, diagnostics) in fresh {
-        affected.insert(uri.clone());
-        store.package.insert(uri, diagnostics);
-    }
+        .remove(&(job.linter, job.root.clone()))
+        .unwrap_or_default();
+    let mut affected: HashSet<Url> = previous.into_keys().collect();
+    affected.extend(fresh.keys().cloned());
+    store.package.insert((job.linter, job.root.clone()), fresh);
     affected.into_iter().collect()
 }
 
-/// Lint one module and publish what changed.
+/// Lint one scope and publish what changed.
 fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn(Message)) {
     let config =
         poly_core::Config::discover(&job.root).unwrap_or_else(|_| poly_core::Config::empty());
-    let Some(cmd) = resolved_tool("golangci-lint", &config) else {
+    let Some(cmd) = resolved_tool(job.linter.tool(), &config) else {
         return;
     };
     let started = Instant::now();
-    // The same call `poly check` makes over the same module. Anything cheaper —
-    // one package, one file, a cached subset — would be a second opinion, and
-    // the editor and CI holding two of those is what A4 forbids.
-    let found = match poly_tools::run::golangci_module(&cmd, &job.root) {
+    let found = match job.linter.run(&cmd, &job.root) {
         Ok(found) => found,
         Err(e) => {
-            eprintln!("[poly] golangci-lint {}: {e:#}", job.root.display());
+            eprintln!("[poly] {} {}: {e:#}", job.linter.tool(), job.root.display());
             return;
         }
     };
@@ -1591,7 +1638,8 @@ fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn
             .push(lint_diagnostic(found.issue));
     }
     eprintln!(
-        "[poly] golangci-lint {} {:.1}ms ({} files)",
+        "[poly] {} {} {:.1}ms ({} files)",
+        job.linter.tool(),
         job.root.display(),
         started.elapsed().as_secs_f64() * 1000.0,
         fresh.len()
@@ -1599,7 +1647,7 @@ fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn
 
     let publishes = {
         let mut store = store.lock().expect("diagnostics lock");
-        replace_package_findings(&mut store, &job.root, fresh)
+        replace_package_findings(&mut store, job, fresh)
             .into_iter()
             .map(|uri| {
                 let diagnostics = store.merged(&uri, job.proxied);
@@ -1942,6 +1990,15 @@ mod tests {
         Url::parse("file:///a.lua").expect("valid uri")
     }
 
+    /// `proxied` plays no part in which findings a run owns, so it is fixed.
+    fn package_job(linter: PackageLinter, root: &str) -> PackageJob {
+        PackageJob {
+            linter,
+            root: PathBuf::from(root),
+            proxied: true,
+        }
+    }
+
     /// A server command id must never be an id the extension contributes.
     ///
     /// An LSP client registers every command the server advertises as an editor
@@ -2147,9 +2204,10 @@ mod tests {
     fn no_publisher_erases_another() {
         let mut store = Diagnostics::default();
         store.lint.insert(uri(), vec![diagnostic("typos")]);
-        store
-            .package
-            .insert(uri(), vec![diagnostic("golangci-lint")]);
+        store.package.insert(
+            (PackageLinter::Golangci, PathBuf::from("/w")),
+            HashMap::from([(uri(), vec![diagnostic("golangci-lint")])]),
+        );
         store.format.insert(uri(), diagnostic("poly/format"));
         store.downstream.insert(uri(), vec![diagnostic("gopls")]);
 
@@ -2168,7 +2226,7 @@ mod tests {
     /// disappears because the next run did not repeat it.
     #[test]
     fn a_fixed_package_finding_is_published_away() {
-        let module = Path::new("/w/api");
+        let job = package_job(PackageLinter::Golangci, "/w/api");
         let fixed = Url::parse("file:///w/api/fixed.go").expect("valid uri");
         let broken = Url::parse("file:///w/api/broken.go").expect("valid uri");
         // A second module, mid-run in the same session. Its findings are no
@@ -2176,15 +2234,17 @@ mod tests {
         let elsewhere = Url::parse("file:///w/cli/main.go").expect("valid uri");
 
         let mut store = Diagnostics::default();
-        store
-            .package
-            .insert(fixed.clone(), vec![diagnostic("unused")]);
-        store
-            .package
-            .insert(broken.clone(), vec![diagnostic("errcheck")]);
-        store
-            .package
-            .insert(elsewhere.clone(), vec![diagnostic("errcheck")]);
+        store.package.insert(
+            (PackageLinter::Golangci, PathBuf::from("/w/api")),
+            HashMap::from([
+                (fixed.clone(), vec![diagnostic("unused")]),
+                (broken.clone(), vec![diagnostic("errcheck")]),
+            ]),
+        );
+        store.package.insert(
+            (PackageLinter::Golangci, PathBuf::from("/w/cli")),
+            HashMap::from([(elsewhere.clone(), vec![diagnostic("errcheck")])]),
+        );
         // gopls also has something to say about the file that was fixed. The
         // whole-module run knows nothing about it and must not take it away.
         store
@@ -2192,7 +2252,7 @@ mod tests {
             .insert(fixed.clone(), vec![diagnostic("gopls")]);
 
         let fresh = HashMap::from([(broken.clone(), vec![diagnostic("errcheck")])]);
-        let mut affected = replace_package_findings(&mut store, module, fresh);
+        let mut affected = replace_package_findings(&mut store, &job, fresh);
         affected.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
         assert_eq!(
@@ -2206,6 +2266,57 @@ mod tests {
             sources(&store.merged(&elsewhere, true)),
             ["errcheck"],
             "another module's report is not this run's to clear"
+        );
+    }
+
+    /// Two whole-scope runs that cover overlapping paths keep their own reports.
+    ///
+    /// This is why the store is keyed by the run and not by a path prefix. Both
+    /// halves are ordinary layouts rather than corner cases: tflint reads one
+    /// directory and does not descend, so a repository with `envs/prod` and
+    /// `envs/prod/modules/db` in it has two runs whose findings both stand; and
+    /// a Go module with .tf files in it is one directory that is two scopes. A
+    /// prefix answer to "what did the last run own" would have a save in the
+    /// parent erase the nested report, and a save of the .tf file erase what
+    /// golangci-lint said about the .go file beside it — in both cases with
+    /// nothing left to put it back.
+    #[test]
+    fn one_run_does_not_clear_another_that_overlaps_it() {
+        let nested = Url::parse("file:///w/envs/prod/modules/db/main.tf").expect("valid uri");
+        let parent = Url::parse("file:///w/envs/prod/main.tf").expect("valid uri");
+        let beside = Url::parse("file:///w/envs/prod/main.go").expect("valid uri");
+
+        let mut store = Diagnostics::default();
+        store.package.insert(
+            (
+                PackageLinter::Tflint,
+                PathBuf::from("/w/envs/prod/modules/db"),
+            ),
+            HashMap::from([(nested.clone(), vec![diagnostic("tflint")])]),
+        );
+        store.package.insert(
+            (PackageLinter::Golangci, PathBuf::from("/w/envs/prod")),
+            HashMap::from([(beside.clone(), vec![diagnostic("errcheck")])]),
+        );
+
+        let job = package_job(PackageLinter::Tflint, "/w/envs/prod");
+        let fresh = HashMap::from([(parent.clone(), vec![diagnostic("tflint")])]);
+        let affected = replace_package_findings(&mut store, &job, fresh);
+
+        assert_eq!(
+            affected,
+            std::slice::from_ref(&parent),
+            "a run republishes what it owns, and it owns neither of the others"
+        );
+        assert_eq!(
+            sources(&store.merged(&nested, false)),
+            ["tflint"],
+            "the directory below has its own run and tflint never descended into it"
+        );
+        assert_eq!(
+            sources(&store.merged(&beside, false)),
+            ["errcheck"],
+            "the other linter's report shares a directory, not a run"
         );
     }
 
@@ -2253,10 +2364,11 @@ mod tests {
         assert_eq!(folders_after(&init, &serde_json::json!({})).len(), 2);
     }
 
-    /// Which files a whole-package linter is asked about has to mean the same
-    /// thing in the editor as in `poly check` (A4), and only Go has one at all.
+    /// Which files a whole-scope linter is asked about has to mean the same
+    /// thing in the editor as in `poly check` (A4), and the two tools that have
+    /// one do not agree about what a scope is.
     #[test]
-    fn only_go_has_a_package_scope_and_it_is_the_module() {
+    fn a_package_scope_is_whatever_the_tool_itself_reads() {
         let dir = tempfile::tempdir().expect("tempdir");
         let root = std::fs::canonicalize(dir.path()).expect("real path");
         std::fs::write(root.join("go.mod"), "module x\n").expect("write go.mod");
@@ -2265,9 +2377,21 @@ mod tests {
         let file = nested.join("api.go");
         std::fs::write(&file, "package api\n").expect("write api.go");
 
-        assert_eq!(package_lint_scope("go", &file), Some(root.clone()));
-        // Nothing else runs one, so nothing else may queue a compile.
-        assert_eq!(package_lint_scope("terraform", &file), None);
+        // Go: up to the module, however deep the file is.
+        assert_eq!(
+            package_lint_scope("go", &file),
+            Some((PackageLinter::Golangci, root.clone()))
+        );
+        // Terraform: the file's own directory and no further, because that is
+        // all tflint reads. `poly check` groups .tf files by parent dir for the
+        // same reason.
+        let plan = nested.join("main.tf");
+        assert_eq!(
+            package_lint_scope("terraform", &plan),
+            Some((PackageLinter::Tflint, nested.clone()))
+        );
+        // Everything else is a stdin-sized linter, and nothing else may queue a
+        // whole-directory run.
         assert_eq!(package_lint_scope("python", &file), None);
         // A .go file outside any module: no root, nothing to run.
         let orphan = dir.path().parent().expect("parent").join("nowhere.go");

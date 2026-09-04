@@ -233,6 +233,13 @@ jobs:
           go version
           gofmt --help >/dev/null
           python tools/go-acceptance.py cli/target/release/poly
+      # The second whole-directory linter. No toolchain line above it because
+      # there is nothing to install: poly downloads tflint, and the bundled
+      # Terraform ruleset needs neither `tflint --init` nor `terraform init`.
+      # It runs here rather than inside the Go step because what it measures is
+      # scope nesting, which Go does not have by default and Terraform does.
+      - name: Terraform lint acceptance
+        run: python tools/tf-acceptance.py cli/target/release/poly
       # Dogfood (M4): the repo's own poly.toml, the binary just built, the same
       # two commands the README tells users to put in their CI. This was a
       # documented gate that was never actually wired, so every dogfood run was

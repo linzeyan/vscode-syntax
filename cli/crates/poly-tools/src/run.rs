@@ -769,8 +769,7 @@ struct TflintOutput {
 }
 
 /// tflint works per directory: reduce the .tf file list to unique parent
-/// dirs and run once per dir. With --chdir, tflint maps issue filenames
-/// back to the original cwd, so they are used as-is (no dir join).
+/// dirs and run once per dir.
 pub fn tflint_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
     let mut dirs: Vec<PathBuf> = files
         .iter()
@@ -784,15 +783,33 @@ pub fn tflint_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
     dirs.dedup();
     let mut out = Vec::new();
     for dir in dirs {
-        let chdir = format!("--chdir={}", dir.display());
-        out.extend(tflint_parse(&run(
-            cmd,
-            &["--format", "json", &chdir],
-            &[],
-            None,
-        )?)?);
+        out.extend(tflint_dir(cmd, &dir)?);
     }
     Ok(out)
+}
+
+/// One directory's findings.
+///
+/// Split out for the daemon for the same reason `golangci_module` is: it knows
+/// the directory from the file that was saved, and reducing a file list to the
+/// same directory a second time is a second place the grouping could drift.
+///
+/// Run *in* the directory rather than pointed at it with `--chdir`. Both
+/// inspect the same files, but they report different filenames: `--chdir` maps
+/// them back to the cwd tflint was started in, which for the daemon is wherever
+/// the editor happened to launch poly, and a path relative to that is not a
+/// document anyone can attach a diagnostic to. From inside, the report is
+/// relative to the directory itself and joining is exact — the same shape
+/// `golangci_issues` uses.
+pub fn tflint_dir(cmd: &Path, dir: &Path) -> Result<Vec<FileIssue>> {
+    let found = tflint_parse(&run_in(cmd, dir, &["--format", "json"], &[], None)?)?;
+    Ok(found
+        .into_iter()
+        .map(|mut issue| {
+            issue.file = dir.join(issue.file);
+            issue
+        })
+        .collect())
 }
 
 fn tflint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
