@@ -6,6 +6,7 @@ import { nextChangedFile } from "./changes";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import { toc, TOC_END, TOC_START } from "./markdown";
+import { describe, EXPR_MARK, POSTFIX_LANGUAGES, postfixesFor, postfixTarget } from "./postfix";
 import { REFACTOR_KIND, refactorChoices, Refactoring } from "./refactors";
 import { countElsewhere, implLabel, lensTargets, refLabel } from "./references";
 import { registerTodoTree } from "./todoTree";
@@ -553,6 +554,85 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
 }
 
 /**
+ * A snippet built from a template, with the user's text escaped into it.
+ *
+ * The two halves go in differently on purpose: the template's `$0` and
+ * `${1:name}` are ours and must stay live, while the expression came off the
+ * user's line and a `$` or `}` in it must not become snippet syntax.
+ */
+function postfixSnippet(template: string, expression: string): vscode.SnippetString {
+  const snippet = new vscode.SnippetString();
+  template.split(EXPR_MARK).forEach((chunk, index) => {
+    if (index > 0) {
+      snippet.appendText(expression);
+    }
+    snippet.value += chunk;
+  });
+  return snippet;
+}
+
+/**
+ * `err.if` → `if err != nil { }`, in every language that has statements.
+ *
+ * See `postfix.ts` for the templates and for why a text rearrangement is not
+ * the language feature 01 A6 rules out. Nothing here asks anything of a
+ * language server: it is the characters left of the dot and a table.
+ */
+function completePostfixes(context: vscode.ExtensionContext): void {
+  const provider: vscode.CompletionItemProvider = {
+    provideCompletionItems(document, position) {
+      const on = vscode.workspace
+        .getConfiguration("poly")
+        .get<boolean>("postfixCompletion.enabled", true);
+      const postfixes = on ? postfixesFor(document.languageId) : undefined;
+      if (!postfixes) {
+        return undefined;
+      }
+      const line = document.lineAt(position.line).text;
+      const target = postfixTarget(line, position.character);
+      if (!target) {
+        return undefined;
+      }
+      // From the start of the expression, because the expansion moves it: the
+      // item replaces `resp.Body.if`, not just the `if`.
+      const range = new vscode.Range(
+        position.line,
+        target.start,
+        position.line,
+        position.character,
+      );
+      return postfixes.map((postfix) => {
+        const item = new vscode.CompletionItem(
+          postfix.name,
+          vscode.CompletionItemKind.Snippet,
+        );
+        item.range = range;
+        item.insertText = postfixSnippet(postfix.template, target.expression);
+        item.detail = describe(postfix.template, target.expression);
+        // The editor filters against the text the range covers, which is
+        // `resp.Body.if` and not `if` -- without this the item disappears the
+        // moment the user types the first letter of its own name.
+        item.filterText = `${target.expression}.${postfix.name}`;
+        // After whatever the language server offered. A member named `iffy`
+        // is a real answer about the program; this is a template, and the
+        // template only wins once the user has typed something no member
+        // matches.
+        item.sortText = `zzz${postfix.name}`;
+        return item;
+      });
+    },
+  };
+
+  context.subscriptions.push(
+    vscode.languages.registerCompletionItemProvider(
+      POSTFIX_LANGUAGES.map((language) => ({ scheme: "file", language })),
+      provider,
+      ".",
+    ),
+  );
+}
+
+/**
  * As much of the built-in git extension's API as the two commands below need.
  *
  * Declared here rather than pulled in from `@types/vscode.git`: this is four
@@ -718,6 +798,7 @@ export function activate(context: vscode.ExtensionContext) {
   tintIndentation(context);
   previewImages(context);
   countReferencesInGutter(context);
+  completePostfixes(context);
   registerTodoTree(context);
 
   const commands: [string, () => Promise<void>][] = [

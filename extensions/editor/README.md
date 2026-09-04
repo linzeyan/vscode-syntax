@@ -77,6 +77,24 @@ TypeScript 有這個 lens，其他語言都沒有。
 - `poly.referencesCodeLens.enabled` 可關（兩種 lens 一起）。編輯器只解析**看得見**的那幾條
   lens，所以成本是「畫面上幾個宣告」而不是「檔案裡幾個宣告」。
 
+### Postfix completion
+
+在句尾打 `.` 再打關鍵字：`err.if` 展開成 `if err != nil { }`（Go）、`if (err) { }`
+（TypeScript）、`if err:`（Python）。涵蓋 go／rust／swift／typescript／javascript
+（含 react 變體）／python／lua／c／cpp——**每個有敘述句的語言**。資料格式沒有，JSON 裡
+`if` 沒有東西可以展開。
+
+- **這是文字重排，不是語意分析。** poly 只讀 `.` 左邊那串字元、把它塞進模板、交給編輯器
+  自己的 snippet 引擎——跟隔壁那個 markdown 粗體切換同一種東西。它不知道 `err` 是不是
+  error、有沒有型別、展開之後編不編得過。**那份無知正是重點**：正因為什麼都不知道，同一
+  份表才蓋得住每個語言，而這也是它跟「語言功能」的分界（01 A6 擋的是分析，不是模板）。
+- **表達式邊界是往左掃出來的**：成員鏈整條算、括號與字串整組算、遇到運算子就停。所以
+  `x + foo(a, b)[0].if` 抓到的是 `foo(a, b)[0]`，不是前面那個 `x +`。
+- **排在 language server 的答案後面**（`sortText`）。叫 `iffy` 的成員是關於程式的真答案，
+  模板不是；要等你打到沒有成員能匹配，它才會浮上來。
+- gopls 沒有 postfix completion，這是 Tooltitude 清單裡唯一一項「poly 代管的東西都不提供」
+  的功能。`poly.postfixCompletion.enabled` 可關。
+
 ### Poly: Extract Variable ／ Inline Variable
 
 `cmd/ctrl+alt+v` 把選取的運算式抽成變數，`cmd/ctrl+alt+shift+v` 把游標所在的變數 inline

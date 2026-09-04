@@ -87,6 +87,10 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 - **`Poly: Toggle Bold` ／ `Toggle Italic`**：`cmd/ctrl+b`、`cmd/ctrl+i`，只在
   markdown 檔生效。產生 `**bold**` 與 `_italic_`——就是 `poly fmt` 正規化出來的那兩種，
   不會被下一次存檔改掉。
+- **Postfix completion**：`err.if` 展開成 `if err != nil { }`（Go）、`if (err) { }`
+  （TS）、`if err:`（Python）。go／rust／swift／ts／js／python／lua／c／cpp 都有。這是
+  文字重排不是分析——poly 只讀 `.` 左邊那串字元塞進模板，不知道 `err` 是什麼型別，也正
+  因為如此同一份表才蓋得住每個語言。排在 language server 的答案後面。
 - **`Poly: Extract Variable` ／ `Inline Variable`**：`cmd/ctrl+alt+v`、
   `cmd/ctrl+alt+shift+v`，每個語言都通用。內建的 `editor.action.refactor` 開的是一張選單，
   而你要的那一項每個 server 講法都不同（`Extract variable`／`Extract into variable`／

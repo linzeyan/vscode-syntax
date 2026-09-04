@@ -34,6 +34,11 @@
           "default": true,
           "description": "Show a reference count above each declaration, and an implementation count above each interface and interface method, in every language whose reference provider can answer. Both counts come from whatever providers the language already has; poly analyses nothing. Whether clicking one opens the peek or the References panel is controlled by references.preferredLocation."
         },
+        "poly.postfixCompletion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offer postfix templates after a dot: `err.if` expands to `if err != nil { }` in Go, `if (err) { }` in TypeScript, `if err:` in Python. Covers go, rust, swift, typescript, javascript (and their react variants), python, lua, c and cpp. These are text templates, not analysis -- poly reads the characters left of the dot and rearranges them, and sorts them after whatever the language server offered."
+        },
         "poly.todo.tags": {
           "type": "array",
           "items": {
