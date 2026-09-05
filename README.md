@@ -115,7 +115,9 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 
 - **內嵌引擎**（免安裝、離線可用）：TypeScript／JavaScript、JSON／JSONC、
   Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
-  Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、GraphQL、Dockerfile、
+  Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、GraphQL、
+  Dockerfile（格式化，lint 是 poly 自己寫的規則，code 長 `poly/docker-*`；
+  hadolint 仍然照跑，補上 poly 沒做的那半——見下面的外部工具），
   Lua（格式化 stylua、lint selene）。這些都是編進 binary 的 Rust library，
   不再下載。拼字檢查（typos）也在裡面，而且不分語言——它讀的是每一個檔案，
   包含 poly 認不出語言的那些。
