@@ -139,9 +139,19 @@ gates: lint test notices pins config smoke probe go tf rust deadcode dogfood ver
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0
+#
+# poly.example.toml carries the version twice ("read out of poly X.Y.Z itself",
+# "the whole set, as of poly X.Y.Z") and bump.py cannot rewrite it: the file is
+# generated, and the generator is the binary, which does not exist at the new
+# version until after the manifests move. So bump rebuilds and regenerates
+# rather than leaving a tree that only `make config` would call wrong -- the
+# 0.10.0 bump left exactly that tree and CI found it.
 bump: ## Move every version string to VERSION=x.y.z
 	@test -n "$(VERSION)" || { echo "usage: make bump VERSION=x.y.z" >&2; exit 1; }
 	python3 tools/bump.py $(VERSION)
+	cargo build --release --manifest-path cli/Cargo.toml
+	$(POLY) config export > poly.example.toml
+	python3 tools/bump.py --check $(POLY)
 
 # make control REF=v0.7.0
 #
