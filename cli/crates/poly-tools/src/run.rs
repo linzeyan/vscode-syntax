@@ -451,93 +451,6 @@ pub fn typos_paths(
     Ok(out)
 }
 
-// ── ruff ───────────────────────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct RuffPos {
-    row: u32,
-    column: u32,
-}
-
-/// ruff is the only tool that ships a remediation sentence with the finding.
-/// `applicability` is "safe" when applying the edit cannot change behavior.
-#[derive(Deserialize)]
-struct RuffFix {
-    message: String,
-    applicability: String,
-}
-
-#[derive(Deserialize)]
-struct RuffItem {
-    filename: String,
-    code: Option<String>,
-    message: String,
-    location: RuffPos,
-    end_location: RuffPos,
-    /// 1-based cell index for notebooks; absent for .py files.
-    cell: Option<u32>,
-    /// Both absent on syntax errors, which no rule owns.
-    fix: Option<RuffFix>,
-    url: Option<String>,
-}
-
-fn ruff_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
-    let items: Vec<RuffItem> = serde_json::from_slice(stdout).context("parsing ruff output")?;
-    Ok(items
-        .into_iter()
-        .map(|i| FileIssue {
-            file: PathBuf::from(i.filename),
-            issue: Issue {
-                line: i.location.row.saturating_sub(1),
-                col: i.location.column.saturating_sub(1),
-                end_line: i.end_location.row.saturating_sub(1),
-                end_col: i.end_location.column.saturating_sub(1),
-                severity: Severity::Warning,
-                code: i.code.unwrap_or_else(|| "ruff".to_string()),
-                // Notebook rows are relative to the cell, so a bare
-                // file:line:col would point at the wrong place in the .ipynb.
-                message: match i.cell {
-                    Some(cell) => format!("cell {cell}: {}", i.message),
-                    None => i.message,
-                },
-                source: "ruff",
-                fix: i.fix.map(|f| Fix::Described {
-                    what: f.message,
-                    safe: f.applicability == "safe",
-                }),
-                url: i.url,
-            },
-        })
-        .collect())
-}
-
-pub fn ruff_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
-    ruff_parse(&run(
-        cmd,
-        &["check", "--output-format", "json"],
-        files,
-        None,
-    )?)
-}
-
-pub fn ruff_stdin(cmd: &Path, path: &Path, text: &str) -> Result<Vec<Issue>> {
-    let path_arg = path.to_string_lossy();
-    let out = run(
-        cmd,
-        &[
-            "check",
-            "--output-format",
-            "json",
-            "--stdin-filename",
-            &path_arg,
-            "-",
-        ],
-        &[],
-        Some(text),
-    )?;
-    Ok(ruff_parse(&out)?.into_iter().map(|f| f.issue).collect())
-}
-
 // ── swiftlint ──────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -2222,20 +2135,6 @@ mod tests {
         // No SuggestedFixes key at all: still a valid issue, just no remedy.
         assert_eq!(issues[1].issue.fix, None);
         assert!(issues[1].issue.url.is_some());
-    }
-
-    #[test]
-    fn ruff_notebook_rows_name_their_cell() {
-        // Notebook rows are cell-relative, so line 1 of cell 2 is not line 1
-        // of the .ipynb; the message has to say which cell.
-        let raw = br#"[{"filename":"a.ipynb","code":"F401","message":"`os` imported but unused","location":{"row":1,"column":8},"end_location":{"row":1,"column":10},"cell":2}]"#;
-        let issues = ruff_parse(raw).unwrap();
-        assert_eq!(issues[0].issue.message, "cell 2: `os` imported but unused");
-
-        // A .py file has no cell and must not gain a prefix.
-        let plain = br#"[{"filename":"a.py","code":"F401","message":"unused","location":{"row":1,"column":1},"end_location":{"row":1,"column":2}}]"#;
-        let issues = ruff_parse(plain).unwrap();
-        assert_eq!(issues[0].issue.message, "unused");
     }
 
     #[test]

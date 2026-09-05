@@ -512,13 +512,6 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             }),
         ),
         (
-            "ruff",
-            // ruff lints notebooks natively, reporting cell-relative
-            // positions; no separate job or tool needed.
-            [group("python"), group("jupyter")].concat(),
-            Box::new(poly_tools::run::ruff_files),
-        ),
-        (
             "tflint",
             group("terraform"),
             Box::new(poly_tools::run::tflint_files),
@@ -566,9 +559,9 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     let mut failed: Vec<String> = Vec::new();
     let mut ran = 0usize;
 
-    // Embedded engines (sqruff) linted only inside the daemon, so `poly check`
-    // stayed silent on exactly the files the editor was flagging. R5/A4 wants
-    // one answer, not two.
+    // Embedded engines (sqruff, selene, ruff) linted only inside the daemon, so
+    // `poly check` stayed silent on exactly the files the editor was flagging.
+    // R5/A4 wants one answer, not two.
     let embedded: Vec<PathBuf> = files
         .iter()
         .filter(|(_, lang, _)| poly_engines::lint::supported(lang))

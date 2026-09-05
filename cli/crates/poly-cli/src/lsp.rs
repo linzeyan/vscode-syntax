@@ -1526,7 +1526,6 @@ fn external_lint(
         "shellscript" => "shellcheck",
         "dockerfile" => "hadolint",
         "yaml" if is_workflow_file(path) => "actionlint",
-        "python" => "ruff",
         "swift" => "swiftlint",
         _ => return Ok(issues),
     };
@@ -1544,7 +1543,6 @@ fn external_lint(
             text,
             resolved_tool("shellcheck", config).as_deref(),
         )?,
-        "ruff" => poly_tools::run::ruff_stdin(&cmd, path, text)?,
         "swiftlint" => poly_tools::run::swiftlint_stdin(&cmd, path, text)?,
         _ => unreachable!(),
     });

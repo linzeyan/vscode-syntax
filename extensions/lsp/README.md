@@ -12,7 +12,8 @@
   檔案交給 formatter，不會兩邊同時改一次存檔。答案與 `poly fmt` 出自同一次解析，所以
   打字時的行為跟存檔後的結果不會各說各話。`charset` 與 `max_line_length` 不處理。
 - **Lint**：存檔即時 diagnostics（shellcheck／hadolint／actionlint／ruff／
-  selene／sqruff，以及專案內的 biome／eslint）；`Poly: Lint (poly check)`
+  selene／sqruff，以及專案內的 biome／eslint；ruff、selene、sqruff 是編進
+  binary 的，其餘是受管下載）；`Poly: Lint (poly check)`
   在終端跑完整 CLI，輸出與 CI 一致。
 - **整包範圍的 lint**：有三個工具讀不了單一 buffer，所以它們跑的是整個範圍，而那個
   範圍是工具自己的定義——**golangci-lint** 讀一個 Go module（含底下所有 package）、
@@ -48,8 +49,9 @@
   module 時 buf 會拿當前工作目錄當根目錄，`PACKAGE_DIRECTORY_MATCH` 就會對完全正常
   的 package 亂噴，而且噴什麼取決於你從哪個目錄執行。導航、補全與 hover 另外由
   `poly.languageServers`（預設關閉）控制，打開後走的是同一支 buf。
-- Jupyter notebook（`.ipynb`）由 ruff 整份處理：cell 內的 Python 會被格式化與
-  檢查，outputs／markdown cell 原樣保留。VSCode 的 notebook editor 不走 LSP
+- Jupyter notebook（`.ipynb`）由內嵌的 ruff 整份處理：cell 內的 Python 會被逐格
+  格式化與檢查，outputs／markdown cell 原樣保留，診斷訊息會標上 `cell N:` 因為
+  行號是相對於 cell 的。VSCode 的 notebook editor 不走 LSP
   文字文件，所以要用批次命令（Format Folder／Workspace）或 `poly fmt`。
 
 ## 語言功能（`poly.languageServers`，預設關閉）

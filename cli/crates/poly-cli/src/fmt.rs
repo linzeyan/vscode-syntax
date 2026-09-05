@@ -15,15 +15,7 @@ pub fn formattable(lang: &str) -> bool {
     poly_engines::supported_language(lang)
         || matches!(
             lang,
-            "rust"
-                | "shellscript"
-                | "go"
-                | "c"
-                | "cpp"
-                | "terraform"
-                | "swift"
-                | "jupyter"
-                | "protobuf"
+            "rust" | "shellscript" | "go" | "c" | "cpp" | "terraform" | "swift" | "protobuf"
         )
 }
 
@@ -127,10 +119,6 @@ fn dispatch(
     let path_arg = path.to_string_lossy();
     let (tool, args): (&str, Vec<&str>) = match lang {
         "shellscript" => ("shfmt", vec!["--filename", &path_arg]),
-        // The embedded ruff formatter takes Python source; only the ruff
-        // binary knows the notebook container, and it round-trips the whole
-        // .ipynb through stdin.
-        "jupyter" => ("ruff", vec!["format", "--stdin-filename", &path_arg, "-"]),
         "go" => ("gofumpt", vec![]),
         "c" | "cpp" => ("clang-format", vec!["--assume-filename", &path_arg]),
         "terraform" => ("terraform", vec!["fmt", "-"]),

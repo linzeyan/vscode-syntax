@@ -22,6 +22,12 @@ OUT = ROOT / "extensions" / "lsp" / "THIRD-PARTY-NOTICES.md"
 # there is no patched source form we would owe anyone under §3.1. Copyleft with
 # no permissive alternative (GPL/AGPL/SSPL, bare LGPL) is not on the list and
 # fails the build rather than landing quietly in the notices.
+#
+# PSF-2.0 arrived with ruff's linter: libcst carries `MIT AND (MIT AND
+# PSF-2.0)` because parts of it derive from CPython's own grammar. It is the
+# licence CPython itself ships under -- permissive, no copyleft, attribution
+# only -- so it belongs with the rest of this list rather than being a reason
+# to refuse the dependency.
 ALLOWED = (
     "MIT",
     "Apache-2.0",
@@ -34,6 +40,7 @@ ALLOWED = (
     "Unlicense",
     "MIT-0",
     "CC0-1.0",
+    "PSF-2.0",
     "Unicode-3.0",
     "Unicode-DFS-2016",
     "CDLA-Permissive-2.0",

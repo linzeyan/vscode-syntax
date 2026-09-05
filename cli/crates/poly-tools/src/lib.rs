@@ -184,28 +184,6 @@ pub const TOOLS: &[Tool] = &[
         },
     },
     Tool {
-        name: "ruff",
-        version: "0.16.5",
-        language: Some("python"),
-        asset: |v, p| {
-            let (triple, kind) = match p {
-                "darwin-arm64" => ("aarch64-apple-darwin.tar.gz", Kind::TarGz),
-                "darwin-x64" => ("x86_64-apple-darwin.tar.gz", Kind::TarGz),
-                "linux-arm64" => ("aarch64-unknown-linux-gnu.tar.gz", Kind::TarGz),
-                "linux-x64" => ("x86_64-unknown-linux-gnu.tar.gz", Kind::TarGz),
-                "win-x64" => ("x86_64-pc-windows-msvc.zip", Kind::Zip),
-                "win-arm64" => ("aarch64-pc-windows-msvc.zip", Kind::Zip),
-                _ => return None,
-            };
-            Some(Asset {
-                url: format!(
-                    "https://github.com/astral-sh/ruff/releases/download/{v}/ruff-{triple}"
-                ),
-                kind,
-            })
-        },
-    },
-    Tool {
         name: "tflint",
         version: "0.64.0",
         language: Some("terraform"),
@@ -365,18 +343,32 @@ pub fn tool(name: &str) -> Option<&'static Tool> {
 /// no way to fetch. Both would be settings that read as working and do
 /// nothing, which is the failure `split_flags` and poly.toml's
 /// `deny_unknown_fields` already refuse to allow.
-const EMBEDDED: &[&str] = &["selene", "stylua"];
+/// Each entry carries the sentence that tells its user what to do instead,
+/// because "this setting does nothing" is only half an answer -- the project
+/// configured it for a reason, and the reason still has somewhere to go.
+const EMBEDDED: &[(&str, &str)] = &[
+    ("selene", LUA_INSTEAD),
+    ("stylua", LUA_INSTEAD),
+    ("ruff", PYTHON_INSTEAD),
+];
+
+const LUA_INSTEAD: &str = "poly formats and lints Lua itself. Drop the line; \
+     `[format.lua]` sets the layout and a selene.toml still configures the lints.";
+
+const PYTHON_INSTEAD: &str = "poly formats and lints Python itself. Drop the line; \
+     `[format.python]` sets the layout and a pyproject.toml or ruff.toml still \
+     selects the rules.";
 
 /// Stop the run if `[tools]` configures something poly now answers for itself.
 pub fn reject_embedded_tools(config: &poly_core::Config) -> Result<()> {
-    let Some(name) = config.tools.keys().find(|n| EMBEDDED.contains(&n.as_str())) else {
+    let Some((name, instead)) = config
+        .tools
+        .keys()
+        .find_map(|n| EMBEDDED.iter().find(|(name, _)| *name == n))
+    else {
         return Ok(());
     };
-    bail!(
-        "poly.toml [tools] {name}: there is no {name} binary to configure — poly \
-         formats and lints Lua itself. Drop the line; `[format.lua]` sets the \
-         layout and a selene.toml still configures the lints."
-    )
+    bail!("poly.toml [tools] {name}: there is no {name} binary to configure — {instead}")
 }
 
 // ── resolution ─────────────────────────────────────────────────────────────
@@ -738,19 +730,27 @@ mod tests {
         ));
     }
 
-    /// Lua is formatted and linted in-process now, so there is no stylua or
-    /// selene binary for `[tools]` to point at, pin or turn off. Accepting the
-    /// line and ignoring it would leave someone believing they had disabled a
-    /// linter that is still reporting.
+    /// Lua and Python are formatted and linted in-process now, so there is no
+    /// stylua, selene or ruff binary for `[tools]` to point at, pin or turn
+    /// off. Accepting the line and ignoring it would leave someone believing
+    /// they had disabled a linter that is still reporting.
     #[test]
-    fn tools_entries_for_embedded_lua_stop_the_run() {
-        for entry in [("selene", "off"), ("stylua", "2.4.0")] {
+    fn tools_entries_for_embedded_languages_stop_the_run() {
+        for entry in [("selene", "off"), ("stylua", "2.4.0"), ("ruff", "0.16.5")] {
             let config = config_with_tools(&[entry]);
             let error = reject_embedded_tools(&config)
                 .expect_err("an entry poly cannot honor must fail")
                 .to_string();
             assert!(error.contains(entry.0), "{error}");
         }
+        // The message has to name where the setting went, not just that it is
+        // gone: someone who pinned ruff did it to control the rules, and
+        // ruff.toml is where that lives now.
+        let error = reject_embedded_tools(&config_with_tools(&[("ruff", "off")]))
+            .expect_err("ruff is embedded")
+            .to_string();
+        assert!(error.contains("ruff.toml"), "{error}");
+
         // Everything else is still a tool with a binary behind it.
         assert!(reject_embedded_tools(&config_with_tools(&[("shellcheck", "off")])).is_ok());
     }

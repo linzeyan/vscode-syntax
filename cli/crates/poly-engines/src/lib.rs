@@ -24,6 +24,7 @@ pub fn supported_language(lang: &str) -> bool {
             | "less"
             | "yaml"
             | "python"
+            | "jupyter"
             | "sql"
             | "xml"
             | "html"
@@ -109,6 +110,7 @@ pub fn format(lang: &str, path: &Path, text: &str, opts: FormatOptions) -> Resul
         "css" | "scss" | "less" => format_css(text, lang, opts),
         "yaml" => format_yaml(text, opts),
         "python" => format_python(path, text, opts),
+        "jupyter" => format_jupyter(path, text, opts),
         "sql" => format_sql(text),
         "xml" => format_xml(text, opts),
         "html" | "vue" | "svelte" | "astro" | "jinja" | "handlebars" => {
@@ -399,7 +401,15 @@ fn line_col(text: &str, offset: usize) -> (usize, usize) {
     )
 }
 
-fn format_python(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<String>> {
+/// `[format.python]`, as ruff's formatter takes it.
+///
+/// Shared by `.py` and `.ipynb`: a notebook's cells are Python and have to be
+/// laid out to the same settings, or the same code is formatted two ways
+/// depending on which file it happens to live in.
+fn python_options(
+    path: &Path,
+    opts: FormatOptions,
+) -> Result<ruff_python_formatter::PyFormatOptions> {
     let mut options = ruff_python_formatter::PyFormatOptions::from_extension(path);
     if let Some(width) = opts.line_width {
         options = options.with_line_width(
@@ -422,9 +432,74 @@ fn format_python(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<
             ruff_formatter::IndentStyle::Space
         });
     }
+    Ok(options)
+}
+
+fn format_python(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<String>> {
+    let options = python_options(path, opts)?;
     let printed = ruff_python_formatter::format_module_source(text, options)
         .map_err(|e| python_error(text, &e))?;
     let result = printed.into_code();
+    Ok((result != text).then_some(result))
+}
+
+/// Format a Jupyter notebook: each code cell as Python, the container left
+/// alone but rewritten.
+///
+/// Cell by cell rather than over the concatenated source, because that is what
+/// ruff does and the difference is visible: formatting the whole thing at once
+/// would let a blank-line rule reach across a cell boundary, and cells are
+/// edited and executed one at a time. The `SourceMap` is how the new text is
+/// mapped back onto cells -- `Notebook::update` walks it to move each cell
+/// offset by however much the text before it grew or shrank.
+///
+/// Nothing is written unless some cell actually changed, so an already
+/// formatted notebook is not rewritten with different JSON whitespace.
+fn format_jupyter(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<String>> {
+    use ruff_text_size::{TextLen, TextRange, TextSize};
+
+    let mut notebook = ruff_notebook::Notebook::from_source_code(text)
+        .map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
+    // An R or Julia notebook is a notebook poly has no formatter for. Silence
+    // is the honest answer; running the Python formatter over it would be a
+    // syntax error at best.
+    if !notebook.is_python_notebook() {
+        return Ok(None);
+    }
+    let options = python_options(path, opts)?;
+    let source = notebook.source_code().to_string();
+
+    let mut output: Option<String> = None;
+    let mut source_map = ruff_diagnostics::SourceMap::default();
+    let mut last: Option<TextSize> = None;
+    for pair in notebook.cell_offsets().windows(2) {
+        let (start, end) = (pair[0], pair[1]);
+        let unformatted = &source[TextRange::new(start, end)];
+        let printed = ruff_python_formatter::format_module_source(unformatted, options.clone())
+            .map_err(|e| python_error(unformatted, &e))?;
+        let formatted = printed.as_code();
+        if formatted == unformatted {
+            continue;
+        }
+        let output = output.get_or_insert_with(|| String::with_capacity(source.len()));
+        // Everything since the last cell this loop rewrote, verbatim.
+        output.push_str(&source[TextRange::new(last.unwrap_or_default(), start)]);
+        source_map.push_marker(start, output.text_len());
+        output.push_str(formatted);
+        source_map.push_marker(end, output.text_len());
+        last = Some(end);
+    }
+    let Some(mut output) = output else {
+        return Ok(None);
+    };
+    output.push_str(&source[usize::from(last.unwrap_or_default())..]);
+    notebook.update(&source_map, output);
+
+    let mut result = Vec::new();
+    notebook
+        .write(&mut result)
+        .map_err(|e| anyhow!("writing {}: {e}", path.display()))?;
+    let result = String::from_utf8(result).map_err(|_| anyhow!("notebook output not UTF-8"))?;
     Ok((result != text).then_some(result))
 }
 

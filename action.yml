@@ -16,7 +16,7 @@ inputs:
     description: >-
       Cache the external linters poly downloads on first use (~/.cache/poly).
       Worth leaving on: a cold `poly check` fetches tens of megabytes of
-      shellcheck, ruff and friends before it lints anything.
+      shellcheck, hadolint and friends before it lints anything.
     default: "true"
   token:
     description: >-

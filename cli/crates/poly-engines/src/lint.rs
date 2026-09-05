@@ -1,6 +1,6 @@
-//! Embedded lint: sqruff for SQL, selene for Lua. External-tool lint
-//! (shellcheck, hadolint, actionlint, typos) lives in poly-tools; the LSP
-//! daemon and the CLI merge both sources.
+//! Embedded lint: sqruff for SQL, selene for Lua, ruff for Python and Jupyter.
+//! External-tool lint (shellcheck, hadolint, actionlint, typos) lives in
+//! poly-tools; the LSP daemon and the CLI merge both sources.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use poly_core::diag::{Fix, Issue, Severity};
 /// Does `lang` have an embedded linter? Batch callers use this to avoid
 /// reading thousands of files whose lint would return nothing.
 pub fn supported(lang: &str) -> bool {
-    matches!(lang, "sql" | "toml" | "lua")
+    matches!(lang, "sql" | "toml" | "lua" | "python" | "jupyter")
 }
 
 /// Rule documentation poly is holding that a diagnostic has no way to carry.
@@ -49,6 +49,7 @@ pub fn lint(lang: &str, path: &Path, text: &str) -> Result<Vec<Issue>> {
         "sql" => lint_sql(text),
         "toml" => Ok(lint_toml(text)),
         "lua" => lint_lua(path, text),
+        "python" | "jupyter" => lint_python(path, text),
         _ => Ok(Vec::new()),
     }
 }
@@ -385,6 +386,215 @@ fn lua_parse_error(text: &str, error: &full_moon::Error) -> Issue {
     }
 }
 
+// ── python (ruff) ──────────────────────────────────────────────────────────
+
+/// ruff's configuration as the project wrote it, with nothing layered on top.
+///
+/// `resolve_root_settings` takes a transformer because ruff's own CLI uses it
+/// to apply `--select` and friends over the file it just read. poly has no
+/// such flags -- the project's config is the whole answer -- and ruff's no-op
+/// implementation is `#[cfg(test)]`, so this is the one line of it poly needs.
+struct AsWritten;
+
+impl ruff_workspace::resolver::ConfigurationTransformer for AsWritten {
+    fn transform(
+        &self,
+        config: ruff_workspace::configuration::Configuration,
+    ) -> ruff_workspace::configuration::Configuration {
+        config
+    }
+}
+
+/// The ruff settings governing `path`.
+///
+/// Two caches, because the two halves cost different things and are shared at
+/// different granularity. Finding the config is a stat-walk up the tree and its
+/// answer is per directory; *resolving* it parses that file and every file it
+/// extends and compiles the rule selection, and its answer is per config file
+/// -- so a monorepo with three hundred package directories and one ruff.toml
+/// walks three hundred times and resolves once.
+///
+/// This is the difference between embedding ruff and regressing it. The
+/// downloaded binary paid resolution once per `poly check` because it was one
+/// subprocess for the whole batch; the embedded linter runs per file under
+/// rayon, so an unmemoized `resolve_root_settings` would turn a fixed cost into
+/// a per-file one. Failures are cached for the reason phase 1 caches them: a
+/// broken ruff.toml should report once, not once per Python file in the tree.
+fn python_settings(path: &Path) -> Result<Arc<ruff_workspace::Settings>> {
+    type Found = HashMap<PathBuf, Option<PathBuf>>;
+    type Built =
+        HashMap<Option<PathBuf>, std::result::Result<Arc<ruff_workspace::Settings>, String>>;
+    static FOUND: Mutex<Option<Found>> = Mutex::new(None);
+    static BUILT: Mutex<Option<Built>> = Mutex::new(None);
+
+    let dir = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    // ruff's own discovery rather than `nearest_ancestor_file`: the nearest
+    // `pyproject.toml` only counts if it actually carries a `[tool.ruff]`
+    // table, and `ruff.toml` and `.ruff.toml` both win over it. Reimplementing
+    // that ordering is how the editor and CI would start disagreeing with the
+    // project's own config, which is the one thing this must not do.
+    let config = {
+        let mut guard = FOUND.lock().expect("ruff config discovery lock");
+        let found = guard.get_or_insert_with(HashMap::new);
+        match found.get(&dir) {
+            Some(hit) => hit.clone(),
+            None => {
+                let hit =
+                    ruff_workspace::pyproject::find_settings_toml(&dir).with_context(|| {
+                        format!("looking for a ruff config above {}", dir.display())
+                    })?;
+                found.insert(dir, hit.clone());
+                hit
+            }
+        }
+    };
+
+    let mut guard = BUILT.lock().expect("ruff settings cache lock");
+    let built = guard.get_or_insert_with(HashMap::new);
+    let settings = match built.get(&config) {
+        Some(hit) => hit.clone(),
+        None => {
+            let hit = build_python_settings(config.as_deref())
+                .map(Arc::new)
+                .map_err(|e| format!("{e:#}"));
+            built.insert(config, hit.clone());
+            hit
+        }
+    };
+    settings.map_err(|e| anyhow!(e))
+}
+
+/// Resolve one config file, or fall back the way ruff falls back.
+///
+/// Same order ruff's CLI uses once the project's own file is out of the
+/// picture: a user-level `~/.config/ruff/ruff.toml`, then ruff's built-in
+/// defaults. The user-level step is here because the downloaded binary honored
+/// it, and a rule set that changes when poly stops shelling out is exactly the
+/// silent drift this port exists to avoid.
+fn build_python_settings(config: Option<&Path>) -> Result<ruff_workspace::Settings> {
+    use ruff_workspace::resolver::{resolve_root_settings, ConfigurationOrigin};
+    if let Some(file) = config {
+        return resolve_root_settings(file, &AsWritten, ConfigurationOrigin::Ancestor)
+            .with_context(|| format!("reading {}", file.display()));
+    }
+    if let Some(file) = ruff_workspace::pyproject::find_user_settings_toml() {
+        return resolve_root_settings(&file, &AsWritten, ConfigurationOrigin::UserSettings)
+            .with_context(|| format!("reading {}", file.display()));
+    }
+    Ok(ruff_workspace::Settings::default())
+}
+
+fn lint_python(path: &Path, text: &str) -> Result<Vec<Issue>> {
+    let source_type = ruff_python_ast::PySourceType::from(path);
+    // A .ipynb is JSON, not Python. Handing the raw text to the linter would
+    // report on the container -- every `"cell_type"` a syntax error -- so it
+    // goes through the notebook reader, which concatenates the code cells and
+    // keeps the map back to them.
+    let source_kind = if source_type.is_ipynb() {
+        ruff_linter::source_kind::SourceKind::ipy_notebook(
+            ruff_notebook::Notebook::from_source_code(text)
+                .map_err(|e| anyhow!("reading {}: {e}", path.display()))?,
+        )
+    } else {
+        ruff_linter::source_kind::SourceKind::Python {
+            code: text.to_string(),
+            is_stub: source_type.is_stub(),
+        }
+    };
+    let settings = python_settings(path)?;
+    let found = ruff_linter::linter::lint_only(
+        path,
+        // Package detection only feeds rules that ask "is this file in a
+        // package" (import sorting's first-party guess, N999's module-name
+        // check). Resolving it means another walk per file for something the
+        // stdin path never had either.
+        None,
+        &settings.linter,
+        // What the subprocess ran with by default. `# noqa` is how a Python
+        // project silences one line, and honouring it in CI but not in the
+        // editor is the split A4 forbids.
+        ruff_linter::settings::flags::Noqa::Enabled,
+        &source_kind,
+        source_type,
+        ruff_linter::linter::ParseSource::None,
+    );
+    let notebook = source_kind
+        .as_ipy_notebook()
+        .map(ruff_notebook::Notebook::index);
+    Ok(found
+        .diagnostics
+        .iter()
+        .filter_map(|diagnostic| python_issue(diagnostic, notebook))
+        .collect())
+}
+
+/// One ruff diagnostic, read the way `ruff --output-format json` reads it.
+///
+/// Field for field the same accessors ruff's own JSON emitter calls, so what
+/// poly reports is what the subprocess reported rather than a second opinion
+/// about the same finding.
+fn python_issue(
+    diagnostic: &ruff_db::diagnostic::Diagnostic,
+    notebook: Option<&ruff_notebook::NotebookIndex>,
+) -> Option<Issue> {
+    // A diagnostic with no span has no line to sit on. ruff emits one with a
+    // null location; the JSON poly used to parse required the field, so such a
+    // finding would have failed the whole run. Dropping it is strictly better
+    // and, so far, hypothetical.
+    let mut start = diagnostic.ruff_start_location()?;
+    let mut end = diagnostic.ruff_end_location()?;
+    // Notebook rows are relative to the cell, so a bare file:line:col points at
+    // the wrong place in the .ipynb -- the cell has to be named, and the row
+    // translated into it.
+    let cell = notebook.map(|index| {
+        // 1 is ruff's own fallback for a row it cannot place in a cell.
+        let cell = index.cell(start.line).map_or(1, |cell| cell.get());
+        start = index.translate_line_column(&start);
+        end = index.translate_line_column(&end);
+        cell
+    });
+    let message = diagnostic.concise_message().to_string();
+    Some(Issue {
+        line: start.line.get().saturating_sub(1) as u32,
+        col: start.column.get().saturating_sub(1) as u32,
+        end_line: end.line.get().saturating_sub(1) as u32,
+        end_col: end.column.get().saturating_sub(1) as u32,
+        // Uniformly a warning, as it was when poly read ruff's JSON: ruff calls
+        // every finding an error there, including the style rules, and passing
+        // that through would make a missing trailing comma as loud as a syntax
+        // error.
+        severity: Severity::Warning,
+        // `secondary_code_or_id`, not `secondary_code`: a syntax error has no
+        // rule code and ruff falls back to the diagnostic's own id, which is
+        // how `invalid-syntax` reaches the output. Verified against the 0.16.5
+        // binary rather than assumed -- poly's old `unwrap_or("ruff")` never
+        // fired, because ruff always sent a code.
+        code: diagnostic.secondary_code_or_id().to_string(),
+        message: match cell {
+            Some(cell) => format!("cell {cell}: {message}"),
+            None => message,
+        },
+        source: "ruff",
+        fix: diagnostic
+            .fix()
+            .map(|fix| match diagnostic.first_help_text() {
+                Some(what) => Fix::Described {
+                    what: what.to_string(),
+                    // "unsafe" is ruff's own word for an edit that can change
+                    // behavior; anything short of Safe gets the warning.
+                    safe: fix.applicability() == ruff_diagnostics::Applicability::Safe,
+                },
+                // A fix ruff computed but never titled. It has never been observed,
+                // and the old JSON path would have failed to parse it outright.
+                None => Fix::Automatic,
+            }),
+        url: diagnostic.documentation_url().map(str::to_string),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,6 +737,169 @@ mod tests {
         std::fs::write(&file, text).unwrap();
         let issues = lint("lua", &file, text).unwrap();
         assert!(issues.is_empty(), "{issues:?}");
+    }
+
+    /// A Python file in its own directory, with an explicit (empty) ruff.toml.
+    ///
+    /// Empty rather than absent on purpose: it pins the run to ruff's built-in
+    /// rule selection, so the test cannot be swayed by a
+    /// `~/.config/ruff/ruff.toml` on whoever's machine is running it.
+    fn python_project(files: &[(&str, &str)]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("ruff.toml"), "").unwrap();
+        for (name, body) in files {
+            std::fs::write(dir.path().join(name), body).unwrap();
+        }
+        dir
+    }
+
+    /// The whole record for one finding: position, rule code, the rule's own
+    /// page, and ruff's sentence about the edit it would make. Every field
+    /// came out of ruff's JSON before this was embedded, and each one is
+    /// somewhere a reader looks -- the code in the terminal, the URL as the
+    /// hover link, the fix text in both.
+    #[test]
+    fn python_unused_import_reports_a_placed_fixable_finding() {
+        let text = "import os\n\nprint(1)\n";
+        let dir = python_project(&[("a.py", text)]);
+        let issues = lint("python", &dir.path().join("a.py"), text).unwrap();
+
+        let found = issues
+            .iter()
+            .find(|i| i.code == "F401")
+            .unwrap_or_else(|| panic!("no F401 in {issues:?}"));
+        assert_eq!(found.source, "ruff");
+        // Uniformly a warning: ruff calls every finding an error in JSON.
+        assert_eq!(found.severity, Severity::Warning);
+        // 0-based, and pointing at `os` on the first line rather than at 0:0.
+        assert_eq!((found.line, found.col), (0, 7));
+        assert_eq!((found.end_line, found.end_col), (0, 9));
+        assert!(found.message.contains("`os`"), "{found:?}");
+        assert_eq!(
+            found.url.as_deref(),
+            Some("https://docs.astral.sh/ruff/rules/unused-import")
+        );
+        // ruff is the only tool that ships the remedy in words, and "safe" is
+        // its own word for an edit that cannot change behavior.
+        match &found.fix {
+            Some(Fix::Described { what, safe }) => {
+                assert!(what.contains("Remove unused import"), "{what}");
+                assert!(*safe, "removing an unused import is a safe fix");
+            }
+            other => panic!("expected a described fix, got {other:?}"),
+        }
+    }
+
+    /// An unsafe fix has to stay marked unsafe. It is the one distinction ruff
+    /// draws that poly passes through verbatim, and flattening it would have
+    /// poly telling people an edit is safe when its author said otherwise.
+    #[test]
+    fn python_keeps_ruffs_verdict_on_an_unsafe_fix() {
+        let text = "def f():\n    x = 1\n    return 2\n";
+        let dir = python_project(&[("a.py", text)]);
+        let issues = lint("python", &dir.path().join("a.py"), text).unwrap();
+        let found = issues
+            .iter()
+            .find(|i| i.code == "F841")
+            .unwrap_or_else(|| panic!("no F841 in {issues:?}"));
+        assert!(
+            matches!(&found.fix, Some(Fix::Described { safe: false, .. })),
+            "{found:?}"
+        );
+    }
+
+    /// The project's own ruff.toml decides which rules run. This is the whole
+    /// reason to resolve the config rather than lint at ruff's defaults: poly's
+    /// promise is that the editor and CI agree with the project, and a rule the
+    /// project turned off still being reported breaks it in the loudest way.
+    #[test]
+    fn a_projects_ruff_toml_selects_the_rules() {
+        let text = "import os\n\nprint(1)\n";
+        let ignored = tempfile::tempdir().unwrap();
+        std::fs::write(
+            ignored.path().join("ruff.toml"),
+            "lint.ignore = [\"F401\"]\n",
+        )
+        .unwrap();
+        let file = ignored.path().join("a.py");
+        std::fs::write(&file, text).unwrap();
+        let issues = lint("python", &file, text).unwrap();
+        assert!(
+            !issues.iter().any(|i| i.code == "F401"),
+            "the project silenced F401: {issues:?}"
+        );
+
+        // And the same file, in a project that did not, still reports it --
+        // otherwise this test would pass on a linter that reports nothing.
+        let dir = python_project(&[("a.py", text)]);
+        let issues = lint("python", &dir.path().join("a.py"), text).unwrap();
+        assert!(issues.iter().any(|i| i.code == "F401"), "{issues:?}");
+    }
+
+    /// `# noqa` is how a Python project silences one line. The subprocess
+    /// honored it by default; the editor and CI both have to keep doing so, or
+    /// every suppression in every Python repo starts reappearing.
+    #[test]
+    fn python_honours_noqa() {
+        let text = "import os  # noqa: F401\n\nprint(1)\n";
+        let dir = python_project(&[("a.py", text)]);
+        let issues = lint("python", &dir.path().join("a.py"), text).unwrap();
+        assert!(!issues.iter().any(|i| i.code == "F401"), "{issues:?}");
+    }
+
+    /// A syntax error carries ruff's own identifier rather than a rule code.
+    ///
+    /// `invalid-syntax`, verified against the 0.16.5 binary poly used to
+    /// download -- not the literal "ruff" the old JSON path had a fallback
+    /// for. That fallback never fired, because ruff always sends a code, and
+    /// keeping the real one means `[lint.per-file-ignores]` can name it.
+    #[test]
+    fn python_syntax_errors_carry_ruffs_own_code() {
+        let text = "def f(:\n    return 1\n";
+        let dir = python_project(&[("a.py", text)]);
+        let issues = lint("python", &dir.path().join("a.py"), text).unwrap();
+        assert!(!issues.is_empty(), "a broken file has to report something");
+        assert!(
+            issues.iter().all(|i| i.code == "invalid-syntax"),
+            "{issues:?}"
+        );
+        // No rule, so no page to link.
+        assert!(issues.iter().all(|i| i.url.is_none()), "{issues:?}");
+        assert!(issues.iter().all(|i| i.fix.is_none()), "{issues:?}");
+    }
+
+    /// A notebook is JSON on disk and Python inside its cells. Linting the
+    /// container would report on `"cell_type"`; what has to come back is a
+    /// position inside a cell, and the cell named, because `file:line:col`
+    /// alone points at the wrong line of the .ipynb.
+    #[test]
+    fn notebook_findings_are_cell_relative_and_say_which_cell() {
+        // r## because a markdown cell's `"# Title` would close an r#" string.
+        let notebook = r##"{
+ "cells": [
+  {"cell_type": "markdown", "metadata": {}, "source": ["# Title\n"]},
+  {"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
+   "source": ["x = 1\n", "print(x)\n"]},
+  {"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
+   "source": ["import os\n"]}
+ ],
+ "metadata": {"language_info": {"name": "python", "version": "3.12.0"}},
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+"##;
+        let dir = python_project(&[("nb.ipynb", notebook)]);
+        let issues = lint("jupyter", &dir.path().join("nb.ipynb"), notebook).unwrap();
+        let found = issues
+            .iter()
+            .find(|i| i.code == "F401")
+            .unwrap_or_else(|| panic!("no F401 in {issues:?}"));
+        // Third cell of the notebook, counting the markdown one -- ruff counts
+        // every cell, not just the code ones.
+        assert!(found.message.starts_with("cell 3: "), "{found:?}");
+        // Row 1 *of that cell*, not row 6 of the concatenated source and not a
+        // line of the surrounding JSON.
+        assert_eq!((found.line, found.col), (0, 7));
     }
 
     #[test]

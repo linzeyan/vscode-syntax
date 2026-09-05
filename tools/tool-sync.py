@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """External tool pin pipeline: the registry in poly-tools -> poly-tools.lock.
 
-The grammars have had a weekly upstream refresh since M5; the twelve external
+The grammars have had a weekly upstream refresh since M5; the external
 linters never did. Their versions are pinned in Rust and were bumped by hand,
-so `poly check` kept reporting whatever ruff said the day someone last
+so `poly check` kept reporting whatever shellcheck said the day someone last
 remembered -- the other half of R1.
 
 Two things happen here:

@@ -33,11 +33,46 @@ markup_fmt = "0.27"
 pretty_graphql = "0.2"
 pretty_yaml = "0.6"
 rayon = "1"
+# The Diagnostic type ruff_linter hands findings back in. A direct dependency
+# because naming it is unavoidable and ruff_linter re-exports nothing.
+ruff_db = "=0.0.12"
+# SourceMap: how a cell-by-cell notebook format is written back into the
+# .ipynb, and the type Notebook::update takes.
+ruff_diagnostics = "=0.0.12"
 # ruff_python_formatter takes IndentStyle in its API but does not re-export it,
 # so [format.python] use-tabs needs the type from here. Same exact pin.
-ruff_formatter = "=0.0.10"
+ruff_formatter = "=0.0.12"
+# ruff's linter, embedded rather than downloaded. This is the crate ruff's own
+# CLI is built from, so the rules, codes, fixes, documentation links and
+# `# noqa` handling are the tool's own rather than poly's reading of them --
+# which is the whole reason to link it instead of parsing its JSON.
+#
+# 0.16.6 rather than the 0.16.5 binary poly used to download: 0.16.6 is the
+# first release whose ruff_* dependencies are the 0.0.12 line the formatter is
+# pinned to, and one line for both is what keeps a single ruff inside poly.
+ruff_linter = "=0.16.6"
+# The .ipynb container: cell offsets on the way in, cell-relative positions on
+# the way out.
+ruff_notebook = "=0.0.12"
+# PySourceType: .py / .pyi / .ipynb, which the linter needs and the formatter
+# infers for itself.
+ruff_python_ast = "=0.0.12"
 # ruff's formatter is an unstable internal crate; exact pin required (M0 decision).
-ruff_python_formatter = "=0.0.10"
+#
+# 0.0.10 -> 0.0.12 to meet ruff_linter 0.16.6 on one ruff_* line. Verified not
+# to change a byte of anyone's Python: the two versions were linked side by
+# side and run over 22,663 files (the CPython 3.12 standard library, its test
+# suite and site-packages) at the defaults, and over 6,000 of them again at
+# every setting [format.python] can reach -- identical output, and no file that
+# one version parsed and the other refused.
+ruff_python_formatter = "=0.0.12"
+# pyproject.toml / ruff.toml discovery and resolution -- a project's own rule
+# selection, which is the point of embedding ruff rather than hardcoding a
+# default set poly invented.
+ruff_workspace = "=0.0.12"
+# Byte offsets into a notebook's concatenated source. Needed to build the
+# SourceMap a cell-by-cell format hands back to Notebook::update.
+ruff_text_size = "=0.0.12"
 # Lua, embedded as a pair: both crates parse with full_moon, so the second one
 # costs little once the first is linked. Exact pins for a different reason than
 # ruff's -- these two crates *are* the answer poly prints. A minor bump changes

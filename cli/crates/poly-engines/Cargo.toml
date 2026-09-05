@@ -17,8 +17,15 @@ markup_fmt.workspace = true
 poly-core = { path = "../poly-core" }
 pretty_graphql.workspace = true
 pretty_yaml.workspace = true
+ruff_db.workspace = true
+ruff_diagnostics.workspace = true
 ruff_formatter.workspace = true
+ruff_linter.workspace = true
+ruff_notebook.workspace = true
+ruff_python_ast.workspace = true
 ruff_python_formatter.workspace = true
+ruff_text_size.workspace = true
+ruff_workspace.workspace = true
 selene-lib.workspace = true
 serde_yaml.workspace = true
 sqruff-lib.workspace = true

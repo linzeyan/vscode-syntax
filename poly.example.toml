@@ -174,7 +174,7 @@ include-hidden = false
 # what is on PATH.
 #
 #   shellcheck 0.11.0     hadolint 2.15.1      actionlint 1.7.12
-#   typos 1.49.0          shfmt 3.13.1         ruff 0.16.4
+#   typos 1.49.0          shfmt 3.13.1
 #   tflint 0.64.0         gofumpt 0.11.0       golangci-lint 2.13.1
 #   swiftlint 0.65.1      buf 1.72.0           terraform system
 #   clang-format system   swift-format system  cargo system
@@ -205,12 +205,13 @@ include-hidden = false
 # config, and never downloads them. Removing the config is how you turn those
 # off.
 #
-# stylua and selene are gone from the list because they are no longer binaries:
-# poly formats and lints Lua in-process, so there is nothing to pin, disable or
-# point elsewhere. Naming either one here stops the run rather than being
-# ignored, so that `selene = "off"` cannot look like it turned something off.
-# `[format.lua]` sets the layout, and a selene.toml still configures the lints.
+# stylua, selene and ruff are gone from the list because they are no longer
+# binaries: poly formats and lints Lua and Python in-process, so there is
+# nothing to pin, disable or point elsewhere. Naming any of them here stops the
+# run rather than being ignored, so that `selene = "off"` cannot look like it
+# turned something off. `[format.lua]` and `[format.python]` set the layout; a
+# selene.toml still configures the Lua lints, and a pyproject.toml or ruff.toml
+# still selects the Python rules -- poly reads the project's own file.
 [tools]
 shellcheck = "C:/tools/shellcheck.exe"
 tflint = "off"
-ruff = "0.16.4"

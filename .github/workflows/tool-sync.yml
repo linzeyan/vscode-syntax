@@ -2,7 +2,7 @@ name: Tool Sync
 
 # The other half of R1. Grammar Sync has kept the grammars current since M5;
 # the twelve external linters were pinned in Rust and bumped by hand, so poly
-# reported whatever ruff said the day someone last remembered.
+# reported whatever shellcheck said the day someone last remembered.
 #
 # Monday 08:00 UTC: after Grammar Sync (06:00) so the two do not open PRs on
 # top of each other, and after Action tag (07:00), which is the other Monday
