@@ -174,7 +174,7 @@ include-hidden = false
 # what is on PATH.
 #
 #   shellcheck 0.11.0     hadolint 2.15.1      actionlint 1.7.12
-#   typos 1.49.0          shfmt 3.13.1
+#   shfmt 3.13.1
 #   tflint 0.64.0         gofumpt 0.11.0       golangci-lint 2.13.1
 #   swiftlint 0.65.1      buf 1.72.0           terraform system
 #   clang-format system   swift-format system  cargo system
@@ -205,13 +205,18 @@ include-hidden = false
 # config, and never downloads them. Removing the config is how you turn those
 # off.
 #
-# stylua, selene and ruff are gone from the list because they are no longer
-# binaries: poly formats and lints Lua and Python in-process, so there is
-# nothing to pin, disable or point elsewhere. Naming any of them here stops the
-# run rather than being ignored, so that `selene = "off"` cannot look like it
-# turned something off. `[format.lua]` and `[format.python]` set the layout; a
-# selene.toml still configures the Lua lints, and a pyproject.toml or ruff.toml
-# still selects the Python rules -- poly reads the project's own file.
+# stylua, selene, ruff and typos are gone from the list because they are no
+# longer binaries: poly formats and lints Lua and Python and spell-checks every
+# file in-process, so there is nothing to pin, disable or point elsewhere.
+# Naming any of them here stops the run rather than being ignored, so that
+# `selene = "off"` cannot look like it turned something off. `[format.lua]` and
+# `[format.python]` set the layout; a selene.toml still configures the Lua
+# lints, a pyproject.toml or ruff.toml still selects the Python rules, and a
+# _typos.toml still holds `[default.extend-words]` and `[files] extend-exclude`
+# -- poly reads the project's own file. Spelling is also the one check with no
+# language, so it now reads exactly the files poly's walk finds, which includes
+# the ones poly has no language for; `--hidden` and `--no-ignore` reach it too,
+# and `[lint] exclude` and `[lint.per-file-ignores]` silence it like any other.
 [tools]
 shellcheck = "C:/tools/shellcheck.exe"
 tflint = "off"

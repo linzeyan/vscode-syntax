@@ -11,6 +11,7 @@ mod report;
 mod usage;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
@@ -421,11 +422,12 @@ fn is_workflow_file(path: &Path) -> bool {
 /// One path shape for every tool, anchored at `base`.
 ///
 /// Each linter reports paths its own way — ruff absolutizes, shellcheck echoes
-/// back the `./x` it was handed, typos prints a bare name — so a single run
-/// printed three different shapes for files sitting in the same directory, and
-/// anything parsing the output (CI annotations, editor terminal links) had to
-/// cope with all of them. Applied before the sort, so issues for one file also
-/// stay together instead of splitting by whichever tool found them.
+/// back the `./x` it was handed, and the embedded engines report the bare
+/// relative path the walk found — so a single run printed three different
+/// shapes for files sitting in the same directory, and anything parsing the
+/// output (CI annotations, editor terminal links) had to cope with all of them.
+/// Applied before the sort, so issues for one file also stay together instead
+/// of splitting by whichever tool found them.
 ///
 /// `base` is the caller's canonicalized cwd: on macOS that reads as /tmp while
 /// ruff reports /private/tmp, and comparing the two unresolved would match
@@ -474,9 +476,18 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     } else {
         paths.clone()
     };
-    let files = crate::batch::resolve_targets(&scope, Scope::Lint, inv.walk(), |_| true)?;
+    // Every file the walk kept, and then the subset poly can name a language
+    // for. Spelling wants the first list -- a LICENSE is worth reading and has
+    // no language -- and every other linter wants the second.
+    let walked = crate::batch::resolve_files(&scope, Scope::Lint, inv.walk())?;
+    let files: Vec<(PathBuf, String, Arc<poly_core::Config>)> = walked
+        .iter()
+        .filter_map(|(path, config)| {
+            Some((path.clone(), config.language(path)?, Arc::clone(config)))
+        })
+        .collect();
 
-    // (tool, files-it-lints) groups; typos runs repo-wide over the roots.
+    // (tool, files-it-lints) groups.
     let group = |lang: &str| -> Vec<PathBuf> {
         files
             .iter()
@@ -536,18 +547,6 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             group("protobuf"),
             Box::new(poly_tools::run::buf_files),
         ),
-        (
-            "typos",
-            paths.to_vec(),
-            Box::new(|cmd: &Path, targets: &[PathBuf]| {
-                poly_tools::run::typos_paths(
-                    cmd,
-                    targets,
-                    &config.lint_exclude,
-                    config.root.as_deref(),
-                )
-            }),
-        ),
     ];
 
     let mut issues: Vec<FileIssue> = Vec::new();
@@ -559,23 +558,28 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     let mut failed: Vec<String> = Vec::new();
     let mut ran = 0usize;
 
-    // Embedded engines (sqruff, selene, ruff) linted only inside the daemon, so
-    // `poly check` stayed silent on exactly the files the editor was flagging.
-    // R5/A4 wants one answer, not two.
-    let embedded: Vec<PathBuf> = files
-        .iter()
-        .filter(|(_, lang, _)| poly_engines::lint::supported(lang))
-        .map(|(p, _, _)| p.clone())
-        .collect();
-    if !embedded.is_empty() {
+    // Embedded engines (sqruff, selene, ruff, typos) linted only inside the
+    // daemon, so `poly check` stayed silent on exactly the files the editor was
+    // flagging. R5/A4 wants one answer, not two.
+    //
+    // Spelling runs over every walked file and the language-keyed linters over
+    // the ones that have a language, in one pass, because the alternative is
+    // two rayon passes over the same tree reading many of the same files twice.
+    if !walked.is_empty() {
         init_thread_pool();
-        let results: Vec<Result<Vec<FileIssue>>> = files
+        let results: Vec<Result<Vec<FileIssue>>> = walked
             .par_iter()
-            .filter(|(_, lang, _)| poly_engines::lint::supported(lang))
-            .map(|(path, lang, _)| {
-                let text = std::fs::read_to_string(path)
-                    .with_context(|| format!("reading {}", path.display()))?;
-                Ok(poly_engines::lint::lint(lang, path, &text)?
+            .map(|(path, config)| {
+                let mut found = poly_engines::lint::spell(path)?;
+                if let Some(lang) = config
+                    .language(path)
+                    .filter(|lang| poly_engines::lint::supported(lang))
+                {
+                    let text = std::fs::read_to_string(path)
+                        .with_context(|| format!("reading {}", path.display()))?;
+                    found.extend(poly_engines::lint::lint(&lang, path, &text)?);
+                }
+                Ok(found
                     .into_iter()
                     .map(|issue| FileIssue {
                         file: path.clone(),
@@ -585,12 +589,21 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             })
             .collect();
         let mut broken = 0usize;
+        // One broken config is one message. Every file under an unparsable
+        // _typos.toml or ruff.toml fails with the same sentence, and a repo of
+        // any size would bury every other finding under thousands of copies of
+        // it -- which the repo-wide typos subprocess never did, because it read
+        // the config once.
+        let mut said: std::collections::HashSet<String> = std::collections::HashSet::new();
         for result in results {
             match result {
                 Ok(found) => issues.extend(found),
                 Err(err) => {
-                    eprintln!("embedded lint: failed — {err:#}");
                     broken += 1;
+                    let message = format!("{err:#}");
+                    if said.insert(message.clone()) {
+                        eprintln!("embedded lint: failed — {message}");
+                    }
                 }
             }
         }
@@ -1124,7 +1137,9 @@ mod tests {
             poly_tools::current_platform().starts_with("darwin"),
         );
         // Non-vacuity: a predicate stuck at false would pass everything above.
-        assert!(installable("typos", false));
+        // actionlint because it is one of the few with a build on all six
+        // platforms, so this cannot start depending on where it runs.
+        assert!(installable("actionlint", false));
     }
 
     #[test]
@@ -1149,7 +1164,7 @@ mod tests {
         let dotted = Path::new("./sub/a.py");
         assert_eq!(relative_to_base(dotted, &base), want, "shellcheck, ./x");
         let bare = Path::new("sub/a.py");
-        assert_eq!(relative_to_base(bare, &base), want, "typos, bare");
+        assert_eq!(relative_to_base(bare, &base), want, "the walk, bare");
 
         // Outside the base there is no relative form worth printing, and a path
         // that does not resolve keeps whatever the tool said minus the "./".

@@ -13,13 +13,6 @@ import tempfile
 
 BIN = sys.argv[1] if len(sys.argv) > 1 else "cli/target/release/poly"
 
-# The daemon resolves managed tools offline on purpose -- a download must not
-# run on a keystroke -- so on a machine that has never fetched typos the
-# assertions below would come back empty and pass for the wrong reason.
-subprocess.run(
-    [BIN, "tools", "install", "typos"], check=True, stdout=subprocess.DEVNULL
-)
-
 proc = subprocess.Popen([BIN, "lsp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
 
@@ -271,10 +264,11 @@ assert ec["endOfLine"] is None, ec
 # one save.
 assert ec["formatted"] is False, ec
 
-# typos, the one lint tool with no language of its own: `poly check` runs it
-# repo-wide over the walk roots, so until the daemon ran it too a misspelling
-# failed CI while the editor never said a word. It reads from disk rather than
-# the buffer, which is why these are real files.
+# Spelling, the one check with no language of its own, which is why it is asked
+# for separately from `lint(lang, ..)` on both sides. It reads from disk rather
+# than the buffer -- on stdin the document would be called `-` and the per-type
+# config keyed off the file name would stop applying -- which is why these are
+# real files.
 typo_dir = tempfile.mkdtemp(prefix="poly-smoke-typos-")
 os.mkdir(os.path.join(typo_dir, "vendor"))
 with open(os.path.join(typo_dir, "poly.toml"), "w") as f:

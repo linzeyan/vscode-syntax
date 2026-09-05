@@ -1,6 +1,7 @@
-//! Embedded lint: sqruff for SQL, selene for Lua, ruff for Python and Jupyter.
-//! External-tool lint (shellcheck, hadolint, actionlint, typos) lives in
-//! poly-tools; the LSP daemon and the CLI merge both sources.
+//! Embedded lint: sqruff for SQL, selene for Lua, ruff for Python and Jupyter,
+//! and typos over every file regardless of language. External-tool lint
+//! (shellcheck, hadolint, actionlint) lives in poly-tools; the LSP daemon and
+//! the CLI merge both sources.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -11,6 +12,8 @@ use poly_core::diag::{Fix, Issue, Severity};
 
 /// Does `lang` have an embedded linter? Batch callers use this to avoid
 /// reading thousands of files whose lint would return nothing.
+///
+/// Spelling is not on this list and never can be: see `spell`.
 pub fn supported(lang: &str) -> bool {
     matches!(lang, "sql" | "toml" | "lua" | "python" | "jupyter")
 }
@@ -595,6 +598,326 @@ fn python_issue(
     })
 }
 
+// ── spelling (typos) ───────────────────────────────────────────────────────
+
+/// Spell-check one file, whatever it is.
+///
+/// A second entry point rather than another `supported` arm, and the seam is
+/// the point: typos is the one checker with no language. It reads a LICENSE, a
+/// Dockerfile and a .py alike, and what it needs to know about a file is not
+/// which language poly calls it but which *type* typos calls it -- `lock` and
+/// `cert` are checked with no dictionary at all, and `[type.rust]` in a
+/// project's config addresses that name. Routing it through `lint(lang, ..)`
+/// would mean naming every language poly knows and still missing every file
+/// poly knows no language for, which is a large share of what a spell checker
+/// exists to read.
+///
+/// Takes a path and no text, also deliberately. Deciding a PNG is a picture
+/// rather than prose, and decoding a UTF-16 source file, are both part of what
+/// typos does and both need the bytes; and the daemon already read the file
+/// from disk rather than the buffer, because on stdin the document is called
+/// `-` and the per-type config keyed off the file name stops applying.
+pub fn spell(path: &Path) -> Result<Vec<Issue>> {
+    // `Policy` and `init_dir` both assert an absolute path, and the config a
+    // file answers to is decided by walking its ancestors -- neither survives a
+    // bare `a.rs` handed over by an editor.
+    let path =
+        std::path::absolute(path).with_context(|| format!("resolving {}", path.display()))?;
+    let speller = speller(&path)?;
+    if speller.excluded(&path) {
+        return Ok(Vec::new());
+    }
+    let policy = speller.engine.policy(&path);
+
+    let mut found = Vec::new();
+    if policy.check_filenames {
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            let ignored = ignored_ranges(name.as_bytes(), &policy);
+            found.extend(
+                typos::check_str(name, policy.tokenizer, policy.dict)
+                    .filter(|typo| !is_ignored(&ignored, typo.span()))
+                    .map(|typo| spell_issue(&typo, None)),
+            );
+        }
+    }
+    if !policy.check_files {
+        return Ok(found);
+    }
+    let (buffer, binary) = read_for_spelling(&path)?;
+    // Without this poly spell-checks the bytes of a PNG. `policy.binary` is the
+    // project saying it wants that anyway (`[default] binary = true`).
+    if binary && !policy.binary {
+        return Ok(found);
+    }
+
+    let ignored = ignored_ranges(&buffer, &policy);
+    // typos reports whole-buffer offsets and a diagnostic needs a line plus an
+    // offset within it. Findings arrive in ascending offset order, so one
+    // forward pass over the buffer counts every line exactly once -- which is
+    // what typos' own AccumulateLineNum/extract_line do, and they are private
+    // to it.
+    let (mut line, mut line_start, mut scanned) = (0u32, 0usize, 0usize);
+    for typo in typos::check_bytes(&buffer, policy.tokenizer, policy.dict) {
+        if is_ignored(&ignored, typo.span()) {
+            continue;
+        }
+        // `max` only so that an ordering change upstream cannot panic here.
+        let offset = typo.byte_offset.min(buffer.len()).max(scanned);
+        for (i, byte) in buffer[scanned..offset].iter().enumerate() {
+            if *byte == b'\n' {
+                line += 1;
+                line_start = scanned + i + 1;
+            }
+        }
+        scanned = offset;
+        found.push(spell_issue(
+            &typo,
+            Some((line, (offset - line_start) as u32)),
+        ));
+    }
+    Ok(found)
+}
+
+/// One typo, worded and positioned the way `typos --format json` worded and
+/// positioned it -- this is a port, so the record has to be the same record.
+///
+/// `at` is `None` for a typo in the file *name*. typos reports those with no
+/// line number, so poly anchors them at the very start and says why in the
+/// message, rather than aiming a path offset at whatever happens to sit at that
+/// offset in the contents.
+///
+/// The column is the typo's *byte* offset within its line while the width
+/// counts *characters*. That mismatch is inherited, not invented: it is the
+/// pair of numbers the JSON path produced, and squaring it up would silently
+/// move every column poly has ever reported on a line with non-ASCII text
+/// before the typo.
+fn spell_issue(typo: &typos::Typo<'_>, at: Option<(u32, u32)>) -> Issue {
+    let (line, col, width) = match at {
+        Some((line, col)) => (line, col, typo.typo.chars().count() as u32),
+        None => (0, 0, 0),
+    };
+    // `Valid` never gets this far (typos drops it) and `Invalid` is a word the
+    // dictionary knows is wrong with nothing to put in its place -- defensive
+    // in typos itself, and a case the JSON poly used to parse could not even
+    // represent, since `corrections: null` would have failed the whole run.
+    let corrections: Vec<&str> = match &typo.corrections {
+        typos::Status::Corrections(corrections) => corrections.iter().map(AsRef::as_ref).collect(),
+        _ => Vec::new(),
+    };
+    Issue {
+        line,
+        col,
+        end_line: line,
+        end_col: col + width,
+        severity: Severity::Info,
+        code: "typo".to_string(),
+        message: format!(
+            "`{}` should be `{}`{}",
+            typo.typo,
+            corrections.join("` or `"),
+            if at.is_none() {
+                " (in the file name)"
+            } else {
+                ""
+            }
+        ),
+        source: "typos",
+        // The correction is already in the message; what this adds is that
+        // `typos --write` would apply it without a human.
+        fix: Some(Fix::Automatic),
+        url: None,
+    }
+}
+
+/// The byte ranges `[default] extend-ignore-re` covers, computed once per
+/// buffer. A typo touching one of them is a typo inside a region the project
+/// asked not to be read -- a license header, a base64 blob, a vendored table.
+fn ignored_ranges(
+    content: &[u8],
+    policy: &typos_cli::policy::Policy<'_, '_, '_>,
+) -> Vec<std::ops::Range<usize>> {
+    if policy.ignore.is_empty() {
+        return Vec::new();
+    }
+    let Ok(text) = std::str::from_utf8(content) else {
+        return Vec::new();
+    };
+    policy
+        .ignore
+        .iter()
+        .flat_map(|pattern| pattern.find_iter(text).map(|found| found.range()))
+        .collect()
+}
+
+fn is_ignored(blocks: &[std::ops::Range<usize>], span: std::ops::Range<usize>) -> bool {
+    let end = span.end.saturating_sub(1);
+    blocks
+        .iter()
+        .any(|block| block.contains(&span.start) || block.contains(&end))
+}
+
+/// The file's bytes as typos would read them, and whether it is a picture.
+///
+/// UTF-16 is decoded rather than skipped, so the offsets below index the
+/// decoded text -- which is what the binary reported too, and the only shape a
+/// line and column can be given in.
+fn read_for_spelling(path: &Path) -> Result<(Vec<u8>, bool)> {
+    use content_inspector::ContentType;
+
+    let buffer = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let decode = |encoding: &'static encoding_rs::Encoding| -> Result<Vec<u8>> {
+        let mut decoded = String::with_capacity(buffer.len() * 2);
+        let (result, at) = encoding
+            .new_decoder_with_bom_removal()
+            .decode_to_string_without_replacement(&buffer, &mut decoded, true);
+        match result {
+            encoding_rs::DecoderResult::InputEmpty => Ok(decoded.into_bytes()),
+            _ => Err(anyhow!(
+                "invalid {} encoding at byte {at} in {}",
+                encoding.name(),
+                path.display()
+            )),
+        }
+    };
+    Ok(match content_inspector::inspect(&buffer) {
+        // UTF-32 reads as binary because typos has no decoder for it either.
+        ContentType::BINARY | ContentType::UTF_32LE | ContentType::UTF_32BE => (buffer, true),
+        ContentType::UTF_16LE => (decode(encoding_rs::UTF_16LE)?, false),
+        ContentType::UTF_16BE => (decode(encoding_rs::UTF_16BE)?, false),
+        ContentType::UTF_8 | ContentType::UTF_8_BOM => (buffer, false),
+    })
+}
+
+/// A typos configuration, resolved, plus the exclusions that came with it.
+struct Speller {
+    engine: typos_cli::policy::ConfigEngine<'static>,
+    /// `[files] extend-exclude`, compiled the way typos compiled it.
+    ///
+    /// typos applied these while walking; poly walks instead, so they have to
+    /// be matched here or a repo that told typos to leave `vendored/` alone
+    /// would suddenly have all of it spell-checked. The rest of `[files]`
+    /// (`ignore-hidden`, `ignore-vcs`, `ignore-dot`) describes a walk poly no
+    /// longer runs -- poly's own walk answers those now, for every tool at
+    /// once, which is what `--hidden` and `--no-ignore` came to mean.
+    excludes: ignore::gitignore::Gitignore,
+}
+
+impl Speller {
+    fn excluded(&self, path: &Path) -> bool {
+        self.excludes
+            .matched_path_or_any_parents(path, false)
+            .is_ignore()
+    }
+}
+
+/// One arena for every config poly ever loads.
+///
+/// `ConfigEngine` borrows its string storage, and interning is what makes a
+/// `[default.extend-words]` entry a `&str` the dictionary can hand back.
+/// Sharing one is what the typos binary does with its single run; poly's is
+/// process-wide because the daemon is one process for a whole editing session.
+fn spell_storage() -> &'static typos_cli::policy::ConfigStorage {
+    static STORAGE: OnceLock<typos_cli::policy::ConfigStorage> = OnceLock::new();
+    STORAGE.get_or_init(typos_cli::policy::ConfigStorage::new)
+}
+
+/// The typos configuration governing `path`.
+///
+/// Two caches, for the reason `python_settings` has two: finding the config is
+/// a stat-walk whose answer is per directory, while *building* one parses that
+/// file, compiles its globs and regexes and interns its word list, so its
+/// answer is per config file. A monorepo with three hundred package
+/// directories and one `_typos.toml` walks three hundred times and builds once.
+/// This is the difference between embedding typos and regressing it: the
+/// subprocess paid for its config once for the whole batch, and poly runs this
+/// per file under rayon. Failures cache too, so a broken `_typos.toml` is
+/// parsed once and every file after it fails from the remembered error rather
+/// than re-reading the file; `cmd_check` is what collapses those into one
+/// message.
+///
+/// Resolving per file rather than once per command-line argument is the one
+/// deliberate departure. The binary loaded a config from each *argument* and
+/// applied it to everything underneath, so `poly check .` used the root's
+/// config for the whole repo while the editor, which handed typos a single
+/// file, used the nearest one above it -- the same file answered to two
+/// different configs depending on who asked. Per file is the editor's answer,
+/// and A4 says there is only supposed to be one.
+fn speller(path: &Path) -> Result<Arc<Speller>> {
+    type Anchors = HashMap<PathBuf, std::result::Result<PathBuf, String>>;
+    type Built = HashMap<PathBuf, std::result::Result<Arc<Speller>, String>>;
+    static ANCHORS: Mutex<Option<Anchors>> = Mutex::new(None);
+    static BUILT: Mutex<Option<Built>> = Mutex::new(None);
+
+    let dir = path.parent().unwrap_or(path).to_path_buf();
+    let anchor = {
+        let mut guard = ANCHORS.lock().expect("typos config discovery lock");
+        let anchors = guard.get_or_insert_with(HashMap::new);
+        match anchors.get(&dir) {
+            Some(hit) => hit.clone(),
+            None => {
+                let hit = spell_anchor(&dir).map_err(|e| format!("{e:#}"));
+                anchors.insert(dir, hit.clone());
+                hit
+            }
+        }
+    }
+    .map_err(|e| anyhow!(e))?;
+
+    let mut guard = BUILT.lock().expect("typos config cache lock");
+    let built = guard.get_or_insert_with(HashMap::new);
+    let speller = match built.get(&anchor) {
+        Some(hit) => hit.clone(),
+        None => {
+            let hit = build_speller(&anchor)
+                .map(Arc::new)
+                .map_err(|e| format!("{e:#}"));
+            built.insert(anchor, hit.clone());
+            hit
+        }
+    };
+    speller.map_err(|e| anyhow!(e))
+}
+
+/// The directory whose typos config governs files under `dir`.
+///
+/// typos' own discovery rather than `nearest_ancestor_file`, because the file
+/// it looks for is one of five and two of them only count conditionally: a
+/// `Cargo.toml` is a typos config exactly when it carries
+/// `[workspace.metadata.typos]` or `[package.metadata.typos]`, and a
+/// `pyproject.toml` when it carries `[tool.typos]`. Reimplementing that is how
+/// poly would start disagreeing with the project's own configuration.
+///
+/// The filesystem root when nothing is found, so that every file still resolves
+/// to *some* initialized directory and gets typos' defaults.
+fn spell_anchor(dir: &Path) -> Result<PathBuf> {
+    for ancestor in dir.ancestors() {
+        if typos_cli::config::Config::from_dir(ancestor)
+            .with_context(|| format!("reading the typos config in {}", ancestor.display()))?
+            .is_some()
+        {
+            return Ok(ancestor.to_path_buf());
+        }
+    }
+    Ok(dir.ancestors().last().unwrap_or(dir).to_path_buf())
+}
+
+fn build_speller(anchor: &Path) -> Result<Speller> {
+    let mut engine = typos_cli::policy::ConfigEngine::new(spell_storage());
+    engine
+        .init_dir(anchor)
+        .with_context(|| format!("loading the typos config for {}", anchor.display()))?;
+    let mut excludes = ignore::gitignore::GitignoreBuilder::new(anchor);
+    for pattern in engine.walk(anchor).extend_exclude() {
+        excludes
+            .add_line(None, pattern)
+            .with_context(|| format!("[files] extend-exclude pattern {pattern:?}"))?;
+    }
+    let excludes = excludes
+        .build()
+        .context("building [files] extend-exclude")?;
+    Ok(Speller { engine, excludes })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -923,5 +1246,202 @@ mod tests {
         assert!(lint("toml", Path::new("a.toml"), "a = 1\n")
             .unwrap()
             .is_empty());
+    }
+
+    // ── spelling ───────────────────────────────────────────────────────────
+
+    /// A project on disk, because every question `spell` answers is asked of
+    /// the filesystem: which config governs the file, what type its name makes
+    /// it, and whether its bytes are text.
+    fn spelling_project(config: &str, files: &[(&str, &[u8])]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        // Canonicalized because macOS hands out /var/folders/... and resolves
+        // it to /private/var/..., and the config cache is keyed by directory.
+        let root = dir.path().canonicalize().unwrap();
+        std::fs::write(root.join("_typos.toml"), config).unwrap();
+        for (name, body) in files {
+            let path = root.join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
+        }
+        dir
+    }
+
+    fn spell_at(dir: &tempfile::TempDir, name: &str) -> Vec<Issue> {
+        let root = dir.path().canonicalize().unwrap();
+        spell(&root.join(name)).unwrap_or_else(|e| panic!("{name}: {e:#}"))
+    }
+
+    /// The whole record for one misspelling, and every number in it is what
+    /// `typos --format json 1.49.1` printed for this exact file. That is the
+    /// point of the test: poly now computes the line, the offset within it and
+    /// the width itself, and an off-by-one here moves the squiggle in every
+    /// file anyone has.
+    ///
+    /// The column is a *byte* offset into the line while the width counts
+    /// *characters* -- inherited from the JSON, asserted so nobody tidies it up
+    /// without meaning to.
+    #[test]
+    fn a_misspelling_carries_typos_own_message_and_position() {
+        let dir = spelling_project(
+            "",
+            &[(
+                "src/main.rs",
+                b"// A recieve typo and a Recieve one.\nlet abandonned = 1;\n",
+            )],
+        );
+        let issues = spell_at(&dir, "src/main.rs");
+        assert_eq!(issues.len(), 3, "{issues:?}");
+
+        let first = &issues[0];
+        assert_eq!(first.message, "`recieve` should be `receive`");
+        assert_eq!(first.source, "typos");
+        assert_eq!(first.code, "typo");
+        assert_eq!(first.severity, Severity::Info);
+        assert_eq!(first.fix, Some(Fix::Automatic));
+        assert_eq!(first.url, None);
+        assert_eq!((first.line, first.col), (0, 5), "{first:?}");
+        assert_eq!((first.end_line, first.end_col), (0, 12), "{first:?}");
+
+        // Case is the dictionary's own doing, and the reason `typos` had to
+        // come in whole: a hand-rolled word list corrects this to `receive`.
+        assert_eq!(issues[1].message, "`Recieve` should be `Receive`");
+        assert_eq!((issues[1].line, issues[1].col), (0, 24), "{issues:?}");
+
+        // Second line, so the line counter has actually advanced and the
+        // column is measured from the start of *that* line.
+        assert_eq!(issues[2].message, "`abandonned` should be `abandoned`");
+        assert_eq!((issues[2].line, issues[2].col), (1, 4), "{issues:?}");
+    }
+
+    /// typos reports a misspelled file name with no line number at all. poly
+    /// anchors it at the very start and says why, rather than aiming a path
+    /// offset at whatever happens to sit at that offset in the contents.
+    #[test]
+    fn a_misspelled_file_name_is_anchored_at_the_start() {
+        let dir = spelling_project("", &[("reciever.py", b"x = 1\n")]);
+        let issues = spell_at(&dir, "reciever.py");
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert_eq!(
+            issues[0].message,
+            "`reciever` should be `receiver` (in the file name)"
+        );
+        // Zero width, not the length of the word: there is no line for the
+        // word to have a width on.
+        assert_eq!(
+            (
+                issues[0].line,
+                issues[0].col,
+                issues[0].end_line,
+                issues[0].end_col
+            ),
+            (0, 0, 0, 0),
+            "{issues:?}"
+        );
+    }
+
+    /// `[default.extend-words]` mapping a word to itself is how a project says
+    /// a misspelling is load-bearing -- this repo's own `_typos.toml` does it
+    /// for parser fixtures. Only `typos_cli::config` reads that table, which is
+    /// why poly links the whole crate rather than the dictionary alone.
+    #[test]
+    fn a_projects_extend_words_suppresses() {
+        let allowed = spelling_project(
+            "[default.extend-words]\nteh = \"teh\"\n",
+            &[("a.md", b"teh recieve\n")],
+        );
+        let issues = spell_at(&allowed, "a.md");
+        assert_eq!(issues.len(), 1, "only `recieve` survives: {issues:?}");
+        assert!(issues[0].message.starts_with("`recieve`"), "{issues:?}");
+
+        // Same file, no such entry: proof the suppression is the config and
+        // not the dictionary declining to have an opinion.
+        let plain = spelling_project("", &[("a.md", b"teh recieve\n")]);
+        assert_eq!(spell_at(&plain, "a.md").len(), 2);
+    }
+
+    /// `extend-ignore-re` blanks out a region of a file. Without it poly
+    /// reports inside the base64 blobs and vendored tables projects use it for.
+    #[test]
+    fn extend_ignore_re_blanks_out_a_region() {
+        let dir = spelling_project(
+            "[default]\nextend-ignore-re = [\"(?s)IGNORE-START.*?IGNORE-END\"]\n",
+            &[("a.md", b"IGNORE-START seperate IGNORE-END\nand a recieve\n")],
+        );
+        let issues = spell_at(&dir, "a.md");
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert!(issues[0].message.starts_with("`recieve`"), "{issues:?}");
+    }
+
+    /// typos checks a lockfile and a certificate with no dictionary and skips a
+    /// picture outright. Losing any of the three means poly reporting
+    /// "misspellings" in machine-written files, which is noise nobody can act
+    /// on -- and it is `typos_cli`'s per-file-type policy, not poly's, that
+    /// decides so.
+    #[test]
+    fn machine_written_and_binary_files_are_left_alone() {
+        // A real PNG header, so content_inspector calls it binary, with the
+        // bytes of a typo after it.
+        let mut png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01".to_vec();
+        png.extend_from_slice(b"\x00recieve abandonned\x00");
+        let dir = spelling_project(
+            "",
+            &[
+                (
+                    "package-lock.json",
+                    b"{\"name\": \"abandonned-recieve\"}\n".as_slice(),
+                ),
+                (
+                    "server.crt",
+                    b"-----BEGIN CERTIFICATE-----\nMIIBabandonnedrecieve\n".as_slice(),
+                ),
+                ("pixel.png", &png),
+                // The control: the same words in a file with no special type
+                // are still reported, so this test cannot pass by checking
+                // nothing at all.
+                ("notes.md", b"abandonned recieve\n".as_slice()),
+            ],
+        );
+        assert!(spell_at(&dir, "package-lock.json").is_empty());
+        assert!(spell_at(&dir, "server.crt").is_empty());
+        assert!(spell_at(&dir, "pixel.png").is_empty());
+        assert_eq!(spell_at(&dir, "notes.md").len(), 2);
+    }
+
+    /// `[files] extend-exclude` used to be applied by typos' own walk. poly
+    /// walks now, so it has to be applied per file or a repo that told typos to
+    /// leave a directory alone would silently have all of it read.
+    #[test]
+    fn files_extend_exclude_still_excludes() {
+        let dir = spelling_project(
+            "[files]\nextend-exclude = [\"vendored/**\"]\n",
+            &[
+                ("vendored/lib.js", b"// recieve\n".as_slice()),
+                ("src/lib.js", b"// recieve\n".as_slice()),
+            ],
+        );
+        assert!(spell_at(&dir, "vendored/lib.js").is_empty());
+        assert_eq!(spell_at(&dir, "src/lib.js").len(), 1);
+    }
+
+    /// A file whose nearest config is not the one at the repo root answers to
+    /// its own. The typos binary could not do this for `poly check` -- it
+    /// loaded one config per command-line argument -- so the editor and CI
+    /// disagreed about a package that configured itself (A4).
+    #[test]
+    fn the_nearest_config_wins_per_file() {
+        let dir = spelling_project(
+            "",
+            &[
+                ("outer.md", b"teh\n".as_slice()),
+                (
+                    "pkg/_typos.toml",
+                    b"[default.extend-words]\nteh = \"teh\"\n",
+                ),
+                ("pkg/inner.md", b"teh\n".as_slice()),
+            ],
+        );
+        assert_eq!(spell_at(&dir, "outer.md").len(), 1);
+        assert!(spell_at(&dir, "pkg/inner.md").is_empty());
     }
 }

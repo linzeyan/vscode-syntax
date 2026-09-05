@@ -6,11 +6,14 @@ edit by hand. Licenses are checked against the A9 allowlist; where a
 crate also offers one poly does not accept, the term poly relies on is
 named inline.
 
+- Inflector 0.11.4 (BSD-2-Clause) — https://github.com/whatisinternet/inflector
+- addr2line 0.25.1 (Apache-2.0 OR MIT) — https://github.com/gimli-rs/addr2line
 - adler2 2.0.1 (0BSD OR MIT OR Apache-2.0) — https://github.com/oyvindln/adler2
 - ahash 0.8.12 (MIT OR Apache-2.0) — https://github.com/tkaitchuck/ahash
 - aho-corasick 1.1.5 (Unlicense OR MIT) — https://github.com/BurntSushi/aho-corasick
 - allocator-api2 0.2.21 (MIT OR Apache-2.0) — https://github.com/zakarumych/allocator-api2
 - annotate-snippets 0.11.5 (MIT OR Apache-2.0) — https://github.com/rust-lang/annotate-snippets-rs
+- annotate-snippets 0.12.16 (MIT OR Apache-2.0) — https://github.com/rust-lang/annotate-snippets-rs
 - anstream 1.0.0 (MIT OR Apache-2.0) — https://github.com/rust-cli/anstyle.git
 - anstyle 1.0.14 (MIT OR Apache-2.0) — https://github.com/rust-cli/anstyle.git
 - anstyle-parse 1.0.0 (MIT OR Apache-2.0) — https://github.com/rust-cli/anstyle.git
@@ -26,6 +29,7 @@ named inline.
 - attribute-derive-macro 0.10.5 (MIT) — https://github.com/ModProg/attribute-derive
 - atty 0.2.14 (MIT) — https://github.com/softprops/atty
 - autocfg 1.5.1 (Apache-2.0 OR MIT) — https://github.com/cuviper/autocfg
+- backtrace 0.3.76 (MIT OR Apache-2.0) — https://github.com/rust-lang/backtrace-rs
 - base64 0.23.1 (MIT OR Apache-2.0) — https://github.com/marshallpierce/rust-base64
 - better_scoped_tls 1.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
 - bit-set 0.8.0 (Apache-2.0 OR MIT) — https://github.com/contain-rs/bit-set
@@ -52,6 +56,8 @@ named inline.
 - chrono 0.4.45 (MIT OR Apache-2.0) — https://github.com/chronotope/chrono
 - clap 3.2.25 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap
 - clap 4.6.6 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap
+- clap-cargo 0.18.3 (MIT OR Apache-2.0) — https://github.com/crate-ci/clap-cargo
+- clap-verbosity-flag 3.0.4 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap-verbosity-flag
 - clap_builder 4.6.6 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap
 - clap_derive 3.2.25 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap/tree/master/clap_derive
 - clap_derive 4.6.4 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap
@@ -61,11 +67,14 @@ named inline.
 - codespan-reporting 0.11.1 (Apache-2.0) — https://github.com/brendanzab/codespan
 - collection_literals 1.0.3 (MIT) — https://github.com/staedoix/collection_literals
 - colorchoice 1.0.5 (MIT OR Apache-2.0) — https://github.com/rust-cli/anstyle.git
+- colorchoice-clap 1.0.8 (MIT OR Apache-2.0) — https://github.com/rust-cli/anstyle.git
 - colored 3.1.1 (MPL-2.0) — https://github.com/mackwic/colored
 - common-path 1.0.0 (MIT/Apache-2.0)
 - compact_str 0.10.0 (MIT) — https://github.com/ParkMyCar/compact_str
 - configparser 3.2.0 (MIT OR LGPL-3.0-or-later; poly takes MIT) — https://github.com/QEDK/configparser-rs
 - console 0.15.11 (MIT) — https://github.com/console-rs/console
+- content_inspector 0.2.4 (MIT/Apache-2.0) — https://github.com/sharkdp/content_inspector
+- convert_case 0.10.0 (MIT) — https://github.com/rutrum/convert-case
 - countme 3.0.1 (MIT OR Apache-2.0) — https://github.com/matklad/countme
 - cpufeatures 0.2.17 (MIT OR Apache-2.0) — https://github.com/RustCrypto/utils
 - cpufeatures 0.3.0 (MIT OR Apache-2.0) — https://github.com/RustCrypto/utils
@@ -79,6 +88,9 @@ named inline.
 - css_dataset 0.4.1 (MIT) — https://github.com/g-plane/css_dataset
 - cssparser 0.37.0 (MPL-2.0) — https://github.com/servo/rust-cssparser
 - cssparser-macros 0.7.0 (MPL-2.0) — https://github.com/servo/rust-cssparser
+- darling 0.21.3 (MIT) — https://github.com/TedDriggs/darling
+- darling_core 0.21.3 (MIT) — https://github.com/TedDriggs/darling
+- darling_macro 0.21.3 (MIT) — https://github.com/TedDriggs/darling
 - dashmap 6.2.1 (MIT) — https://github.com/xacrimon/dashmap
 - data-url 0.3.2 (MIT OR Apache-2.0) — https://github.com/servo/rust-url
 - defmt 1.1.1 (MIT OR Apache-2.0) — https://github.com/knurling-rs/defmt
@@ -94,7 +106,10 @@ named inline.
 - derive_more 2.1.1 (MIT) — https://github.com/JelteF/derive_more
 - derive_more-impl 1.0.0 (MIT) — https://github.com/JelteF/derive_more
 - derive_more-impl 2.1.1 (MIT) — https://github.com/JelteF/derive_more
+- derive_setters 0.1.9 (MIT/Apache-2.0) — https://github.com/Lymia/derive_setters
+- dictgen 0.6.0 (MIT OR Apache-2.0) — https://github.com/crate-ci/typos
 - diff 0.1.13 (MIT OR Apache-2.0) — https://github.com/utkarshkukreti/diff.rs
+- difflib 0.4.0 (MIT) — https://github.com/DimaKudosh/difflib
 - digest 0.10.7 (MIT OR Apache-2.0) — https://github.com/RustCrypto/traits
 - dirs 6.0.0 (MIT OR Apache-2.0) — https://github.com/soc/dirs-rs
 - dirs-sys 0.5.0 (MIT OR Apache-2.0) — https://github.com/dirs-dev/dirs-sys-rs
@@ -117,8 +132,13 @@ named inline.
 - ec4rs 1.2.0 (Apache-2.0) — https://github.com/TheDaemoness/ec4rs
 - either 1.18.0 (MIT OR Apache-2.0) — https://github.com/rayon-rs/either
 - encode_unicode 1.0.0 (Apache-2.0 OR MIT) — https://github.com/tormol/encode_unicode
+- encoding_rs 0.8.35 ((Apache-2.0 OR MIT) AND BSD-3-Clause) — https://github.com/hsivonen/encoding_rs
 - enum_dispatch 0.3.13 (MIT OR Apache-2.0) — https://gitlab.com/antonok/enum_dispatch
+- enumflags2 0.7.12 (MIT OR Apache-2.0) — https://github.com/meithecatte/enumflags2
+- enumflags2_derive 0.7.12 (MIT OR Apache-2.0) — https://github.com/meithecatte/enumflags2
+- env_filter 2.0.0 (MIT OR Apache-2.0) — https://github.com/rust-cli/env_logger
 - env_logger 0.10.2 (MIT OR Apache-2.0) — https://github.com/rust-cli/env_logger
+- env_logger 0.11.11 (MIT OR Apache-2.0) — https://github.com/rust-cli/env_logger
 - equivalent 1.0.2 (Apache-2.0 OR MIT) — https://github.com/indexmap-rs/equivalent
 - errno 0.3.14 (MIT OR Apache-2.0) — https://github.com/lambda-fairy/rust-errno
 - etcetera 0.11.0 (MIT OR Apache-2.0) — https://github.com/lunacookies/etcetera
@@ -128,6 +148,7 @@ named inline.
 - filetime 0.2.29 (MIT/Apache-2.0) — https://github.com/alexcrichton/filetime
 - find-msvc-tools 0.1.11 (MIT OR Apache-2.0) — https://github.com/rust-lang/cc-rs
 - flate2 1.1.9 (MIT OR Apache-2.0) — https://github.com/rust-lang/flate2-rs
+- fnv 1.0.7 (Apache-2.0 / MIT) — https://github.com/servo/rust-fnv
 - foldhash 0.1.5 (Zlib) — https://github.com/orlp/foldhash
 - foldhash 0.2.0 (Zlib) — https://github.com/orlp/foldhash
 - form_urlencoded 1.2.2 (MIT OR Apache-2.0) — https://github.com/servo/rust-url
@@ -142,7 +163,9 @@ named inline.
 - get-size2 0.10.3 (MIT OR Apache-2.0) — https://github.com/bircni/get-size2
 - getopts 0.2.24 (MIT OR Apache-2.0) — https://github.com/rust-lang/getopts
 - getrandom 0.2.17 (MIT OR Apache-2.0) — https://github.com/rust-random/getrandom
+- getrandom 0.3.4 (MIT OR Apache-2.0) — https://github.com/rust-random/getrandom
 - getrandom 0.4.3 (MIT OR Apache-2.0) — https://github.com/rust-random/getrandom
+- gimli 0.32.3 (MIT OR Apache-2.0) — https://github.com/gimli-rs/gimli
 - glob 0.3.4 (MIT OR Apache-2.0) — https://github.com/rust-lang/glob
 - globset 0.4.20 (Unlicense OR MIT) — https://github.com/BurntSushi/ripgrep/tree/master/crates/globset
 - hashbrown 0.12.3 (MIT OR Apache-2.0) — https://github.com/rust-lang/hashbrown
@@ -157,6 +180,7 @@ named inline.
 - hstr 3.0.6 (Apache-2.0) — https://github.com/swc-project/swc.git
 - http 1.5.0 (MIT OR Apache-2.0) — https://github.com/hyperium/http
 - httparse 1.10.1 (MIT OR Apache-2.0) — https://github.com/seanmonstar/httparse
+- human-panic 2.0.8 (MIT OR Apache-2.0) — https://github.com/rust-cli/human-panic
 - icu_collections 2.3.0 (Unicode-3.0) — https://github.com/unicode-org/icu4x
 - icu_locale_core 2.3.0 (Unicode-3.0) — https://github.com/unicode-org/icu4x
 - icu_normalizer 2.3.0 (Unicode-3.0) — https://github.com/unicode-org/icu4x
@@ -165,6 +189,7 @@ named inline.
 - icu_properties_data 2.3.0 (Unicode-3.0) — https://github.com/unicode-org/icu4x
 - icu_provider 2.3.1 (Unicode-3.0) — https://github.com/unicode-org/icu4x
 - id-arena 2.3.0 (MIT/Apache-2.0) — https://github.com/fitzgen/id-arena
+- ident_case 1.0.1 (MIT/Apache-2.0) — https://github.com/TedDriggs/ident_case
 - idna 1.1.0 (MIT OR Apache-2.0) — https://github.com/servo/rust-url/
 - idna_adapter 1.2.2 (Apache-2.0 OR MIT) — https://github.com/hsivonen/idna_adapter
 - if_chain 1.0.3 (MIT/Apache-2.0) — https://github.com/lambda-fairy/if_chain
@@ -214,10 +239,14 @@ named inline.
 - new_debug_unreachable 1.0.6 (MIT) — https://github.com/mbrubeck/rust-debug-unreachable
 - newtype-uuid 1.4.0 (MIT OR Apache-2.0) — https://github.com/oxidecomputer/newtype-uuid
 - nohash-hasher 0.2.0 (Apache-2.0 OR MIT) — https://github.com/paritytech/nohash-hasher
+- ntapi 0.4.3 (Apache-2.0 OR MIT) — https://github.com/MSxDOS/ntapi
 - num-bigint 0.4.8 (MIT OR Apache-2.0) — https://github.com/rust-num/num-bigint
 - num-integer 0.1.47 (MIT OR Apache-2.0) — https://github.com/rust-num/num-integer
 - num-traits 0.2.19 (MIT OR Apache-2.0) — https://github.com/rust-num/num-traits
 - num_cpus 1.17.0 (MIT OR Apache-2.0) — https://github.com/seanmonstar/num_cpus
+- objc2-core-foundation 0.3.2 (Zlib OR Apache-2.0 OR MIT) — https://github.com/madsmtm/objc2
+- objc2-io-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT) — https://github.com/madsmtm/objc2
+- object 0.37.3 (Apache-2.0 OR MIT) — https://github.com/gimli-rs/object
 - object 0.39.1 (Apache-2.0 OR MIT) — https://github.com/gimli-rs/object
 - once_cell 1.21.4 (MIT OR Apache-2.0) — https://github.com/matklad/once_cell
 - once_cell_polyfill 1.70.2 (MIT OR Apache-2.0) — https://github.com/polyfill-rs/once_cell_polyfill
@@ -239,14 +268,18 @@ named inline.
 - percent-encoding 2.3.2 (MIT OR Apache-2.0) — https://github.com/servo/rust-url/
 - phf 0.11.3 (MIT) — https://github.com/rust-phf/rust-phf
 - phf 0.13.1 (MIT) — https://github.com/rust-phf/rust-phf
+- phf 0.14.0 (MIT) — https://github.com/rust-phf/rust-phf
 - phf_codegen 0.11.3 (MIT) — https://github.com/rust-phf/rust-phf
 - phf_codegen 0.13.1 (MIT) — https://github.com/rust-phf/rust-phf
 - phf_generator 0.11.3 (MIT) — https://github.com/rust-phf/rust-phf
 - phf_generator 0.13.1 (MIT) — https://github.com/rust-phf/rust-phf
+- phf_generator 0.14.0 (MIT) — https://github.com/rust-phf/rust-phf
 - phf_macros 0.11.3 (MIT) — https://github.com/rust-phf/rust-phf
 - phf_macros 0.13.1 (MIT) — https://github.com/rust-phf/rust-phf
+- phf_macros 0.14.0 (MIT) — https://github.com/rust-phf/rust-phf
 - phf_shared 0.11.3 (MIT) — https://github.com/rust-phf/rust-phf
 - phf_shared 0.13.1 (MIT) — https://github.com/rust-phf/rust-phf
+- phf_shared 0.14.0 (MIT) — https://github.com/rust-phf/rust-phf
 - pin-project-lite 0.2.17 (Apache-2.0 OR MIT) — https://github.com/taiki-e/pin-project-lite
 - portable-atomic 1.15.0 (Apache-2.0 OR MIT) — https://github.com/taiki-e/portable-atomic
 - portable-atomic-util 0.2.8 (Apache-2.0 OR MIT) — https://github.com/taiki-e/portable-atomic-util
@@ -256,6 +289,8 @@ named inline.
 - pretty_assertions 1.4.1 (MIT OR Apache-2.0) — https://github.com/rust-pretty-assertions/rust-pretty-assertions
 - pretty_graphql 0.2.3 (MIT) — https://github.com/g-plane/pretty_graphql
 - pretty_yaml 0.6.0 (MIT) — https://github.com/g-plane/pretty_yaml
+- prettyplease 0.2.37 (MIT OR Apache-2.0) — https://github.com/dtolnay/prettyplease
+- proc-exit 2.0.2 (MIT OR Apache-2.0) — https://github.com/rust-cli/proc-exit
 - proc-macro-error 1.0.4 (MIT OR Apache-2.0) — https://gitlab.com/CreepySkeleton/proc-macro-error
 - proc-macro-error-attr 1.0.4 (MIT OR Apache-2.0) — https://gitlab.com/CreepySkeleton/proc-macro-error
 - proc-macro-utils 0.10.0 (MIT OR Apache-2.0) — https://github.com/ModProg/proc-macro-utils
@@ -273,6 +308,7 @@ named inline.
 - quote 1.0.47 (MIT OR Apache-2.0) — https://github.com/dtolnay/quote
 - quote-use 0.8.4 (MIT) — https://github.com/ModProg/quote-use
 - quote-use-macros 0.8.4 (MIT) — https://github.com/ModProg/quote-use
+- r-efi 5.3.0 (MIT OR Apache-2.0 OR LGPL-2.1-or-later; poly takes MIT) — https://github.com/r-efi/r-efi
 - r-efi 6.0.0 (MIT OR Apache-2.0 OR LGPL-2.1-or-later; poly takes MIT) — https://github.com/r-efi/r-efi
 - raffia 0.12.3 (MIT) — https://github.com/g-plane/raffia
 - raffia_macro 0.2.0 (MIT) — https://github.com/g-plane/raffia
@@ -320,6 +356,7 @@ named inline.
 - ruff_text_size 0.0.12 (MIT) — https://github.com/astral-sh/ruff
 - ruff_workspace 0.0.12 (MIT) — https://github.com/astral-sh/ruff
 - rust-stemmers 1.2.0 (MIT/BSD-3-Clause) — https://github.com/CurrySoftware/rust-stemmers
+- rustc-demangle 0.1.28 (MIT/Apache-2.0) — https://github.com/rust-lang/rustc-demangle
 - rustc-hash 1.1.0 (Apache-2.0/MIT) — https://github.com/rust-lang-nursery/rustc-hash
 - rustc-hash 2.1.3 (Apache-2.0 OR MIT) — https://github.com/rust-lang/rustc-hash
 - rustc_version 0.4.1 (MIT OR Apache-2.0) — https://github.com/djc/rustc-version-rs
@@ -333,6 +370,8 @@ named inline.
 - salsa-macro-rules 0.28.2 (Apache-2.0 OR MIT) — https://github.com/salsa-rs/salsa
 - salsa-macros 0.28.2 (Apache-2.0 OR MIT) — https://github.com/salsa-rs/salsa
 - same-file 1.0.6 (Unlicense/MIT) — https://github.com/BurntSushi/same-file
+- schemafy_core 0.6.0 (MIT) — https://github.com/Marwes/schemafy
+- schemafy_lib 0.6.0 (MIT) — https://github.com/Marwes/schemafy
 - schemars 1.2.2 (MIT) — https://github.com/GREsau/schemars
 - schemars_derive 1.2.2 (MIT) — https://github.com/GREsau/schemars
 - scoped-tls 1.0.1 (MIT/Apache-2.0) — https://github.com/alexcrichton/scoped-tls
@@ -343,10 +382,12 @@ named inline.
 - semver 1.0.28 (MIT OR Apache-2.0) — https://github.com/dtolnay/semver
 - seq-macro 0.3.6 (MIT OR Apache-2.0) — https://github.com/dtolnay/seq-macro
 - serde 1.0.229 (MIT OR Apache-2.0) — https://github.com/serde-rs/serde
+- serde-sarif 0.8.0 (MIT) — https://github.com/psastras/sarif-rs
 - serde_core 1.0.229 (MIT OR Apache-2.0) — https://github.com/serde-rs/serde
 - serde_derive 1.0.229 (MIT OR Apache-2.0) — https://github.com/serde-rs/serde
 - serde_derive_internals 0.30.0 (MIT OR Apache-2.0) — https://github.com/serde-rs/serde
 - serde_json 1.0.151 (MIT OR Apache-2.0) — https://github.com/serde-rs/json
+- serde_regex 1.2.0 (MIT OR Apache-2.0)
 - serde_repr 0.1.21 (MIT OR Apache-2.0) — https://github.com/dtolnay/serde-repr
 - serde_spanned 0.6.9 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
 - serde_spanned 1.1.1 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
@@ -356,6 +397,7 @@ named inline.
 - shellexpand 3.1.2 (MIT/Apache-2.0) — https://gitlab.com/ijackson/rust-shellexpand
 - shlex 2.0.1 (MIT OR Apache-2.0) — https://github.com/comex/rust-shlex
 - simd-adler32 0.3.10 (MIT) — https://github.com/mcountryman/simd-adler32
+- simdutf8 0.1.5 (MIT OR Apache-2.0) — https://github.com/rusticstuff/simdutf8
 - similar 2.7.0 (Apache-2.0) — https://github.com/mitsuhiko/similar
 - similar 3.2.0 (Apache-2.0) — https://github.com/mitsuhiko/similar
 - siphasher 0.3.11 (MIT/Apache-2.0) — https://github.com/jedisct1/rust-siphash
@@ -375,11 +417,14 @@ named inline.
 - strip-ansi-escapes 0.2.1 (Apache-2.0/MIT) — https://github.com/luser/strip-ansi-escapes
 - strsim 0.10.0 (MIT) — https://github.com/dguo/strsim-rs
 - strsim 0.11.1 (MIT) — https://github.com/rapidfuzz/strsim-rs
+- strum 0.27.2 (MIT) — https://github.com/Peternator7/strum
 - strum 0.28.0 (MIT) — https://github.com/Peternator7/strum
+- strum_macros 0.27.2 (MIT) — https://github.com/Peternator7/strum
 - strum_macros 0.28.0 (MIT) — https://github.com/Peternator7/strum
 - stylua 2.5.2 (MPL-2.0) — https://github.com/johnnymorganz/stylua
 - subtle 2.6.1 (BSD-3-Clause) — https://github.com/dalek-cryptography/subtle
 - supports-hyperlinks 3.2.0 (Apache-2.0) — https://github.com/zkat/supports-hyperlinks
+- supports-unicode 3.0.0 (Apache-2.0) — https://github.com/zkat/supports-unicode
 - swc_atoms 9.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_common 17.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_ecma_ast 18.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
@@ -392,9 +437,11 @@ named inline.
 - syn 2.0.119 (MIT OR Apache-2.0) — https://github.com/dtolnay/syn
 - syn 3.0.4 (MIT OR Apache-2.0) — https://github.com/dtolnay/syn
 - synstructure 0.13.2 (MIT) — https://github.com/mystor/synstructure
+- sysinfo 0.38.4 (MIT) — https://github.com/GuillaumeGomez/sysinfo
 - tar 0.4.46 (MIT OR Apache-2.0) — https://github.com/composefs/tar-rs
 - tempfile 3.27.0 (MIT OR Apache-2.0) — https://github.com/Stebalien/tempfile
 - termcolor 1.4.1 (Unlicense OR MIT) — https://github.com/BurntSushi/termcolor
+- terminal_size 0.4.4 (MIT OR Apache-2.0) — https://github.com/eminence/terminal-size
 - text-size 1.1.1 (MIT OR Apache-2.0) — https://github.com/rust-analyzer/text-size
 - text_lines 0.6.0 (MIT)
 - textwrap 0.16.2 (MIT) — https://github.com/mgeisler/textwrap
@@ -403,6 +450,7 @@ named inline.
 - thiserror 2.0.20 (MIT OR Apache-2.0) — https://github.com/dtolnay/thiserror
 - thiserror-impl 1.0.69 (MIT OR Apache-2.0) — https://github.com/dtolnay/thiserror
 - thiserror-impl 2.0.20 (MIT OR Apache-2.0) — https://github.com/dtolnay/thiserror
+- thread_local 1.1.10 (MIT OR Apache-2.0) — https://github.com/Amanieu/thread_local-rs
 - threadpool 1.8.1 (MIT/Apache-2.0) — https://github.com/rust-threadpool/rust-threadpool
 - tiny_pretty 0.2.1 (MIT) — https://github.com/g-plane/tiny_pretty
 - tiny_pretty 0.4.3 (MIT) — https://github.com/g-plane/tiny_pretty
@@ -429,9 +477,15 @@ named inline.
 - ty_site_packages 0.0.12 (MIT) — https://github.com/astral-sh/ruff
 - ty_static 0.0.12 (MIT) — https://github.com/astral-sh/ruff
 - typed-arena 2.0.2 (MIT) — https://github.com/SimonSapin/rust-typed-arena
+- typed-builder 0.21.2 (MIT OR Apache-2.0) — https://github.com/idanarye/rust-typed-builder
+- typed-builder-macro 0.21.2 (MIT OR Apache-2.0) — https://github.com/idanarye/rust-typed-builder
 - typed-path 0.12.3 (MIT OR Apache-2.0) — https://github.com/chipsenkbeil/typed-path
 - typeid 1.0.3 (MIT OR Apache-2.0) — https://github.com/dtolnay/typeid
 - typenum 1.20.1 (MIT OR Apache-2.0) — https://github.com/paholg/typenum
+- typos 0.10.44 (MIT OR Apache-2.0) — https://github.com/crate-ci/typos
+- typos-cli 1.49.1 (MIT OR Apache-2.0) — https://github.com/crate-ci/typos
+- typos-dict 0.14.0 (MIT OR Apache-2.0) — https://github.com/crate-ci/typos
+- typos-vars 0.11.0 (MIT OR Apache-2.0) — https://github.com/crate-ci/typos
 - unic-char-property 0.9.0 (MIT/Apache-2.0) — https://github.com/open-i18n/rust-unic/
 - unic-char-range 0.9.0 (MIT/Apache-2.0) — https://github.com/open-i18n/rust-unic/
 - unic-common 0.9.0 (MIT/Apache-2.0) — https://github.com/open-i18n/rust-unic/
@@ -453,6 +507,7 @@ named inline.
 - unicode-id-start 1.4.0 ((MIT OR Apache-2.0) AND Unicode-3.0) — https://github.com/Boshen/unicode-id-start
 - unicode-ident 1.0.24 ((MIT OR Apache-2.0) AND Unicode-3.0) — https://github.com/dtolnay/unicode-ident
 - unicode-normalization 0.1.25 (MIT OR Apache-2.0) — https://github.com/unicode-rs/unicode-normalization
+- unicode-segmentation 1.13.3 (MIT OR Apache-2.0) — https://github.com/unicode-rs/unicode-segmentation
 - unicode-width 0.1.14 (MIT OR Apache-2.0) — https://github.com/unicode-rs/unicode-width
 - unicode-width 0.2.2 (MIT OR Apache-2.0) — https://github.com/unicode-rs/unicode-width
 - unicode-xid 0.2.6 (MIT OR Apache-2.0) — https://github.com/unicode-rs/unicode-xid
@@ -463,17 +518,20 @@ named inline.
 - untrusted 0.9.0 (ISC) — https://github.com/briansmith/untrusted
 - ureq 3.4.0 (MIT OR Apache-2.0) — https://github.com/algesten/ureq
 - ureq-proto 0.6.1 (MIT OR Apache-2.0) — https://github.com/algesten/ureq-proto
+- uriparse 0.6.4 (MIT) — https://github.com/sgodwincs/uriparse-rs
 - url 2.5.8 (MIT OR Apache-2.0) — https://github.com/servo/rust-url
 - urlencoding 2.1.3 (MIT) — https://github.com/kornelski/rust_urlencoding
 - utf8-zero 0.8.1 (MIT OR Apache-2.0) — https://github.com/algesten/utf8-zero
 - utf8_iter 1.0.4 (Apache-2.0 OR MIT) — https://github.com/hsivonen/utf8_iter
 - utf8parse 0.2.2 (Apache-2.0 OR MIT) — https://github.com/alacritty/vte
 - uuid 1.25.0 (Apache-2.0 OR MIT) — https://github.com/uuid-rs/uuid
+- varcon-core 5.0.7 (MIT OR Apache-2.0) — https://github.com/crate-ci/typos
 - version-ranges 0.1.3 (MPL-2.0) — https://github.com/pubgrub-rs/pubgrub
 - version_check 0.9.5 (MIT/Apache-2.0) — https://github.com/SergioBenitez/version_check
 - vte 0.14.1 (Apache-2.0 OR MIT) — https://github.com/alacritty/vte
 - walkdir 2.5.0 (Unlicense/MIT) — https://github.com/BurntSushi/walkdir
 - wasi 0.11.1+wasi-snapshot-preview1 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) — https://github.com/bytecodealliance/wasi
+- wasip2 1.0.4+wasi-0.2.12 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) — https://github.com/bytecodealliance/wasi-rs
 - wasm-bindgen 0.2.127 (MIT OR Apache-2.0) — https://github.com/wasm-bindgen/wasm-bindgen
 - wasm-bindgen-macro 0.2.127 (MIT OR Apache-2.0) — https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro
 - wasm-bindgen-macro-support 0.2.127 (MIT OR Apache-2.0) — https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support
@@ -484,11 +542,21 @@ named inline.
 - winapi-i686-pc-windows-gnu 0.4.0 (MIT/Apache-2.0) — https://github.com/retep998/winapi-rs
 - winapi-util 0.1.11 (Unlicense OR MIT) — https://github.com/BurntSushi/winapi-util
 - winapi-x86_64-pc-windows-gnu 0.4.0 (MIT/Apache-2.0) — https://github.com/retep998/winapi-rs
+- windows 0.62.2 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-collections 0.3.2 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-core 0.62.2 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-future 0.3.2 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-implement 0.60.2 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-interface 0.59.3 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-link 0.2.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-numerics 0.3.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-result 0.4.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-strings 0.5.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-sys 0.52.0 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-sys 0.59.0 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-sys 0.61.2 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-targets 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-threading 0.2.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_aarch64_gnullvm 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_aarch64_msvc 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_i686_gnu 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
@@ -500,6 +568,7 @@ named inline.
 - winnow 0.5.40 (MIT) — https://github.com/winnow-rs/winnow
 - winnow 0.7.15 (MIT) — https://github.com/winnow-rs/winnow
 - winnow 1.0.4 (MIT) — https://github.com/winnow-rs/winnow
+- wit-bindgen 0.57.1 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) — https://github.com/bytecodealliance/wit-bindgen
 - writeable 0.6.4 (Unicode-3.0) — https://github.com/unicode-org/icu4x
 - xattr 1.6.1 (MIT OR Apache-2.0) — https://github.com/Stebalien/xattr
 - xmlem 0.5.0 (Apache-2.0 OR MIT) — https://github.com/xmlem/xmlem

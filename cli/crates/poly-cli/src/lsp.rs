@@ -1476,29 +1476,6 @@ fn external_lint(
 ) -> anyhow::Result<Vec<poly_core::diag::Issue>> {
     let mut issues = Vec::new();
 
-    // typos has no language of its own: `poly check` runs it repo-wide over
-    // the walk roots, which is why a misspelling could fail CI while the
-    // editor never mentioned it -- the last editor/CI split A4 forbids.
-    //
-    // Handed the path rather than the buffer, even though typos does read
-    // stdin: on stdin the document is called `-`, so the per-extension config
-    // (`[type.*]`, keyed off the file name) does not apply and the editor
-    // would answer differently from CI for exactly the repos that configure
-    // it. Reading from disk is what didOpen and didSave already guarantee is
-    // current, the same trade biome makes above.
-    if let Some(cmd) = resolved_tool("typos", config) {
-        issues.extend(
-            poly_tools::run::typos_paths(
-                &cmd,
-                &[path.to_path_buf()],
-                &config.lint_exclude,
-                config.root.as_deref(),
-            )?
-            .into_iter()
-            .map(|f| f.issue),
-        );
-    }
-
     // biome and eslint are project-local only and never managed, so they
     // resolve through the same detection `poly check` uses rather than the
     // tool registry.
@@ -1878,6 +1855,16 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
             Vec::new()
         }
     };
+    // Spelling is asked separately because it has no language to dispatch on,
+    // and from disk rather than from the buffer: on stdin the document is
+    // called `-`, so the per-type config keyed off the file name stops applying
+    // and the editor would answer differently from CI for exactly the repos
+    // that configure it. didOpen and didSave are what make the file on disk the
+    // current one — the same trade biome makes in `external_lint`.
+    match poly_engines::lint::spell(path) {
+        Ok(found) => issues.extend(found),
+        Err(e) => eprintln!("[poly] spell error {}: {e:#}", path.display()),
+    }
     match external_lint(&lang, path, text, &config) {
         Ok(more) => issues.extend(more),
         Err(e) => eprintln!("[poly] external lint error {}: {e:#}", path.display()),

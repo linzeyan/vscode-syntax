@@ -31,8 +31,9 @@ pub struct Asset {
 pub struct Tool {
     pub name: &'static str,
     pub version: &'static str,
-    /// Repo-wide tools (typos) have no language; per-language linters list
-    /// the poly-core language id they cover.
+    /// The poly-core language id this linter covers. `None` would mean a tool
+    /// that reads every file regardless; typos was the only one, and it is
+    /// compiled in now (`poly_engines::lint::spell`).
     pub language: Option<&'static str>,
     asset: fn(version: &str, platform: &str) -> Option<Asset>,
 }
@@ -135,27 +136,6 @@ pub const TOOLS: &[Tool] = &[
             Some(Asset {
                 url: format!(
                     "https://github.com/rhysd/actionlint/releases/download/v{v}/actionlint_{v}_{suffix}"
-                ),
-                kind,
-            })
-        },
-    },
-    Tool {
-        name: "typos",
-        version: "1.49.1",
-        language: None,
-        asset: |v, p| {
-            let (triple, kind) = match p {
-                "darwin-arm64" => ("aarch64-apple-darwin.tar.gz", Kind::TarGz),
-                "darwin-x64" => ("x86_64-apple-darwin.tar.gz", Kind::TarGz),
-                "linux-arm64" => ("aarch64-unknown-linux-musl.tar.gz", Kind::TarGz),
-                "linux-x64" => ("x86_64-unknown-linux-musl.tar.gz", Kind::TarGz),
-                "win-x64" | "win-arm64" => ("x86_64-pc-windows-msvc.zip", Kind::Zip),
-                _ => return None,
-            };
-            Some(Asset {
-                url: format!(
-                    "https://github.com/crate-ci/typos/releases/download/v{v}/typos-v{v}-{triple}"
                 ),
                 kind,
             })
@@ -350,6 +330,7 @@ const EMBEDDED: &[(&str, &str)] = &[
     ("selene", LUA_INSTEAD),
     ("stylua", LUA_INSTEAD),
     ("ruff", PYTHON_INSTEAD),
+    ("typos", TYPOS_INSTEAD),
 ];
 
 const LUA_INSTEAD: &str = "poly formats and lints Lua itself. Drop the line; \
@@ -358,6 +339,10 @@ const LUA_INSTEAD: &str = "poly formats and lints Lua itself. Drop the line; \
 const PYTHON_INSTEAD: &str = "poly formats and lints Python itself. Drop the line; \
      `[format.python]` sets the layout and a pyproject.toml or ruff.toml still \
      selects the rules.";
+
+const TYPOS_INSTEAD: &str = "poly spell-checks every file itself. Drop the line; \
+     a _typos.toml still holds `[default.extend-words]` and `[files] extend-exclude`, \
+     and `[lint] per-file-ignores` can silence `typos/typo` per path.";
 
 /// Stop the run if `[tools]` configures something poly now answers for itself.
 pub fn reject_embedded_tools(config: &poly_core::Config) -> Result<()> {
@@ -730,26 +715,39 @@ mod tests {
         ));
     }
 
-    /// Lua and Python are formatted and linted in-process now, so there is no
-    /// stylua, selene or ruff binary for `[tools]` to point at, pin or turn
-    /// off. Accepting the line and ignoring it would leave someone believing
-    /// they had disabled a linter that is still reporting.
+    /// Lua, Python and spelling are handled in-process now, so there is no
+    /// stylua, selene, ruff or typos binary for `[tools]` to point at, pin or
+    /// turn off. Accepting the line and ignoring it would leave someone
+    /// believing they had disabled a linter that is still reporting.
+    ///
+    /// Asserted on the *message*, not on what poly does with it: whether an
+    /// unactionable `[tools]` key stops the run or is reported and stepped over
+    /// is a separate decision, and the thing that must not change either way is
+    /// that the reader is told where the setting went.
     #[test]
-    fn tools_entries_for_embedded_languages_stop_the_run() {
-        for entry in [("selene", "off"), ("stylua", "2.4.0"), ("ruff", "0.16.5")] {
+    fn tools_entries_for_embedded_languages_name_where_the_setting_went() {
+        for entry in [
+            ("selene", "off"),
+            ("stylua", "2.4.0"),
+            ("ruff", "0.16.5"),
+            ("typos", "1.49.1"),
+        ] {
             let config = config_with_tools(&[entry]);
             let error = reject_embedded_tools(&config)
-                .expect_err("an entry poly cannot honor must fail")
+                .expect_err("an entry poly cannot honor must be reported")
                 .to_string();
             assert!(error.contains(entry.0), "{error}");
         }
-        // The message has to name where the setting went, not just that it is
-        // gone: someone who pinned ruff did it to control the rules, and
-        // ruff.toml is where that lives now.
-        let error = reject_embedded_tools(&config_with_tools(&[("ruff", "off")]))
-            .expect_err("ruff is embedded")
-            .to_string();
-        assert!(error.contains("ruff.toml"), "{error}");
+        // Naming where the setting went, not just that it is gone: someone who
+        // pinned ruff did it to control the rules, and someone who pinned typos
+        // did it to control the dictionary. ruff.toml and _typos.toml are where
+        // those live now.
+        for (tool, instead) in [("ruff", "ruff.toml"), ("typos", "_typos.toml")] {
+            let error = reject_embedded_tools(&config_with_tools(&[(tool, "off")]))
+                .expect_err("embedded")
+                .to_string();
+            assert!(error.contains(instead), "{tool}: {error}");
+        }
 
         // Everything else is still a tool with a binary behind it.
         assert!(reject_embedded_tools(&config_with_tools(&[("shellcheck", "off")])).is_ok());

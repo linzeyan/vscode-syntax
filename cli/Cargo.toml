@@ -9,6 +9,10 @@ license = "MIT"
 
 [workspace.dependencies]
 anyhow = "1"
+# Is this file text or a picture? typos asks before spell-checking, and so must
+# poly now that poly is the one reading the bytes. Same crate typos uses, so the
+# answer is the same one for the same file.
+content_inspector = "0.2"
 dprint-plugin-dockerfile = "0.6"
 dprint-plugin-json = "0.23"
 dprint-plugin-markdown = "0.22"
@@ -21,6 +25,9 @@ dprint-plugin-typescript = "0.96"
 # outcome -- it reads a project's real config and quietly formats to something
 # else.
 ec4rs = "1.2"
+# UTF-16 source files, which typos decodes before checking and poly would
+# otherwise hand to the tokenizer as noise. Upstream's exact path.
+encoding_rs = "0.8"
 # Lua's parser, needed directly because selene lints an `Ast` rather than a
 # string and re-exports nothing.
 full_moon = "2.2"
@@ -112,6 +119,29 @@ stylua = { version = "=2.5.2", default-features = false, features = [
   "luau",
 ] }
 toml = "0.8"
+# The spell checker's engine: tokenizer, `Typo`, `Status`. Named directly
+# because `typos_cli` takes and returns these types and re-exports none of them.
+typos = "0.10"
+# ...and the part of typos that is not the engine: config discovery
+# (`typos.toml` / `_typos.toml` / `.typos.toml` / Cargo.toml / pyproject.toml),
+# the built-in dictionary with its case-preserving corrections, and the
+# per-file-type policy that keeps poly from reporting "typos" in a lockfile or a
+# certificate. `typos` + `typos-dict` alone is not enough for any of the three:
+# a hand-rolled dictionary corrects `Recieve` to `receive` where the real one
+# says `Receive`, and nothing but `typos_cli::config` reads the
+# `[default.extend-words]` this repo itself relies on.
+#
+# `=1.49.1` to the binary poly used to download. 1.50.1 ships a new dictionary
+# (typos-dict 0.14.1), which is a decision about what counts as a typo in
+# everyone's existing repo -- worth taking on its own rather than folding into a
+# change that is supposed to keep the findings identical.
+typos-cli = "=1.49.1"
+# The dictionary, named here although poly never calls it, because it is the one
+# dependency that *is* poly's answer and typos-cli asks for it as `^0.14`. The
+# 1.49.1 release binary was built against 0.14.0; cargo resolves 0.14.1, which
+# adds 314 words and would have poly reporting typos the binary it replaces
+# never did. Pinning is what keeps "embedded" from quietly meaning "upgraded".
+typos-dict = "=0.14.0"
 xmlem = "0.5"
 
 # Size/perf trade-off: thin LTO + strip keeps the single-binary target honest

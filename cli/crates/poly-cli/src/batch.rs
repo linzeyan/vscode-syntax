@@ -19,8 +19,13 @@ pub struct FmtSummary {
     pub errors: Vec<(PathBuf, String)>,
 }
 
-/// Walk `paths` and pair every file with the language and config that govern
-/// it, dropping anything `keep` rejects.
+/// Walk `paths` and pair every file with the config that governs it, before
+/// any question about language is asked.
+///
+/// Split out from `resolve_targets` for the one checker that has no language:
+/// `poly_engines::lint::spell` reads a LICENSE and a `.mailmap` as readily as a
+/// `.rs`, and asking `Config::language` first would drop exactly those. Every
+/// other caller wants the language, so it stays the default shape.
 ///
 /// The walk itself can only be pruned by one exclude list, so it uses the
 /// config nearest the first path; a nested `poly.toml` is then consulted
@@ -28,12 +33,11 @@ pub struct FmtSummary {
 /// un-exclude a directory an ancestor already pruned — undoing a prune would
 /// mean walking everything and filtering afterwards, which is exactly the cost
 /// `exclude` exists to avoid.
-pub fn resolve_targets(
+pub fn resolve_files(
     paths: &[PathBuf],
     scope: Scope,
     walk: Walk,
-    keep: impl Fn(&str) -> bool,
-) -> Result<Vec<(PathBuf, String, Arc<Config>)>> {
+) -> Result<Vec<(PathBuf, Arc<Config>)>> {
     let start = paths.first().context("no paths given")?;
     let top = Config::discover(start)?;
     let exclude = match scope {
@@ -64,11 +68,24 @@ pub fn resolve_targets(
         .into_iter()
         .filter_map(|p| {
             let config = cache.for_file(&p);
-            if !explicit.contains(p.as_path()) && config.excluded(&p, scope) {
-                return None;
-            }
-            let lang = config.language(&p)?;
-            keep(&lang).then_some((p, lang, config))
+            (explicit.contains(p.as_path()) || !config.excluded(&p, scope)).then_some((p, config))
+        })
+        .collect())
+}
+
+/// Walk `paths` and pair every file with the language and config that govern
+/// it, dropping anything `keep` rejects.
+pub fn resolve_targets(
+    paths: &[PathBuf],
+    scope: Scope,
+    walk: Walk,
+    keep: impl Fn(&str) -> bool,
+) -> Result<Vec<(PathBuf, String, Arc<Config>)>> {
+    Ok(resolve_files(paths, scope, walk)?
+        .into_iter()
+        .filter_map(|(path, config)| {
+            let lang = config.language(&path)?;
+            keep(&lang).then_some((path, lang, config))
         })
         .collect())
 }

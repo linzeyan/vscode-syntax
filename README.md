@@ -117,8 +117,9 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
   Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、GraphQL、Dockerfile、
   Lua（格式化 stylua、lint selene）。這些都是編進 binary 的 Rust library，
-  不再下載。
-- **外部工具**（受管下載）：shellcheck、shfmt、hadolint、actionlint、typos、
+  不再下載。拼字檢查（typos）也在裡面，而且不分語言——它讀的是每一個檔案，
+  包含 poly 認不出語言的那些。
+- **外部工具**（受管下載）：shellcheck、shfmt、hadolint、actionlint、
   tflint、gofumpt、golangci-lint、swiftlint、buf
   （Protobuf 的格式化與 lint，同一支 binary 也是上面那個 language server）。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是

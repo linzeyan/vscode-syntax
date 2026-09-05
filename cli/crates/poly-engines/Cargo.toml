@@ -6,12 +6,15 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+content_inspector.workspace = true
 dprint-plugin-dockerfile.workspace = true
 dprint-plugin-json.workspace = true
 dprint-plugin-markdown.workspace = true
 dprint-plugin-toml.workspace = true
 dprint-plugin-typescript.workspace = true
+encoding_rs.workspace = true
 full_moon.workspace = true
+ignore.workspace = true
 malva.workspace = true
 markup_fmt.workspace = true
 poly-core = { path = "../poly-core" }
@@ -31,6 +34,9 @@ serde_yaml.workspace = true
 sqruff-lib.workspace = true
 stylua.workspace = true
 toml.workspace = true
+typos.workspace = true
+typos-cli.workspace = true
+typos-dict.workspace = true
 xmlem.workspace = true
 
 [dev-dependencies]
