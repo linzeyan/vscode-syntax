@@ -176,9 +176,8 @@ include-hidden = false
 #   shellcheck 0.11.0     hadolint 2.15.1      actionlint 1.7.12
 #   typos 1.49.0          shfmt 3.13.1         ruff 0.16.4
 #   tflint 0.64.0         gofumpt 0.11.0       golangci-lint 2.13.1
-#   stylua 2.5.2          selene 0.31.0        swiftlint 0.65.1
-#   buf 1.72.0            terraform system     clang-format system
-#   swift-format system   cargo system
+#   swiftlint 0.65.1      buf 1.72.0           terraform system
+#   clang-format system   swift-format system  cargo system
 #
 # `cargo` is the entry for `cargo clippy`: clippy is a subcommand, not a binary
 # poly invokes on its own, so `cargo = "off"` is how a project turns Rust lint
@@ -205,6 +204,12 @@ include-hidden = false
 # them only when it finds them installed in the project alongside their own
 # config, and never downloads them. Removing the config is how you turn those
 # off.
+#
+# stylua and selene are gone from the list because they are no longer binaries:
+# poly formats and lints Lua in-process, so there is nothing to pin, disable or
+# point elsewhere. Naming either one here stops the run rather than being
+# ignored, so that `selene = "off"` cannot look like it turned something off.
+# `[format.lua]` sets the layout, and a selene.toml still configures the lints.
 [tools]
 shellcheck = "C:/tools/shellcheck.exe"
 tflint = "off"

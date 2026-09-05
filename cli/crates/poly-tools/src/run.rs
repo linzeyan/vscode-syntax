@@ -15,26 +15,6 @@ pub struct FileIssue {
     pub issue: Issue,
 }
 
-/// Nearest `name` at or above `start`'s directory. Tools that resolve their
-/// own config against the *cwd* (selene) otherwise lint with default rules
-/// whenever poly is invoked from outside the project, which would make CI and
-/// the editor disagree for no visible reason.
-fn nearest_ancestor_file(start: &Path, name: &str) -> Option<PathBuf> {
-    let start = std::path::absolute(start).unwrap_or_else(|_| start.to_path_buf());
-    let mut dir = if start.is_dir() {
-        start.as_path()
-    } else {
-        start.parent()?
-    };
-    loop {
-        let candidate = dir.join(name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        dir = dir.parent()?;
-    }
-}
-
 fn run(cmd: &Path, args: &[&str], files: &[PathBuf], stdin: Option<&str>) -> Result<Vec<u8>> {
     run_impl(cmd, None, args, files, stdin, None)
 }
@@ -556,101 +536,6 @@ pub fn ruff_stdin(cmd: &Path, path: &Path, text: &str) -> Result<Vec<Issue>> {
         Some(text),
     )?;
     Ok(ruff_parse(&out)?.into_iter().map(|f| f.issue).collect())
-}
-
-// ── selene ─────────────────────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct SeleneSpan {
-    start_line: u32,
-    start_column: u32,
-    end_line: u32,
-    end_column: u32,
-}
-
-#[derive(Deserialize)]
-struct SeleneLabel {
-    filename: String,
-    span: SeleneSpan,
-}
-
-#[derive(Deserialize)]
-struct SeleneItem {
-    #[serde(rename = "type")]
-    kind: String,
-    severity: String,
-    code: String,
-    message: String,
-    primary_label: SeleneLabel,
-}
-
-/// One page per lint, named exactly by the code selene reports. `parse_error`
-/// is the exception: it is how selene reports invalid Lua, not a lint, and has
-/// no page — linking it would send the reader somewhere that 404s.
-fn selene_url(code: &str) -> Option<String> {
-    (code != "parse_error")
-        .then(|| format!("https://kampfkarren.github.io/selene/lints/{code}.html"))
-}
-
-/// selene emits json2: one JSON object per line, already 0-based.
-pub fn selene_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
-    let config = files
-        .first()
-        .and_then(|f| nearest_ancestor_file(f, "selene.toml"));
-    let config_arg = config.map(|p| p.to_string_lossy().into_owned());
-    let mut args = vec!["--display-style", "json2"];
-    if let Some(c) = &config_arg {
-        args.extend_from_slice(&["--config", c]);
-    }
-    selene_parse(&run(cmd, &args, files, None)?)
-}
-
-/// Lint an unsaved buffer. selene reads `-` as stdin and reports the filename
-/// as "-", so the caller owns the path.
-pub fn selene_stdin(cmd: &Path, path: &Path, text: &str) -> Result<Vec<Issue>> {
-    let config = nearest_ancestor_file(path, "selene.toml");
-    let config_arg = config.map(|p| p.to_string_lossy().into_owned());
-    let mut args = vec!["--display-style", "json2"];
-    if let Some(c) = &config_arg {
-        args.extend_from_slice(&["--config", c]);
-    }
-    args.push("-");
-    Ok(selene_parse(&run(cmd, &args, &[], Some(text))?)?
-        .into_iter()
-        .map(|f| f.issue)
-        .collect())
-}
-
-fn selene_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
-    let mut out = Vec::new();
-    for line in stdout.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
-        let Ok(item) = serde_json::from_slice::<SeleneItem>(line) else {
-            continue; // Summary line and other non-diagnostic records
-        };
-        if item.kind != "Diagnostic" {
-            continue;
-        }
-        out.push(FileIssue {
-            file: PathBuf::from(item.primary_label.filename),
-            issue: Issue {
-                line: item.primary_label.span.start_line,
-                col: item.primary_label.span.start_column,
-                end_line: item.primary_label.span.end_line,
-                end_col: item.primary_label.span.end_column,
-                severity: if item.severity == "Error" {
-                    Severity::Error
-                } else {
-                    Severity::Warning
-                },
-                url: selene_url(&item.code),
-                code: item.code,
-                message: item.message,
-                source: "selene",
-                fix: None,
-            },
-        });
-    }
-    Ok(out)
 }
 
 // ── swiftlint ──────────────────────────────────────────────────────────────
@@ -1887,7 +1772,7 @@ pub fn buf_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
     let mut modules: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
     let mut orphans = 0usize;
     for file in files {
-        match nearest_ancestor_file(file, "buf.yaml")
+        match poly_core::nearest_ancestor_file(file, "buf.yaml")
             .and_then(|c| c.parent().map(Path::to_path_buf))
         {
             Some(module) => modules.entry(module).or_default().push(file.clone()),
@@ -2280,19 +2165,6 @@ mod tests {
         assert_eq!(item.line_num, None);
     }
 
-    #[test]
-    fn parses_selene_json2() {
-        // json2 is already 0-based, and the Summary line must not become an
-        // issue. Both the file and the stdin runner go through this.
-        let raw = br#"{"type":"Diagnostic","severity":"Error","code":"undefined_variable","message":"`y` is not defined","primary_label":{"filename":"-","span":{"start":18,"start_line":1,"start_column":6,"end":19,"end_line":1,"end_column":7}},"notes":[],"secondary_labels":[]}
-{"type":"Summary","errors":1,"warnings":0,"parse_errors":0}"#;
-        let issues = selene_parse(raw).unwrap();
-        assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].issue.line, 1);
-        assert_eq!(issues[0].issue.col, 6);
-        assert_eq!(issues[0].issue.severity, Severity::Error);
-    }
-
     /// tflint is the one tool that hands over both halves itself: a
     /// version-pinned rule URL and whether `--fix` rewrites the finding.
     /// Sampled from tflint 0.64.0.
@@ -2424,20 +2296,13 @@ mod tests {
         assert!(issues[1].issue.message.ends_with("to fix this issue"));
     }
 
-    /// These three tools name their rules well enough that the documentation
-    /// URL falls out of the code, so poly derives it instead of shipping a
-    /// table that would rot. Every scheme below was checked against the live
-    /// sites: a real rule resolves and an invented one 404s, so a derivation
-    /// that drifts shows up as a dead link rather than a wrong page.
+    /// These tools name their rules well enough that the documentation URL
+    /// falls out of the code, so poly derives it instead of shipping a table
+    /// that would rot. Every scheme below was checked against the live sites:
+    /// a real rule resolves and an invented one 404s, so a derivation that
+    /// drifts shows up as a dead link rather than a wrong page.
     #[test]
     fn documentation_urls_are_derived_from_the_rule_code() {
-        assert_eq!(
-            selene_url("unused_variable").as_deref(),
-            Some("https://kampfkarren.github.io/selene/lints/unused_variable.html")
-        );
-        // Invalid Lua is not a lint and has no page.
-        assert_eq!(selene_url("parse_error"), None);
-
         assert_eq!(
             swiftlint_url("identifier_name"),
             "https://realm.github.io/SwiftLint/identifier_name.html"

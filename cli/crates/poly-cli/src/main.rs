@@ -271,12 +271,11 @@ fn cmd_fmt(inv: &Invocation) -> Result<i32> {
         inv.has("--strict"),
         inv.has("--compact"),
     );
+    let config = poly_core::Config::discover(&inv.paths[0])?;
+    poly_tools::reject_embedded_tools(&config)?;
     // The flag beats poly.toml: a policy belongs in the file so the editor and
     // CI share it, but one run wanting a different answer is why flags exist.
-    let fail_on = match inv.fail_on {
-        Some(explicit) => explicit,
-        None => poly_core::Config::discover(&inv.paths[0])?.format_fail_on,
-    };
+    let fail_on = inv.fail_on.unwrap_or(config.format_fail_on);
     let paths: Vec<PathBuf> = if inv.has("--changed") {
         match changed_scope(&inv.paths)? {
             Some(files) => files,
@@ -465,6 +464,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     // linter once over a batch, so there is no per-file choice to make.
     // Language mapping and excludes are per file (batch::resolve_targets).
     let config = poly_core::Config::discover(paths.first().unwrap())?;
+    poly_tools::reject_embedded_tools(&config)?;
     let fail_on = inv.fail_on.unwrap_or(config.lint_fail_on);
     let scope: Vec<PathBuf> = if inv.has("--changed") {
         match changed_scope(paths)? {
@@ -517,11 +517,6 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             // positions; no separate job or tool needed.
             [group("python"), group("jupyter")].concat(),
             Box::new(poly_tools::run::ruff_files),
-        ),
-        (
-            "selene",
-            group("lua"),
-            Box::new(poly_tools::run::selene_files),
         ),
         (
             "tflint",

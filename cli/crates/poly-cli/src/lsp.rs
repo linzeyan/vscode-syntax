@@ -1527,7 +1527,6 @@ fn external_lint(
         "dockerfile" => "hadolint",
         "yaml" if is_workflow_file(path) => "actionlint",
         "python" => "ruff",
-        "lua" => "selene",
         "swift" => "swiftlint",
         _ => return Ok(issues),
     };
@@ -1546,7 +1545,6 @@ fn external_lint(
             resolved_tool("shellcheck", config).as_deref(),
         )?,
         "ruff" => poly_tools::run::ruff_stdin(&cmd, path, text)?,
-        "selene" => poly_tools::run::selene_stdin(&cmd, path, text)?,
         "swiftlint" => poly_tools::run::swiftlint_stdin(&cmd, path, text)?,
         _ => unreachable!(),
     });

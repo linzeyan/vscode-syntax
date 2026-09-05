@@ -21,6 +21,9 @@ dprint-plugin-typescript = "0.96"
 # outcome -- it reads a project's real config and quietly formats to something
 # else.
 ec4rs = "1.2"
+# Lua's parser, needed directly because selene lints an `Ast` rather than a
+# string and re-exports nothing.
+full_moon = "2.2"
 globset = "0.4"
 ignore = "0.4"
 lsp-server = "0.7"
@@ -35,8 +38,28 @@ rayon = "1"
 ruff_formatter = "=0.0.10"
 # ruff's formatter is an unstable internal crate; exact pin required (M0 decision).
 ruff_python_formatter = "=0.0.10"
+# Lua, embedded as a pair: both crates parse with full_moon, so the second one
+# costs little once the first is linked. Exact pins for a different reason than
+# ruff's -- these two crates *are* the answer poly prints. A minor bump changes
+# what stylua lays out and which lints selene ships, so a caret pin would let
+# `cargo update` silently change what `poly fmt --check` and `poly check` call
+# clean. The features are the ones upstream's own release builds use, so poly
+# reads the same dialects the binaries did: StyLua's release workflow passes
+# `lua52,lua53,lua54,luau,luajit,cfxlua`, and selene's binary takes selene-lib
+# with default features off and only `roblox` back on.
+#
+# stylua's remaining defaults are off because poly already is the thing they
+# provide, not to save space: `editorconfig` would give stylua a second reader
+# of a file poly parses itself and feeds in through FormatOptions, and `lsp` is
+# a whole second language server inside the one poly is running.
+selene-lib = { version = "=0.31.0", default-features = false, features = [
+  "roblox",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Standard-library definitions are YAML; selene-lib already depends on this, so
+# reading a project's own `<std>.yml` costs nothing new.
+serde_yaml = "0.9"
 # Line diff for Format Selection: poly formats the whole document and then has
 # to say which parts of the result fall inside the selection. Free in build
 # terms -- ruff_python_formatter already pulls it in -- and a hand-rolled LCS
@@ -44,6 +67,15 @@ serde_json = "1"
 similar = "3"
 # sqruff's lib API is unstable; exact pin required (M0 decision).
 sqruff-lib = "=0.40.0"
+# See selene-lib above for the pin and the feature list.
+stylua = { version = "=2.5.2", default-features = false, features = [
+  "cfxlua",
+  "lua52",
+  "lua53",
+  "lua54",
+  "luajit",
+  "luau",
+] }
 toml = "0.8"
 xmlem = "0.5"
 
@@ -51,8 +83,9 @@ xmlem = "0.5"
 # without the slow codegen-units=1 builds during development.
 [profile.release]
 # The binary ships inside all six platform VSIX, so size is worth real
-# latency: opt-level="s" halves it (28.9MB -> 14.7MB on darwin-arm64)
-# for ~8% on 1MB files, which stays far inside the 200ms p95 budget.
+# latency: opt-level="s" halved it when this was measured (28.9MB -> 14.7MB on
+# darwin-arm64, before Lua was embedded) for ~8% on 1MB files, which stays far
+# inside the 200ms p95 budget.
 lto = "fat"
 codegen-units = 1
 opt-level = "s"

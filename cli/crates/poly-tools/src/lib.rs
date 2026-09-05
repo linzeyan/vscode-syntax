@@ -270,48 +270,6 @@ pub const TOOLS: &[Tool] = &[
         },
     },
     Tool {
-        name: "stylua",
-        version: "2.5.2",
-        language: Some("lua"),
-        asset: |v, p| {
-            let suffix = match p {
-                "darwin-arm64" => "macos-aarch64",
-                "darwin-x64" => "macos-x86_64",
-                "linux-arm64" => "linux-aarch64",
-                "linux-x64" => "linux-x86_64",
-                "win-x64" | "win-arm64" => "windows-x86_64",
-                _ => return None,
-            };
-            Some(Asset {
-                url: format!(
-                    "https://github.com/JohnnyMorganz/StyLua/releases/download/v{v}/stylua-{suffix}.zip"
-                ),
-                kind: Kind::Zip,
-            })
-        },
-    },
-    Tool {
-        name: "selene",
-        version: "0.31.0",
-        language: Some("lua"),
-        // Upstream ships un-arched zips: macos is x86_64 (Rosetta on arm),
-        // linux is x86_64 only.
-        asset: |v, p| {
-            let os = match p {
-                "darwin-arm64" | "darwin-x64" => "macos",
-                "linux-x64" => "linux",
-                "win-x64" | "win-arm64" => "windows",
-                _ => return None,
-            };
-            Some(Asset {
-                url: format!(
-                    "https://github.com/Kampfkarren/selene/releases/download/{v}/selene-{v}-{os}.zip"
-                ),
-                kind: Kind::Zip,
-            })
-        },
-    },
-    Tool {
         name: "swiftlint",
         version: "0.65.1",
         language: Some("swift"),
@@ -397,6 +355,28 @@ pub const TOOLS: &[Tool] = &[
 
 pub fn tool(name: &str) -> Option<&'static Tool> {
     TOOLS.iter().find(|t| t.name == name)
+}
+
+/// Tools that used to be here and are now compiled into poly.
+///
+/// Kept as data rather than dropped silently because a `[tools]` entry naming
+/// one still parses: `selene = "off"` used to turn Lua lint off and would now
+/// turn nothing off, and `stylua = "2.4.0"` would ask for a version poly has
+/// no way to fetch. Both would be settings that read as working and do
+/// nothing, which is the failure `split_flags` and poly.toml's
+/// `deny_unknown_fields` already refuse to allow.
+const EMBEDDED: &[&str] = &["selene", "stylua"];
+
+/// Stop the run if `[tools]` configures something poly now answers for itself.
+pub fn reject_embedded_tools(config: &poly_core::Config) -> Result<()> {
+    let Some(name) = config.tools.keys().find(|n| EMBEDDED.contains(&n.as_str())) else {
+        return Ok(());
+    };
+    bail!(
+        "poly.toml [tools] {name}: there is no {name} binary to configure — poly \
+         formats and lints Lua itself. Drop the line; `[format.lua]` sets the \
+         layout and a selene.toml still configures the lints."
+    )
 }
 
 // ── resolution ─────────────────────────────────────────────────────────────
@@ -756,6 +736,23 @@ mod tests {
             resolve("shellcheck", &config, true),
             Resolved::Missing(_)
         ));
+    }
+
+    /// Lua is formatted and linted in-process now, so there is no stylua or
+    /// selene binary for `[tools]` to point at, pin or turn off. Accepting the
+    /// line and ignoring it would leave someone believing they had disabled a
+    /// linter that is still reporting.
+    #[test]
+    fn tools_entries_for_embedded_lua_stop_the_run() {
+        for entry in [("selene", "off"), ("stylua", "2.4.0")] {
+            let config = config_with_tools(&[entry]);
+            let error = reject_embedded_tools(&config)
+                .expect_err("an entry poly cannot honor must fail")
+                .to_string();
+            assert!(error.contains(entry.0), "{error}");
+        }
+        // Everything else is still a tool with a binary behind it.
+        assert!(reject_embedded_tools(&config_with_tools(&[("shellcheck", "off")])).is_ok());
     }
 
     #[test]

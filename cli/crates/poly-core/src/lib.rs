@@ -696,6 +696,28 @@ fn merge(base: &mut toml::Value, incoming: toml::Value) {
 
 // ── file walking ───────────────────────────────────────────────────────────
 
+/// Nearest `name` at or above `start`'s directory.
+///
+/// How poly finds another tool's config file — buf.yaml, selene.toml. Both
+/// tools resolve their own against a working directory, which for the daemon
+/// is wherever the editor happened to launch poly from; anchoring on the file
+/// instead is what keeps the editor and CI reading the same config (A4).
+pub fn nearest_ancestor_file(start: &Path, name: &str) -> Option<PathBuf> {
+    let start = std::path::absolute(start).unwrap_or_else(|_| start.to_path_buf());
+    let mut dir = if start.is_dir() {
+        start.as_path()
+    } else {
+        start.parent()?
+    };
+    loop {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        dir = dir.parent()?;
+    }
+}
+
 /// Whether the walk honors the ignore files git honors: `.gitignore`,
 /// `.ignore`, `.git/info/exclude` and the global excludes file (`core.
 /// excludesFile`, else `$XDG_CONFIG_HOME/git/ignore`) — the ancestors' copies

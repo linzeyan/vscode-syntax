@@ -34,6 +34,7 @@ pub fn supported_language(lang: &str) -> bool {
             | "handlebars"
             | "graphql"
             | "dockerfile"
+            | "lua"
     )
 }
 
@@ -115,6 +116,7 @@ pub fn format(lang: &str, path: &Path, text: &str, opts: FormatOptions) -> Resul
         }
         "graphql" => format_graphql(text, opts),
         "dockerfile" => format_dockerfile(path, text, opts),
+        "lua" => format_lua(text, opts),
         other => Err(anyhow!("no embedded formatter for language {other:?}")),
     }
 }
@@ -444,6 +446,40 @@ fn python_error(text: &str, err: &ruff_python_formatter::FormatModuleError) -> a
     }
 }
 
+/// stylua honors all three knobs, so `honored` needs no arm for lua: the
+/// column width guides wrapping, and `indent_type` plus `indent_width` are the
+/// other two spelled its way. Tabs are stylua's own default, which is why
+/// `use-tabs` is left unset rather than defaulted to false here -- a poly that
+/// silently spaced every Lua file would disagree with every stylua.toml in
+/// existence.
+///
+/// `OutputVerification::None` matches the CLI, where reparsing the output is
+/// opt-in behind `--verify`. `Range` is None because poly formats whole
+/// documents; the LSP's Format Selection diffs the result instead (see
+/// `similar` in Cargo.toml).
+fn format_lua(text: &str, opts: FormatOptions) -> Result<Option<String>> {
+    let mut config = stylua_lib::Config::default();
+    if let Some(width) = opts.line_width {
+        config.column_width = width.into();
+    }
+    if let Some(width) = opts.indent_width {
+        config.indent_width = width.into();
+    }
+    if let Some(tabs) = opts.use_tabs {
+        config.indent_type = if tabs {
+            stylua_lib::IndentType::Tabs
+        } else {
+            stylua_lib::IndentType::Spaces
+        };
+    }
+    // stylua's Display already carries `(line:col to line:col)` for a parse
+    // error, so unlike ruff there is nothing to translate -- only the language
+    // to name, the way malva and pretty_yaml are prefixed.
+    let result = stylua_lib::format_code(text, config, None, stylua_lib::OutputVerification::None)
+        .map_err(|e| anyhow!("lua {e}"))?;
+    Ok((result != text).then_some(result))
+}
+
 /// Shared warm sqruff instance (construction loads the rule set; lint_string
 /// takes &self). Dialect defaults to ansi until per-language options land.
 pub(crate) fn sql_linter() -> Result<&'static sqruff_lib::core::linter::core::Linter> {
@@ -580,6 +616,7 @@ mod tests {
             ("a.xml", "<root><a>1</a><b attr='2'/></root>"),
             ("a.html", "<div><p>hi</p><style>a{color:red}</style></div>"),
             ("a.graphql", "query { user(id:1){name email} }"),
+            ("a.lua", "local  function f( a,b )\nreturn a+b\nend"),
             ("Dockerfile", "FROM  alpine:3\nrun echo hi\n"),
             (
                 "a.hbs",
@@ -616,6 +653,54 @@ mod tests {
             .expect("html formats")
             .expect("html changes something");
         assert_ne!(handlebars, html, "Mustache and Html cannot agree here");
+    }
+
+    /// lua is the one engine that takes all three knobs without an `honored`
+    /// arm to declare it, and the failure that creates is silent: a setting
+    /// poly claims to apply and stylua ignores reads as working and does
+    /// nothing. So each knob is asserted against output only it could produce.
+    #[test]
+    fn lua_honors_all_three_format_options() {
+        let lua = |text: &str, opts| format("lua", Path::new("a.lua"), text, opts);
+
+        // Tabs are stylua's own default, so a space indent can only have come
+        // from use-tabs, and its width only from indent-width.
+        let body = "if x then\nreturn 1\nend\n";
+        let spaced = lua(
+            body,
+            FormatOptions {
+                line_width: None,
+                indent_width: Some(2),
+                use_tabs: Some(false),
+            },
+        )
+        .expect("lua formats")
+        .expect("the indent has to change");
+        assert!(spaced.contains("\n  return 1"), "{spaced}");
+        assert!(lua(body, FormatOptions::default())
+            .unwrap()
+            .unwrap()
+            .contains("\n\treturn 1"));
+
+        // Wide enough for stylua's default 120 and not for 20, so the line
+        // splitting is the setting and nothing else.
+        let table = "local t = { alpha = 1, beta = 2, gamma = 3, delta = 4 }\n";
+        assert_eq!(
+            lua(table, FormatOptions::default()).unwrap(),
+            None,
+            "already formatted at the default width"
+        );
+        let narrow = lua(
+            table,
+            FormatOptions {
+                line_width: Some(20),
+                indent_width: None,
+                use_tabs: None,
+            },
+        )
+        .expect("lua formats")
+        .expect("20 columns cannot hold that line");
+        assert!(narrow.lines().count() > 1, "{narrow}");
     }
 
     /// MDX goes through the markdown engine, so the question is not whether it

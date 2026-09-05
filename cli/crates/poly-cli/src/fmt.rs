@@ -18,7 +18,6 @@ pub fn formattable(lang: &str) -> bool {
             "rust"
                 | "shellscript"
                 | "go"
-                | "lua"
                 | "c"
                 | "cpp"
                 | "terraform"
@@ -133,7 +132,6 @@ fn dispatch(
         // .ipynb through stdin.
         "jupyter" => ("ruff", vec!["format", "--stdin-filename", &path_arg, "-"]),
         "go" => ("gofumpt", vec![]),
-        "lua" => ("stylua", vec!["-"]),
         "c" | "cpp" => ("clang-format", vec!["--assume-filename", &path_arg]),
         "terraform" => ("terraform", vec!["fmt", "-"]),
         "swift" => ("swift-format", vec![]),

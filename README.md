@@ -115,9 +115,10 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 
 - **內嵌引擎**（免安裝、離線可用）：TypeScript／JavaScript、JSON／JSONC、
   Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
-  Python、SQL、XML、GraphQL、Dockerfile。
+  Python、SQL、XML、GraphQL、Dockerfile、Lua（格式化 stylua、lint selene，兩者
+  都是編進 binary 的 Rust library，不再下載）。
 - **外部工具**（受管下載）：shellcheck、shfmt、hadolint、actionlint、typos、
-  ruff、tflint、gofumpt、golangci-lint、stylua、selene、swiftlint、buf
+  ruff、tflint、gofumpt、golangci-lint、swiftlint、buf
   （Protobuf 的格式化與 lint，同一支 binary 也是上面那個 language server）。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
   信任第一次抓到的東西。
