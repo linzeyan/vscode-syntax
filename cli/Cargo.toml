@@ -66,13 +66,13 @@ ruff_python_ast = "=0.0.12"
 # every setting [format.python] can reach -- identical output, and no file that
 # one version parsed and the other refused.
 ruff_python_formatter = "=0.0.12"
+# Byte offsets into a notebook's concatenated source. Needed to build the
+# SourceMap a cell-by-cell format hands back to Notebook::update.
+ruff_text_size = "=0.0.12"
 # pyproject.toml / ruff.toml discovery and resolution -- a project's own rule
 # selection, which is the point of embedding ruff rather than hardcoding a
 # default set poly invented.
 ruff_workspace = "=0.0.12"
-# Byte offsets into a notebook's concatenated source. Needed to build the
-# SourceMap a cell-by-cell format hands back to Notebook::update.
-ruff_text_size = "=0.0.12"
 # Lua, embedded as a pair: both crates parse with full_moon, so the second one
 # costs little once the first is linked. Exact pins for a different reason than
 # ruff's -- these two crates *are* the answer poly prints. A minor bump changes
