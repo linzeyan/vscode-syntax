@@ -171,7 +171,7 @@ sourcekit-lsp 是等編輯器表示看得懂之後才自己註冊的，時機比
 這個 extension 0.6.0 前叫 `poly-lint`（另一個叫 `poly-syntax`）。id 換了就是新
 extension，只能手動裝。
 
-0.5.0 的更新提示還是會跳，但按下 Install 必定失敗（它找的是 `poly-syntax-0.9.0.vsix`
+0.5.0 的更新提示還是會跳，但按下 Install 必定失敗（它找的是 `poly-syntax-0.10.0.vsix`
 這個已經不存在的檔名），而且錯誤訊息會說「The VSIX files were downloaded」——
 其實一個都沒下載，所以「Show Files」也沒東西可看。那段程式碼凍在已安裝的 0.5.0
 裡，改不了。
