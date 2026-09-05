@@ -6,7 +6,7 @@
     }
   },
   "microsoft/vscode": {
-    "sha": "2a058e8844367ffdeda372134e6d41ea9313dd10",
+    "sha": "fc0a9e94576224c89cc08d390b38ab760a261f1f",
     "files": {
       "extensions/swift/syntaxes/swift.tmLanguage.json": "acd12f33c06092e1",
       "extensions/csharp/syntaxes/csharp.tmLanguage.json": "152d4586a2ddf518",
@@ -377,7 +377,7 @@
     }
   },
   "hashicorp/syntax": {
-    "sha": "ae0c4e30047d0df4dc60c8e25aaaccc4e8cab604",
+    "sha": "16375ff2107c4d12551b1637bf17b371cf9ac103",
     "files": {
       "syntaxes/hcl.tmGrammar.json": "5a2e52e505fc3e4a",
       "syntaxes/terraform.tmGrammar.json": "63b2c259398559c4"
@@ -425,13 +425,13 @@
     }
   },
   "sveltejs/language-tools": {
-    "sha": "092af3826bada5cd591b0efccc39eed970169465",
+    "sha": "2cfcc15b4c44dfc1128432e20ca663fe20bdd12e",
     "files": {
-      "packages/svelte-vscode/syntaxes/svelte.tmLanguage.src.yaml": "40d79f3fcfa511ee"
+      "packages/svelte-vscode/syntaxes/svelte.tmLanguage.src.yaml": "222e3b63e1c78996"
     }
   },
   "graphql/graphiql": {
-    "sha": "7d543a9d8c71cac4a674c999e7a94b60236a146d",
+    "sha": "fd32cea3e191eb6eb41b785e157403308d787b12",
     "files": {
       "packages/vscode-graphql-syntax/grammars/graphql.json": "38ed385ed8379661",
       "packages/vscode-graphql-syntax/grammars/graphql.js.json": "4269c1a350282898",
@@ -447,7 +447,7 @@
     }
   },
   "vuejs/language-tools": {
-    "sha": "f4b17caaecddf5edfa076d31d6a2af7ea3c1ccdb",
+    "sha": "ffb85e57723d4a1a5107d43c0a09408814c4608a",
     "contributes": {
       "text.html.vue": {
         "embeddedLanguages": {
@@ -542,9 +542,9 @@
     }
   },
   "microsoft/vscode-cmake-tools": {
-    "sha": "09dd68b54de06469bd1b81d84d6b8666aa2dce1d",
+    "sha": "182a2948230f977c4897078186c2960596034769",
     "files": {
-      "syntaxes/CMake.tmLanguage.json": "d0affda1b82d2261",
+      "syntaxes/CMake.tmLanguage.json": "97a1a711279fdabe",
       "syntaxes/CMakeCache.tmLanguage.json": "fbbfecaf5ba5584b"
     }
   },
@@ -652,7 +652,7 @@
     }
   },
   "ocamllabs/vscode-ocaml-platform": {
-    "sha": "da3dbe865e03dc31151bfdb6d3053b9e41a28434",
+    "sha": "715202f37fd92b6f16b03e1314ac1f8467e03869",
     "files": {
       "syntaxes/ocaml.json": "6ce207aebaaf677f",
       "syntaxes/ocaml-markdown-codeblock.json": "d39e8739966911d3",
