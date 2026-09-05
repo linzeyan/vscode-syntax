@@ -510,14 +510,7 @@ fn ensure_installed(
         "[poly] downloading {} {} for {platform}...",
         tool.name, version
     );
-    let body = ureq::get(&asset.url)
-        .call()
-        .with_context(|| format!("downloading {}", asset.url))?
-        .body_mut()
-        .with_config()
-        .limit(512 * 1024 * 1024)
-        .read_to_vec()
-        .context("reading download body")?;
+    let body = download(&asset.url)?;
     let digest = format!("{:x}", sha2::Sha256::digest(&body));
 
     let lock_file = lock_path(config);
@@ -547,6 +540,112 @@ fn ensure_installed(
 
     extract(&body, asset.kind, tool.name, &target)?;
     Ok(Some(target))
+}
+
+/// How many times one asset is fetched before poly calls it missing.
+///
+/// Four, because the failure this exists for is a single TCP reset from a
+/// release CDN and the next attempt almost always survives it. The cost of
+/// being wrong is paid by someone on a genuinely dead network, so it is capped:
+/// with the backoff below, a hopeless download costs 1.75s of waiting before
+/// the error prints, which is under the point where a human wonders if poly
+/// hung.
+const DOWNLOAD_ATTEMPTS: u32 = 4;
+
+/// Delay before the second attempt; doubles from there (250ms, 500ms, 1s).
+///
+/// No jitter. Jitter exists to break up many clients retrying one server in
+/// lockstep, and poly is one process on one developer's machine or one CI
+/// runner -- there is no herd to spread out, so a PRNG here would buy a
+/// dependency and a non-reproducible test and nothing else.
+const DOWNLOAD_BACKOFF: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// GET `url` and return the body, retrying failures that could go differently.
+///
+/// One attempt covers the response *and* the body read, because a reset can
+/// arrive after the headers and half a tarball is worth no more than none.
+///
+/// Everything past this function is deliberately outside the loop: the sha256
+/// comparison against poly-tools.lock, extraction, and the write into the
+/// cache. A digest that disagrees with the lock is a statement about the bytes
+/// -- upstream re-tagged, or something in the middle rewrote them -- and
+/// quietly downloading again until one passes is exactly how a tamper signal
+/// turns into a flake.
+fn download(url: &str) -> Result<Vec<u8>> {
+    let mut attempt = 1u32;
+    loop {
+        let error = match ureq::get(url).call().and_then(|mut response| {
+            response
+                .body_mut()
+                .with_config()
+                .limit(512 * 1024 * 1024)
+                .read_to_vec()
+        }) {
+            Ok(body) => return Ok(body),
+            Err(error) => error,
+        };
+        if !is_transient(&error) || attempt == DOWNLOAD_ATTEMPTS {
+            // The count goes in the message only once attempts were actually
+            // spent: a real outage must not read like one unlucky packet, and
+            // a 404 must not claim a persistence that never happened.
+            let tried = if attempt > 1 {
+                format!(", gave up after {attempt} attempts")
+            } else {
+                String::new()
+            };
+            return Err(anyhow::Error::new(error))
+                .with_context(|| format!("downloading {url}{tried}"));
+        }
+        eprintln!("[poly] {url}: {error} — retrying ({attempt}/{DOWNLOAD_ATTEMPTS})");
+        std::thread::sleep(DOWNLOAD_BACKOFF * 2u32.pow(attempt - 1));
+        attempt += 1;
+    }
+}
+
+/// Whether asking for the same URL again could plausibly answer differently.
+///
+/// The line is "no answer arrived, or the answer was about the server rather
+/// than about this asset". Retrying anything else is worse than useless: a 404
+/// for a release upstream never published would spend the whole backoff before
+/// printing what the first attempt already knew.
+fn is_transient(error: &ureq::Error) -> bool {
+    match error {
+        // 5xx is the origin saying "not now" and 429 is it saying "not this
+        // fast". Every other 4xx is about the request, and poly sends a
+        // byte-identical request every time.
+        ureq::Error::StatusCode(code) => *code >= 500 || *code == 429,
+        // The socket failures behind the CI log this exists for. UnexpectedEof
+        // is how a reset *mid-body* surfaces: the headers already parsed, so
+        // ureq reports a short read rather than a reset.
+        ureq::Error::Io(e) => matches!(
+            e.kind(),
+            std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::ConnectionRefused
+                | std::io::ErrorKind::BrokenPipe
+                | std::io::ErrorKind::UnexpectedEof
+                | std::io::ErrorKind::NotConnected
+                | std::io::ErrorKind::TimedOut
+                | std::io::ErrorKind::Interrupted
+        ),
+        ureq::Error::Timeout(_) | ureq::Error::ConnectionFailed => true,
+        // A truncated or otherwise malformed HTTP frame. Same class as the
+        // short read above, reached when the transfer was chunked: the
+        // connection died partway and ureq noticed at the framing layer first.
+        ureq::Error::Protocol(_) => true,
+        // Resolution failure, which ureq cannot tell apart from a hostname
+        // that will never resolve. Retried anyway, because every URL the
+        // registry builds is a literal in this file -- the realistic cause is
+        // a resolver that is not up yet, in a container whose network is still
+        // coming online or on a laptop that just woke.
+        ureq::Error::HostNotFound => true,
+        // Everything else is an answer rather than a gap: a bad URI, a TLS
+        // chain that does not verify, a redirect loop, a body over the limit.
+        // `ConnectProxyFailed` is in here on purpose -- an unreachable or
+        // unauthenticated proxy is a configuration answer, and repeating the
+        // CONNECT delays it without changing it.
+        _ => false,
+    }
 }
 
 /// Pull the tool binary out of the payload and land it at `target`
@@ -771,6 +870,283 @@ mod tests {
             Resolved::Managed(_) | Resolved::Path(_) | Resolved::Missing(_) => {}
             other => panic!("unexpected: {other:?}"),
         }
+    }
+
+    // ── downloads ──────────────────────────────────────────────────────────
+    //
+    // Every test below drives the real `download`/`ensure_installed` against a
+    // TCP listener this process owns, rather than a mock of ureq. The bug being
+    // fixed lives in how a socket failure reaches poly -- a mock that returns a
+    // hand-made `ureq::Error` would be asserting on the classifier's input,
+    // which is the one part that was never in doubt.
+
+    /// What a fake origin does with the next connection it is handed.
+    #[derive(Clone)]
+    enum Reply {
+        /// Read one byte of the request and close, leaving the rest queued:
+        /// closing a socket with unread data is what makes the kernel send an
+        /// RST instead of a FIN, which is the "Connection reset by peer" this
+        /// whole path exists for. Should a platform send a FIN anyway, ureq
+        /// reports a premature EOF, which is the same class and also retried.
+        Reset,
+        /// Answer with a status and an empty body.
+        Status(u16),
+        /// Answer 200 with these bytes.
+        Body(Vec<u8>),
+        /// Promise a body, send `usize` bytes of it, hang up. A reset that
+        /// lands after the headers have already parsed.
+        Truncated(usize),
+    }
+
+    /// A local origin answering a scripted sequence, plus the count of
+    /// connections it was given. The last reply repeats once the script runs
+    /// out, so a test asserting "this was not retried" still detects a retry
+    /// instead of hanging on a closed port.
+    ///
+    /// Every answer carries `Connection: close`, which keeps ureq from pooling
+    /// the socket and makes the connection count equal the attempt count.
+    ///
+    /// The thread is never joined: it owns the listener for as long as the test
+    /// binary runs, and process exit is the only cleanup it needs.
+    fn origin(script: Vec<Reply>) -> (u16, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let seen = std::sync::Arc::new(AtomicUsize::new(0));
+        let counter = std::sync::Arc::clone(&seen);
+        std::thread::spawn(move || {
+            for (index, stream) in listener.incoming().flatten().enumerate() {
+                counter.fetch_add(1, Ordering::SeqCst);
+                let reply = script
+                    .get(index)
+                    .or_else(|| script.last())
+                    .cloned()
+                    .unwrap_or(Reply::Reset);
+                serve(stream, reply);
+            }
+        });
+        (port, seen)
+    }
+
+    fn serve(mut stream: std::net::TcpStream, reply: Reply) {
+        use std::io::{Read, Write};
+        let mut byte = [0u8; 1];
+        if matches!(reply, Reply::Reset) {
+            // Blocking on one byte proves the request arrived, so this is a
+            // close-with-data-queued rather than a race with the client's
+            // write -- and the queued remainder is what makes it an RST.
+            let _ = stream.read(&mut byte);
+            return;
+        }
+        // Every other reply has to drain the request first. Closing with any
+        // of it unread sends an RST, which discards the response the client
+        // has not read yet and turns every scripted answer into a reset.
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            match stream.read(&mut byte) {
+                Ok(1) => head.push(byte[0]),
+                _ => break,
+            }
+        }
+        let mut write = |head: String, body: &[u8]| {
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(body);
+            let _ = stream.flush();
+        };
+        match reply {
+            Reply::Reset => {}
+            Reply::Status(code) => write(
+                format!(
+                    "HTTP/1.1 {code} Scripted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                ),
+                &[],
+            ),
+            Reply::Body(body) => write(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                ),
+                &body,
+            ),
+            Reply::Truncated(sent) => write(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    sent * 4
+                ),
+                &vec![b'x'; sent],
+            ),
+        }
+    }
+
+    fn asset_url(port: u16) -> String {
+        format!("http://127.0.0.1:{port}/asset")
+    }
+
+    /// A reset says something about this moment, not about the asset. Poly has
+    /// to ask again, and a download that succeeds on the second attempt is a
+    /// download that succeeded -- not a missing tool and not a red CI step.
+    #[test]
+    fn a_reset_connection_is_retried_and_can_succeed() {
+        use std::sync::atomic::Ordering;
+        let payload = b"the tool bytes".to_vec();
+        let (port, seen) = origin(vec![Reply::Reset, Reply::Body(payload.clone())]);
+        let body = download(&asset_url(port)).expect("a reset must not end the download");
+        assert_eq!(body, payload);
+        assert_eq!(seen.load(Ordering::SeqCst), 2, "expected exactly one retry");
+    }
+
+    /// Same class one layer up: a release CDN answering 503 for a few seconds
+    /// is the ordinary shape of a partial outage, and it clears by itself.
+    #[test]
+    fn a_5xx_is_retried_and_can_succeed() {
+        use std::sync::atomic::Ordering;
+        let payload = b"the tool bytes".to_vec();
+        let (port, seen) = origin(vec![Reply::Status(503), Reply::Body(payload.clone())]);
+        let body = download(&asset_url(port)).expect("a 503 must not end the download");
+        assert_eq!(body, payload);
+        assert_eq!(seen.load(Ordering::SeqCst), 2);
+    }
+
+    /// The retry has to wrap the body read, not just the connect: a cut that
+    /// lands after the headers leaves poly holding half a tarball, which is
+    /// worth exactly what none of it is worth.
+    #[test]
+    fn a_body_cut_short_is_retried_and_can_succeed() {
+        use std::sync::atomic::Ordering;
+        let payload = b"the tool bytes".to_vec();
+        let (port, seen) = origin(vec![Reply::Truncated(8), Reply::Body(payload.clone())]);
+        let body = download(&asset_url(port)).expect("a short body must not end the download");
+        assert_eq!(body, payload);
+        assert_eq!(seen.load(Ordering::SeqCst), 2);
+    }
+
+    /// A 404 is the server answering about this asset, and poly sends a
+    /// byte-identical request every time. Retrying would spend the whole
+    /// backoff before printing what the first attempt already knew.
+    #[test]
+    fn a_404_is_not_retried() {
+        use std::sync::atomic::Ordering;
+        let (port, seen) = origin(vec![Reply::Status(404)]);
+        let error = download(&asset_url(port)).expect_err("404 is not a download");
+        assert_eq!(seen.load(Ordering::SeqCst), 1, "a 404 was asked again");
+        let error = format!("{error:#}");
+        assert!(error.contains("404"), "{error}");
+        // The count is reserved for downloads that actually spent attempts.
+        assert!(!error.contains("attempts"), "{error}");
+    }
+
+    /// A real outage must not read like one unlucky packet. The CI log that
+    /// prompted this said only "Connection reset by peer", which left no way to
+    /// tell whether poly had tried at all.
+    #[test]
+    fn exhausting_the_attempts_names_the_count() {
+        use std::sync::atomic::Ordering;
+        let (port, seen) = origin(vec![Reply::Reset]);
+        let error = download(&asset_url(port)).expect_err("nothing was ever served");
+        assert_eq!(seen.load(Ordering::SeqCst), DOWNLOAD_ATTEMPTS as usize);
+        let error = format!("{error:#}");
+        assert!(
+            error.contains(&format!("gave up after {DOWNLOAD_ATTEMPTS} attempts")),
+            "{error}"
+        );
+    }
+
+    /// The port has to reach the registry entry through a static: `Tool::asset`
+    /// is a plain `fn` pointer and cannot capture one. A static per test keeps
+    /// the two from racing.
+    static MISMATCH_PORT: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
+    static OFFLINE_PORT: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
+
+    /// Names nothing real, so its cache directory cannot exist and the run
+    /// cannot be short-circuited by a tool someone already installed.
+    const PROBE_VERSION: &str = "0.0.0";
+
+    fn mismatch_probe() -> Tool {
+        Tool {
+            name: "poly-mismatch-probe",
+            version: PROBE_VERSION,
+            language: None,
+            asset: |_, _| {
+                Some(Asset {
+                    url: asset_url(*MISMATCH_PORT.get().expect("port published")),
+                    kind: Kind::Raw,
+                })
+            },
+        }
+    }
+
+    fn offline_probe() -> Tool {
+        Tool {
+            name: "poly-offline-probe",
+            version: PROBE_VERSION,
+            language: None,
+            asset: |_, _| {
+                Some(Asset {
+                    url: asset_url(*OFFLINE_PORT.get().expect("port published")),
+                    kind: Kind::Raw,
+                })
+            },
+        }
+    }
+
+    /// A digest that disagrees with poly-tools.lock says the bytes are not the
+    /// ones this project agreed to run -- upstream re-tagged, or something in
+    /// the middle rewrote them. Fetching again until one passes is exactly how
+    /// a tamper signal turns into a flake, so the retry must stop at the
+    /// socket: one fetch, one verdict, said out loud.
+    #[test]
+    fn a_sha256_mismatch_is_not_retried() {
+        use std::sync::atomic::Ordering;
+        let tool = mismatch_probe();
+        let (port, seen) = origin(vec![Reply::Body(b"not what the lock says".to_vec())]);
+        MISMATCH_PORT.set(port).unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("poly-tools.lock"),
+            format!(
+                "[{}]\n\"{PROBE_VERSION}-{}\" = \"{}\"\n",
+                tool.name,
+                current_platform(),
+                "0".repeat(64)
+            ),
+        )
+        .unwrap();
+        let mut config = poly_core::Config::empty();
+        config.root = Some(dir.path().to_path_buf());
+
+        let error = ensure_installed(&tool, PROBE_VERSION, &config, false)
+            .expect_err("a digest that disagrees with the lock is not an install");
+        assert_eq!(
+            seen.load(Ordering::SeqCst),
+            1,
+            "a bad digest was downloaded again"
+        );
+        let error = format!("{error:#}");
+        assert!(error.contains("sha256 mismatch"), "{error}");
+        assert!(!error.contains("attempts"), "{error}");
+    }
+
+    /// `offline` is a promise, not a preference. An air-gapped run must not
+    /// open a socket at all, and adding retries is precisely the change that
+    /// could turn one skipped request into four.
+    #[test]
+    fn offline_does_not_reach_the_network() {
+        use std::sync::atomic::Ordering;
+        let (port, seen) = origin(vec![Reply::Body(b"never served".to_vec())]);
+        OFFLINE_PORT.set(port).unwrap();
+        let config = poly_core::Config::empty();
+        let error = ensure_installed(&offline_probe(), PROBE_VERSION, &config, true)
+            .expect_err("nothing is cached, so offline has no answer");
+        assert_eq!(
+            seen.load(Ordering::SeqCst),
+            0,
+            "offline opened a connection"
+        );
+        assert!(
+            format!("{error:#}").contains("downloads are disabled"),
+            "{error:#}"
+        );
     }
 
     #[test]
