@@ -17,6 +17,12 @@
 //! checker, not a rule, and poly does not have one. Every rule below therefore
 //! *stops* at an expression rather than guessing what it evaluates to.
 //!
+//! The one exception is a *reference*, which needs no evaluator: a `runs-on:`
+//! that is exactly `${{ matrix.<key> }}` names values written down a few lines
+//! above it, and looking them up is reading rather than guessing. See
+//! `matrix_reference`. Anything with an operator, a function call or a second
+//! term in it goes back to stopping.
+//!
 //! actionlint stays wired in alongside this. See the module doc on `lint`.
 
 use poly_core::diag::{Fix, Issue, Severity};
@@ -208,8 +214,12 @@ pub const RULES: &[(&str, &str)] = &[
          from a real one, or a GitHub-hosted OS at a version that never existed. \
          Anything else is assumed to be a self-hosted or third-party runner and \
          left alone, because poly cannot know what somebody named their machines. \
-         The list of live images is a snapshot and will age: when GitHub ships a \
-         new one, this rule reports it until poly's next release.",
+         A `runs-on:` that is exactly `${{ matrix.<key> }}` is followed to the \
+         list that key declares in this job's `strategy.matrix`, and each value \
+         judged the same three ways; a reference with anything else in it, or to \
+         a key whose values are not written out, is left alone too. The list of \
+         live images is a snapshot and will age: when GitHub ships a new one, \
+         this rule reports it until poly's next release.",
     ),
     (
         "actions-unknown-step-key",
@@ -558,7 +568,8 @@ impl Node {
     /// is computed is a value poly does not know -- and the alternative,
     /// reporting on the un-evaluated text, is how a linter teaches people that
     /// half its findings are noise. 246 of the 1372 workflows measured write
-    /// `runs-on: ${{ matrix.os }}`.
+    /// `runs-on: ${{ matrix.os }}`, and `matrix_reference` resolves that one
+    /// shape by looking the values up rather than by evaluating anything.
     fn is_expression(&self) -> bool {
         self.str().is_some_and(|s| s.contains("${{"))
     }
@@ -1410,6 +1421,22 @@ fn runs_on(text: &str, id: &Node, job: &Node, found: &mut Vec<Issue>) {
     if runs_on.get("group").is_some() {
         return;
     }
+    // A `runs-on:` that is one matrix reference and nothing else names labels
+    // written a few lines above it, so the rule can be applied to those instead
+    // of stopping. The finding lands on the value in the matrix, which is both
+    // where the fix goes and the only place a reader can see which of several
+    // values is the wrong one.
+    if let Some(key) = matrix_reference(runs_on) {
+        for value in matrix_labels(job, key) {
+            report_label(
+                text,
+                value,
+                &format!("this job's `runs-on` is `matrix.{key}`, so this value is its runner: "),
+                found,
+            );
+        }
+        return;
+    }
     let labels = match runs_on.get("labels") {
         Some(labels) => labels.strings(),
         None => runs_on.strings(),
@@ -1423,21 +1450,114 @@ fn runs_on(text: &str, id: &Node, job: &Node, found: &mut Vec<Issue>) {
         return;
     }
     for label in labels {
-        if label.is_expression() {
-            continue;
-        }
-        let Some(name) = label.str() else { continue };
-        if let Some(why) = unknown_runner(name) {
-            found.push(issue(
-                text,
-                label,
-                "actions-unknown-runner",
-                Severity::Warning,
-                why,
-                None,
-            ));
+        report_label(text, label, "", found);
+    }
+}
+
+/// Report `label` if `unknown_runner` is confident about it, `lead` first.
+///
+/// `lead` is empty for a label written on `runs-on` and says where the value
+/// came from for one reached through the matrix -- a finding anchored on a list
+/// entry three lines under `strategy:` otherwise gives a reader no reason to
+/// think the entry is a runner label at all.
+fn report_label(text: &str, label: &Node, lead: &str, found: &mut Vec<Issue>) {
+    if label.is_expression() {
+        return;
+    }
+    let Some(name) = label.str() else { return };
+    if let Some(why) = unknown_runner(name) {
+        found.push(issue(
+            text,
+            label,
+            "actions-unknown-runner",
+            Severity::Warning,
+            format!("{lead}{why}"),
+            None,
+        ));
+    }
+}
+
+/// The `<key>` of a `runs-on:` that is exactly `${{ matrix.<key> }}`.
+///
+/// A reference, not an expression: what comes back is a name to look up, and
+/// every shape that would need evaluating instead -- `fromJSON(...)` or any
+/// other call, `a || b`, a string with a reference embedded in it, a property
+/// below the key (`matrix.cfg.os`) -- fails the spelling test here and leaves
+/// the rule where it was, saying nothing.
+fn matrix_reference(runs_on: &Node) -> Option<&str> {
+    let key = runs_on
+        .str()?
+        .trim()
+        .strip_prefix("${{")?
+        .strip_suffix("}}")?
+        .trim()
+        .strip_prefix("matrix.")?;
+    let plain = !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    plain.then_some(key)
+}
+
+/// The literal values `matrix.<key>` can take in this job.
+///
+/// Empty whenever the answer is not written down, which is most of the reasons
+/// there are: no `strategy.matrix` at all, a matrix that is itself computed, a
+/// key the matrix does not declare, or a key whose values are objects rather
+/// than labels. Each of those is a value poly does not know, and the rule this
+/// feeds reports nothing about a value it does not know.
+fn matrix_labels<'a>(job: &'a Node, key: &str) -> Vec<&'a Node> {
+    let Some(matrix) = job.get("strategy").and_then(|s| s.get("matrix")) else {
+        return Vec::new();
+    };
+    // The top-level list is the declaration, and a key reached only through
+    // `include` does not have one. That shape is common and correct -- it is
+    // how poly's own `build.yml` pairs a target with a runner -- but which
+    // value each entry contributes depends on the combinations it attaches to,
+    // which is the same arithmetic `exclude` is declined for below.
+    let Some(declared) = matrix.get(key) else {
+        return Vec::new();
+    };
+    let Value::Seq(declared) = &declared.value else {
+        return Vec::new();
+    };
+    // One entry that is not a scalar and the list is not a list of labels: the
+    // key's values are objects, and `runs-on` would be reading a property of
+    // one of them rather than the value itself.
+    if declared.iter().any(|value| value.str().is_none()) {
+        return Vec::new();
+    }
+
+    // `exclude` removes whole combinations, and deciding whether it removed
+    // every combination carrying one value means expanding the product of every
+    // key in the matrix. So when it names this key at all -- or is written in a
+    // shape poly cannot read -- the declared list is dropped rather than half
+    // resolved. An `exclude` that never mentions this key cannot single out one
+    // of its values: it constrains the other keys identically for all of them.
+    let excluded = matrix
+        .get("exclude")
+        .is_some_and(|exclude| match &exclude.value {
+            Value::Seq(entries) => entries
+                .iter()
+                .any(|entry| !entry.is_map() || entry.get(key).is_some()),
+            _ => true,
+        });
+
+    let mut labels: Vec<&Node> = if excluded {
+        Vec::new()
+    } else {
+        declared.iter().collect()
+    };
+    // `include` is applied after `exclude`, so a value one of its entries gives
+    // this key is one GitHub schedules whatever else the matrix says -- an
+    // entry that cannot extend an existing combination becomes a new one, and
+    // nothing removes it afterwards. That is why these survive the drop above.
+    for entry in matrix.get("include").map(Node::seq).unwrap_or(&[]) {
+        if let Some(value) = entry.get(key) {
+            labels.push(value);
         }
     }
+    labels
 }
 
 /// Why `label` cannot be a runner, when poly is confident enough to say so.
@@ -2296,6 +2416,317 @@ jobs:
             "on: push\njobs:\n  a:\n    runs-on:\n      group: aws-general-8-plus\n    steps:\n      - run: x\n",
             "actions-unknown-runner"
         ));
+    }
+
+    // ── runners behind a matrix reference ──────────────────────────────────
+
+    /// One job whose `runs-on:` is `runs_on` and whose matrix body is `matrix`,
+    /// written at the eight spaces `strategy.matrix`'s keys sit at.
+    fn matrix_job(runs_on: &str, matrix: &str) -> String {
+        format!(
+            "on: push\njobs:\n  a:\n    runs-on: {runs_on}\n    strategy:\n      matrix:\n{matrix}    steps:\n      - run: x\n"
+        )
+    }
+
+    /// `runs-on: ${{ matrix.os }}` is a reference, and the values are three
+    /// lines above it.
+    ///
+    /// This is where the 152 retired images poly already reports stop being all
+    /// of them: of the 75 runner-label findings actionlint had that poly did
+    /// not, 34 were real, and every one of the 34 was a retired image sitting in
+    /// a matrix behind a reference exactly this shape.
+    #[test]
+    fn a_runs_on_that_is_only_a_matrix_reference_is_followed_to_its_values() {
+        let text = matrix_job(
+            "${{ matrix.os }}",
+            "        os: [ubuntu-20.04, ubuntu-latest, macos-14]\n",
+        );
+        let found = lint(&text);
+        let issue = found
+            .iter()
+            .find(|i| i.code == "actions-unknown-runner")
+            .unwrap_or_else(|| panic!("{found:#?}"));
+        // The one dead value, and only it: the other two are live labels.
+        assert_eq!(
+            found
+                .iter()
+                .filter(|i| i.code == "actions-unknown-runner")
+                .count(),
+            1,
+            "{found:#?}"
+        );
+        assert!(issue.message.contains("ubuntu-20.04"), "{issue:?}");
+        // Anchored on the value in the matrix, which is line 6, not on the
+        // `runs-on:` line that only names the key.
+        assert_eq!(issue.line, 6, "{issue:?}");
+        // And it says why a list entry under `strategy:` is being read as a
+        // runner label at all -- without that the finding arrives without a
+        // reason for being where it is.
+        assert!(issue.message.contains("`matrix.os`"), "{issue:?}");
+
+        // The key is whatever the workflow called it. `matrix.platform` is 3 of
+        // the 34 real findings, so hard-coding `os` would have missed them.
+        assert!(fires(
+            &matrix_job(
+                "${{ matrix.platform }}",
+                "        platform: [ubuntu-20.04]\n"
+            ),
+            "actions-unknown-runner"
+        ));
+        // Spacing inside the braces is the author's, not a different shape.
+        assert!(fires(
+            &matrix_job("${{matrix.os}}", "        os: [macos-12]\n"),
+            "actions-unknown-runner"
+        ));
+        // A matrix of live labels stays quiet, so the tests above are not
+        // passing because resolution reports everything it resolves.
+        assert!(!fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [ubuntu-latest, macos-14, windows-latest]\n"
+            ),
+            "actions-unknown-runner"
+        ));
+    }
+
+    /// An `include` entry's value for the key is one GitHub schedules.
+    ///
+    /// `include` is applied after `exclude` and cannot overwrite a declared
+    /// value, so an entry naming this key either extends a combination or
+    /// becomes a new one -- either way the label runs. 15 of the 34 real
+    /// findings are in matrices with an `include`, and most of them are values
+    /// only `include` mentions.
+    #[test]
+    fn a_value_include_adds_is_one_the_job_will_run_on() {
+        assert!(fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [ubuntu-latest]\n        include:\n          - os: macos-12\n"
+            ),
+            "actions-unknown-runner"
+        ));
+        // The flow spelling of the same entry, which is how the corpus writes
+        // most of them.
+        assert!(fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [ubuntu-latest]\n        include:\n          - { python: \"3.9\", os: macos-13 }\n"
+            ),
+            "actions-unknown-runner"
+        ));
+        // An `include` that never names the key adds nothing to judge.
+        assert!(!fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [ubuntu-latest]\n        include:\n          - experimental: false\n"
+            ),
+            "actions-unknown-runner"
+        ));
+    }
+
+    // ── and where the resolution stops ─────────────────────────────────────
+
+    /// Declined: the reference has something else in it.
+    ///
+    /// Following a reference is reading; anything with a call, an operator or a
+    /// second term in it would need evaluating, and poly has no evaluator. Each
+    /// of these is a shape the corpus writes.
+    #[test]
+    fn declined_a_runs_on_that_is_more_than_a_reference() {
+        for expression in [
+            "${{ fromJSON(needs.setup.outputs.runners) }}",
+            "${{ matrix.os || 'ubuntu-latest' }}",
+            "${{ inputs.hosted && 'ubuntu-24.04' || matrix.os }}",
+            "${{ matrix.os }}-large",
+            "${{ matrix.prefix }}${{ matrix.os }}",
+            "${{ matrix.cfg.os }}",
+            "${{ needs.setup.outputs.os }}",
+        ] {
+            assert!(
+                !fires(
+                    &matrix_job(
+                        &format!("\"{expression}\""),
+                        "        os: [ubuntu-20.04]\n        cfg: [x]\n        prefix: [y]\n"
+                    ),
+                    "actions-unknown-runner"
+                ),
+                "{expression}"
+            );
+        }
+        // The control: the same matrix behind a plain reference does fire, so
+        // the silence above is the expression's doing and not the fixture's.
+        assert!(fires(
+            &matrix_job("${{ matrix.os }}", "        os: [ubuntu-20.04]\n"),
+            "actions-unknown-runner"
+        ));
+    }
+
+    /// Declined: there is no `strategy.matrix` poly can read.
+    #[test]
+    fn declined_a_matrix_reference_with_no_matrix_to_resolve_against() {
+        assert!(!fires(
+            "on: push\njobs:\n  a:\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: x\n",
+            "actions-unknown-runner"
+        ));
+        // A `strategy:` that has everything but a matrix.
+        assert!(!fires(
+            "on: push\njobs:\n  a:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      fail-fast: false\n    steps:\n      - run: x\n",
+            "actions-unknown-runner"
+        ));
+        // A whole matrix built by an earlier job and read back as JSON, which
+        // is what all five of the corpus's cases are. The values are not in
+        // this file at any point.
+        assert!(!fires(
+            "on: push\njobs:\n  a:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix: ${{ fromJSON(needs.list.outputs.matrix) }}\n    steps:\n      - run: x\n",
+            "actions-unknown-runner"
+        ));
+    }
+
+    /// Declined: the matrix has no list under this key.
+    ///
+    /// The top-level list is the declaration, and without one there is nothing
+    /// to look up. A matrix that reaches the key only through `include` is a
+    /// real shape and a common one -- 46 of the corpus's 361 matrix references
+    /// are written that way, poly's own `build.yml` among them -- but which
+    /// value each entry contributes depends on which combinations it attaches
+    /// to, and that is the combination arithmetic declined for `exclude` below
+    /// rather than a name to look up. It is not a defect and must not be
+    /// reported as one.
+    #[test]
+    fn declined_a_matrix_that_declares_no_list_under_the_key() {
+        assert!(!fires(
+            &matrix_job("${{ matrix.os }}", "        platform: [ubuntu-20.04]\n"),
+            "actions-unknown-runner"
+        ));
+        // Reached only through `include`, alongside a base matrix.
+        assert!(!fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        python: [\"3.9\"]\n        include:\n          - os: macos-12\n"
+            ),
+            "actions-unknown-runner"
+        ));
+        // And an `include`-only matrix, where the combinations are the include
+        // entries themselves. 45 of the 46 are this one.
+        assert!(!fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        include:\n          - { target: x86_64, os: macos-12 }\n"
+            ),
+            "actions-unknown-runner"
+        ));
+        // The control: declaring the key is the whole difference.
+        assert!(fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [ubuntu-latest]\n        python: [\"3.9\"]\n        include:\n          - os: macos-12\n"
+            ),
+            "actions-unknown-runner"
+        ));
+    }
+
+    /// Declined: the key's values are not a list poly can read.
+    #[test]
+    fn declined_a_matrix_key_whose_values_are_not_written_out() {
+        for values in [
+            // Computed, so the values are not in this file at all.
+            "        os: ${{ fromJSON(inputs.runners) }}\n",
+            // Objects rather than labels: `runs-on` would be reading a property
+            // of one of these, not the value itself.
+            "        os:\n          - name: ubuntu-20.04\n            arch: x64\n",
+            // A scalar where GitHub requires an array. Whatever this workflow
+            // does, it is not the shape being resolved.
+            "        os: ubuntu-20.04\n",
+        ] {
+            assert!(
+                !fires(
+                    &matrix_job("${{ matrix.os }}", values),
+                    "actions-unknown-runner"
+                ),
+                "{values}"
+            );
+        }
+        // One computed entry among literal ones stops at that entry rather than
+        // at the list: the others are still written down.
+        assert!(fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [ubuntu-20.04, \"${{ inputs.extra }}\"]\n"
+            ),
+            "actions-unknown-runner"
+        ));
+    }
+
+    /// Declined: `exclude` names the key, so the declared list is dropped.
+    ///
+    /// Whether an `exclude` removed every combination carrying one value means
+    /// expanding the product of every key in the matrix, which is a different
+    /// piece of machinery from looking a name up. So the declared list goes and
+    /// the `include` values -- which `exclude` is applied before, and so cannot
+    /// touch -- stay. 13 of the 34 real findings are in matrices like this, and
+    /// nearly all of them come from the `include`.
+    #[test]
+    fn declined_a_declared_list_an_exclude_might_have_emptied() {
+        let excluded = "        os: [ubuntu-latest, macos-12]\n        python: [\"3.8\"]\n        exclude:\n          - os: macos-12\n";
+        assert!(
+            !fires(
+                &matrix_job("${{ matrix.os }}", excluded),
+                "actions-unknown-runner"
+            ),
+            "reported a declared value an exclude may have removed"
+        );
+        // An `exclude` poly cannot read at all is the same answer for the same
+        // reason.
+        assert!(!fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [macos-12]\n        exclude: ${{ fromJSON(inputs.skip) }}\n"
+            ),
+            "actions-unknown-runner"
+        ));
+        // An `exclude` that never names this key cannot single out one of its
+        // values -- it constrains the other keys identically for all of them --
+        // so the declared list survives.
+        assert!(fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [macos-12]\n        python: [\"3.8\", \"3.9\"]\n        exclude:\n          - python: \"3.8\"\n"
+            ),
+            "actions-unknown-runner"
+        ));
+        // And the `include` half still reports, because `include` is applied
+        // after `exclude` and nothing can remove what it adds.
+        assert!(fires(
+            &matrix_job(
+                "${{ matrix.os }}",
+                "        os: [ubuntu-latest]\n        python: [\"3.8\"]\n        exclude:\n          - os: ubuntu-latest\n            python: \"3.8\"\n        include:\n          - os: macos-12\n"
+            ),
+            "actions-unknown-runner"
+        ));
+    }
+
+    /// Declined: `runs-on` is a label set or a runner group rather than one
+    /// reference.
+    ///
+    /// A matrix reference among several labels describes one label of a
+    /// self-hosted set, and a `group:` names machines configured outside this
+    /// repository. Neither is a job whose runner is the matrix value.
+    #[test]
+    fn declined_a_matrix_reference_that_is_one_label_among_several() {
+        for runs_on in [
+            "[self-hosted, \"${{ matrix.os }}\"]",
+            "[\"${{ matrix.os }}\", gpu]",
+            "\n      labels: [\"${{ matrix.os }}\"]",
+            "\n      group: aws-general-8-plus\n      labels: [\"${{ matrix.os }}\"]",
+        ] {
+            assert!(
+                !fires(
+                    &matrix_job(runs_on, "        os: [ubuntu-20.04]\n"),
+                    "actions-unknown-runner"
+                ),
+                "{runs_on}"
+            );
+        }
     }
 
     /// A job with neither steps nor a reusable-workflow call starts a runner,
