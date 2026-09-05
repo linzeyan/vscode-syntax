@@ -1,15 +1,18 @@
 //! Embedded lint: sqruff for SQL, selene for Lua, ruff for Python and Jupyter,
-//! poly's own rules for Dockerfiles, and typos over every file regardless of
-//! language. External-tool lint (shellcheck, hadolint, actionlint) lives in
-//! poly-tools; the LSP daemon and the CLI merge both sources.
+//! poly's own rules for Dockerfiles and GitHub Actions workflows, and typos over
+//! every file regardless of language. External-tool lint (shellcheck, hadolint,
+//! actionlint) lives in poly-tools; the LSP daemon and the CLI merge both
+//! sources.
 //!
-//! Dockerfiles are the odd one out and the module doc is the place to say so.
-//! Every other engine here is a *substitution*: poly links the same code the
-//! tool ships, so the findings are the tool's findings and parity is a testable
-//! property. hadolint is Haskell, cannot be linked in, and has no Rust
-//! equivalent worth embedding -- so `lint_dockerfile` is a reimplementation,
-//! its rules are poly's opinions rather than anyone's answers, and it covers
-//! hadolint's structural half only. See `DOCKER_RULES`.
+//! Dockerfiles and workflows are the odd ones out and the module doc is the
+//! place to say so. Every other engine here is a *substitution*: poly links the
+//! same code the tool ships, so the findings are the tool's findings and parity
+//! is a testable property. hadolint is Haskell and actionlint is Go; neither can
+//! be linked in and neither has a Rust equivalent worth embedding -- so
+//! `lint_dockerfile` and `crate::workflow::lint` are reimplementations, their
+//! rules are poly's opinions rather than anyone's answers, and each covers only
+//! the structural half of what the tool it sits beside reports. See
+//! `DOCKER_RULES` and `crate::workflow::RULES`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -18,15 +21,22 @@ use std::sync::{Arc, Mutex, OnceLock};
 use anyhow::{anyhow, bail, Context, Result};
 use poly_core::diag::{Fix, Issue, Severity};
 
-/// Does `lang` have an embedded linter? Batch callers use this to avoid
+/// Does this file have an embedded linter? Batch callers use this to avoid
 /// reading thousands of files whose lint would return nothing.
 ///
+/// Takes the path as well as the language because YAML is only linted when it
+/// is a workflow: a repository of Kubernetes manifests and Helm charts is
+/// thousands of YAML files poly has no opinion about, and `is_workflow_file` is
+/// the same question `lint` asks below. The two have to agree, which is why
+/// neither answers it alone.
+///
 /// Spelling is not on this list and never can be: see `spell`.
-pub fn supported(lang: &str) -> bool {
-    matches!(
-        lang,
-        "sql" | "toml" | "lua" | "python" | "jupyter" | "dockerfile"
-    )
+pub fn supported(lang: &str, path: &Path) -> bool {
+    match lang {
+        "sql" | "toml" | "lua" | "python" | "jupyter" | "dockerfile" => true,
+        "yaml" => poly_core::is_workflow_file(path),
+        _ => false,
+    }
 }
 
 /// Rule documentation poly is holding that a diagnostic has no way to carry.
@@ -39,10 +49,10 @@ pub fn supported(lang: &str) -> bool {
 /// binary. Version-exact and readable offline, and until now with no way out.
 ///
 /// `poly` is the second, and for the same reason rather than a new one: the
-/// Dockerfile rules are poly's own, so there is no upstream page to send anyone
-/// to and the prose has to ship in the binary. This does not loosen the policy
-/// below -- poly still does not paraphrase somebody else's rule, it documents
-/// the ones it wrote.
+/// Dockerfile and workflow rules are poly's own, so there is no upstream page to
+/// send anyone to and the prose has to ship in the binary. This does not loosen
+/// the policy below -- poly still does not paraphrase somebody else's rule, it
+/// documents the ones it wrote.
 ///
 /// `None` is the answer for everything else, deliberately: poly does not
 /// paraphrase a tool's rules, it repeats what the tool itself says.
@@ -60,8 +70,13 @@ pub fn rule_doc(source: &str, code: &str) -> Option<&'static str> {
             .get(code)
             .copied()
         }
+        // One namespace for every rule poly wrote, two tables behind it: the
+        // codes are already prefixed by what they lint (`docker-`, `actions-`),
+        // so a third engine adds a table here rather than a second source name
+        // the reader has to learn.
         "poly" => DOCKER_RULES
             .iter()
+            .chain(crate::workflow::RULES)
             .find(|(rule, _)| *rule == code)
             .map(|(_, doc)| *doc),
         _ => None,
@@ -77,6 +92,10 @@ pub fn lint(lang: &str, path: &Path, text: &str) -> Result<Vec<Issue>> {
         "lua" => lint_lua(path, text),
         "python" | "jupyter" => lint_python(path, text),
         "dockerfile" => Ok(lint_dockerfile(text)),
+        // A workflow is YAML, so this is the one arm that reads the path as well
+        // as the language: `poly check` on a Kubernetes repository must not
+        // report `unknown workflow key` on every manifest in it.
+        "yaml" if poly_core::is_workflow_file(path) => Ok(crate::workflow::lint(text)),
         _ => Ok(Vec::new()),
     }
 }
@@ -121,7 +140,7 @@ fn lint_toml(text: &str) -> Vec<Issue> {
 
 /// Byte offset -> 0-based (line, column in chars). Offsets that are not char
 /// boundaries fall back to the start of the file rather than panicking.
-fn line_col(text: &str, offset: usize) -> (u32, u32) {
+pub(crate) fn line_col(text: &str, offset: usize) -> (u32, u32) {
     let Some(before) = text.get(..offset.min(text.len())) else {
         return (0, 0);
     };

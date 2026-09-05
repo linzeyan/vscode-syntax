@@ -753,6 +753,32 @@ pub fn nearest_ancestor_file(start: &Path, name: &str) -> Option<PathBuf> {
     }
 }
 
+/// Is `path` a GitHub Actions workflow?
+///
+/// Exactly `.github/workflows/<name>.yml`, and nothing nested below that: GitHub
+/// reads that one directory and does not descend, so a file in
+/// `.github/workflows/templates/` is a fragment somebody keeps there, not a
+/// workflow. Extension and both directory names, in that order.
+///
+/// Here rather than beside any one caller because there are three, and until
+/// this existed two of them disagreed: `poly check` compared the path components
+/// while the daemon matched the substring `.github/workflows/`, so a file one
+/// directory deeper was linted in the editor and not in CI. That is the split
+/// A4 exists to prevent, and it is the same reason `nearest_ancestor_file` lives
+/// here.
+pub fn is_workflow_file(path: &Path) -> bool {
+    let extension = path.extension().and_then(|e| e.to_str());
+    if !matches!(extension, Some("yml" | "yaml")) {
+        return false;
+    }
+    let mut ancestors = path.components().rev();
+    ancestors.next();
+    ancestors
+        .next()
+        .is_some_and(|c| c.as_os_str() == "workflows")
+        && ancestors.next().is_some_and(|c| c.as_os_str() == ".github")
+}
+
 /// Whether the walk honors the ignore files git honors: `.gitignore`,
 /// `.ignore`, `.git/info/exclude` and the global excludes file (`core.
 /// excludesFile`, else `$XDG_CONFIG_HOME/git/ignore`) — the ancestors' copies
@@ -881,6 +907,37 @@ mod tests {
         ];
         for (path, expected) in cases {
             assert_eq!(builtin_language(Path::new(path)), expected, "{path}");
+        }
+    }
+
+    /// One answer for "is this a workflow", because there used to be two.
+    ///
+    /// `poly check` compared the path components and the daemon matched the
+    /// substring `.github/workflows/`, so a file one directory deeper was linted
+    /// in the editor and not in CI -- the editor/CI split A4 exists to prevent.
+    /// The components version is the one that survived: GitHub reads that
+    /// directory and does not descend, so a file under `workflows/templates/` is
+    /// a fragment somebody keeps there rather than something that ever runs.
+    #[test]
+    fn a_workflow_is_the_directory_github_actually_reads() {
+        for yes in [
+            ".github/workflows/ci.yml",
+            ".github/workflows/release.yaml",
+            "/abs/path/.github/workflows/ci.yml",
+        ] {
+            assert!(is_workflow_file(Path::new(yes)), "{yes}");
+        }
+        for no in [
+            // The case the two implementations disagreed on.
+            ".github/workflows/templates/base.yml",
+            ".github/actions/setup/action.yml",
+            ".github/dependabot.yml",
+            "workflows/ci.yml",
+            "k8s/deployment.yaml",
+            ".github/workflows/notes.md",
+            ".github/workflows",
+        ] {
+            assert!(!is_workflow_file(Path::new(no)), "{no}");
         }
     }
 

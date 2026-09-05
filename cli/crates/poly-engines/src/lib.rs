@@ -4,6 +4,7 @@
 //! Returns `Ok(None)` when the input is already formatted.
 
 pub mod lint;
+mod workflow;
 
 use std::path::Path;
 use std::sync::OnceLock;

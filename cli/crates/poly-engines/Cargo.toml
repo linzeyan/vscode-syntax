@@ -20,6 +20,7 @@ markup_fmt.workspace = true
 poly-core = { path = "../poly-core" }
 pretty_graphql.workspace = true
 pretty_yaml.workspace = true
+rowan.workspace = true
 ruff_db.workspace = true
 ruff_diagnostics.workspace = true
 ruff_formatter.workspace = true
@@ -38,6 +39,7 @@ typos.workspace = true
 typos-cli.workspace = true
 typos-dict.workspace = true
 xmlem.workspace = true
+yaml_parser.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

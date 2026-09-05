@@ -40,6 +40,12 @@ markup_fmt = "0.27"
 pretty_graphql = "0.2"
 pretty_yaml = "0.6"
 rayon = "1"
+# The syntax-tree library yaml_parser builds on. Named directly because walking
+# its AST means naming `rowan::ast::AstNode` and `rowan::TextRange`, and
+# yaml_parser re-exports neither. The version has to be the one yaml_parser
+# resolves to, not merely a compatible one: two rowans in the tree means two
+# `AstNode` traits, and the tree yaml_parser hands over implements the other.
+rowan = "0.16"
 # The Diagnostic type ruff_linter hands findings back in. A direct dependency
 # because naming it is unavoidable and ruff_linter re-exports nothing.
 ruff_db = "=0.0.12"
@@ -143,6 +149,13 @@ typos-cli = "=1.49.1"
 # never did. Pinning is what keeps "embedded" from quietly meaning "upgraded".
 typos-dict = "=0.14.0"
 xmlem = "0.5"
+# The parser behind pretty_yaml, named directly so poly's workflow rules read
+# the same tree `poly fmt` formats. pretty_yaml already links it, so this costs
+# no second YAML grammar in the binary -- and, more to the point, `fmt` and
+# `check` cannot end up holding two different opinions about what the file is.
+# It also keeps `on:` spelled `on`: this is a CST, so the YAML 1.1 rule that
+# reads a bare `on` as the boolean true never gets a chance to apply.
+yaml_parser = "0.3"
 
 # Size/perf trade-off: thin LTO + strip keeps the single-binary target honest
 # without the slow codegen-units=1 builds during development.

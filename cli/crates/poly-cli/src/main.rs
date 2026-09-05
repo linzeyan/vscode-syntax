@@ -409,18 +409,6 @@ fn cmd_minify(inv: &Invocation) -> Result<i32> {
     Ok(if tally.errors.is_empty() { 0 } else { 2 })
 }
 
-fn is_workflow_file(path: &Path) -> bool {
-    let mut comps = path.components().rev();
-    let file_ok = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e == "yml" || e == "yaml");
-    comps.next(); // file name
-    file_ok
-        && comps.next().is_some_and(|c| c.as_os_str() == "workflows")
-        && comps.next().is_some_and(|c| c.as_os_str() == ".github")
-}
-
 /// One path shape for every tool, anchored at `base`.
 ///
 /// Each linter reports paths its own way — ruff absolutizes, shellcheck echoes
@@ -514,7 +502,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             files
                 .iter()
                 .map(|(p, _, _)| p)
-                .filter(|p| is_workflow_file(p))
+                .filter(|p| poly_core::is_workflow_file(p))
                 .cloned()
                 .collect(),
             // Resolved inside the closure so a repo with no workflows never
@@ -575,7 +563,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                 let mut found = poly_engines::lint::spell(path)?;
                 if let Some(lang) = config
                     .language(path)
-                    .filter(|lang| poly_engines::lint::supported(lang))
+                    .filter(|lang| poly_engines::lint::supported(lang, path))
                 {
                     let text = std::fs::read_to_string(path)
                         .with_context(|| format!("reading {}", path.display()))?;

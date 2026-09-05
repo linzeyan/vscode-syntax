@@ -6,6 +6,14 @@
 teh = "teh"
 titel = "titel"
 varialbles = "varialbles"
+# The same, for the workflow rules' fixtures. Each of these is the misspelling
+# whose detection the test is about -- `ubunutu-latest` is what
+# actions-unknown-runner exists to catch, and correcting it would leave the test
+# asserting that a correct label is reported.
+biuld = "biuld"
+pusg = "pusg"
+reqest = "reqest"
+ubunutu = "ubunutu"
 # The same, for the spell checker's own fixtures: `lint::spell` is tested
 # against the exact words and positions typos 1.49.1 reported, so these have to
 # stay misspelt to mean anything. `recieve` covers `Recieve` too, which is the
@@ -16,5 +24,8 @@ reciever = "reciever"
 seperate = "seperate"
 # Field name in biome's JSON diagnostics; we deserialize what biome emits.
 advices = "advices"
+# Method name in yaml_parser's AST (`Flow::double_qouted_scalar`). Upstream's
+# spelling, and the only way to call it.
+qouted = "qouted"
 # HashiCorp, in grammar source rationales.
 Hashi = "Hashi"

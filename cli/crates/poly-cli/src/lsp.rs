@@ -1462,12 +1462,6 @@ fn resolved_tool(name: &str, config: &poly_core::Config) -> Option<PathBuf> {
     path
 }
 
-fn is_workflow_file(path: &Path) -> bool {
-    path.to_str()
-        .map(|s| s.replace('\\', "/"))
-        .is_some_and(|s| s.contains(".github/workflows/"))
-}
-
 fn external_lint(
     lang: &str,
     path: &Path,
@@ -1502,7 +1496,7 @@ fn external_lint(
     let name = match lang {
         "shellscript" => "shellcheck",
         "dockerfile" => "hadolint",
-        "yaml" if is_workflow_file(path) => "actionlint",
+        "yaml" if poly_core::is_workflow_file(path) => "actionlint",
         "swift" => "swiftlint",
         _ => return Ok(issues),
     };
