@@ -661,6 +661,30 @@ fn python_issue(
 /// in a terminal with nothing behind them. `every_docker_rule_is_documented`
 /// holds this list and the codes the linter emits to the same set, in both
 /// directions.
+///
+/// # What the three severities mean here
+///
+/// poly is the only opinion on a Dockerfile now -- hadolint defaults to off --
+/// so these decide what `[lint] fail-on` blocks a build on, and a tier picked
+/// per rule by feel is a tier nobody can predict. One definition, applied to
+/// every rule below:
+///
+/// * `Error` -- poly expects the build, or Docker itself, to reject this. It is
+///   about to fail; the only question is how far in. Four rules qualify:
+///   `docker-missing-from`, `docker-invalid-port`,
+///   `docker-copy-multiple-sources-no-slash` and `docker-apt-get-interactive`.
+/// * `Warning` -- it builds, and the image or the build is wrong, fragile or
+///   contradictory in a way with a cost somebody pays later. Most rules.
+/// * `Info` -- it builds and behaves; what is here is redundant or deprecated,
+///   and removing it changes nothing at runtime.
+///
+/// The line matters most where poly disagrees with hadolint, and it settles
+/// both directions. A second `ENTRYPOINT` is unambiguously a mistake and
+/// hadolint calls it an error, but the image builds and runs, so it stays a
+/// warning -- promoting it would make `Error` mean "a mistake" instead of "it
+/// does not build", and then the tier stops predicting anything. `MAINTAINER`
+/// is hadolint's error and poly's info for the same reason read the other way:
+/// it builds, it runs, and the value is simply not in the image's metadata.
 const DOCKER_RULES: &[(&str, &str)] = &[
     (
         "docker-add-instead-of-copy",
@@ -730,6 +754,16 @@ const DOCKER_RULES: &[(&str, &str)] = &[
          they are cached or invalidated together.",
     ),
     (
+        "docker-apt-not-apt-get",
+        "`apt` prints \"this APT has Super Cow Powers\" and, more to the point, \
+         \"WARNING: apt does not have a stable CLI interface. Use with caution \
+         in scripts.\" -- upstream's own words. Its output format and its flags \
+         are free to change between Debian releases, so a `RUN apt install` that \
+         works today can break on a base-image bump with no change to the \
+         Dockerfile. `apt-get` and `apt-cache` are the interfaces Debian keeps \
+         stable, and they are what a script should call.",
+    ),
+    (
         "docker-cd-in-run",
         "A `cd` inside `RUN` lasts exactly as long as that instruction's shell. \
          The next `RUN` starts back where the last `WORKDIR` left it, so a file \
@@ -746,6 +780,24 @@ const DOCKER_RULES: &[(&str, &str)] = &[
          the destination *name*.",
     ),
     (
+        "docker-copy-relative-no-workdir",
+        "With no `WORKDIR` anywhere in the stage, a relative `COPY` destination \
+         resolves against `/`. `COPY app.jar .` therefore lands the file at \
+         `/app.jar`, which is almost never where the line was aiming -- and \
+         because it succeeds, nothing says so until something further down \
+         cannot find it. A `WORKDIR` above the `COPY` gives the destination a \
+         stated meaning; an absolute destination says it outright.",
+    ),
+    (
+        "docker-copy-whole-filesystem",
+        "`COPY --from=stage / /` copies that stage's entire root over this one: \
+         its `/etc/passwd`, its package database, its `/var`, its libraries. \
+         What ships is then neither image, and the parts of the base that were \
+         overwritten are whichever ones the other stage happened to have. It \
+         also defeats layer caching completely -- every byte of the source stage \
+         is one layer here. Copy the paths the image actually needs.",
+    ),
+    (
         "docker-duplicate-env-key",
         "Only the last `ENV` for a key survives into the image. The earlier one \
          is dead, and there is nothing in the file to say which of the two the \
@@ -757,6 +809,32 @@ const DOCKER_RULES: &[(&str, &str)] = &[
          earlier one is dead, and a reader looking for the version an image \
          claims has two answers in front of them and no way to tell which one \
          `docker inspect` will print.",
+    ),
+    (
+        "docker-from-platform-pinned",
+        "`FROM --platform=linux/amd64 ...` builds that stage for that \
+         architecture whatever the host is, and it *succeeds* on an arm64 \
+         machine -- producing an image whose binaries cannot exec, which is a \
+         message about the loader at `docker run` rather than anything at build \
+         time. A multi-arch build wants the default (the host, or what buildx \
+         asked for); a stage that genuinely has to be one architecture wants \
+         `--platform=$BUILDPLATFORM` or a build argument that says why.",
+    ),
+    (
+        "docker-from-platform-redundant",
+        "`--platform=$TARGETPLATFORM` is what `FROM` already does. buildx sets \
+         `TARGETPLATFORM` to the platform it is building for and resolves every \
+         unflagged `FROM` against exactly that, so the flag restates the \
+         default and leaves a reader working out whether it was meant to change \
+         something.",
+    ),
+    (
+        "docker-go-install-unpinned",
+        "`go install example.com/cmd@latest`, or a `go get` with no version at \
+         all, resolves against whatever the module proxy serves at build time. \
+         The binary in the image is then not the one that was tested, and \
+         nothing in the repository records which one it was. `@v1.2.3` -- or a \
+         commit -- names it.",
     ),
     (
         "docker-invalid-port",
@@ -798,6 +876,22 @@ const DOCKER_RULES: &[(&str, &str)] = &[
          dead and reads as though it applies, and unlike a dead `CMD` there is \
          nothing at runtime that hints the container is starting something other \
          than what the first line named.",
+    ),
+    (
+        "docker-npm-unpinned",
+        "`npm install -g typescript` installs whatever the registry serves \
+         today, so the same Dockerfile builds against a different compiler next \
+         week. `typescript@5.4.5` says which one. Installing from a \
+         package-lock.json instead -- `npm ci` -- pins everything at once and \
+         this rule does not fire on it.",
+    ),
+    (
+        "docker-pip-cache",
+        "pip downloads every wheel into ~/.cache/pip and then never reads it \
+         again: the image is built once, and the layer carries the cache for \
+         the rest of its life. On a Python image that is routinely more than \
+         the packages themselves. `--no-cache-dir` fetches, installs, and \
+         writes nothing.",
     ),
     (
         "docker-pip-unpinned",
@@ -856,11 +950,40 @@ const DOCKER_RULES: &[(&str, &str)] = &[
          version, or pin a digest with `@sha256:...`.",
     ),
     (
+        "docker-wget-and-curl",
+        "Two programs that fetch a URL, where the image needs one. Whichever \
+         arrived second is a package to install, patch and carry for the life \
+         of the image, for a job the first one already did. Reported as info \
+         rather than a warning because it costs bytes rather than \
+         correctness -- and because both are sometimes there on purpose, when \
+         one comes from the base image and a step needs a flag the other does \
+         not have.",
+    ),
+    (
         "docker-workdir-relative",
         "A relative `WORKDIR` resolves against whatever the previous one left \
          behind, so inserting an instruction above it silently moves everything \
          below. An absolute path means the same thing wherever it appears in the \
          file.",
+    ),
+    (
+        "docker-yum-no-clean",
+        "`yum install` leaves its downloaded rpms and metadata under \
+         /var/cache/yum, and they stay in the layer forever. `yum clean all` in \
+         the same `RUN` removes them; in a later `RUN` it removes nothing, \
+         because the bytes are already committed. A \
+         `RUN --mount=type=cache` over the yum directories is the other answer, \
+         and this rule does not fire on one.",
+    ),
+    (
+        "docker-yum-unpinned",
+        "`yum install -y nginx` installs whichever nginx the repository serves \
+         today, so the same Dockerfile builds different software over time. \
+         `nginx-1.20.1` says which one. The counter-argument is the same as for \
+         Debian and just as real: a repository drops the superseded version \
+         when a security update lands, so a pin can make the image stop \
+         building on somebody else's schedule. That is a reason to silence this \
+         for a package with the reason written down, not a reason it is wrong.",
     ),
 ];
 
@@ -1131,6 +1254,26 @@ struct DockerStage {
     user: Option<String>,
     /// A `SHELL` in this stage that turned on `pipefail`.
     pipefail: bool,
+    /// Whether a `WORKDIR` has been set in this stage yet. See
+    /// `docker-copy-relative-no-workdir`.
+    workdir: bool,
+    /// Whether this stage's `FROM` names another stage in this file, and so
+    /// starts with that stage's working directory rather than `/`. poly then
+    /// declines to say anything about a relative `COPY` destination here.
+    inherits: bool,
+}
+
+/// The state that belongs to the file rather than to one stage.
+///
+/// Only the wget/curl pair so far, and it is here rather than in `DockerStage`
+/// because the redundancy is a property of the image being built: fetching with
+/// curl in the builder and wget in the final stage still ships both.
+#[derive(Default)]
+struct DockerFile {
+    /// Where each was first run as a command -- not where it was named as a
+    /// package to install, which is the same word in a different job.
+    wget: Option<usize>,
+    curl: Option<usize>,
 }
 
 /// Lint a Dockerfile against poly's own rules.
@@ -1148,6 +1291,7 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
     };
     let mut found: Vec<Issue> = Vec::new();
     let mut stage = DockerStage::default();
+    let mut file_state = DockerFile::default();
     let mut stages: Vec<DockerStage> = Vec::new();
     // Stage names, so a later `FROM build` is read as "the stage above" rather
     // than as an untagged image on Docker Hub.
@@ -1208,15 +1352,19 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                     stages.push(std::mem::take(&mut stage));
                 }
                 seen_from = true;
-                stage = DockerStage {
-                    from: span.start,
-                    ..DockerStage::default()
-                };
                 if let Some(alias) = &from.alias {
                     aliases.push(alias.content.to_lowercase());
                 }
                 let image = from.image.content.as_ref();
                 let is_stage = aliases.iter().any(|a| a == &image.to_lowercase());
+                stage = DockerStage {
+                    from: span.start,
+                    // A stage built on another stage starts with that stage's
+                    // WORKDIR, which this file does state -- just not here.
+                    inherits: is_stage,
+                    ..DockerStage::default()
+                };
+                docker_from_platform(text, from, &mut found);
                 // `scratch` is the empty image and has no tag to give it; `$FOO`
                 // is decided by an ARG poly cannot resolve; a digest already
                 // pins the thing a tag would only name.
@@ -1251,7 +1399,7 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                     body.push('\n');
                     body.push_str(heredoc);
                 }
-                docker_run_rules(text, span, &body, &mut stage, &mut found);
+                docker_run_rules(text, span, &body, &mut stage, &mut file_state, &mut found);
             }
             Instruction::Cmd(cmd) => {
                 stage.cmds += 1;
@@ -1345,22 +1493,65 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                 }
             }
             Instruction::Copy(copy) => {
-                let (sources, destination) = match &copy.args {
+                let (paths, destination) = match &copy.args {
                     CopyArgs::Paths {
                         sources,
                         destination,
                     } => (
-                        sources.len(),
+                        sources.iter().map(|s| s.content.to_string()).collect(),
                         Some(destination.content.as_ref().to_string()),
                     ),
                     // `COPY ["a", "b", "dest"]`: the last element is the
                     // destination, the rest are sources.
                     CopyArgs::Exec(array) => (
-                        array.elements.len().saturating_sub(1),
+                        array.elements.split_last().map_or(Vec::new(), |(_, rest)| {
+                            rest.iter().map(|e| e.content.to_string()).collect()
+                        }),
                         array.elements.last().map(|e| e.content.to_string()),
                     ),
                 };
+                let sources = paths.len();
+                // `--from` is what makes `/` a stage's root rather than the
+                // build context's, which is the case this is about.
+                let from_stage = copy.flags.iter().any(|flag| flag.name.content == "from");
+                if from_stage && paths.iter().any(|source| source == "/") {
+                    found.push(docker_issue(
+                        text,
+                        span.start,
+                        span.end,
+                        "docker-copy-whole-filesystem",
+                        Severity::Warning,
+                        "copying `/` out of another stage overwrites this image's own \
+                         root with that stage's"
+                            .to_string(),
+                        None,
+                    ));
+                }
                 if let Some(destination) = destination {
+                    // A relative destination with no WORKDIR anywhere in the
+                    // stage resolves against `/`, which is where the file lands
+                    // and almost never where the line meant. Skipped for a stage
+                    // built on another stage, whose working directory this file
+                    // sets somewhere poly is not looking.
+                    if !stage.workdir
+                        && !stage.inherits
+                        && !destination.starts_with('/')
+                        && !destination.starts_with('$')
+                        && !destination.contains(":\\")
+                        && !destination.starts_with('\\')
+                    {
+                        found.push(docker_issue(
+                            text,
+                            span.start,
+                            span.end,
+                            "docker-copy-relative-no-workdir",
+                            Severity::Warning,
+                            format!(
+                                "no WORKDIR in this stage, so `{destination}` resolves against `/`"
+                            ),
+                            None,
+                        ));
+                    }
                     if sources > 1 && !docker_is_directory(&destination) {
                         found.push(docker_issue(
                             text,
@@ -1394,6 +1585,30 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
         }
     }
 
+    // Anchored on whichever of the two appears later: that is the line at which
+    // the file started carrying both, and the one whose author had a choice.
+    if let (Some(wget), Some(curl)) = (file_state.wget, file_state.curl) {
+        let (at, second, first) = if wget > curl {
+            (wget, "wget", "curl")
+        } else {
+            (curl, "curl", "wget")
+        };
+        found.push(docker_issue(
+            text,
+            at,
+            at,
+            "docker-wget-and-curl",
+            // Info, not warning: see the rule's entry in `DOCKER_RULES`. It
+            // costs image size, not correctness, and there are real files that
+            // need both.
+            Severity::Info,
+            format!(
+                "`{second}` fetches URLs and so does the `{first}` above; the image ships both"
+            ),
+            None,
+        ));
+    }
+
     if seen_from {
         stages.push(stage);
         // Only the last stage becomes the image. An earlier one is a build
@@ -1421,6 +1636,59 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
 
     found.sort_by_key(|issue| (issue.line, issue.col));
     found
+}
+
+/// The two rules about `FROM --platform=...`.
+///
+/// Split by what the value is, and silent on anything else. `$TARGETPLATFORM`
+/// is exactly what an unflagged `FROM` resolves to, so the flag is redundant; a
+/// literal like `linux/amd64` overrides the host and is the one that produces an
+/// image nobody can run. Any *other* variable -- `$BUILDPLATFORM`, or an ARG the
+/// project defined -- is a deliberate choice whose value poly cannot see, and
+/// guessing at it is how a rule earns its reputation.
+fn docker_from_platform(
+    text: &str,
+    from: &dprint_plugin_dockerfile::ast::FromInstruction<'_>,
+    found: &mut Vec<Issue>,
+) {
+    let Some(flag) = from
+        .flags
+        .iter()
+        .find(|flag| flag.name.content == "platform")
+    else {
+        return;
+    };
+    let value = flag.value.content.as_ref();
+    let (start, end) = (flag.span.start, flag.span.end);
+    if matches!(value, "$TARGETPLATFORM" | "${TARGETPLATFORM}") {
+        found.push(docker_issue(
+            text,
+            start,
+            end,
+            "docker-from-platform-redundant",
+            // Info: removing it changes nothing about the image. See the
+            // severity tiers on `DOCKER_RULES`.
+            Severity::Info,
+            "`--platform=$TARGETPLATFORM` is what FROM already does".to_string(),
+            Some(Fix::Described {
+                what: "Drop the `--platform` flag".to_string(),
+                safe: true,
+            }),
+        ));
+    } else if !value.contains('$') {
+        found.push(docker_issue(
+            text,
+            start,
+            end,
+            "docker-from-platform-pinned",
+            Severity::Warning,
+            format!(
+                "`--platform={value}` builds this stage for {value} on every host, and \
+                 the mismatch surfaces at `docker run` rather than here"
+            ),
+            None,
+        ));
+    }
 }
 
 fn docker_shell_form(text: &str, span: DockerSpan, keyword: &str) -> Issue {
@@ -1472,6 +1740,11 @@ fn docker_misc_rules(
     let words: Vec<&str> = arguments.split_whitespace().collect();
     match keyword {
         "workdir" => {
+            // Set whether or not the path is absolute: what
+            // `docker-copy-relative-no-workdir` asks is whether the stage states
+            // a working directory at all, and a relative one still does (the
+            // rule just above says what is wrong with it).
+            stage.workdir = true;
             let Some(path) = words.first() else { return };
             // A variable could hold an absolute path; a Windows container's
             // `C:\app` is absolute in the way that matters.
@@ -1697,6 +1970,7 @@ fn docker_run_rules(
     span: DockerSpan,
     body: &str,
     stage: &mut DockerStage,
+    file: &mut DockerFile,
     found: &mut Vec<Issue>,
 ) {
     let (mut commands, piped) = docker_commands(body);
@@ -1726,6 +2000,11 @@ fn docker_run_rules(
     let mut apt_update = false;
     let mut apt_install = false;
     let mut apt_cleaned = false;
+    let mut yum_install = false;
+    // Order matters here in a way it does not for apt: a `yum clean all` before
+    // the install it was meant to follow leaves that install's rpms in the
+    // layer, and writing the two the wrong way round is exactly the mistake.
+    let mut yum_cleaned = false;
 
     for written in &commands {
         let name = written.name();
@@ -1772,15 +2051,61 @@ fn docker_run_rules(
         }
 
         match command.name() {
-            "apt-get" | "apt" => match command.subcommand() {
-                "update" => apt_update = true,
-                "install" => {
-                    apt_install = true;
-                    docker_apt_rules(text, span, command, found);
+            "apt-get" | "apt" => {
+                if command.name() == "apt" {
+                    found.push(docker_issue(
+                        text,
+                        docker_locate(text, span, "apt"),
+                        span.end,
+                        "docker-apt-not-apt-get",
+                        Severity::Warning,
+                        "`apt` has no stable CLI, by its own warning: use `apt-get` \
+                         (or `apt-cache`) in a build"
+                            .to_string(),
+                        Some(Fix::Described {
+                            what: "Call `apt-get` instead".to_string(),
+                            safe: true,
+                        }),
+                    ));
                 }
+                match command.subcommand() {
+                    "update" => apt_update = true,
+                    "install" => {
+                        apt_install = true;
+                        docker_apt_rules(text, span, command, found);
+                    }
+                    _ => {}
+                }
+            }
+            "apk" if command.subcommand() == "add" => docker_apk_rules(text, span, command, found),
+            "yum" => match command.subcommand() {
+                "install" => {
+                    yum_install = true;
+                    yum_cleaned = false;
+                    docker_yum_rules(text, span, command, found);
+                }
+                "clean" if command.operands().any(|word| word == "all") => yum_cleaned = true,
                 _ => {}
             },
-            "apk" if command.subcommand() == "add" => docker_apk_rules(text, span, command, found),
+            // `npm ci` installs exactly what package-lock.json says, which is
+            // the pin this rule is asking for; only `install` is a free choice.
+            "npm" if matches!(command.subcommand(), "install" | "i") => {
+                docker_npm_rules(text, span, command, found);
+            }
+            "go" if matches!(command.subcommand(), "get" | "install") => {
+                docker_go_rules(text, span, command, found);
+            }
+            // Where a URL fetcher is *run*. `apt-get install wget` names the
+            // same word as a package, and an image that installs one and uses
+            // the other is not the redundancy this is about.
+            "wget" => {
+                file.wget
+                    .get_or_insert_with(|| docker_locate(text, span, "wget"));
+            }
+            "curl" => {
+                file.curl
+                    .get_or_insert_with(|| docker_locate(text, span, "curl"));
+            }
             // Not `"pip" | "pip3"`: an image that installs several interpreters
             // calls the one it means by version, and `pip3.7 install` is a real
             // line in a real Dockerfile that a two-name match reads as an
@@ -1837,6 +2162,22 @@ fn docker_run_rules(
             }),
         ));
     }
+    if yum_install && !yum_cleaned && !cached("/var/cache/yum") {
+        found.push(docker_issue(
+            text,
+            docker_locate(text, span, "yum"),
+            span.end,
+            "docker-yum-no-clean",
+            Severity::Warning,
+            "the downloaded rpms and metadata stay in this layer; `yum clean all` \
+             in a later RUN does not shrink the image"
+                .to_string(),
+            Some(Fix::Described {
+                what: "Append `&& yum clean all` to this RUN".to_string(),
+                safe: true,
+            }),
+        ));
+    }
     if piped && !stage.pipefail && !body.contains("pipefail") {
         found.push(docker_issue(
             text,
@@ -1870,6 +2211,13 @@ fn docker_apt_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, "install"),
             span.end,
             "docker-apt-get-interactive",
+            // The one rule where poly is louder than hadolint (which calls it a
+            // warning), and it stays that way now poly is the only voice. A
+            // build has no terminal, so apt reads EOF at its confirmation
+            // prompt and exits non-zero: this predicts a failing build, which is
+            // what `Error` means here. The corpus agrees in the way that
+            // matters -- one occurrence in 256 real Dockerfiles, because a file
+            // with this in it never built and so never got committed.
             Severity::Error,
             "`apt-get install` without `-y` waits for a confirmation the build \
              has no terminal to type"
@@ -1956,7 +2304,125 @@ fn docker_apk_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
     }
 }
 
+fn docker_yum_rules(text: &str, span: DockerSpan, command: &DockerCommand, found: &mut Vec<Issue>) {
+    for package in command.operands() {
+        // `nginx-1.20.1` is the pin yum takes; a local rpm and a variable are
+        // both already decided elsewhere. `@core` is a group, which has no
+        // version to give.
+        let pinned = package.contains('$')
+            || package.ends_with(".rpm")
+            || package.starts_with('@')
+            || package.contains("://")
+            || package
+                .rsplit_once('-')
+                .is_some_and(|(_, tail)| tail.starts_with(|c: char| c.is_ascii_digit()));
+        if pinned {
+            continue;
+        }
+        found.push(docker_issue(
+            text,
+            docker_locate(text, span, package),
+            span.end,
+            "docker-yum-unpinned",
+            Severity::Warning,
+            format!(
+                "`{package}` has no version, so this installs whatever the repository serves today"
+            ),
+            None,
+        ));
+    }
+}
+
+fn docker_npm_rules(text: &str, span: DockerSpan, command: &DockerCommand, found: &mut Vec<Issue>) {
+    for package in command.operands() {
+        // The version marker is an `@` that is not the one starting a scope:
+        // `@scope/name` is unpinned, `@scope/name@1.2.3` is not.
+        let after_first = package
+            .char_indices()
+            .nth(1)
+            .map_or("", |(at, _)| &package[at..]);
+        let pinned = after_first.contains('@')
+            || package.contains('$')
+            || package.starts_with('.')
+            || package.starts_with('/')
+            // `file:`, `git+ssh://`, `github:owner/repo`: every npm specifier
+            // that is not a registry name carries a colon, and each of them
+            // names its own source rather than "today's".
+            || package.contains(':')
+            || package.ends_with(".tgz");
+        if pinned {
+            continue;
+        }
+        found.push(docker_issue(
+            text,
+            docker_locate(text, span, package),
+            span.end,
+            "docker-npm-unpinned",
+            Severity::Warning,
+            format!(
+                "`{package}` has no version, so this installs whatever the registry serves today"
+            ),
+            None,
+        ));
+    }
+}
+
+fn docker_go_rules(text: &str, span: DockerSpan, command: &DockerCommand, found: &mut Vec<Issue>) {
+    for package in command.operands() {
+        // A local path is the module being built, not something fetched, and
+        // `all`/`./...` are patterns over it.
+        let pinned = package.contains('@')
+            || package.contains('$')
+            || package.starts_with('.')
+            || package.starts_with('/')
+            || package == "all";
+        if pinned {
+            continue;
+        }
+        found.push(docker_issue(
+            text,
+            docker_locate(text, span, package),
+            span.end,
+            "docker-go-install-unpinned",
+            Severity::Warning,
+            format!(
+                "`{package}` has no `@version`, so this builds whatever the proxy serves today"
+            ),
+            None,
+        ));
+    }
+}
+
 fn docker_pip_rules(text: &str, span: DockerSpan, command: &DockerCommand, found: &mut Vec<Issue>) {
+    // Asked before the `-r` return below, because the cache is written whatever
+    // the packages were named in.
+    //
+    // Any `--no-cache...` counts, not just the full `--no-cache-dir`: pip's
+    // parser is optparse, which accepts an unambiguous abbreviation of a long
+    // option, and `--no-cache-dir` is the only option pip has starting that way.
+    // `pip install --no-cache x` therefore does disable the cache -- hadolint
+    // reports it anyway, and matching that would have been a false positive on
+    // six files of the corpus.
+    if !command
+        .words
+        .iter()
+        .any(|word| word.starts_with("--no-cache"))
+    {
+        found.push(docker_issue(
+            text,
+            docker_locate(text, span, "install"),
+            span.end,
+            "docker-pip-cache",
+            Severity::Warning,
+            "pip writes every downloaded wheel into the layer's cache directory, \
+             where nothing reads it again"
+                .to_string(),
+            Some(Fix::Described {
+                what: "Add `--no-cache-dir` to `pip install`".to_string(),
+                safe: true,
+            }),
+        ));
+    }
     // `-r requirements.txt` and `-e .` both put the versions somewhere else, and
     // that somewhere else is the file to look at.
     if command
@@ -2690,13 +3156,28 @@ mod tests {
             "FROM a:1\nRUN apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*\n",
         ),
         ("docker-apt-get-update-alone", "FROM a:1\nRUN apt-get update\n"),
+        ("docker-apt-not-apt-get", "FROM a:1\nRUN apt update\n"),
         ("docker-cd-in-run", "FROM a:1\nRUN cd /app && make\n"),
         (
             "docker-copy-multiple-sources-no-slash",
             "FROM a:1\nCOPY one two /app\n",
         ),
+        ("docker-copy-relative-no-workdir", "FROM a:1\nCOPY one .\n"),
+        (
+            "docker-copy-whole-filesystem",
+            "FROM a:1 AS build\nFROM a:1\nWORKDIR /app\nCOPY --from=build / /\n",
+        ),
         ("docker-duplicate-env-key", "FROM a:1\nENV A=1\nENV A=2\n"),
         ("docker-duplicate-label-key", "FROM a:1\nLABEL a=1\nLABEL a=2\n"),
+        ("docker-from-platform-pinned", "FROM --platform=linux/amd64 a:1\n"),
+        (
+            "docker-from-platform-redundant",
+            "FROM --platform=$TARGETPLATFORM a:1\n",
+        ),
+        (
+            "docker-go-install-unpinned",
+            "FROM a:1\nRUN go install example.com/cmd\n",
+        ),
         ("docker-invalid-port", "FROM a:1\nEXPOSE 99999\n"),
         ("docker-latest-base", "FROM ubuntu:latest\n"),
         ("docker-maintainer-deprecated", "FROM a:1\nMAINTAINER me@example.com\n"),
@@ -2706,6 +3187,14 @@ mod tests {
             "docker-multiple-entrypoint",
             "FROM a:1\nENTRYPOINT [\"a\"]\nENTRYPOINT [\"b\"]\n",
         ),
+        (
+            "docker-npm-unpinned",
+            "FROM a:1\nRUN npm install -g typescript\n",
+        ),
+        (
+            "docker-pip-cache",
+            "FROM a:1\nRUN pip install requests==2.31.0\n",
+        ),
         ("docker-pip-unpinned", "FROM a:1\nRUN pip install requests\n"),
         ("docker-pipe-without-pipefail", "FROM a:1\nRUN cat x | tar xz\n"),
         ("docker-root-user", "FROM a:1\nCMD [\"a\"]\n"),
@@ -2713,7 +3202,16 @@ mod tests {
         ("docker-shell-form-command", "FROM a:1\nCMD npm start\n"),
         ("docker-sudo-in-run", "FROM a:1\nRUN sudo make install\n"),
         ("docker-untagged-base", "FROM ubuntu\n"),
+        (
+            "docker-wget-and-curl",
+            "FROM a:1\nRUN curl -o x https://e.example\nRUN wget https://e.example\n",
+        ),
         ("docker-workdir-relative", "FROM a:1\nWORKDIR app\n"),
+        ("docker-yum-no-clean", "FROM a:1\nRUN yum install -y nginx-1.20.1\n"),
+        (
+            "docker-yum-unpinned",
+            "FROM a:1\nRUN yum install -y nginx && yum clean all\n",
+        ),
     ];
 
     /// Every code poly emits has prose behind it, and every piece of prose
@@ -2752,6 +3250,36 @@ mod tests {
         // Still nobody else's rules: the policy `rule_doc` documents is that
         // poly repeats what a tool says rather than paraphrasing it.
         assert!(rule_doc("hadolint", "DL3006").is_none());
+    }
+
+    /// Every replacement poly offers for a `# hadolint ignore=` is a rule poly
+    /// actually has.
+    ///
+    /// The table lives in poly-core, next to the sentence it words, and the
+    /// rules live here; nothing but this test holds the two together. Without
+    /// it, renaming a rule would leave poly telling people to write a
+    /// suppression that silences nothing -- which is the exact failure the
+    /// migration signal exists to report.
+    #[test]
+    fn hadolint_replacements_name_real_rules() {
+        let rules: Vec<&str> = DOCKER_RULES.iter().map(|(code, _)| *code).collect();
+        for (hadolint, poly) in poly_core::HADOLINT_REPLACEMENTS {
+            assert!(rules.contains(poly), "{hadolint} -> {poly}: no such rule");
+            assert!(
+                hadolint.starts_with("DL"),
+                "{hadolint} is not a hadolint code"
+            );
+        }
+        // One entry per hadolint code, or the message would name a rule and
+        // then name another.
+        let mut codes: Vec<&str> = poly_core::HADOLINT_REPLACEMENTS
+            .iter()
+            .map(|(code, _)| *code)
+            .collect();
+        let total = codes.len();
+        codes.sort_unstable();
+        codes.dedup();
+        assert_eq!(codes.len(), total, "a hadolint code is mapped twice");
     }
 
     /// A finding lands on the line the offending text starts on, and marks the
@@ -3032,6 +3560,305 @@ mod tests {
             "FROM a:1\nRUN pipenv install requests\nUSER app\n",
             "docker-pip-unpinned"
         ));
+    }
+
+    /// pip's download cache is written into the layer and never read again.
+    ///
+    /// The abbreviation is the point of the second half. pip parses its options
+    /// with optparse, which accepts any unambiguous prefix of a long option, and
+    /// `--no-cache-dir` is the only one starting `--no-cache` -- so
+    /// `pip install --no-cache` really does disable the cache. hadolint reports
+    /// it anyway; matching that would have been a false positive on four files
+    /// of the corpus, all of them written by someone who got it right.
+    #[test]
+    fn a_pip_cache_is_dead_weight_in_the_layer() {
+        assert!(fires(
+            "FROM a:1\nRUN pip install requests==2.31.0\nUSER app\n",
+            "docker-pip-cache"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN pip install --no-cache-dir requests==2.31.0\nUSER app\n",
+            "docker-pip-cache"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN pip install --no-cache requests==2.31.0\nUSER app\n",
+            "docker-pip-cache"
+        ));
+        // Independent of where the versions are written: a requirements file
+        // pins the packages and says nothing about the cache.
+        assert!(fires(
+            "FROM a:1\nRUN pip install -r requirements.txt\nUSER app\n",
+            "docker-pip-cache"
+        ));
+    }
+
+    /// `apt` warns, in its own output, that it has no stable CLI. A build that
+    /// calls it can break on a base-image bump with no change to the Dockerfile.
+    #[test]
+    fn apt_is_not_the_interface_a_script_should_call() {
+        assert!(fires(
+            "FROM a:1\nRUN apt update && apt install -y curl=1\nUSER app\n",
+            "docker-apt-not-apt-get"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN apt-get update && apt-get install -y curl=1\nUSER app\n",
+            "docker-apt-not-apt-get"
+        ));
+        // Still the same package manager underneath, so the rules about how it
+        // is called keep applying to it.
+        assert!(fires(
+            "FROM a:1\nRUN apt install -y curl\nUSER app\n",
+            "docker-apt-get-unpinned"
+        ));
+    }
+
+    /// yum's rpms and metadata stay in the layer, and the cleanup has to come
+    /// after the install that produced them.
+    ///
+    /// The ordering is not pedantry: a `yum clean all` written before the
+    /// install it was meant to follow is a real shape in a real Dockerfile, and
+    /// it cleans nothing. It is also where poly is right and hadolint is not --
+    /// hadolint reports three corpus files whose cleanup is correct.
+    #[test]
+    fn yum_leaves_its_downloads_in_the_layer() {
+        assert!(fires(
+            "FROM a:1\nRUN yum install -y nginx-1.20.1\nUSER app\n",
+            "docker-yum-no-clean"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN yum install -y nginx-1.20.1 && yum clean all\nUSER app\n",
+            "docker-yum-no-clean"
+        ));
+        assert!(fires(
+            "FROM a:1\nRUN yum clean all && yum install -y nginx-1.20.1\nUSER app\n",
+            "docker-yum-no-clean"
+        ));
+        // The same answer poly already accepts for apt: a cache mount means the
+        // bytes never land in the layer to begin with.
+        assert!(!fires(
+            "FROM a:1\nRUN --mount=type=cache,target=/var/cache/yum yum install -y nginx-1.20.1\nUSER app\n",
+            "docker-yum-no-clean"
+        ));
+    }
+
+    /// The reproducibility argument again, against a yum repository.
+    #[test]
+    fn an_unpinned_yum_package_changes_under_the_build() {
+        let clean = |packages: &str| {
+            format!("FROM a:1\nRUN yum install -y {packages} && yum clean all\nUSER app\n")
+        };
+        assert!(fires(&clean("nginx"), "docker-yum-unpinned"));
+        assert!(!fires(&clean("nginx-1.20.1"), "docker-yum-unpinned"));
+        // A local rpm, a group and a URL are each already decided somewhere the
+        // version string is not.
+        assert!(!fires(&clean("./nginx.rpm"), "docker-yum-unpinned"));
+        assert!(!fires(&clean("@core"), "docker-yum-unpinned"));
+        assert!(!fires(
+            &clean("https://example.com/nginx.rpm"),
+            "docker-yum-unpinned"
+        ));
+        // A hyphen that is not a version marker. `zlib-devel` is a package
+        // name, and reading its tail as a version would silence the rule on
+        // most of what a build installs.
+        assert!(fires(&clean("zlib-devel"), "docker-yum-unpinned"));
+    }
+
+    /// npm installs whatever the registry serves unless the line says which.
+    #[test]
+    fn an_unpinned_npm_package_changes_under_the_build() {
+        assert!(fires(
+            "FROM a:1\nRUN npm install -g typescript\nUSER app\n",
+            "docker-npm-unpinned"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN npm install -g typescript@5.4.5\nUSER app\n",
+            "docker-npm-unpinned"
+        ));
+        // A scope is an `@` that is not a version, and a scoped package with a
+        // version has both.
+        assert!(fires(
+            "FROM a:1\nRUN npm install -g @scope/thing\nUSER app\n",
+            "docker-npm-unpinned"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN npm install -g @scope/thing@1.2.3\nUSER app\n",
+            "docker-npm-unpinned"
+        ));
+        // `npm ci` installs exactly what the lockfile says, which is the pin
+        // this rule is asking for. So does a bare `npm install` in a project
+        // with a package.json, which names no packages at all.
+        assert!(!fires(
+            "FROM a:1\nRUN npm ci\nUSER app\n",
+            "docker-npm-unpinned"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN npm install\nUSER app\n",
+            "docker-npm-unpinned"
+        ));
+    }
+
+    /// `go install pkg` with no `@version` builds whatever the proxy serves.
+    #[test]
+    fn an_unpinned_go_install_builds_a_different_binary_each_time() {
+        assert!(fires(
+            "FROM a:1\nRUN go install example.com/cmd/thing\nUSER app\n",
+            "docker-go-install-unpinned"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN go install example.com/cmd/thing@v1.2.3\nUSER app\n",
+            "docker-go-install-unpinned"
+        ));
+        // `go get` is the same fetch under an older spelling, and the corpus
+        // still has it.
+        assert!(fires(
+            "FROM a:1\nRUN go get github.com/jxskiss/ssl-cert-server\nUSER app\n",
+            "docker-go-install-unpinned"
+        ));
+        // A local path is the module being built, not something fetched.
+        assert!(!fires(
+            "FROM a:1\nRUN go install ./cmd/thing\nUSER app\n",
+            "docker-go-install-unpinned"
+        ));
+    }
+
+    /// `FROM --platform=` says two different things, and only one of them is a
+    /// mistake worth stopping for.
+    ///
+    /// A literal overrides the host and still builds, so the failure arrives at
+    /// `docker run` as a message about the loader. `$TARGETPLATFORM` is exactly
+    /// what an unflagged `FROM` already resolves to, so it changes nothing.
+    /// Anything else is a variable poly cannot see the value of, and a rule that
+    /// guesses there is a rule people learn to ignore.
+    #[test]
+    fn a_platform_on_from_is_either_an_override_or_a_restatement() {
+        assert!(fires(
+            "FROM --platform=linux/amd64 a:1\nUSER app\n",
+            "docker-from-platform-pinned"
+        ));
+        assert!(fires(
+            "FROM --platform=$TARGETPLATFORM a:1\nUSER app\n",
+            "docker-from-platform-redundant"
+        ));
+        assert!(fires(
+            "FROM --platform=${TARGETPLATFORM} a:1\nUSER app\n",
+            "docker-from-platform-redundant"
+        ));
+        for code in [
+            "docker-from-platform-pinned",
+            "docker-from-platform-redundant",
+        ] {
+            assert!(!fires("FROM a:1\nUSER app\n", code));
+            assert!(!fires(
+                "FROM --platform=$BUILDPLATFORM a:1\nUSER app\n",
+                code
+            ));
+            assert!(!fires("FROM --platform=$MY_ARCH a:1\nUSER app\n", code));
+        }
+        // The redundant one is info: dropping the flag changes nothing about
+        // the image, which is the whole finding. See the tiers on DOCKER_RULES.
+        let issues = lint(
+            "dockerfile",
+            Path::new("Dockerfile"),
+            "FROM --platform=$TARGETPLATFORM a:1\nUSER app\n",
+        )
+        .unwrap();
+        let found = issues
+            .iter()
+            .find(|i| i.code == "docker-from-platform-redundant")
+            .expect("the rule fired");
+        assert_eq!(found.severity, Severity::Info);
+    }
+
+    /// `COPY --from=stage / /` overwrites this image's root with another's.
+    #[test]
+    fn copying_a_whole_filesystem_out_of_a_stage_overwrites_this_one() {
+        assert!(fires(
+            "FROM a:1 AS build\nFROM a:1\nWORKDIR /app\nCOPY --from=build / /\nUSER app\n",
+            "docker-copy-whole-filesystem"
+        ));
+        assert!(!fires(
+            "FROM a:1 AS build\nFROM a:1\nWORKDIR /app\nCOPY --from=build /out/app /app\nUSER app\n",
+            "docker-copy-whole-filesystem"
+        ));
+        // Without `--from` the source is the build context, which is a
+        // different instruction doing a different thing.
+        assert!(!fires(
+            "FROM a:1\nWORKDIR /app\nCOPY / /\nUSER app\n",
+            "docker-copy-whole-filesystem"
+        ));
+    }
+
+    /// With no WORKDIR anywhere in the stage, a relative COPY destination
+    /// resolves against `/` -- and succeeds, so nothing says so.
+    #[test]
+    fn a_relative_copy_with_no_workdir_lands_at_the_root() {
+        assert!(fires(
+            "FROM a:1\nCOPY app.jar .\nUSER app\n",
+            "docker-copy-relative-no-workdir"
+        ));
+        assert!(!fires(
+            "FROM a:1\nWORKDIR /app\nCOPY app.jar .\nUSER app\n",
+            "docker-copy-relative-no-workdir"
+        ));
+        assert!(!fires(
+            "FROM a:1\nCOPY app.jar /app/\nUSER app\n",
+            "docker-copy-relative-no-workdir"
+        ));
+        // The WORKDIR has to be above the COPY, because that is the order the
+        // build runs in.
+        assert!(fires(
+            "FROM a:1\nCOPY app.jar .\nWORKDIR /app\nUSER app\n",
+            "docker-copy-relative-no-workdir"
+        ));
+        // A stage built on another stage starts with that stage's working
+        // directory. This file does state it -- just not here -- so poly
+        // declines rather than guessing.
+        assert!(!fires(
+            "FROM a:1 AS build\nWORKDIR /src\nFROM build\nCOPY app.jar .\nUSER app\n",
+            "docker-copy-relative-no-workdir"
+        ));
+        // A destination poly cannot resolve is not one it complains about.
+        assert!(!fires(
+            "FROM a:1\nCOPY app.jar $DEST\nUSER app\n",
+            "docker-copy-relative-no-workdir"
+        ));
+    }
+
+    /// Two programs that fetch a URL, where the image needs one.
+    ///
+    /// Info rather than a warning, deliberately: it costs bytes rather than
+    /// correctness, and a file that installs one and uses the other has a
+    /// reason. Being *named* as a package is not using it -- `apt-get install
+    /// wget` and then `curl` everywhere is one fetcher, not two.
+    #[test]
+    fn an_image_that_ships_both_wget_and_curl_carries_one_too_many() {
+        assert!(fires(
+            "FROM a:1\nRUN curl -o x https://e.example\nRUN wget https://e.example\nUSER app\n",
+            "docker-wget-and-curl"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN curl -o x https://e.example\nUSER app\n",
+            "docker-wget-and-curl"
+        ));
+        assert!(!fires(
+            "FROM a:1\nRUN apt-get install -y --no-install-recommends wget=1 \
+             && rm -rf /var/lib/apt/lists/*\nRUN curl -o x https://e.example\nUSER app\n",
+            "docker-wget-and-curl"
+        ));
+        let issues = lint(
+            "dockerfile",
+            Path::new("Dockerfile"),
+            "FROM a:1\nRUN curl -o x https://e.example\nRUN wget https://e.example\nUSER app\n",
+        )
+        .unwrap();
+        let found = issues
+            .iter()
+            .find(|i| i.code == "docker-wget-and-curl")
+            .expect("the rule fired");
+        assert_eq!(found.severity, Severity::Info);
+        // Anchored on the second of the two: that is the line at which the file
+        // started carrying both.
+        assert_eq!(found.line, 2);
     }
 
     /// A `cd` dies with the RUN's shell, so a file written by the next

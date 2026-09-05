@@ -494,6 +494,22 @@ fn embedded_shell(
     Ok(found.into_iter().flatten().collect())
 }
 
+/// Will this run report nothing from hadolint?
+///
+/// Gates the one thing poly says about hadolint's own `# hadolint ignore=`
+/// comments, so it has to mean "off", not "absent". A project that asked for
+/// hadolint and does not have it is already told so by name -- nagging it about
+/// suppression syntax on top would be poly answering a question nobody asked.
+///
+/// Resolved offline: this decides what to *say*, and a sentence about a comment
+/// is not a reason to fetch a linter.
+fn hadolint_is_off(config: &poly_core::Config) -> bool {
+    matches!(
+        poly_tools::resolve("hadolint", config, true),
+        poly_tools::Resolved::Disabled | poly_tools::Resolved::OffByDefault
+    )
+}
+
 fn cmd_check(inv: &Invocation) -> Result<i32> {
     let (strict, compact) = (inv.has("--strict"), inv.has("--compact"));
     let paths = &inv.paths;
@@ -743,6 +759,11 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             poly_tools::Resolved::Disabled => {
                 eprintln!("{name}: disabled in poly.toml");
             }
+            // Silent on purpose. A project that never mentioned hadolint has
+            // not lost anything it asked for -- poly's own Dockerfile rules
+            // covered these files -- and a line per run about a tool nobody
+            // configured is the nagging `poly/ignore-syntax` exists to avoid.
+            poly_tools::Resolved::OffByDefault => {}
             poly_tools::Resolved::Missing(reason) => {
                 eprintln!("{name}: skipped — {reason}");
                 missing.push(name.to_string());
@@ -766,11 +787,12 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         // comment in a file nothing else reported on is exactly the one nobody
         // would otherwise notice silencing nothing. Every walked file, so the
         // set is the one `[lint] exclude` already narrowed.
+        let hadolint_off = hadolint_is_off(&config);
         for (path, config) in &walked {
             let Some(path) = resolve_report(path, &base) else {
                 continue;
             };
-            for issue in inline.for_file(&path, config).syntax_issues() {
+            for issue in inline.for_file(&path, config).syntax_issues(hadolint_off) {
                 issues.push(FileIssue {
                     file: path.clone(),
                     issue,
@@ -1176,6 +1198,7 @@ fn cmd_tools(rest: &[String]) -> Result<i32> {
                     poly_tools::Resolved::Path(p) => format!("PATH {}", p.display()),
                     poly_tools::Resolved::Pinned(p) => format!("pinned {}", p.display()),
                     poly_tools::Resolved::Disabled => "disabled".to_string(),
+                    poly_tools::Resolved::OffByDefault => "off by default".to_string(),
                     poly_tools::Resolved::Missing(_) => "not installed".to_string(),
                 };
                 println!("{:<12} {:<8} {}", tool.name, tool.version, state);
@@ -1201,6 +1224,12 @@ fn cmd_tools(rest: &[String]) -> Result<i32> {
                     }
                     poly_tools::Resolved::Pinned(p) => println!("{name}: pinned {}", p.display()),
                     poly_tools::Resolved::Disabled => println!("{name}: disabled in poly.toml"),
+                    // Not downloaded even when named. Fetching a binary poly
+                    // would then never invoke is the confusing outcome; the
+                    // one line that makes it run is the useful answer.
+                    poly_tools::Resolved::OffByDefault => println!(
+                        "{name}: off by default — add `{name} = \"on\"` under [tools] to use it"
+                    ),
                     poly_tools::Resolved::Missing(reason) if installable(name, explicit) => {
                         eprintln!("{name}: FAILED — {reason}");
                         failed += 1;

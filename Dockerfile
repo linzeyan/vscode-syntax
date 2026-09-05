@@ -30,14 +30,13 @@ ARG TARGETARCH
 # and without them every one of them is "unavailable, skipping its files".
 # git: `--changed` and the Git Repo scope shell out to it.
 #
-# DL3008 wants both pinned to an exact version. Ubuntu drops the old version
-# from the archive the moment a security update lands, so a pin here means the
-# image stops building on someone else's schedule -- and these two are a CA
-# bundle and git, where the newest patch is the one you want.
-# hadolint ignore=DL3008
+# Both are deliberately unpinned. Ubuntu drops the old version from the archive
+# the moment a security update lands, so a pin here means the image stops
+# building on someone else's schedule -- and these two are a CA bundle and git,
+# where the newest patch is the one you want.
 RUN apt-get update \
-  # The same judgement, for poly's own copy of the rule. It sits here rather
-  # than above the RUN because the finding lands on the package it names.
+  # The suppression sits here rather than above the RUN because the finding
+  # lands on the package it names, not on the instruction.
   # poly: ignore poly/docker-apt-get-unpinned
   && apt-get install -y --no-install-recommends ca-certificates git \
   && rm -rf /var/lib/apt/lists/*

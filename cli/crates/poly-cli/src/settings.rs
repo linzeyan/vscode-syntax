@@ -32,6 +32,9 @@ const TEMPLATE: &str = include_str!("poly.example.toml.in");
 enum Source {
     /// poly pins the version and downloads it on first use.
     Pinned(&'static str),
+    /// Pinned and downloadable, but not run unless poly.toml asks. See
+    /// `poly_tools::DEFAULT_OFF`.
+    OffByDefault(&'static str),
     /// Never downloaded: it has to match the project's own toolchain.
     Toolchain,
     /// A language server `poly lsp` starts, from PATH for the same reason.
@@ -66,6 +69,8 @@ fn known_tools() -> Vec<Known> {
             // string `system`; see the toolchain-only entries in poly-tools.
             source: if tool.version == "system" {
                 Source::Toolchain
+            } else if poly_tools::default_off(tool.name) {
+                Source::OffByDefault(tool.version)
             } else {
                 Source::Pinned(tool.version)
             },
@@ -266,6 +271,7 @@ pub fn export() -> String {
     for tool in &known {
         let (version, note) = match tool.source {
             Source::Pinned(v) => (v, "downloaded on first use"),
+            Source::OffByDefault(v) => (v, "off; set it to \"on\" and poly downloads it"),
             Source::Toolchain => ("system", "from the project's toolchain, on PATH"),
             Source::Server => ("-", "language server, from PATH"),
             Source::Analysis => ("-", "whole-program analysis (`poly deadcode`)"),
@@ -489,11 +495,34 @@ mod tests {
         assert!(error.contains("shellcheck"), "{error}");
         assert!(error.contains("no such file"), "{error}");
 
-        // A version pin and "off" are not paths and must not be tested as one.
-        for value in ["off", "0.11.0"] {
+        // A version pin, "off" and "on" are not paths and must not be tested as
+        // one.
+        for value in ["off", "on", "0.11.0"] {
             let (_dir, config) = config_from(&format!("[tools]\nshellcheck = \"{value}\"\n"));
             assert!(check(&config).is_ok(), "{value}");
         }
+    }
+
+    /// Turning a default-off tool back on is a supported setting, not a
+    /// mistake: no warning, no error, and the row in the exported file says
+    /// what the value does.
+    #[test]
+    fn a_default_off_tool_can_be_turned_on_without_complaint() {
+        for value in ["on", "off", "2.15.1"] {
+            let (_dir, config) = config_from(&format!("[tools]\nhadolint = \"{value}\"\n"));
+            assert_eq!(check(&config).unwrap(), Vec::<String>::new(), "{value}");
+        }
+        // The exported documentation marks it, so nobody has to discover the
+        // default by noticing an absence of findings.
+        let text = export();
+        // The row of the [tools] table, not the first line of prose that
+        // mentions the name -- `self_test` writes rows in this shape.
+        let row = text
+            .lines()
+            .find(|line| line.starts_with(&format!("#   {:<20}", "hadolint")))
+            .expect("hadolint has a row");
+        assert!(row.contains("off"), "{row}");
+        assert!(row.contains("\"on\""), "{row}");
     }
 
     /// The export is documentation, so the interesting property is that the

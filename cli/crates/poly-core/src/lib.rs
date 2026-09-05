@@ -402,8 +402,70 @@ pub const INLINE_RULES: &[(&str, &str)] = &[(
      line of its own, where it would cover the next instruction instead, so it \
      belongs above the line it excuses. Either way the comment is reported \
      rather than the run aborted, because one comment in one file is not a \
-     reason to stop checking a repo.",
+     reason to stop checking a repo. The same rule reports a \
+     `# hadolint ignore=` in a Dockerfile when hadolint is off, for the same \
+     reason: it silences nothing, and poly names the code to write instead.",
 )];
+
+/// hadolint's rule codes, mapped to the poly rule that says the same thing.
+///
+/// Only used to word one sentence: when hadolint is off, a
+/// `# hadolint ignore=DL3008` silences nothing, and "write
+/// `# poly: ignore poly/docker-apt-get-unpinned` instead" is a better answer
+/// than "this does nothing". A code with no entry gets the shorter sentence
+/// rather than a guess.
+///
+/// Only the `DL` codes are here. hadolint's other half is shellcheck run over
+/// every `RUN`, and poly reports those itself now under shellcheck's own name,
+/// so `SC2086` becomes `shellcheck/SC2086` by construction rather than by a
+/// table that would have to list every shellcheck rule there is.
+///
+/// Poly does **not** honour hadolint's syntax, and this table is not a step
+/// towards it. Reading `# hadolint ignore=` as a suppression would be a
+/// compatibility layer for a tool poly no longer runs -- two syntaxes for one
+/// job, forever, and a comment whose meaning depends on a `[tools]` line
+/// somewhere else. What this does is tell the author what poly's own syntax
+/// spells it as, once, so the comment can be replaced and deleted.
+///
+/// Read against the two tools' messages by hand, and held to the rules that
+/// actually exist by `hadolint_replacements_name_real_rules` in poly-engines,
+/// which is the crate that owns `DOCKER_RULES`.
+pub const HADOLINT_REPLACEMENTS: &[(&str, &str)] = &[
+    ("DL3000", "docker-workdir-relative"),
+    ("DL3002", "docker-root-user"),
+    ("DL3003", "docker-cd-in-run"),
+    ("DL3004", "docker-sudo-in-run"),
+    ("DL3006", "docker-untagged-base"),
+    ("DL3007", "docker-latest-base"),
+    ("DL3008", "docker-apt-get-unpinned"),
+    ("DL3009", "docker-apt-get-no-clean"),
+    ("DL3011", "docker-invalid-port"),
+    ("DL3013", "docker-pip-unpinned"),
+    ("DL3014", "docker-apt-get-interactive"),
+    ("DL3015", "docker-apt-get-no-recommends"),
+    ("DL3016", "docker-npm-unpinned"),
+    ("DL3018", "docker-apk-unpinned"),
+    ("DL3019", "docker-apk-no-cache"),
+    ("DL3020", "docker-add-instead-of-copy"),
+    ("DL3021", "docker-copy-multiple-sources-no-slash"),
+    ("DL3025", "docker-shell-form-command"),
+    ("DL3027", "docker-apt-not-apt-get"),
+    ("DL3029", "docker-from-platform-pinned"),
+    ("DL3032", "docker-yum-no-clean"),
+    ("DL3033", "docker-yum-unpinned"),
+    ("DL3042", "docker-pip-cache"),
+    ("DL3045", "docker-copy-relative-no-workdir"),
+    ("DL3061", "docker-missing-from"),
+    ("DL3062", "docker-go-install-unpinned"),
+    ("DL3064", "docker-secret-in-env"),
+    ("DL3065", "docker-from-platform-redundant"),
+    ("DL3067", "docker-copy-whole-filesystem"),
+    ("DL4000", "docker-maintainer-deprecated"),
+    ("DL4001", "docker-wget-and-curl"),
+    ("DL4003", "docker-multiple-cmd"),
+    ("DL4004", "docker-multiple-entrypoint"),
+    ("DL4006", "docker-pipe-without-pipefail"),
+];
 
 /// Comment introducers an inline suppression may follow, by language id.
 ///
@@ -471,6 +533,18 @@ struct RejectedIgnore {
     reason: String,
 }
 
+/// A `# hadolint ignore=` comment, kept in case this run has to say it is inert.
+///
+/// Collected always and reported only when hadolint is off, because whether it
+/// is off is a fact about the run rather than about the file — the same
+/// Dockerfile is correctly annotated for one project and stale for the next.
+struct HadolintIgnore {
+    line: u32,
+    col: u32,
+    end_col: u32,
+    codes: Vec<String>,
+}
+
 /// Languages whose formatter moves a trailing comment onto a line of its own.
 ///
 /// Dockerfile alone, and this list is the reason it is named rather than
@@ -509,6 +583,7 @@ fn relocates_trailing_comments(lang: &str) -> bool {
 pub struct InlineIgnores {
     entries: Vec<InlineEntry>,
     rejected: Vec<RejectedIgnore>,
+    hadolint: Vec<HadolintIgnore>,
 }
 
 impl InlineIgnores {
@@ -516,6 +591,7 @@ impl InlineIgnores {
         InlineIgnores {
             entries: Vec::new(),
             rejected: Vec::new(),
+            hadolint: Vec::new(),
         }
     }
 
@@ -541,10 +617,30 @@ impl InlineIgnores {
         let mut found = InlineIgnores::empty();
         for (number, line) in text.lines().enumerate() {
             let number = number as u32;
+            let column = |byte: usize| line[..byte].chars().count() as u32;
+            // hadolint's own syntax, recorded rather than obeyed. See
+            // `hadolint_migration_issues`.
+            if lang == Some("dockerfile") {
+                if let Some((at, codes_at)) = find_hadolint_ignore(line) {
+                    found.hadolint.push(HadolintIgnore {
+                        line: number,
+                        col: column(at),
+                        end_col: column(line.len()),
+                        codes: line[codes_at..]
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or("")
+                            .split(',')
+                            .map(str::trim)
+                            .filter(|code| !code.is_empty())
+                            .map(str::to_string)
+                            .collect(),
+                    });
+                }
+            }
             let Some((at, codes_at)) = find_inline_marker(line, prefixes) else {
                 continue;
             };
-            let column = |byte: usize| line[..byte].chars().count() as u32;
             let mut codes = Vec::new();
             let mut named_anything = false;
             let mut cursor = codes_at;
@@ -631,24 +727,111 @@ impl InlineIgnores {
     /// whole repo's check over one line in one file. It silences nothing
     /// either way, so the finding it was aimed at is still printed next to this
     /// one.
-    pub fn syntax_issues(&self) -> Vec<crate::diag::Issue> {
-        self.rejected
+    pub fn syntax_issues(&self, hadolint_off: bool) -> Vec<crate::diag::Issue> {
+        let reported = |line: u32, col: u32, end_col: u32, message: String| crate::diag::Issue {
+            line,
+            col,
+            end_line: line,
+            end_col,
+            severity: crate::diag::Severity::Warning,
+            code: INLINE_RULES[0].0.to_string(),
+            message,
+            // poly's own rule about a comment poly will not act on. See
+            // `INLINE_RULES`.
+            source: "poly",
+            fix: None,
+            url: None,
+        };
+        let mut found: Vec<crate::diag::Issue> = self
+            .rejected
             .iter()
-            .map(|bad| crate::diag::Issue {
-                line: bad.line,
-                col: bad.col,
-                end_line: bad.line,
-                end_col: bad.end_col,
-                severity: crate::diag::Severity::Warning,
-                code: INLINE_RULES[0].0.to_string(),
-                message: bad.reason.clone(),
-                // poly's own rule about poly's own comment. See `INLINE_RULES`.
-                source: "poly",
-                fix: None,
-                url: None,
-            })
-            .collect()
+            .map(|bad| reported(bad.line, bad.col, bad.end_col, bad.reason.clone()))
+            .collect();
+        if hadolint_off {
+            found.extend(self.hadolint.iter().map(|stale| {
+                reported(
+                    stale.line,
+                    stale.col,
+                    stale.end_col,
+                    hadolint_migration_message(&stale.codes),
+                )
+            }));
+        }
+        found.sort_by_key(|issue| (issue.line, issue.col));
+        found
     }
+}
+
+/// What to tell the author of a `# hadolint ignore=` that no longer does
+/// anything.
+///
+/// The comment was written to silence a real finding, and with hadolint off it
+/// silences nothing — which is the same failure `poly/ignore-syntax` already
+/// exists to report, so it is reported as the same rule. What poly does *not*
+/// do is honour it: the codes below name poly's replacement so the comment can
+/// be rewritten and deleted, rather than being kept working forever behind a
+/// second syntax.
+fn hadolint_migration_message(codes: &[String]) -> String {
+    let replacements: Vec<String> = codes
+        .iter()
+        .filter_map(|code| {
+            // hadolint runs shellcheck over every `RUN`, so half of what a
+            // `# hadolint ignore=` silences in the wild is an SC code. poly
+            // reports those itself now, from its own shellcheck seam and under
+            // shellcheck's own name -- so the suppression has a home, and
+            // telling the author to delete it would throw away a finding they
+            // had already looked at.
+            if let Some(number) = code.strip_prefix("SC") {
+                if !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()) {
+                    return Some(format!("shellcheck/{code}"));
+                }
+            }
+            HADOLINT_REPLACEMENTS
+                .iter()
+                .find(|(hadolint, _)| hadolint == code)
+                .map(|(_, poly)| format!("poly/{poly}"))
+        })
+        .collect();
+    let named = codes.join(", ");
+    let turn_on = "or set `hadolint = \"on\"` under `[tools]` to keep running it";
+    if replacements.is_empty() {
+        return format!(
+            "`hadolint ignore={named}` silences nothing — poly does not run hadolint by \
+             default, and has no rule of its own for it. Delete the comment, {turn_on}."
+        );
+    }
+    let write = replacements.join(", ");
+    let rest = if replacements.len() == codes.len() {
+        String::new()
+    } else {
+        format!(
+            " (poly has no rule of its own for the other {})",
+            codes.len() - replacements.len()
+        )
+    };
+    format!(
+        "`hadolint ignore={named}` silences nothing — poly does not run hadolint by default. \
+         Write `# {INLINE_MARKER} {write}` instead{rest}, {turn_on}."
+    )
+}
+
+/// The `# hadolint ignore=` on this line: where the comment starts, and where
+/// the codes begin after it.
+///
+/// hadolint's own placement rule is that the comment sits on its own line above
+/// the instruction, so a trailing one is not looked for — and `poly fmt` would
+/// move it anyway, which is the reasoning `relocates_trailing_comments` already
+/// records.
+fn find_hadolint_ignore(line: &str) -> Option<(usize, usize)> {
+    let at = line.find('#')?;
+    if !line[..at].trim().is_empty() {
+        return None;
+    }
+    let rest = line[at + 1..].trim_start_matches('#').trim_start();
+    let codes = rest.strip_prefix("hadolint")?.trim_start();
+    let codes = codes.strip_prefix("ignore")?.trim_start();
+    let codes = codes.strip_prefix('=')?;
+    Some((at, line.len() - codes.len()))
 }
 
 /// The first `<comment> poly: ignore` on this line: where the comment starts,
@@ -1663,7 +1846,7 @@ mod tests {
     #[test]
     fn a_malformed_inline_code_is_reported_not_fatal() {
         let found = InlineIgnores::scan(Some("python"), "import os  # poly: ignore F401\n");
-        let issues = found.syntax_issues();
+        let issues = found.syntax_issues(false);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].source, "poly");
         assert_eq!(issues[0].code, "ignore-syntax");
@@ -1678,17 +1861,19 @@ mod tests {
         // The good codes in a comment still work; only the bad one is reported.
         let found = InlineIgnores::scan(Some("python"), "x  # poly: ignore ruff/F401, E501\n");
         assert!(found.suppresses(0, "ruff", "F401"));
-        assert_eq!(found.syntax_issues().len(), 1);
+        assert_eq!(found.syntax_issues(false).len(), 1);
 
         // No code at all silences nothing and reads like it does.
         let found = InlineIgnores::scan(Some("python"), "# poly: ignore\nimport os\n");
-        assert_eq!(found.syntax_issues().len(), 1);
-        assert!(found.syntax_issues()[0].message.contains("no rule code"));
+        assert_eq!(found.syntax_issues(false).len(), 1);
+        assert!(found.syntax_issues(false)[0]
+            .message
+            .contains("no rule code"));
 
         // An unknown tool or rule is left alone: poly cannot know every code
         // its tools will grow, and the finding it was aimed at keeps appearing.
         let found = InlineIgnores::scan(Some("python"), "x  # poly: ignore ruff/NOSUCHRULE\n");
-        assert!(found.syntax_issues().is_empty());
+        assert!(found.syntax_issues(false).is_empty());
     }
 
     /// In a Dockerfile the trailing form is reported and does nothing, because
@@ -1709,7 +1894,7 @@ mod tests {
             "FROM ubuntu  # poly: ignore poly/docker-untagged-base\nRUN make\n",
         );
         assert!(!trailing.suppresses(0, "poly", "docker-untagged-base"));
-        let issues = trailing.syntax_issues();
+        let issues = trailing.syntax_issues(false);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, "ignore-syntax");
         assert!(issues[0].message.contains("poly fmt"), "{:?}", issues[0]);
@@ -1722,7 +1907,7 @@ mod tests {
             "# poly: ignore poly/docker-untagged-base\nFROM ubuntu\n",
         );
         assert!(above.suppresses(1, "poly", "docker-untagged-base"));
-        assert!(above.syntax_issues().is_empty());
+        assert!(above.syntax_issues(false).is_empty());
 
         // Every other formatter poly ships leaves a trailing comment where it
         // is, so the rule stops at Dockerfile.
@@ -1731,7 +1916,105 @@ mod tests {
         }
         let python = InlineIgnores::scan(Some("python"), "import os  # poly: ignore ruff/F401\n");
         assert!(python.suppresses(0, "ruff", "F401"));
-        assert!(python.syntax_issues().is_empty());
+        assert!(python.syntax_issues(false).is_empty());
+    }
+
+    /// With hadolint off, a `# hadolint ignore=` silences nothing -- and poly
+    /// says what to write instead rather than quietly dropping a suppression
+    /// its author meant.
+    ///
+    /// The gate is the whole point. Someone who set `hadolint = "on"` has a
+    /// comment that works, and telling them to rewrite it would be poly nagging
+    /// about a tool it is running. The two halves of this test are the same
+    /// file read under the two settings.
+    #[test]
+    fn a_hadolint_suppression_is_named_only_when_hadolint_is_off() {
+        let found = InlineIgnores::scan(
+            Some("dockerfile"),
+            "# hadolint ignore=DL3008\nRUN apt-get install -y curl\n",
+        );
+        // Never honoured, either way: poly does not read hadolint's syntax.
+        // Reporting it is not a step towards doing so.
+        assert!(!found.suppresses(1, "poly", "docker-apt-get-unpinned"));
+        assert!(!found.suppresses(1, "hadolint", "DL3008"));
+
+        assert!(found.syntax_issues(false).is_empty(), "hadolint is running");
+
+        let issues = found.syntax_issues(true);
+        assert_eq!(issues.len(), 1);
+        // The same rule as every other comment poly will not act on.
+        assert_eq!(issues[0].code, "ignore-syntax");
+        assert_eq!(issues[0].source, "poly");
+        assert_eq!(issues[0].line, 0);
+        // Names the replacement, so the fix is a paste rather than a lookup.
+        assert!(
+            issues[0]
+                .message
+                .contains("poly: ignore poly/docker-apt-get-unpinned"),
+            "{:?}",
+            issues[0]
+        );
+        // And the way back, for whoever wanted hadolint after all.
+        assert!(issues[0].message.contains("\"on\""), "{:?}", issues[0]);
+
+        // Several codes in one comment become one replacement line.
+        let many = InlineIgnores::scan(
+            Some("dockerfile"),
+            "# hadolint ignore=DL3006,DL3008\nFROM ubuntu\n",
+        )
+        .syntax_issues(true);
+        assert_eq!(many.len(), 1);
+        assert!(
+            many[0]
+                .message
+                .contains("poly/docker-untagged-base, poly/docker-apt-get-unpinned"),
+            "{:?}",
+            many[0]
+        );
+
+        // An SC code is hadolint's shellcheck half, and poly runs shellcheck
+        // over Dockerfile `RUN` bodies itself -- so the suppression has a real
+        // home, and "delete it" would throw away a finding somebody had already
+        // looked at. Half the `# hadolint ignore=` comments on the corpus are
+        // this shape.
+        let shell = InlineIgnores::scan(
+            Some("dockerfile"),
+            "# hadolint ignore=SC2086\nRUN echo $x\n",
+        )
+        .syntax_issues(true);
+        assert_eq!(shell.len(), 1);
+        assert!(
+            shell[0].message.contains("poly: ignore shellcheck/SC2086"),
+            "{:?}",
+            shell[0]
+        );
+
+        // A code poly declined to implement gets the honest answer rather than
+        // a guess: DL3059 is in the residual gap on purpose.
+        let unknown =
+            InlineIgnores::scan(Some("dockerfile"), "# hadolint ignore=DL3059\nRUN make\n")
+                .syntax_issues(true);
+        assert_eq!(unknown.len(), 1);
+        assert!(
+            unknown[0].message.contains("no rule of its own"),
+            "{:?}",
+            unknown[0]
+        );
+
+        // Not a Dockerfile, not this rule -- `# hadolint ignore=` in a shell
+        // script is a comment about nothing and poly has no business reading
+        // it.
+        assert!(
+            InlineIgnores::scan(Some("shellscript"), "# hadolint ignore=DL3008\n")
+                .syntax_issues(true)
+                .is_empty()
+        );
+        // Trailing, where hadolint itself would not read it either.
+        assert!(
+            InlineIgnores::scan(Some("dockerfile"), "FROM ubuntu # hadolint ignore=DL3006\n")
+                .syntax_issues(true)
+                .is_empty()
+        );
     }
 
     /// The marker is a comment poly reads, not a word it greps for.
@@ -1741,7 +2024,7 @@ mod tests {
 
         // Prose that starts the same way is prose.
         assert!(scan("x  # poly: ignored ruff/F401\n")
-            .syntax_issues()
+            .syntax_issues(false)
             .is_empty());
         assert!(!scan("x  # poly: ignored ruff/F401\n").suppresses(0, "ruff", "F401"));
         // No introducer at all: this is code, not a comment.

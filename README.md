@@ -117,15 +117,22 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
   Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、GraphQL、
   Dockerfile（格式化，lint 是 poly 自己寫的規則，code 長 `poly/docker-*`；
-  hadolint 仍然照跑，補上 poly 沒做的那半——見下面的外部工具），
+  hadolint 預設關閉，因為它跟 poly 的規則大部分重疊——見下面的外部工具），
   Lua（格式化 stylua、lint selene）。這些都是編進 binary 的 Rust library，
   不再下載。拼字檢查（typos）也在裡面，而且不分語言——它讀的是每一個檔案，
   包含 poly 認不出語言的那些。
-- **外部工具**（受管下載）：shellcheck、shfmt、hadolint、actionlint、
+- **外部工具**（受管下載）：shellcheck、shfmt、actionlint、
   tflint、gofumpt、golangci-lint、swiftlint、buf
   （Protobuf 的格式化與 lint，同一支 binary 也是上面那個 language server）。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
   信任第一次抓到的東西。
+- **預設關閉但仍可用**：hadolint。poly 現在有自己的 Dockerfile 規則，兩邊一起跑
+  等於同一個缺陷印兩次、掛兩個 code、兩種嚴重度，`[lint] fail-on` 會變成看誰先講話。
+  拿 256 個真實 Dockerfile 量過：hadolint 的 shellcheck findings 是 poly 自己那套
+  的子集（65 對 534，沒有一個 code 是 hadolint 有而 poly 沒有的），而且位置更差
+  （每個 RUN 的第 1 欄，poly 指到出問題的那個字）。poly 沒有補的是它三條 info 級
+  規則：DL3047、DL3059、DL3066。想同時看兩邊就寫 `[tools] hadolint = "on"`，
+  poly 會照樣下載並執行它，不會囉嗦。
 - **只用專案 toolchain、不代裝**：rustfmt、clang-format、swift-format、
   terraform fmt、`cargo clippy`。
 - **Rust 的 lint 是 `cargo clippy`**，範圍是整個 cargo workspace——跟 Go 的
@@ -568,13 +575,13 @@ import os  # poly: ignore ruff/F401
 ```
 
 ```dockerfile
-# poly: ignore hadolint/DL3008, poly/docker-apt-get-unpinned
-RUN apt-get install -y curl
+# poly: ignore poly/docker-apt-get-unpinned, shellcheck/SC2086
+RUN apt-get install -y $PACKAGES
 ```
 
 註釋管自己這一行；獨佔一整行時再多管下面一行——長行與用 `\` 續行的指令沒地方擺行尾
 註釋，這個位置就是給它們的。代碼與 `tool/*` 跟設定檔那邊完全一樣，而且對 poly 跑的
-每一支工具都有效，包含下載回來的 hadolint、shellcheck。兩者的分工是：註釋指不到路
+每一支工具都有效，包含下載回來的 shellcheck、actionlint。兩者的分工是：註釋指不到路
 徑，設定檔指不到行。
 
 Dockerfile 只認寫在上一行的形式：`poly fmt` 會把 Dockerfile 的行尾註釋搬到獨立一
@@ -586,8 +593,13 @@ Dockerfile 只認寫在上一行的形式：`poly fmt` 會把 Dockerfile 的行�
 per-file-ignores 一條路。註釋裡寫了 poly 讀不懂的代碼會以 `poly/ignore-syntax` 報出
 來，而不是讓整個 run 中斷——一個檔案裡的一行註釋不值得讓整個 repo 停下來，而且它原
 本想關掉的那條 finding 還是照樣印在旁邊。各工具自己的 `# noqa`、
-`# hadolint ignore=`、`# shellcheck disable=`、`-- selene: allow(...)` 一律照舊有效，
-poly 不碰。
+`# shellcheck disable=`、`-- selene: allow(...)` 一律照舊有效，poly 不碰。
+
+例外是 `# hadolint ignore=`：hadolint 預設關閉，這行註釋就什麼都關不掉了。poly 會把
+它報成 `poly/ignore-syntax`，並直接告訴你該改寫成哪一行——例如
+`# poly: ignore poly/docker-apt-get-unpinned`。poly **不會**去解讀 hadolint 的語法，
+這是遷移提示不是相容層：講一次，讓你把註釋換掉然後刪了它。把 hadolint 開回來
+（`[tools] hadolint = "on"`）的話這行註釋照常有效，poly 也就不再提。
 
 「要不要開語言伺服器」只認 VSCode settings 的 `poly.languageServers`，不進
 `poly.toml`——那是「這台機器上我要不要讓 poly 接管 Go」的個人偏好，CI 根本不跑

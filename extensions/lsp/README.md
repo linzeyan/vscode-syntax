@@ -11,9 +11,10 @@
   換行、行尾字元。**包括 poly 不格式化的檔案**（`.ini`、Makefile……）——poly 會格的
   檔案交給 formatter，不會兩邊同時改一次存檔。答案與 `poly fmt` 出自同一次解析，所以
   打字時的行為跟存檔後的結果不會各說各話。`charset` 與 `max_line_length` 不處理。
-- **Lint**：存檔即時 diagnostics（shellcheck／hadolint／actionlint／ruff／
+- **Lint**：存檔即時 diagnostics（shellcheck／actionlint／ruff／
   selene／sqruff，以及專案內的 biome／eslint；ruff、selene、sqruff 是編進
-  binary 的，其餘是受管下載）；`Poly: Lint (poly check)`
+  binary 的，其餘是受管下載；hadolint 預設關閉，`[tools] hadolint = "on"`
+  可開回來）；`Poly: Lint (poly check)`
   在終端跑完整 CLI，輸出與 CI 一致。
 - **整包範圍的 lint**：有三個工具讀不了單一 buffer，所以它們跑的是整個範圍，而那個
   範圍是工具自己的定義——**golangci-lint** 讀一個 Go module（含底下所有 package）、

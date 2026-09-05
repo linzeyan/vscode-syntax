@@ -349,6 +349,28 @@ const TYPOS_INSTEAD: &str = "poly spell-checks every file itself. Drop the line;
      a _typos.toml still holds `[default.extend-words]` and `[files] extend-exclude`, \
      and `[lint] per-file-ignores` can silence `typos/typo` per path.";
 
+/// Registry tools poly does not run unless a project asks for them.
+///
+/// Not the same thing as `EMBEDDED`: those stopped being binaries, and an entry
+/// naming one is a mistake. These are still real tools, still downloadable,
+/// still pinned in poly-tools.lock -- `[tools] hadolint = "on"` gets the actual
+/// thing. What changed is the default, and only because poly grew its own
+/// answer for the same files.
+///
+/// hadolint is the only one. Measured over 256 real Dockerfiles, 23 of its 39
+/// rules are a second opinion on a rule poly already has, its shellcheck half is
+/// a subset of what poly's own shellcheck seam finds (65 findings against 534,
+/// with no code hadolint has that poly does not), and the two disagree on
+/// severity for 9 of the 23 -- which made `[lint] fail-on` depend on which of
+/// the two spoke first. Running both printed 62 findings for 35 defects on the
+/// audit fixture. Turning it off is how a Dockerfile gets one answer.
+pub const DEFAULT_OFF: &[&str] = &["hadolint"];
+
+/// Is `name` a tool poly leaves off until poly.toml says otherwise?
+pub fn default_off(name: &str) -> bool {
+    DEFAULT_OFF.contains(&name)
+}
+
 // ── resolution ─────────────────────────────────────────────────────────────
 
 /// The binary a `[tools]` value points at, or None when the value is not a
@@ -380,6 +402,14 @@ pub enum Resolved {
     Pinned(PathBuf),
     /// poly.toml says "off".
     Disabled,
+    /// Off because poly does not run it unless asked, and poly.toml did not
+    /// ask. See `DEFAULT_OFF`.
+    ///
+    /// Its own variant rather than `Disabled` because the callers print
+    /// different things, and printing the wrong one is a lie either way: a
+    /// project that never mentioned hadolint has no "disabled in poly.toml" to
+    /// be told about, and would reasonably go looking for the line.
+    OffByDefault,
     /// Nowhere to get it (and how to fix that).
     Missing(String),
 }
@@ -395,10 +425,22 @@ impl Resolved {
 
 /// Resolve `name` per 02 §3.4. `offline` skips downloads (A10: report,
 /// don't pretend).
+///
+/// A `[tools]` value is `"off"`, `"on"`, a version, or a path. `"on"` is the
+/// counterpart of `"off"` and means the version poly pins -- for most tools
+/// that is what happens anyway, and for a `DEFAULT_OFF` one it is how a project
+/// asks for it. One grammar for every tool, rather than a value that only means
+/// something for the tools that happen to be off today.
 pub fn resolve(name: &str, config: &poly_core::Config, offline: bool) -> Resolved {
     let setting = config.tools.get(name).map(String::as_str);
     if setting == Some("off") {
         return Resolved::Disabled;
+    }
+    // Silence, not a download, and before the registry lookup: a repository
+    // with a Dockerfile and no opinion about hadolint must not pay for fetching
+    // it, which is most of the point of turning it off.
+    if setting.is_none() && default_off(name) {
+        return Resolved::OffByDefault;
     }
     if let Some(path) = setting.and_then(|s| explicit_path(s, config)) {
         return if path.is_file() {
@@ -413,8 +455,12 @@ pub fn resolve(name: &str, config: &poly_core::Config, offline: bool) -> Resolve
     let Some(tool) = tool(name) else {
         return Resolved::Missing(format!("unknown tool {name:?}"));
     };
-    // A version pin overrides the registry default.
-    let version = setting.unwrap_or(tool.version);
+    // A version pin overrides the registry default; `"on"` asks for exactly the
+    // registry default, which is the only thing it can mean.
+    let version = match setting {
+        Some("on") | None => tool.version,
+        Some(pinned) => pinned,
+    };
     match ensure_installed(tool, version, config, offline) {
         Ok(Some(path)) => return Resolved::Managed(path),
         Ok(None) => {} // no asset for this platform: fall through to PATH
@@ -809,6 +855,57 @@ mod tests {
     fn off_disables() {
         let config = config_with_tools(&[("shellcheck", "off")]);
         assert_eq!(resolve("shellcheck", &config, true), Resolved::Disabled);
+    }
+
+    /// A `DEFAULT_OFF` tool is off with no poly.toml at all, and `"on"` is how
+    /// a project asks for it back.
+    ///
+    /// The distinction from `Disabled` is what the callers print: nobody who
+    /// never wrote a poly.toml should be told a tool is "disabled in poly.toml".
+    /// And the offline resolve has to reach the answer without a download --
+    /// most repositories with a Dockerfile will never want hadolint, and making
+    /// them fetch it to find that out is most of what this change undoes.
+    #[test]
+    fn a_default_off_tool_stays_off_until_asked_for() {
+        assert_eq!(
+            resolve("hadolint", &poly_core::Config::empty(), true),
+            Resolved::OffByDefault
+        );
+        // Explicitly off is still its own answer, because the reader of the
+        // message wrote the line.
+        assert_eq!(
+            resolve("hadolint", &config_with_tools(&[("hadolint", "off")]), true),
+            Resolved::Disabled
+        );
+        // "on" asks for the pinned version. Offline here, so it lands wherever
+        // this machine already has one -- what must not happen is the tool
+        // still reporting as off.
+        let on = resolve("hadolint", &config_with_tools(&[("hadolint", "on")]), true);
+        assert!(
+            !matches!(on, Resolved::OffByDefault | Resolved::Disabled),
+            "{on:?}"
+        );
+        // And "on" is a value every tool takes, meaning the same thing: the
+        // version poly pins. A grammar with a value that only works for some
+        // names is one more thing to look up.
+        let on = resolve(
+            "shellcheck",
+            &config_with_tools(&[("shellcheck", "on")]),
+            true,
+        );
+        assert!(
+            !matches!(on, Resolved::OffByDefault | Resolved::Disabled),
+            "{on:?}"
+        );
+        // "on" is not a path, so the poly.toml validator must not test it as
+        // one -- see `a_tools_path_that_does_not_exist_is_fatal`.
+        assert_eq!(explicit_path("on", &poly_core::Config::empty()), None);
+        // Every name in DEFAULT_OFF is a real registry entry that can still be
+        // downloaded. A typo here would turn a tool off and never say so.
+        for name in DEFAULT_OFF {
+            let entry = tool(name).unwrap_or_else(|| panic!("{name} is not in the registry"));
+            assert_ne!(entry.version, "system", "{name} has nothing to download");
+        }
     }
 
     #[test]

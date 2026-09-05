@@ -1901,7 +1901,7 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     // typing is the one that should apply, and a squiggle that only clears on
     // save is a suppression that looks broken.
     let inline = poly_core::InlineIgnores::scan(Some(&lang), text);
-    issues.extend(inline.syntax_issues());
+    issues.extend(inline.syntax_issues(crate::hadolint_is_off(&config)));
     issues.retain(|i| {
         !config.lint_ignored(path, i.source, &i.code)
             && !inline.suppresses(i.line, i.source, &i.code)

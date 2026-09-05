@@ -160,8 +160,8 @@ fail-on = "hint"
 #
 #   import os  # poly: ignore ruff/F401
 #
-#   # poly: ignore hadolint/DL3008, poly/docker-apt-get-unpinned
-#   RUN apt-get install -y curl
+#   # poly: ignore poly/docker-apt-get-unpinned, shellcheck/SC2086
+#   RUN apt-get install -y $PACKAGES
 #
 # A comment covers the line it is on; alone on its line it covers the line below
 # as well, which is the placement a long or continued line needs. The codes and
@@ -182,8 +182,10 @@ fail-on = "hint"
 # the one language it applies to; every other formatter poly ships leaves a
 # trailing comment where it is.
 #
-# Each tool's own syntax -- `# noqa`, `# hadolint ignore=`,
-# `# shellcheck disable=`, `-- selene: allow(...)` -- keeps working untouched.
+# Each tool's own syntax -- `# noqa`, `# shellcheck disable=`,
+# `-- selene: allow(...)` -- keeps working untouched, for the tools poly runs.
+# `# hadolint ignore=` is the exception, because hadolint is off by default:
+# see [tools] below.
 #
 # Default: empty.
 [lint.per-file-ignores]
@@ -204,9 +206,11 @@ fail-on = "hint"
 include-hidden = false
 
 # ── [tools] ────────────────────────────────────────────────────────────────
-# Where an external tool comes from, per tool. Three kinds of value:
+# Where an external tool comes from, per tool. Four kinds of value:
 #
 #   "off"             never run it; poly stays quiet about it being absent
+#   "on"              run it at poly's pinned version -- the same as leaving the
+#                     line out, except for the tools poly leaves off by default
 #   "<path>"          use this binary (anything containing a / or \, absolute
 #                     or relative to this file's directory)
 #   "<version>"       download this version instead of poly's pinned one
@@ -224,6 +228,23 @@ include-hidden = false
 # The whole set, as of poly {{version}}:
 #
 {{tools}}
+#
+# hadolint is the one marked off by default, and it is the only one: poly has
+# its own Dockerfile rules now, and running both printed most defects twice
+# under two codes with two severities, which made `[lint] fail-on` depend on
+# which of the two spoke first. Measured over 256 real Dockerfiles, hadolint's
+# shellcheck findings are a subset of what poly's own shellcheck seam already
+# reports, at worse positions. `hadolint = "on"` downloads and runs the real
+# thing alongside poly's rules, which is a choice to see both rather than a
+# fallback -- nothing warns about it. What poly does not reproduce is three of
+# hadolint's info-level rules: DL3047, DL3059 and DL3066.
+#
+# `# hadolint ignore=DL3008` in a Dockerfile stops doing anything when hadolint
+# is off, so poly reports it as `poly/ignore-syntax` and names the `# poly:
+# ignore` line to write instead. It is a migration signal, not a compatibility
+# layer: poly never honours hadolint's syntax, and says so once so the comment
+# can be replaced. Turn hadolint on and the comment works again, and poly stops
+# mentioning it.
 #
 # `cargo` is the entry for `cargo clippy`: clippy is a subcommand, not a binary
 # poly invokes on its own, so `cargo = "off"` is how a project turns Rust lint
@@ -267,3 +288,4 @@ include-hidden = false
 [tools]
 # shellcheck = "C:/tools/shellcheck.exe"
 # tflint = "off"
+# hadolint = "on"
