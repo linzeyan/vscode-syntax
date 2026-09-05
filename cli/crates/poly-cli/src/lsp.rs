@@ -59,7 +59,7 @@ pub fn run() -> Result<()> {
 /// binary as protobuf's formatter and linter. Making it PATH-only would mean
 /// downloading buf to format a file and then refusing to use it to navigate
 /// the same file. See `server_command`.
-const LANGUAGE_SERVERS: &[(&str, &str)] = &[
+pub(crate) const LANGUAGE_SERVERS: &[(&str, &str)] = &[
     ("go", "gopls"),
     ("rust", "rust-analyzer"),
     ("c", "clangd"),
@@ -1836,6 +1836,12 @@ fn collect_symbols(
 
 fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     let config = poly_core::Config::discover(path).unwrap_or_else(|_| poly_core::Config::empty());
+    // The same reading of poly.toml `poly check` prints, on the channel the
+    // daemon has: the editor shows the server's stderr as poly's output. A
+    // `[tools]` name that turns nothing off is a mistake worth the same
+    // sentence in both places, and the editor is where most people meet it
+    // first -- CI only sees the file once it is pushed.
+    crate::settings::report(&config);
     // A file `[lint] exclude` drops has to come back clean here too, or
     // Problems shows findings no `poly check` run will ever produce. Naming a
     // file on the command line still beats the exclude (batch::resolve_targets

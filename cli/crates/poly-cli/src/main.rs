@@ -8,6 +8,7 @@ mod fmt;
 mod lsp;
 mod proxy;
 mod report;
+mod settings;
 mod usage;
 
 use std::path::{Path, PathBuf};
@@ -52,6 +53,7 @@ fn run() -> Result<i32> {
         "check" => cmd_check(&split_flags("check", &rest)?),
         "minify" => cmd_minify(&split_flags("minify", &rest)?),
         "tools" => cmd_tools(&rest),
+        "config" => cmd_config(&rest),
         "deadcode" => cmd_deadcode(&rest),
         "bench" => {
             let path = rest.first().context("usage: poly bench <file> [iters]")?;
@@ -273,7 +275,7 @@ fn cmd_fmt(inv: &Invocation) -> Result<i32> {
         inv.has("--compact"),
     );
     let config = poly_core::Config::discover(&inv.paths[0])?;
-    poly_tools::reject_embedded_tools(&config)?;
+    settings::enforce(&config)?;
     // The flag beats poly.toml: a policy belongs in the file so the editor and
     // CI share it, but one run wanting a different answer is why flags exist.
     let fail_on = inv.fail_on.unwrap_or(config.format_fail_on);
@@ -466,7 +468,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     // linter once over a batch, so there is no per-file choice to make.
     // Language mapping and excludes are per file (batch::resolve_targets).
     let config = poly_core::Config::discover(paths.first().unwrap())?;
-    poly_tools::reject_embedded_tools(&config)?;
+    settings::enforce(&config)?;
     let fail_on = inv.fail_on.unwrap_or(config.lint_fail_on);
     let scope: Vec<PathBuf> = if inv.has("--changed") {
         match changed_scope(paths)? {
@@ -822,15 +824,67 @@ fn python_sources(root: &Path) -> Result<Vec<PathBuf>> {
     )
 }
 
+/// `poly config export`: the annotated default poly.toml, on stdout.
+///
+/// Generated rather than kept as a file in the repo because the parts that
+/// drift are exactly the parts poly already knows -- a pinned version, a tool
+/// that became a library, the release number in "as of poly 0.1.0". Redirecting
+/// this into poly.toml is a no-op by construction; `--self-test` is the gate's
+/// non-vacuity check, since diffing the binary's output against a file the
+/// binary wrote would otherwise pass forever on a generator that stopped
+/// generating.
+fn cmd_config(rest: &[String]) -> Result<i32> {
+    match rest.first().map(String::as_str) {
+        Some("export") => {
+            if rest.iter().any(|a| a == "--self-test") {
+                settings::self_test()?;
+            } else {
+                print!("{}", settings::export());
+            }
+            Ok(0)
+        }
+        other => bail!("usage: poly config export [--self-test] (got {other:?})"),
+    }
+}
+
+/// The whole-program analysis tools `poly deadcode` dispatches to, and what to
+/// say when one is not installed.
+///
+/// Every one comes from the language's own toolchain, so the instruction is
+/// that toolchain's rather than a poly download. A table rather than three
+/// literals inside `dead_code_jobs` because `[tools]` accepts these names too
+/// (see `dead_code_tool`), and `settings` has to document and recognise exactly
+/// the names that work.
+pub(crate) const ANALYSIS_TOOLS: &[(&str, &str)] = &[
+    (
+        "deadcode",
+        "It ships with the Go toolchain's own tools:\n  \
+         go install golang.org/x/tools/cmd/deadcode@latest",
+    ),
+    (
+        "knip",
+        "It is a project dependency:\n  npm install --save-dev knip",
+    ),
+    (
+        "vulture",
+        "Install it into the project's environment:\n  pip install vulture",
+    ),
+];
+
+/// What to say when `tool` is not installed.
+fn install_hint(tool: &str) -> &'static str {
+    ANALYSIS_TOOLS
+        .iter()
+        .find(|(name, _)| *name == tool)
+        .map(|(_, hint)| *hint)
+        .unwrap_or("")
+}
+
 /// One whole-program analysis to run, and where.
 struct DeadCodeJob {
     /// The name `[tools]` resolves it under, and the name in the report.
     tool: &'static str,
     root: PathBuf,
-    /// What to say when the tool is not installed. Every one of these comes
-    /// from the language's own toolchain, so the instruction is that
-    /// toolchain's, not a poly download.
-    install: &'static str,
 }
 
 /// Which analyses apply to `target`.
@@ -845,11 +899,6 @@ struct DeadCodeJob {
 /// "which project is this path part of", and a project below it is a different
 /// one.
 fn dead_code_jobs(target: &Path, config: &poly_core::Config) -> Vec<DeadCodeJob> {
-    const GO: &str = "It ships with the Go toolchain's own tools:\n  \
-                      go install golang.org/x/tools/cmd/deadcode@latest";
-    const KNIP: &str = "It is a project dependency:\n  npm install --save-dev knip";
-    const VULTURE: &str = "Install it into the project's environment:\n  pip install vulture";
-
     let language = if target.is_dir() {
         None
     } else {
@@ -866,17 +915,12 @@ fn dead_code_jobs(target: &Path, config: &poly_core::Config) -> Vec<DeadCodeJob>
             jobs.push(DeadCodeJob {
                 tool: "deadcode",
                 root,
-                install: GO,
             });
         }
     }
     if wanted(&["typescript", "javascript"]) {
         if let Some(root) = js_analysis_root(target) {
-            jobs.push(DeadCodeJob {
-                tool: "knip",
-                root,
-                install: KNIP,
-            });
+            jobs.push(DeadCodeJob { tool: "knip", root });
         }
     }
     if wanted(&["python"]) {
@@ -884,7 +928,6 @@ fn dead_code_jobs(target: &Path, config: &poly_core::Config) -> Vec<DeadCodeJob>
             jobs.push(DeadCodeJob {
                 tool: "vulture",
                 root,
-                install: VULTURE,
             });
         }
     }
@@ -933,7 +976,7 @@ fn cmd_deadcode(rest: &[String]) -> Result<i32> {
     let mut ran = 0usize;
     for job in &jobs {
         let Some(cmd) = dead_code_tool(job, &config, &target) else {
-            eprintln!("{} is not installed. {}", job.tool, job.install);
+            eprintln!("{} is not installed. {}", job.tool, install_hint(job.tool));
             missing.push(job.tool.to_string());
             continue;
         };

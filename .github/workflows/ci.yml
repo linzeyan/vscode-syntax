@@ -178,6 +178,17 @@ jobs:
       # exactly like a pin until someone else downloads.
       - name: External tool pins are locked
         run: python3 tools/tool-sync.py --check
+      # The third drift gate, and the only one whose failure lands in
+      # documentation rather than in a build: poly.example.toml is generated, so
+      # a tool poly pins, embeds or stops shipping cannot quietly leave the file
+      # describing a poly that no longer exists. --self-test first for the same
+      # reason the notices gate has one -- this diffs the binary against a file
+      # the binary wrote, so a generator that stopped generating would pass.
+      - name: poly.example.toml is current
+        run: |
+          cargo build --release --manifest-path cli/Cargo.toml
+          cli/target/release/poly config export --self-test
+          cli/target/release/poly config export | diff -u poly.example.toml -
       - name: LSP smoke test
         run: |
           cargo build --release --manifest-path cli/Cargo.toml

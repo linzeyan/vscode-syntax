@@ -13,8 +13,8 @@ POLY := cli/target/release/poly
 MANIFEST := --manifest-path cli/Cargo.toml
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint notices pins dogfood smoke probe e2e gates version \
-	grammars bump control clean
+.PHONY: help build test lint notices pins config dogfood smoke probe e2e gates \
+	version grammars bump control clean
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -43,6 +43,18 @@ notices: ## THIRD-PARTY-NOTICES still matches cargo metadata
 # trust-on-first-use, which looks exactly like a pin until someone downloads.
 pins: ## External tool versions and hashes are locked
 	python3 tools/tool-sync.py --check
+
+# The third drift gate, and the one whose failure mode is documentation rather
+# than a build: poly.example.toml is generated, so a tool poly pins or embeds
+# cannot quietly stop matching what the file says it does.
+#
+# --self-test first, for the same reason the notices gate has one. This compares
+# the binary against a file the binary wrote, so a generator that silently
+# stopped substituting would be regenerated into the committed copy and pass
+# from then on. A gate that stops working is worse than no gate.
+config: build ## poly.example.toml still matches what `poly config export` writes
+	$(POLY) config export --self-test
+	$(POLY) config export | diff -u poly.example.toml -
 
 # poly run over its own repo. --strict so a missing toolchain fails here rather
 # than quietly formatting less than a developer's machine does.
@@ -123,7 +135,7 @@ version: build ## Check every version string agrees, binary included
 # The order is ci.yml's, so a failure here fails at the same point CI would.
 # The list is ci.yml's too: this claims a green run means the push is already
 # checked the way CI checks it, and a gate missing from here makes that a lie.
-gates: lint test notices pins smoke probe go tf rust deadcode dogfood version grammars e2e editor ## Everything above, in CI's order
+gates: lint test notices pins config smoke probe go tf rust deadcode dogfood version grammars e2e editor ## Everything above, in CI's order
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0

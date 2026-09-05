@@ -282,6 +282,7 @@ poly check --strict <paths...> # 工具缺席時視為錯誤，而不是跳過�
 poly fmt --changed             # 只處理 git 變更的檔案（pre-commit 用）
 poly tools list                # 工具解析狀態
 poly tools install [tool...]   # 預先抓好受管工具（離線環境先在有網路的機器跑）
+poly config export             # 印出含所有預設值與註解的 poly.toml
 poly deadcode [路徑]           # 進入點走不到的程式碼（見下）
 poly lsp                       # 給編輯器用的 LSP daemon
 poly --help                    # 完整說明
@@ -588,7 +589,10 @@ poly 壞了。走外部工具的語言不經過這條路，那些工具自己就
 不處理。
 
 完整的鍵、可填的值、每個引擎的預設值都寫在
-[poly.example.toml](poly.example.toml) 裡。
+[poly.example.toml](poly.example.toml) 裡。那份檔案是 `poly config export` 產生
+的，工具名稱、pin 住的版本、語言清單都直接讀自 binary，所以不會跟你手上這一版
+poly 說的不一樣；想拿當下這支 binary 的版本就跑 `poly config export > poly.toml`，
+整份存下來不改任何一行也不會改變 poly 的行為。
 
 ## 從原始碼建置
 

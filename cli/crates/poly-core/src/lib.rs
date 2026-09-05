@@ -250,6 +250,24 @@ pub fn editorconfig_editor_settings(path: &Path) -> EditorSettings {
     }
 }
 
+/// Every language id built-in detection can produce, sorted and deduplicated.
+///
+/// The set `[languages.map]` values and `[format.<lang>]` tables are checked
+/// against, and the set the generated poly.example.toml lists. Derived from
+/// `EXTENSIONS` rather than written out a second time, because a hand-copied
+/// list is exactly what went stale: `handlebars` and `protobuf` were detected
+/// for two releases before the documentation heard about them.
+///
+/// `dockerfile` is added by hand because it is the one id no extension yields
+/// -- `builtin_language` reaches it through a filename rule.
+pub fn builtin_languages() -> Vec<&'static str> {
+    let mut ids: Vec<&'static str> = EXTENSIONS.iter().map(|(_, lang)| *lang).collect();
+    ids.push("dockerfile");
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
 /// Detect by built-in rules only (no config). Filename rules run before
 /// extension rules so `Dockerfile.dev` is dockerfile, not a "dev" extension.
 pub fn builtin_language(path: &Path) -> Option<&'static str> {
@@ -591,6 +609,23 @@ impl Config {
     /// that merges the two.
     pub fn format_options(&self, lang: &str) -> FormatOptions {
         self.format_options.get(lang).copied().unwrap_or_default()
+    }
+
+    /// The languages `[format.<lang>]` tables were written for.
+    ///
+    /// Exposed so the caller that owns the language table can say whether each
+    /// one is a language at all. poly-core cannot ask that question itself: an
+    /// id it does not detect may still be one an engine formats, and the two
+    /// lists live in different crates.
+    pub fn format_languages(&self) -> impl Iterator<Item = &str> {
+        self.format_options.keys().map(String::as_str)
+    }
+
+    /// `[languages.map]` as written: glob, then the language id it maps to.
+    pub fn language_map(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.map
+            .iter()
+            .map(|(matcher, lang)| (matcher.glob().glob(), lang.as_str()))
     }
 
     /// `[languages.map]` first (project truth), then built-in detection.

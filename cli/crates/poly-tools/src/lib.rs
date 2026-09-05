@@ -326,7 +326,12 @@ pub fn tool(name: &str) -> Option<&'static Tool> {
 /// Each entry carries the sentence that tells its user what to do instead,
 /// because "this setting does nothing" is only half an answer -- the project
 /// configured it for a reason, and the reason still has somewhere to go.
-const EMBEDDED: &[(&str, &str)] = &[
+///
+/// Public because it is one column of the table poly-cli checks `[tools]`
+/// against and generates poly.example.toml from. An embedded name and a
+/// misspelled one are the same mistake, so they are answered by one pass over
+/// one table rather than by two mechanisms that could disagree.
+pub const EMBEDDED: &[(&str, &str)] = &[
     ("selene", LUA_INSTEAD),
     ("stylua", LUA_INSTEAD),
     ("ruff", PYTHON_INSTEAD),
@@ -344,19 +349,26 @@ const TYPOS_INSTEAD: &str = "poly spell-checks every file itself. Drop the line;
      a _typos.toml still holds `[default.extend-words]` and `[files] extend-exclude`, \
      and `[lint] per-file-ignores` can silence `typos/typo` per path.";
 
-/// Stop the run if `[tools]` configures something poly now answers for itself.
-pub fn reject_embedded_tools(config: &poly_core::Config) -> Result<()> {
-    let Some((name, instead)) = config
-        .tools
-        .keys()
-        .find_map(|n| EMBEDDED.iter().find(|(name, _)| *name == n))
-    else {
-        return Ok(());
-    };
-    bail!("poly.toml [tools] {name}: there is no {name} binary to configure — {instead}")
-}
-
 // ── resolution ─────────────────────────────────────────────────────────────
+
+/// The binary a `[tools]` value points at, or None when the value is not a
+/// path (`"off"`, or a version).
+///
+/// Relative paths resolve against the poly.toml that wrote them, not the
+/// working directory, so a repo-root entry means the same thing whichever
+/// subdirectory poly was invoked from. Shared with the validator in poly-cli:
+/// "does this path exist" has to be asked of the same path `resolve` will use,
+/// or the check would pass on a file the run then cannot find.
+pub fn explicit_path(value: &str, config: &poly_core::Config) -> Option<PathBuf> {
+    if !value.contains('/') && !value.contains('\\') {
+        return None;
+    }
+    let path = PathBuf::from(value);
+    Some(match (&config.root, path.is_absolute()) {
+        (Some(root), false) => root.join(path),
+        _ => path,
+    })
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Resolved {
@@ -385,24 +397,18 @@ impl Resolved {
 /// don't pretend).
 pub fn resolve(name: &str, config: &poly_core::Config, offline: bool) -> Resolved {
     let setting = config.tools.get(name).map(String::as_str);
-    match setting {
-        Some("off") => return Resolved::Disabled,
-        Some(s) if s.contains('/') || s.contains('\\') => {
-            let p = PathBuf::from(s);
-            let p = match (&config.root, p.is_absolute()) {
-                (Some(root), false) => root.join(p),
-                _ => p,
-            };
-            return if p.is_file() {
-                Resolved::Pinned(p)
-            } else {
-                Resolved::Missing(format!(
-                    "poly.toml points {name} at {} (not found)",
-                    p.display()
-                ))
-            };
-        }
-        _ => {}
+    if setting == Some("off") {
+        return Resolved::Disabled;
+    }
+    if let Some(path) = setting.and_then(|s| explicit_path(s, config)) {
+        return if path.is_file() {
+            Resolved::Pinned(path)
+        } else {
+            Resolved::Missing(format!(
+                "poly.toml points {name} at {} (not found)",
+                path.display()
+            ))
+        };
     }
     let Some(tool) = tool(name) else {
         return Resolved::Missing(format!("unknown tool {name:?}"));
@@ -814,42 +820,23 @@ mod tests {
         ));
     }
 
-    /// Lua, Python and spelling are handled in-process now, so there is no
-    /// stylua, selene, ruff or typos binary for `[tools]` to point at, pin or
-    /// turn off. Accepting the line and ignoring it would leave someone
-    /// believing they had disabled a linter that is still reporting.
+    /// A relative `[tools]` path is the poly.toml's, not the caller's.
     ///
-    /// Asserted on the *message*, not on what poly does with it: whether an
-    /// unactionable `[tools]` key stops the run or is reported and stepped over
-    /// is a separate decision, and the thing that must not change either way is
-    /// that the reader is told where the setting went.
+    /// The distinction only shows up when poly is run from a subdirectory, and
+    /// then it decides whether the tool is found at all. Shared with the
+    /// poly.toml validator so the file it checks for is the file `resolve`
+    /// would run.
     #[test]
-    fn tools_entries_for_embedded_languages_name_where_the_setting_went() {
-        for entry in [
-            ("selene", "off"),
-            ("stylua", "2.4.0"),
-            ("ruff", "0.16.5"),
-            ("typos", "1.49.1"),
-        ] {
-            let config = config_with_tools(&[entry]);
-            let error = reject_embedded_tools(&config)
-                .expect_err("an entry poly cannot honor must be reported")
-                .to_string();
-            assert!(error.contains(entry.0), "{error}");
-        }
-        // Naming where the setting went, not just that it is gone: someone who
-        // pinned ruff did it to control the rules, and someone who pinned typos
-        // did it to control the dictionary. ruff.toml and _typos.toml are where
-        // those live now.
-        for (tool, instead) in [("ruff", "ruff.toml"), ("typos", "_typos.toml")] {
-            let error = reject_embedded_tools(&config_with_tools(&[(tool, "off")]))
-                .expect_err("embedded")
-                .to_string();
-            assert!(error.contains(instead), "{tool}: {error}");
-        }
-
-        // Everything else is still a tool with a binary behind it.
-        assert!(reject_embedded_tools(&config_with_tools(&[("shellcheck", "off")])).is_ok());
+    fn an_explicit_path_is_anchored_at_the_config() {
+        let config = config_with_tools(&[("shellcheck", "bin/shellcheck")]);
+        let root = config.root.clone().expect("config root");
+        assert_eq!(
+            explicit_path("bin/shellcheck", &config),
+            Some(root.join("bin/shellcheck"))
+        );
+        // Neither of the other two value shapes is a path.
+        assert_eq!(explicit_path("off", &config), None);
+        assert_eq!(explicit_path("0.11.0", &config), None);
     }
 
     #[test]
