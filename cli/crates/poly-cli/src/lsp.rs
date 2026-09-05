@@ -1722,11 +1722,21 @@ fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn
         }
     };
     let mut fresh: HashMap<Url, Vec<lsp_types::Diagnostic>> = HashMap::new();
+    // Whole-scope linters report on files no editor has open, so the
+    // suppressions have to be read from disk here. `lint_document` reads the
+    // buffer instead, which is the only difference between the two.
+    let mut inline = poly_core::InlineCache::new();
     for found in found {
-        // The same two filters `lint_document` applies, for the same reason: a
-        // rule silenced in poly.toml has to be silent in Problems too.
+        // The same filters `lint_document` applies, for the same reason: a rule
+        // silenced in poly.toml or in the file itself has to be silent in
+        // Problems too.
         if config.excluded(&found.file, poly_core::Scope::Lint)
             || config.lint_ignored(&found.file, found.issue.source, &found.issue.code)
+            || inline.for_file(&found.file, &config).suppresses(
+                found.issue.line,
+                found.issue.source,
+                &found.issue.code,
+            )
         {
             continue;
         }
@@ -1869,10 +1879,19 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
         Ok(more) => issues.extend(more),
         Err(e) => eprintln!("[poly] external lint error {}: {e:#}", path.display()),
     }
-    // Same call `poly check` makes, so a rule silenced in poly.toml is silent
-    // in Problems too. A suppression only one side honors is the editor/CI
-    // split A4 exists to prevent.
-    issues.retain(|i| !config.lint_ignored(path, i.source, &i.code));
+    // Same two calls `poly check` makes, so a rule silenced in poly.toml or in
+    // the file itself is silent in Problems too. A suppression only one side
+    // honors is the editor/CI split A4 exists to prevent.
+    //
+    // Scanned from the buffer rather than from disk: the comment the user is
+    // typing is the one that should apply, and a squiggle that only clears on
+    // save is a suppression that looks broken.
+    let inline = poly_core::InlineIgnores::scan(Some(&lang), text);
+    issues.extend(inline.syntax_issues());
+    issues.retain(|i| {
+        !config.lint_ignored(path, i.source, &i.code)
+            && !inline.suppresses(i.line, i.source, &i.code)
+    });
     issues.into_iter().map(lint_diagnostic).collect()
 }
 
@@ -3110,6 +3129,49 @@ mod tests {
 
         assert!(lint_document(&root.join("vendor/a.sql"), sql).is_empty());
         assert!(!lint_document(&root.join("src/a.sql"), sql).is_empty());
+    }
+
+    /// The daemon's half of `tests/check.rs`'s inline suppression cases, on the
+    /// same fixtures.
+    ///
+    /// Both sides call the same `InlineIgnores`, and this is what keeps that
+    /// true: a comment that silences a finding in CI and leaves the squiggle on
+    /// screen is the editor/CI split A4 exists to prevent, and it is the split
+    /// nobody notices until they are staring at a Problems panel that disagrees
+    /// with a green build.
+    #[test]
+    fn an_inline_comment_is_silent_in_the_editor_too() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        let codes = |name: &str, text: &str| -> Vec<String> {
+            lint_document(&root.join(name), text)
+                .into_iter()
+                .filter_map(|d| match d.code {
+                    Some(lsp_types::NumberOrString::String(code)) => Some(code),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // Trailing: LT01 on this line is gone, CP01 on the next is not.
+        assert_eq!(
+            codes(
+                "trailing.sql",
+                "select a,b from t  -- poly: ignore sqruff/LT01\nWHERE x = 1;\n"
+            ),
+            ["CP01"]
+        );
+        // On its own line, for the line below.
+        assert!(codes(
+            "above.sql",
+            "select a, b from t\n-- poly: ignore sqruff/CP01\nWHERE x = 1;\n"
+        )
+        .is_empty());
+        // A comment poly cannot read is a diagnostic of its own here too, and
+        // the finding it was aimed at stays on screen.
+        let found = codes("bad.sql", "select a,b from t  -- poly: ignore LT01\n");
+        assert!(found.contains(&"ignore-syntax".to_string()), "{found:?}");
+        assert!(found.contains(&"LT01".to_string()), "{found:?}");
     }
 
     /// The squiggle's position is scraped out of prose, so the prose is a

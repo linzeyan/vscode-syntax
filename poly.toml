@@ -36,25 +36,9 @@ exclude = [
   "extensions/*/pnpm-lock.yaml",
 ]
 
-# Two rules poly wrote, silenced for the one file in this repo that argues with
-# them in its own comments. Both are judgement calls the Dockerfile already made
-# and explained, and this is where poly wants that decision recorded -- it does
-# not read hadolint's `# hadolint ignore=` lines, deliberately, because a
-# suppression that only one of the two linters honours is the editor/CI split
-# poly exists to prevent.
-#
-#   docker-apt-get-unpinned  the file pins nothing on purpose: Ubuntu drops the
-#                            superseded version the moment a security update
-#                            lands, so a pin makes the image stop building on
-#                            somebody else's schedule -- and the two packages
-#                            are a CA bundle and git, where the newest patch is
-#                            the one you want. The same argument the file makes
-#                            for `# hadolint ignore=DL3008`.
-#   docker-root-user         this image is a CI tool, not a service. It writes
-#                            into a checkout mounted at /work that belongs to
-#                            whoever the runner runs as, and a fixed non-root
-#                            UID baked in here would own none of it -- the file
-#                            already works around the same mismatch with
-#                            `git config --system safe.directory '*'`.
-[lint.per-file-ignores]
-"Dockerfile" = ["poly/docker-apt-get-unpinned", "poly/docker-root-user"]
+# No [lint.per-file-ignores] at all. Everything this repo silences is a line
+# rather than a file, so every one of them is a `# poly: ignore` comment in the
+# file itself -- the two Dockerfile rules on the lines they fire on, and the
+# deliberate misspellings in tests/check.rs on the fixtures that carry them. A
+# glob would have covered the lines nobody has written yet as well, and put the
+# reason two files away from the line it excuses.

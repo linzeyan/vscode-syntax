@@ -342,31 +342,383 @@ struct Suppression {
 }
 
 impl Suppression {
-    fn parse(entry: &str, pattern: &str) -> Result<Suppression> {
+    /// The grammar itself, with no surface attached. `Err` is the sentence a
+    /// reader needs, and the two callers put it where their surface can show it
+    /// -- the config aborts the parse, an inline comment reports a finding.
+    /// One function because there is one syntax: what poly prints is what you
+    /// paste, into either place.
+    fn parse_code(entry: &str) -> Result<Suppression, String> {
         // Shape only: an unknown tool or rule name is self-revealing (the
         // finding keeps appearing), but `"F401"` with no tool looks like a
         // spelling poly ought to understand and would silently match nothing.
         let (tool, rule) = entry
             .split_once('/')
             .filter(|(t, r)| !t.is_empty() && !r.is_empty())
-            .with_context(|| {
+            .ok_or_else(|| {
                 format!(
-                    "[lint.per-file-ignores] {pattern:?}: {entry:?} is not a rule code — write it \
-                     the way poly prints it, `tool/rule` (e.g. \"ruff/F401\") or `tool/*`"
+                    "{entry:?} is not a rule code — write it the way poly prints it, `tool/rule` \
+                     (e.g. \"ruff/F401\") or `tool/*`"
                 )
             })?;
-        anyhow::ensure!(
-            !rule.contains('/'),
-            "[lint.per-file-ignores] {pattern:?}: {entry:?} has more than one `/`"
-        );
+        if rule.contains('/') {
+            return Err(format!("{entry:?} has more than one `/`"));
+        }
         Ok(Suppression {
             tool: tool.to_string(),
             rule: (rule != "*").then(|| rule.to_string()),
         })
     }
 
+    fn parse(entry: &str, pattern: &str) -> Result<Suppression> {
+        Suppression::parse_code(entry)
+            .map_err(|reason| anyhow::anyhow!("[lint.per-file-ignores] {pattern:?}: {reason}"))
+    }
+
     fn matches(&self, source: &str, code: &str) -> bool {
         self.tool == source && self.rule.as_deref().is_none_or(|rule| rule == code)
+    }
+}
+
+// ── inline suppressions ────────────────────────────────────────────────────
+
+/// What an inline suppression comment says, after whatever introduces a comment
+/// in that language.
+const INLINE_MARKER: &str = "poly: ignore";
+
+/// The rule `syntax_issues` reports under, and the prose `lint::rule_doc`
+/// serves for it.
+///
+/// Exported so the documentation lives next to the code that emits it, the way
+/// poly's Dockerfile and workflow rules do -- poly's own rules have no upstream
+/// page to link, so the prose ships in the binary or the reader has nothing to
+/// look up.
+pub const INLINE_RULES: &[(&str, &str)] = &[(
+    "ignore-syntax",
+    "A `poly: ignore` comment poly will not act on. Codes are spelled the way \
+     poly prints them -- `[ruff/F401]` in a finding is `ruff/F401` in the \
+     comment -- and `tool/*` covers one tool entirely. A bare `F401` names no \
+     tool, so it would match nothing and read like a working suppression. In a \
+     Dockerfile a trailing comment is reported too: `poly fmt` moves it onto a \
+     line of its own, where it would cover the next instruction instead, so it \
+     belongs above the line it excuses. Either way the comment is reported \
+     rather than the run aborted, because one comment in one file is not a \
+     reason to stop checking a repo.",
+)];
+
+/// Comment introducers an inline suppression may follow, by language id.
+///
+/// Keyed on the id `Config::language` produces, so `EXTENSIONS` stays the only
+/// place that says which file is which language -- a second file-type table is
+/// how `nearest_ancestor_file` came to have two implementations that
+/// disagreed. `inline_suppression_covers_every_language` holds the two lists
+/// together: every id `builtin_languages` yields is either here or in that
+/// test's list of the ones deliberately left out.
+///
+/// Three families is the whole set poly needs, and a language outside them gets
+/// no inline suppression at all rather than a guess: `[lint.per-file-ignores]`
+/// still works there, and the finding continuing to appear says so.
+const COMMENT_PREFIXES: &[(&str, &[&str])] = &[
+    ("c", &["//"]),
+    ("cpp", &["//"]),
+    ("dockerfile", &["#"]),
+    ("go", &["//"]),
+    ("graphql", &["#"]),
+    // Both spellings are HCL's own.
+    ("hcl", &["#", "//"]),
+    ("terraform", &["#", "//"]),
+    // The id covers .jsonc as well as .json, and .jsonc is where a comment is
+    // legal. Writing one in strict JSON breaks the file loudly on the next
+    // parse, which is not a failure mode poly has to protect anyone from.
+    ("json", &["//"]),
+    ("less", &["//"]),
+    ("lua", &["--"]),
+    ("protobuf", &["//"]),
+    ("python", &["#"]),
+    ("rust", &["//"]),
+    ("scss", &["//"]),
+    ("shellscript", &["#"]),
+    ("sql", &["--"]),
+    ("swift", &["//"]),
+    ("toml", &["#"]),
+    ("typescript", &["//"]),
+    ("yaml", &["#"]),
+];
+
+fn comment_prefixes(lang: &str) -> &'static [&'static str] {
+    COMMENT_PREFIXES
+        .iter()
+        .find(|(id, _)| *id == lang)
+        .map_or(&[], |(_, prefixes)| *prefixes)
+}
+
+/// One suppression comment, and the lines it silences.
+struct InlineEntry {
+    /// Inclusive, 0-based. One line for a trailing comment, two when the
+    /// comment is on a line of its own -- see `InlineIgnores::scan`.
+    first: u32,
+    last: u32,
+    codes: Vec<Suppression>,
+}
+
+/// A `poly: ignore` comment poly reports on instead of acting on: one it cannot
+/// read, or one it cannot promise will still mean this tomorrow.
+struct RejectedIgnore {
+    line: u32,
+    col: u32,
+    end_col: u32,
+    /// Already worded for the reader — by the same parser the config uses, when
+    /// the codes are what is wrong.
+    reason: String,
+}
+
+/// Languages whose formatter moves a trailing comment onto a line of its own.
+///
+/// Dockerfile alone, and this list is the reason it is named rather than
+/// guessed at: `poly fmt` rewrites
+///
+///   FROM ubuntu  # poly: ignore poly/docker-untagged-base
+///
+/// into the comment and the instruction on separate lines, which under the
+/// line-above rule makes the suppression govern the *next* instruction. The
+/// YAML, Python, Lua and TOML formatters all leave a trailing comment where it
+/// is, so nothing else belongs here -- adding a language without checking its
+/// formatter would turn correct advice into wrong advice.
+fn relocates_trailing_comments(lang: &str) -> bool {
+    lang == "dockerfile"
+}
+
+/// The `# poly: ignore <tool/rule>, …` comments in one file.
+///
+/// The line-level neighbour of `[lint.per-file-ignores]`, and the same
+/// vocabulary: the codes are what the terminal prints, so silencing a finding
+/// is copying `[ruff/F401]` out of the output into either a comment or the
+/// config. `per-file-ignores` has no line dimension -- two `RUN apt-get` lines
+/// where only one is excusable cannot be written there at all -- and a whole
+/// file dropped to excuse one line is how a suppression stops being reviewable.
+///
+/// Applies to every finding poly reports, not only the rules poly wrote:
+/// filtering happens after collection, so a downloaded tool's code and an
+/// embedded engine's are silenced by the same comment. Each tool's own syntax
+/// (`# noqa`, `# hadolint ignore=`, `# shellcheck disable=`) keeps working
+/// untouched; this is the one that covers all of them at once.
+///
+/// Deliberately not a parse. A comment introducer inside a string literal is
+/// accepted as a comment, and living with that false accept costs one wrong
+/// suppression in a file somebody wrote on purpose, while avoiding it costs a
+/// parser for every language poly reports on.
+pub struct InlineIgnores {
+    entries: Vec<InlineEntry>,
+    rejected: Vec<RejectedIgnore>,
+}
+
+impl InlineIgnores {
+    pub fn empty() -> InlineIgnores {
+        InlineIgnores {
+            entries: Vec::new(),
+            rejected: Vec::new(),
+        }
+    }
+
+    /// Read `text` as `lang` and collect what it suppresses.
+    ///
+    /// A comment covers the line it sits on. When it is alone on its line it
+    /// covers the line below as well, which is the only other placement worth
+    /// having: a line long enough to need a suppression often has no room for a
+    /// trailing comment, and one continued over several lines cannot carry one
+    /// at all. A trailing comment stops at its own line, so the suppression
+    /// cannot leak onto the next statement -- the difference between the two
+    /// forms is whether anything precedes the comment on that line.
+    ///
+    /// The exception is a language whose formatter relocates trailing comments,
+    /// where the trailing form is reported and does nothing. See
+    /// `relocates_trailing_comments`.
+    pub fn scan(lang: Option<&str>, text: &str) -> InlineIgnores {
+        let prefixes = lang.map_or(&[][..], comment_prefixes);
+        if prefixes.is_empty() {
+            return InlineIgnores::empty();
+        }
+        let relocated = lang.is_some_and(relocates_trailing_comments);
+        let mut found = InlineIgnores::empty();
+        for (number, line) in text.lines().enumerate() {
+            let number = number as u32;
+            let Some((at, codes_at)) = find_inline_marker(line, prefixes) else {
+                continue;
+            };
+            let column = |byte: usize| line[..byte].chars().count() as u32;
+            let mut codes = Vec::new();
+            let mut named_anything = false;
+            let mut cursor = codes_at;
+            for token in line[codes_at..].split(',') {
+                let start = cursor + (token.len() - token.trim_start().len());
+                cursor += token.len() + 1; // the comma the split removed
+                let token = token.trim();
+                if token.is_empty() {
+                    continue;
+                }
+                named_anything = true;
+                match Suppression::parse_code(token) {
+                    Ok(code) => codes.push(code),
+                    Err(reason) => found.rejected.push(RejectedIgnore {
+                        line: number,
+                        col: column(start),
+                        end_col: column(start + token.len()),
+                        reason,
+                    }),
+                }
+            }
+            if !named_anything {
+                found.rejected.push(RejectedIgnore {
+                    line: number,
+                    col: column(at),
+                    end_col: column(line.len()),
+                    reason: format!(
+                        "`{INLINE_MARKER}` with no rule code silences nothing — name the rules the \
+                         way poly prints them, `tool/rule` (e.g. \"ruff/F401\") or `tool/*`"
+                    ),
+                });
+            }
+            let standalone = line[..at].trim().is_empty();
+            // Reported rather than honoured, and the reasoning is the one poly
+            // applies to a code it cannot read: it silences nothing now, so it
+            // cannot later silence something else. Honouring it until the next
+            // `poly fmt` would mean the same comment governs one instruction
+            // today and its neighbour tomorrow, and the day it moves is the day
+            // the warning saying so disappears. A Dockerfile suppression goes
+            // above the line -- which is where `# hadolint ignore=` already
+            // goes, so it is the placement the language's readers expect.
+            if relocated && !standalone {
+                found.rejected.push(RejectedIgnore {
+                    line: number,
+                    col: column(at),
+                    end_col: column(line.len()),
+                    reason: format!(
+                        "a trailing `{INLINE_MARKER}` silences nothing in a Dockerfile — `poly \
+                         fmt` moves a trailing comment onto a line of its own, where it would \
+                         cover the next instruction instead. Write it on the line above."
+                    ),
+                });
+                continue;
+            }
+            if !codes.is_empty() {
+                found.entries.push(InlineEntry {
+                    first: number,
+                    last: number + u32::from(standalone),
+                    codes,
+                });
+            }
+        }
+        found
+    }
+
+    /// Is this finding silenced by a comment in the file it was found in?
+    ///
+    /// Takes what the terminal prints as `[source/code]`, like
+    /// `Config::lint_ignored`, and is called from the same two places for the
+    /// same reason: a suppression only one of the CLI and the daemon honours is
+    /// the editor/CI split A4 exists to prevent.
+    pub fn suppresses(&self, line: u32, source: &str, code: &str) -> bool {
+        self.entries.iter().any(|entry| {
+            (entry.first..=entry.last).contains(&line)
+                && entry.codes.iter().any(|c| c.matches(source, code))
+        })
+    }
+
+    /// Findings for the comments poly declined to act on.
+    ///
+    /// Reported rather than fatal, which is the one place this parts company
+    /// with the config: a malformed entry in poly.toml stops the run because
+    /// nothing else would reveal it, and a malformed comment cannot abort a
+    /// whole repo's check over one line in one file. It silences nothing
+    /// either way, so the finding it was aimed at is still printed next to this
+    /// one.
+    pub fn syntax_issues(&self) -> Vec<crate::diag::Issue> {
+        self.rejected
+            .iter()
+            .map(|bad| crate::diag::Issue {
+                line: bad.line,
+                col: bad.col,
+                end_line: bad.line,
+                end_col: bad.end_col,
+                severity: crate::diag::Severity::Warning,
+                code: INLINE_RULES[0].0.to_string(),
+                message: bad.reason.clone(),
+                // poly's own rule about poly's own comment. See `INLINE_RULES`.
+                source: "poly",
+                fix: None,
+                url: None,
+            })
+            .collect()
+    }
+}
+
+/// The first `<comment> poly: ignore` on this line: where the comment starts,
+/// and where the rule codes begin after it.
+fn find_inline_marker(line: &str, prefixes: &[&str]) -> Option<(usize, usize)> {
+    let mut best: Option<(usize, usize)> = None;
+    for prefix in prefixes {
+        for (at, _) in line.match_indices(prefix) {
+            let after = &line[at + prefix.len()..];
+            // `##`, `///`, `-----`: the introducer repeated is still one comment.
+            let after = match prefix.chars().next() {
+                Some(c) => after.trim_start_matches(c),
+                None => after,
+            };
+            let Some(rest) = after.trim_start().strip_prefix(INLINE_MARKER) else {
+                continue;
+            };
+            // `poly: ignored the docs` is prose that starts the same way.
+            if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+                continue;
+            }
+            if best.is_none_or(|(previous, _)| at < previous) {
+                best = Some((at, line.len() - rest.len()));
+            }
+            break;
+        }
+    }
+    best
+}
+
+/// Reads each file's inline suppressions once, for callers holding findings
+/// rather than buffers.
+///
+/// The sibling of `ConfigCache`, and memoized for the same reason: a batch run
+/// filters thousands of findings and several of them land in one file, so the
+/// alternative is re-reading that file once per finding.
+#[derive(Default)]
+pub struct InlineCache {
+    by_file: HashMap<PathBuf, Arc<InlineIgnores>>,
+}
+
+impl InlineCache {
+    pub fn new() -> InlineCache {
+        InlineCache::default()
+    }
+
+    /// What `path` suppresses inline. `config` answers what language it is, so
+    /// a `[languages.map]` entry decides the comment syntax too.
+    ///
+    /// A file that cannot be read yields nothing: whatever produced a finding
+    /// for it has already read it, and failing here would turn a deleted file
+    /// into an error about suppressions.
+    pub fn for_file(&mut self, path: &Path, config: &Config) -> Arc<InlineIgnores> {
+        if let Some(hit) = self.by_file.get(path) {
+            return Arc::clone(hit);
+        }
+        let lang = config.language(path);
+        let scanned = Arc::new(
+            match lang.filter(|lang| !comment_prefixes(lang).is_empty()) {
+                // Read only for a language that could carry one: a walk covers
+                // every file in the repo, images included.
+                Some(lang) => std::fs::read_to_string(path)
+                    .map(|text| InlineIgnores::scan(Some(&lang), &text))
+                    .unwrap_or_else(|_| InlineIgnores::empty()),
+                None => InlineIgnores::empty(),
+            },
+        );
+        self.by_file
+            .insert(path.to_path_buf(), Arc::clone(&scanned));
+        scanned
     }
 }
 
@@ -1148,6 +1500,280 @@ mod tests {
         // finding it was meant to silence keeps being printed.
         write("[lint.per-file-ignores]\n\"tests/**\" = [\"ruff/NOSUCHRULE\"]\n");
         assert!(Config::discover(root).is_ok());
+    }
+
+    /// The syntax is the config's, and the only difference is where it is
+    /// written: a comment sits next to the code it excuses, so the reason and
+    /// the suppression are reviewed together.
+    #[test]
+    fn an_inline_comment_silences_the_line_it_is_on() {
+        let scan = |text: &str| InlineIgnores::scan(Some("python"), text);
+
+        // Trailing: its own line only. The next line is a different statement
+        // and a suppression that reaches it is one nobody wrote.
+        let found = scan("import os  # poly: ignore ruff/F401\nimport sys\n");
+        assert!(found.suppresses(0, "ruff", "F401"));
+        assert!(!found.suppresses(1, "ruff", "F401"));
+        // Only the rule named, and only from the tool named.
+        assert!(!found.suppresses(0, "ruff", "E501"));
+        assert!(!found.suppresses(0, "typos", "F401"));
+
+        // On a line of its own: the line below, which is the line it annotates,
+        // plus its own -- a long line has no room for a trailing comment and a
+        // continued one has nowhere to put it at all.
+        let found = scan("# poly: ignore ruff/F401\nimport os\nimport sys\n");
+        assert!(found.suppresses(1, "ruff", "F401"));
+        assert!(!found.suppresses(2, "ruff", "F401"));
+
+        // Two lines away is not reviewable, so it does not reach.
+        let found = scan("# poly: ignore ruff/F401\n\nimport os\n");
+        assert!(!found.suppresses(2, "ruff", "F401"));
+
+        // Several codes in one comment, and `tool/*` for a whole tool.
+        let found = scan("x = 1  # poly: ignore ruff/F401, typos/typo\n# poly: ignore ruff/*\ny\n");
+        assert!(found.suppresses(0, "ruff", "F401"));
+        assert!(found.suppresses(0, "typos", "typo"));
+        assert!(found.suppresses(2, "ruff", "ANYTHING"));
+        assert!(!found.suppresses(2, "typos", "typo"));
+
+        // Nothing to say about a file with no such comment.
+        assert!(!scan("import os\n").suppresses(0, "ruff", "F401"));
+    }
+
+    /// Every finding poly reports, not only the rules poly wrote. Filtering
+    /// happens after collection, so the comment cannot tell a downloaded tool's
+    /// code from an embedded engine's -- which is the point: poly is one
+    /// surface over many tools, and a suppression covering only poly's own
+    /// rules would be the opposite.
+    #[test]
+    fn an_inline_comment_covers_any_tools_code() {
+        let found = InlineIgnores::scan(
+            Some("dockerfile"),
+            "# poly: ignore hadolint/DL3008, poly/docker-apt-get-unpinned\nRUN apt-get install x\n",
+        );
+        assert!(found.suppresses(1, "hadolint", "DL3008"));
+        assert!(found.suppresses(1, "poly", "docker-apt-get-unpinned"));
+    }
+
+    /// Comment syntax is per language, and a language poly has no introducer
+    /// for gets nothing at all rather than a guess -- `[lint.per-file-ignores]`
+    /// still covers it, and the finding continuing to appear says so.
+    #[test]
+    fn inline_comments_follow_the_languages_own_syntax() {
+        let cases = [
+            ("python", "x = 1  # poly: ignore ruff/F401", true),
+            ("shellscript", "x=1 ## poly: ignore shellcheck/SC2086", true),
+            ("yaml", "a: 1 # poly: ignore actionlint/syntax-check", true),
+            (
+                "rust",
+                "let x = 1; // poly: ignore clippy/needless_return",
+                true,
+            ),
+            (
+                "typescript",
+                "const x = 1; /// poly: ignore eslint/no-var",
+                true,
+            ),
+            ("sql", "select a -- poly: ignore sqruff/LT01", true),
+            (
+                "lua",
+                "local x -- poly: ignore selene/unused_variable",
+                true,
+            ),
+            // The false accept this design takes on purpose, landing on the
+            // file that documents it: `//` inside a Rust string is not a
+            // comment, and poly does not parse Rust to find that out. What the
+            // scan then reads as a second code is the row's own `, true)`.
+            // poly: ignore poly/ignore-syntax
+            ("terraform", "x = 1 // poly: ignore tflint/rule", true),
+            // The introducer is the language's, so python's `#` is not rust's.
+            (
+                "rust",
+                "let x = 1; # poly: ignore clippy/needless_return",
+                false,
+            ),
+            // poly: ignore poly/ignore-syntax
+            ("python", "x = 1  // poly: ignore ruff/F401", false),
+            // Markdown, HTML and friends have no line comment poly reads.
+            ("markdown", "text <!-- poly: ignore typos/typo -->", false),
+            ("css", "a {} /* poly: ignore typos/typo */", false),
+        ];
+        for (lang, line, expected) in cases {
+            let found = InlineIgnores::scan(Some(lang), line);
+            let (source, code) = {
+                let tail = line.split("poly: ignore ").nth(1).unwrap();
+                let code = tail.split_whitespace().next().unwrap();
+                code.split_once('/').unwrap()
+            };
+            assert_eq!(
+                found.suppresses(0, source, code),
+                expected,
+                "{lang}: {line:?}"
+            );
+        }
+
+        // A file poly cannot name a language for is the same case as a language
+        // with no comment syntax.
+        assert!(!InlineIgnores::scan(None, "# poly: ignore typos/typo\nx\n")
+            .suppresses(1, "typos", "typo"));
+    }
+
+    /// The comment-prefix table is keyed by the ids `EXTENSIONS` produces, and
+    /// this is what keeps it from becoming a second file-type table that drifts
+    /// -- the way `nearest_ancestor_file` once had two implementations. A new
+    /// language has to be named in one list or the other.
+    #[test]
+    fn inline_suppression_covers_every_language() {
+        // Left out for a reason, not by omission: the first four are markup
+        // whose comments are block-delimited (`<!-- -->`, `/* */`, `{# #}`),
+        // which is not one of the three families this reads, and .ipynb is JSON
+        // around the source -- ruff reports notebook positions that do not
+        // index the file's own lines, so a comment placed by line number would
+        // land somewhere else entirely.
+        const NO_INLINE: &[&str] = &[
+            "astro",
+            "css",
+            "handlebars",
+            "html",
+            "jinja",
+            "jupyter",
+            "markdown",
+            "svelte",
+            "vue",
+            "xml",
+        ];
+        for lang in builtin_languages() {
+            let has = !comment_prefixes(lang).is_empty();
+            assert_eq!(
+                has,
+                !NO_INLINE.contains(&lang),
+                "{lang}: a new language needs a comment prefix here or a place in NO_INLINE"
+            );
+        }
+        // And nothing in the table for a language that no longer exists.
+        for (lang, _) in COMMENT_PREFIXES {
+            assert!(builtin_languages().contains(lang), "{lang}");
+        }
+    }
+
+    /// A code poly cannot read is reported instead of aborting the run: it is
+    /// one comment in one file, the finding it aimed at is still printed, and a
+    /// repo-wide check that stops for it would be a worse trade than the config
+    /// makes -- there, nothing else would reveal the mistake.
+    #[test]
+    fn a_malformed_inline_code_is_reported_not_fatal() {
+        let found = InlineIgnores::scan(Some("python"), "import os  # poly: ignore F401\n");
+        let issues = found.syntax_issues();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].source, "poly");
+        assert_eq!(issues[0].code, "ignore-syntax");
+        assert!(issues[0].message.contains("F401"), "{:?}", issues[0]);
+        // The same sentence the config gives for the same mistake.
+        assert!(issues[0].message.contains("tool/rule"), "{:?}", issues[0]);
+        // Pointed at the code itself, not at the line.
+        assert_eq!(issues[0].line, 0);
+        assert_eq!((issues[0].col, issues[0].end_col), (26, 30));
+        assert!(!found.suppresses(0, "ruff", "F401"));
+
+        // The good codes in a comment still work; only the bad one is reported.
+        let found = InlineIgnores::scan(Some("python"), "x  # poly: ignore ruff/F401, E501\n");
+        assert!(found.suppresses(0, "ruff", "F401"));
+        assert_eq!(found.syntax_issues().len(), 1);
+
+        // No code at all silences nothing and reads like it does.
+        let found = InlineIgnores::scan(Some("python"), "# poly: ignore\nimport os\n");
+        assert_eq!(found.syntax_issues().len(), 1);
+        assert!(found.syntax_issues()[0].message.contains("no rule code"));
+
+        // An unknown tool or rule is left alone: poly cannot know every code
+        // its tools will grow, and the finding it was aimed at keeps appearing.
+        let found = InlineIgnores::scan(Some("python"), "x  # poly: ignore ruff/NOSUCHRULE\n");
+        assert!(found.syntax_issues().is_empty());
+    }
+
+    /// In a Dockerfile the trailing form is reported and does nothing, because
+    /// poly's own Dockerfile formatter moves a trailing comment onto a line of
+    /// its own -- where the line-above rule would make it cover the *next*
+    /// instruction. `a_trailing_dockerfile_suppression_would_move` in
+    /// `tests/check.rs` pins that formatter behaviour, so this rule cannot
+    /// quietly become wrong advice.
+    ///
+    /// Silencing nothing is the point rather than a shortfall: a suppression
+    /// that works today and governs its neighbour after the next `poly fmt` is
+    /// the editor/CI-shaped failure where the two answers are the same tool at
+    /// two moments, and nothing in the second run says what changed.
+    #[test]
+    fn a_dockerfile_suppression_belongs_above_the_line() {
+        let trailing = InlineIgnores::scan(
+            Some("dockerfile"),
+            "FROM ubuntu  # poly: ignore poly/docker-untagged-base\nRUN make\n",
+        );
+        assert!(!trailing.suppresses(0, "poly", "docker-untagged-base"));
+        let issues = trailing.syntax_issues();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, "ignore-syntax");
+        assert!(issues[0].message.contains("poly fmt"), "{:?}", issues[0]);
+        assert!(issues[0].message.contains("line above"), "{:?}", issues[0]);
+
+        // The placement poly asks for, which is also where `# hadolint ignore=`
+        // goes: honoured, and nothing to report.
+        let above = InlineIgnores::scan(
+            Some("dockerfile"),
+            "# poly: ignore poly/docker-untagged-base\nFROM ubuntu\n",
+        );
+        assert!(above.suppresses(1, "poly", "docker-untagged-base"));
+        assert!(above.syntax_issues().is_empty());
+
+        // Every other formatter poly ships leaves a trailing comment where it
+        // is, so the rule stops at Dockerfile.
+        for lang in ["python", "yaml", "toml", "lua"] {
+            assert!(!relocates_trailing_comments(lang), "{lang}");
+        }
+        let python = InlineIgnores::scan(Some("python"), "import os  # poly: ignore ruff/F401\n");
+        assert!(python.suppresses(0, "ruff", "F401"));
+        assert!(python.syntax_issues().is_empty());
+    }
+
+    /// The marker is a comment poly reads, not a word it greps for.
+    #[test]
+    fn only_a_real_ignore_comment_counts() {
+        let scan = |text: &str| InlineIgnores::scan(Some("python"), text);
+
+        // Prose that starts the same way is prose.
+        assert!(scan("x  # poly: ignored ruff/F401\n")
+            .syntax_issues()
+            .is_empty());
+        assert!(!scan("x  # poly: ignored ruff/F401\n").suppresses(0, "ruff", "F401"));
+        // No introducer at all: this is code, not a comment.
+        assert!(!scan("poly: ignore ruff/F401\n").suppresses(0, "ruff", "F401"));
+    }
+
+    #[test]
+    fn inline_cache_reads_each_file_once_and_survives_a_missing_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(root.join("a.py"), "import os  # poly: ignore ruff/F401\n").unwrap();
+        // A `[languages.map]` entry decides the comment syntax too: the
+        // language poly thinks a file is has to be the same answer everywhere.
+        std::fs::write(
+            root.join("poly.toml"),
+            "[languages.map]\n\"*.tpl\" = \"python\"\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("b.tpl"), "x  # poly: ignore typos/typo\n").unwrap();
+        let config = Config::discover(root).unwrap();
+
+        let mut cache = InlineCache::new();
+        assert!(cache
+            .for_file(&root.join("a.py"), &config)
+            .suppresses(0, "ruff", "F401"));
+        assert!(cache
+            .for_file(&root.join("b.tpl"), &config)
+            .suppresses(0, "typos", "typo"));
+        // A file the walk found and something deleted since is not an error.
+        assert!(!cache
+            .for_file(&root.join("gone.py"), &config)
+            .suppresses(0, "ruff", "F401"));
     }
 
     #[test]

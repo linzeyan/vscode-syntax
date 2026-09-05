@@ -158,6 +158,36 @@ fail-on = "hint"
 # CLI and the editor consult this, so a rule silenced here is gone from
 # Problems too.
 #
+# For one line rather than one path, write the same codes in a comment in the
+# file itself:
+#
+#   import os  # poly: ignore ruff/F401
+#
+#   # poly: ignore hadolint/DL3008, poly/docker-apt-get-unpinned
+#   RUN apt-get install -y curl
+#
+# A comment covers the line it is on; alone on its line it covers the line below
+# as well, which is the placement a long or continued line needs. The codes and
+# `tool/*` are the same as here, and it silences every tool poly runs, the
+# downloaded ones included -- what a comment cannot do is name a path, and what
+# this table cannot do is name a line.
+#
+# Read in languages with a `#`, `//` or `--` line comment. Elsewhere -- markdown,
+# HTML, CSS -- there is nothing to write it in, so only this table applies. A
+# code poly cannot read in a comment is reported as `poly/ignore-syntax` and the
+# run continues: one comment in one file is not a reason to stop checking a
+# repo, and the finding it was aimed at is still printed next to it.
+#
+# In a Dockerfile, write it above the line and never after it. `poly fmt` moves
+# a trailing comment there onto a line of its own, where it would cover the next
+# instruction instead -- so a trailing one is reported as `poly/ignore-syntax`
+# and silences nothing, rather than working until the next format run. This is
+# the one language it applies to; every other formatter poly ships leaves a
+# trailing comment where it is.
+#
+# Each tool's own syntax -- `# noqa`, `# hadolint ignore=`,
+# `# shellcheck disable=`, `-- selene: allow(...)` -- keeps working untouched.
+#
 # Default: empty.
 [lint.per-file-ignores]
 # "tests/fixtures/**" = ["ruff/F401", "typos/typo"]

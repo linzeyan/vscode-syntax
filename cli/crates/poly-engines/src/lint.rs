@@ -70,13 +70,15 @@ pub fn rule_doc(source: &str, code: &str) -> Option<&'static str> {
             .get(code)
             .copied()
         }
-        // One namespace for every rule poly wrote, two tables behind it: the
+        // One namespace for every rule poly wrote, three tables behind it: the
         // codes are already prefixed by what they lint (`docker-`, `actions-`),
         // so a third engine adds a table here rather than a second source name
-        // the reader has to learn.
+        // the reader has to learn. `INLINE_RULES` is poly-core's because the
+        // rule is poly-core's -- a suppression comment is not a language's.
         "poly" => DOCKER_RULES
             .iter()
             .chain(crate::workflow::RULES)
+            .chain(poly_core::INLINE_RULES)
             .find(|(rule, _)| *rule == code)
             .map(|(_, doc)| *doc),
         _ => None,

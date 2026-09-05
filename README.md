@@ -561,6 +561,34 @@ exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同�
 報。少了工具名的 `"F401"` 會讓 poly.toml 解析失敗，而不是安靜地什麼都沒關掉。編輯
 器與 CI 讀同一份設定，所以關掉的規則在 Problems 裡也不會出現。
 
+要關掉的只是某一行而不是整個檔案時，把同一組代碼寫成註釋放進原始碼：
+
+```python
+import os  # poly: ignore ruff/F401
+```
+
+```dockerfile
+# poly: ignore hadolint/DL3008, poly/docker-apt-get-unpinned
+RUN apt-get install -y curl
+```
+
+註釋管自己這一行；獨佔一整行時再多管下面一行——長行與用 `\` 續行的指令沒地方擺行尾
+註釋，這個位置就是給它們的。代碼與 `tool/*` 跟設定檔那邊完全一樣，而且對 poly 跑的
+每一支工具都有效，包含下載回來的 hadolint、shellcheck。兩者的分工是：註釋指不到路
+徑，設定檔指不到行。
+
+Dockerfile 只認寫在上一行的形式：`poly fmt` 會把 Dockerfile 的行尾註釋搬到獨立一
+行，搬完就變成在管下一道指令，所以寫在行尾的會被報成 `poly/ignore-syntax`、而且什麼
+都不關——與其讓它現在有效、下次格式化後改去關別行，不如當場說清楚。這是唯一有這條規
+則的語言，其他語言的 formatter 都會把行尾註釋留在原地。
+
+有 `#`／`//`／`--` 行註釋的語言才讀得到；markdown、HTML、CSS 這類沒地方寫，就只剩
+per-file-ignores 一條路。註釋裡寫了 poly 讀不懂的代碼會以 `poly/ignore-syntax` 報出
+來，而不是讓整個 run 中斷——一個檔案裡的一行註釋不值得讓整個 repo 停下來，而且它原
+本想關掉的那條 finding 還是照樣印在旁邊。各工具自己的 `# noqa`、
+`# hadolint ignore=`、`# shellcheck disable=`、`-- selene: allow(...)` 一律照舊有效，
+poly 不碰。
+
 「要不要開語言伺服器」只認 VSCode settings 的 `poly.languageServers`，不進
 `poly.toml`——那是「這台機器上我要不要讓 poly 接管 Go」的個人偏好，CI 根本不跑
 `poly lsp`，寫進專案設定只會讓兩邊看到一個對方不在乎的鍵。server 一律從 PATH 找，poly

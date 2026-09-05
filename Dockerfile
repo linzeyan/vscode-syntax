@@ -13,6 +13,12 @@
 # cargo build --release --manifest-path cli/Cargo.toml
 # mkdir -p docker && cp cli/target/release/poly docker/poly-$(dpkg --print-architecture)
 # docker build -t poly .
+#
+# docker-root-user wants a USER. This image is a CI tool, not a service: it
+# writes into a checkout mounted at /work that belongs to whoever the runner
+# runs as, and a fixed non-root UID baked in here would own none of it -- the
+# same mismatch the `safe.directory` line below already works around.
+# poly: ignore poly/docker-root-user
 FROM ubuntu:24.04
 
 # Matches the runner the binary is compiled on. A slimmer base is tempting,
@@ -30,6 +36,9 @@ ARG TARGETARCH
 # bundle and git, where the newest patch is the one you want.
 # hadolint ignore=DL3008
 RUN apt-get update \
+  # The same judgement, for poly's own copy of the rule. It sits here rather
+  # than above the RUN because the finding lands on the package it names.
+  # poly: ignore poly/docker-apt-get-unpinned
   && apt-get install -y --no-install-recommends ca-certificates git \
   && rm -rf /var/lib/apt/lists/*
 

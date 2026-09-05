@@ -683,11 +683,32 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         // does in the editor, or the suppression is one more thing that only
         // works on one side (A4).
         let mut configs = poly_core::ConfigCache::new();
+        let mut inline = poly_core::InlineCache::new();
+        // A `# poly: ignore` comment poly cannot read is a finding of its own,
+        // and it has to come from the file rather than from a finding: a
+        // comment in a file nothing else reported on is exactly the one nobody
+        // would otherwise notice silencing nothing. Every walked file, so the
+        // set is the one `[lint] exclude` already narrowed.
+        for (path, config) in &walked {
+            let Some(path) = resolve_report(path, &base) else {
+                continue;
+            };
+            for issue in inline.for_file(&path, config).syntax_issues() {
+                issues.push(FileIssue {
+                    file: path.clone(),
+                    issue,
+                });
+            }
+        }
         issues.retain(|found| match resolve_report(&found.file, &base) {
             Some(path) => {
-                !configs
-                    .for_file(&path)
-                    .lint_ignored(&path, found.issue.source, &found.issue.code)
+                let config = configs.for_file(&path);
+                !config.lint_ignored(&path, found.issue.source, &found.issue.code)
+                    && !inline.for_file(&path, &config).suppresses(
+                        found.issue.line,
+                        found.issue.source,
+                        &found.issue.code,
+                    )
             }
             None => true,
         });
