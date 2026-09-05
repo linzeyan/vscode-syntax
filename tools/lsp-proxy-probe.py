@@ -1447,11 +1447,15 @@ def run(case, logs=True, graceful=True):
     shutil.rmtree(root, ignore_errors=True)
 
 
-# ── Two Go modules in one window ─────────────────────────────────────────────
+# ── Two projects in one window ───────────────────────────────────────────────
 #
 # The scenario the `Poly: Create go.work` command exists for, and the one thing
-# about Go that no other check here touches: every case above is one module in
-# one folder, which is the shape that always worked.
+# no other check here touches: every case above is one project in one folder,
+# which is the shape that always worked.
+#
+# Both languages that have a project boundary are measured, and they answer
+# differently -- which is the reason the command is Go-only and the reason that
+# is written down here rather than asserted in prose.
 
 GO_LIB = """package liba
 
@@ -1494,14 +1498,87 @@ GO_MODULES = {
     "appb/main.go": GO_APP,
 }
 
+# No second reference inside liba, unlike the Go fixture above. The Rust
+# assertion is the positive one, so the cross-crate hit has to be the only
+# thing settle can wait for -- an in-crate reference would let it return the
+# moment rust-analyzer parsed one file, and the check would be racing the
+# index instead of measuring it.
+RUST_LIB = """pub fn hello() -> &'static str {
+    "hi"
+}
+"""
 
-def referrers_to_hello(root, label):
-    """Which files poly reports as referring to `liba.Hello`, relative to root.
+RUST_APP = """fn main() {
+    println!("{}", liba::hello());
+}
+"""
+
+# A path dependency, which is Rust's `replace`: no network, and the two crates
+# are still two separate cargo projects with no workspace file over them.
+RUST_CRATES = {
+    "liba/Cargo.toml": '[package]\nname = "liba"\nversion = "0.1.0"\nedition = "2021"\n',
+    "liba/src/lib.rs": RUST_LIB,
+    "appb/Cargo.toml": (
+        '[package]\nname = "appb"\nversion = "0.1.0"\nedition = "2021"\n\n'
+        '[dependencies]\nliba = { path = "../liba" }\n'
+    ),
+    "appb/src/main.rs": RUST_APP,
+}
+
+
+@dataclass
+class Cross:
+    """Two projects of one language, and where to ask who refers to what."""
+
+    language: str
+    files: dict
+    # Both are opened: a server only answers about documents it has been given,
+    # and the question spans both projects.
+    opened: tuple
+    declared_in: str
+    line: int  # 0-based, as LSP counts
+    character: int
+
+
+CROSS_GO = Cross(
+    language="go",
+    files=GO_MODULES,
+    opened=("liba/lib.go", "appb/main.go"),
+    declared_in="liba/lib.go",
+    # `func Hello() string {` is line 2, and the name starts at column 5.
+    line=2,
+    character=5,
+)
+
+CROSS_RUST = Cross(
+    language="rust",
+    files=RUST_CRATES,
+    opened=("liba/src/lib.rs", "appb/src/main.rs"),
+    declared_in="liba/src/lib.rs",
+    line=0,
+    character=7,
+)
+
+
+def lay_out(cross, prefix):
+    """Write one Cross fixture to a fresh directory and return its root."""
+    root = tempfile.mkdtemp(prefix=prefix)
+    for name, text in cross.files.items():
+        path = os.path.join(root, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+    return root
+
+
+def referrers_to_hello(root, label, cross):
+    """Which files poly reports as referring to `hello`, relative to root.
 
     A whole poly session per call. `init_params` is captured at initialize and
-    the go.work appears between the two calls, so reusing one would be asking
-    gopls about a workspace it was never told about -- which is also why the
-    editor command restarts the client rather than waiting for a watcher.
+    the Go caller writes a go.work between its two calls, so reusing a session
+    would be asking gopls about a workspace it was never told about -- which is
+    also why the editor command restarts the client rather than waiting for a
+    watcher.
 
     Two workspace folders and neither of them the root: that is what VSCode
     sends when someone opens two projects in one window, and it is the reason
@@ -1547,9 +1624,7 @@ def referrers_to_hello(root, label):
     pump(want_id=1)
     send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
 
-    # Both opened, because a server only answers about documents it has been
-    # given and the question spans both modules.
-    for name in ("liba/lib.go", "appb/main.go"):
+    for name in cross.opened:
         send(
             {
                 "jsonrpc": "2.0",
@@ -1557,22 +1632,21 @@ def referrers_to_hello(root, label):
                 "params": {
                     "textDocument": {
                         "uri": f"file://{root}/{name}",
-                        "languageId": "go",
+                        "languageId": cross.language,
                         "version": 1,
-                        "text": GO_MODULES[name],
+                        "text": cross.files[name],
                     }
                 },
             }
         )
     pump(want_method="client/registerCapability")
 
-    # `func Hello() string {` is line 2, and the name starts at column 5.
     found = settle(
         50,
         "textDocument/references",
         {
-            "textDocument": {"uri": f"file://{root}/liba/lib.go"},
-            "position": {"line": 2, "character": 5},
+            "textDocument": {"uri": f"file://{root}/{cross.declared_in}"},
+            "position": {"line": cross.line, "character": cross.character},
             "context": {"includeDeclaration": False},
         },
         bool,
@@ -1604,15 +1678,10 @@ def cross_module_go():
     if not (shutil.which("gopls") and shutil.which("go")):
         print("SKIPPED cross-module Go: needs gopls and go on PATH")
         return
-    root = tempfile.mkdtemp(prefix="poly-proxy-gowork-")
-    for name, text in GO_MODULES.items():
-        path = os.path.join(root, name)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            f.write(text)
+    root = lay_out(CROSS_GO, "poly-proxy-gowork-")
 
     print("go, two modules in one window:")
-    without = referrers_to_hello(root, "no go.work")
+    without = referrers_to_hello(root, "no go.work", CROSS_GO)
     assert any(f.startswith("liba/") for f in without), (
         f"gopls did not even find the in-module reference; nothing here is "
         f"measuring what it claims to: {without}"
@@ -1639,11 +1708,41 @@ def cross_module_go():
     # that -- the directory it writes into is usually outside everything open.
     assert os.path.exists(os.path.join(root, "go.work"))
 
-    with_work = referrers_to_hello(root, "go.work")
+    with_work = referrers_to_hello(root, "go.work", CROSS_GO)
     assert any(f.startswith("appb/") for f in with_work), (
         f"a go.work did not make the reference cross: {with_work}"
     )
     print(f"  with a go.work one directory up: {with_work}")
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def cross_crate_rust():
+    """The same question in Rust, and the answer is the opposite one.
+
+    Measured because "Rust needs the go.work treatment too" is the obvious
+    guess and it is wrong: a `path` dependency puts liba into appb's crate
+    graph, and rust-analyzer's reference search covers the whole graph. There
+    is nothing for poly to write, so there is no `Poly: Create Cargo
+    Workspace` -- and this is what that decision rests on.
+
+    Asserted rather than left in prose for the reason the Go half is: if
+    rust-analyzer ever stops crossing, Rust acquires the gap Go has, and the
+    probe should be what says so.
+    """
+    if not (shutil.which("rust-analyzer") and shutil.which("cargo")):
+        print("SKIPPED cross-crate Rust: needs rust-analyzer and cargo on PATH")
+        return
+    root = lay_out(CROSS_RUST, "poly-proxy-crates-")
+
+    print("rust, two crates in one window:")
+    # No workspace file is written anywhere, in either call: that is the point.
+    found = referrers_to_hello(root, "no workspace file", CROSS_RUST)
+    assert any(f.startswith("appb/") for f in found), (
+        "rust-analyzer stopped crossing a crate boundary on a path dependency. "
+        "Rust now has Go's problem, and unlike Go there is no overlay file to "
+        f"write for it: {found}"
+    )
+    print(f"  a path dependency alone, no workspace Cargo.toml: {found}")
     shutil.rmtree(root, ignore_errors=True)
 
 
@@ -2195,6 +2294,7 @@ elif ran:
     print("SKIPPED rude-exit check: needs rust-analyzer, the server that reports it")
 
 cross_module_go()
+cross_crate_rust()
 one_query_two_servers()
 a_folder_added_mid_session()
 a_cancelled_request_reaches_the_server()
