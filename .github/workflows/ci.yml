@@ -70,10 +70,19 @@ jobs:
       # Building proves it assembles; running proves the parts fit. The mount
       # is how a CI job would actually use it, and `check` reaches for the
       # network and for git, which is where a too-thin base image shows up.
+      #
+      # --strict is what makes this a check rather than a demo: a linter that
+      # failed to download becomes a failed step instead of a skipped file.
+      # That is also why the paths stop short of `cli/`. The image ships no
+      # language toolchain on purpose, `cargo clippy` only ever comes from one,
+      # and Rust would therefore be missing here forever -- the cli job lints
+      # it on a runner that has cargo. These four cover every tool the image
+      # does download: actionlint, hadolint, shellcheck, ruff and typos.
       - name: The image can lint a repository
         run: |
           docker run --rm -v "$PWD:/work" poly:ci --version
-          docker run --rm -v "$PWD:/work" poly:ci check --strict .
+          docker run --rm -v "$PWD:/work" poly:ci check --strict \
+            .github Dockerfile extensions tools
 
   # Same reason as the docker job: an action only exercised by whoever adopts
   # it is an action that breaks for whoever adopts it. `uses: ./` runs the

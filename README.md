@@ -247,6 +247,11 @@ docker run --rm -v "$PWD:/work" ghcr.io/linzeyan/poly check --strict .
 `linux/amd64` 與 `linux/arm64` 都有。tag 有 `latest`、`0.9.0`、`0.9`；pre-release
 不會動到 `latest`。image 裡的 binary 就是 release 附的那一支，不是另外編的。
 
+image **不含任何語言 toolchain**，只含 poly 自己會下載的那些 linter。所以 Rust
+專案在容器裡要拿掉 `--strict`——`cargo clippy` 只可能來自 toolchain，poly 下載不
+到，`--strict` 會（正確地）把它當成錯誤。同理 `poly fmt` 在容器裡不會有
+clang-format、swift-format、terraform fmt。
+
 外部 linter 快取在 `/cache`，CI 裡掛個 volume 上去就不用每次重抓：
 
 ```sh
