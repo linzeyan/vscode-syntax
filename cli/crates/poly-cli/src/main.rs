@@ -449,6 +449,51 @@ fn resolve_report(file: &Path, base: &Path) -> Option<PathBuf> {
     absolute.canonicalize().ok()
 }
 
+/// shellcheck over the shell embedded in one file, reported on that file.
+///
+/// The two halves of the seam meet here and nowhere else: poly-engines knows
+/// which text is shell and where it came from, poly-tools knows how to run
+/// shellcheck, and neither can see the other. `relocate` is what makes the
+/// findings about the Dockerfile or the workflow rather than about a snippet
+/// nobody can open — everything else on the issue is shellcheck's own answer,
+/// under shellcheck's own name and code, because it is.
+///
+/// Shared by `poly check` and the daemon so a squiggle in the editor and a
+/// `file:line:col` in CI cannot disagree (R5/A4).
+///
+/// One shellcheck process per snippet, and they run in parallel because there
+/// are as many of them as the file has `run:` blocks: shellcheck is a Haskell
+/// binary that costs ~17ms to start, so this repo's own `ci.yml` with 28 of
+/// them took half a second in a straight loop and 130ms here. actionlint pays
+/// the same per-script cost and hides it the same way. `collect` into a
+/// `Result` keeps the order the snippets were extracted in, so the report does
+/// not shuffle between runs.
+fn embedded_shell(
+    shellcheck: &Path,
+    snippets: &[poly_engines::shell::Snippet],
+    text: &str,
+) -> Result<Vec<poly_core::diag::Issue>> {
+    let found: Vec<Vec<poly_core::diag::Issue>> = snippets
+        .par_iter()
+        .map(|snippet| {
+            let reported = poly_tools::run::shellcheck_script(
+                shellcheck,
+                snippet.script(),
+                snippet.shell(),
+                snippet.excluded(),
+            )?;
+            Ok(reported
+                .into_iter()
+                .map(|mut issue| {
+                    snippet.relocate(text, &mut issue);
+                    issue
+                })
+                .collect())
+        })
+        .collect::<Result<_>>()?;
+    Ok(found.into_iter().flatten().collect())
+}
+
 fn cmd_check(inv: &Invocation) -> Result<i32> {
     let (strict, compact) = (inv.has("--strict"), inv.has("--compact"));
     let paths = &inv.paths;
@@ -555,19 +600,51 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     // Spelling runs over every walked file and the language-keyed linters over
     // the ones that have a language, in one pass, because the alternative is
     // two rayon passes over the same tree reading many of the same files twice.
+    // Shell lives inside files that are not shell scripts -- a Dockerfile `RUN`
+    // and a workflow `run:` -- and until now nobody checked it: poly's own rules
+    // for both stop at the shell, and hadolint's and actionlint's SC findings
+    // arrive under their name and at their position, which is the `RUN` or the
+    // `run:` key rather than the offending word. poly-engines lifts the script
+    // out and holds the map back; resolving and spawning shellcheck cannot live
+    // there, so it happens here, exactly as actionlint is already handed the
+    // shellcheck poly resolved.
+    //
+    // Resolved once, before any file is read, and only when the walk found a
+    // file that can carry shell -- resolution downloads, and a repository with
+    // no Dockerfile and no workflow must not pay for one. `None` when shellcheck
+    // is missing or `[tools] shellcheck = "off"`, and then this is silent: the
+    // `shellcheck` job below already says so for whoever has shell scripts.
+    let shellcheck: Option<PathBuf> = files
+        .iter()
+        .any(|(path, lang, _)| poly_engines::shell::hosts_shell(lang, path))
+        .then(|| poly_tools::resolve("shellcheck", &config, false))
+        .and_then(|resolved| resolved.command().map(Path::to_path_buf));
+
     if !walked.is_empty() {
         init_thread_pool();
         let results: Vec<Result<Vec<FileIssue>>> = walked
             .par_iter()
             .map(|(path, config)| {
                 let mut found = poly_engines::lint::spell(path)?;
-                if let Some(lang) = config
-                    .language(path)
-                    .filter(|lang| poly_engines::lint::supported(lang, path))
-                {
-                    let text = std::fs::read_to_string(path)
-                        .with_context(|| format!("reading {}", path.display()))?;
-                    found.extend(poly_engines::lint::lint(&lang, path, &text)?);
+                if let Some(lang) = config.language(path) {
+                    let linted = poly_engines::lint::supported(&lang, path);
+                    let embeds =
+                        shellcheck.is_some() && poly_engines::shell::hosts_shell(&lang, path);
+                    if linted || embeds {
+                        let text = std::fs::read_to_string(path)
+                            .with_context(|| format!("reading {}", path.display()))?;
+                        if linted {
+                            found.extend(poly_engines::lint::lint(&lang, path, &text)?);
+                        }
+                        if embeds {
+                            let snippets = poly_engines::shell::embedded(&lang, path, &text);
+                            found.extend(embedded_shell(
+                                shellcheck.as_deref().expect("checked above"),
+                                &snippets,
+                                &text,
+                            )?);
+                        }
+                    }
                 }
                 Ok(found
                     .into_iter()

@@ -1886,6 +1886,146 @@ fn listed(items: &[&str]) -> String {
     }
 }
 
+// ── embedded shell ─────────────────────────────────────────────────────────
+
+/// Every `run:` in this workflow that a POSIX shell checker can read, lifted
+/// out with a map back to the file. See `crate::shell`.
+///
+/// This is the *selection*, not the extraction: which steps carry shell, and
+/// which dialect. Both halves of that are the same question -- what GitHub will
+/// hand the script to -- and getting it wrong is not a missed finding but a
+/// wrong one, because a PowerShell step read as bash is a page of nonsense.
+pub(crate) fn shell_snippets(text: &str) -> Vec<crate::shell::Snippet> {
+    let mut out = Vec::new();
+    let Some(root) = parse(text) else {
+        return out;
+    };
+    let Some(jobs) = root.get("jobs") else {
+        return out;
+    };
+    let workflow_default = default_shell(&root);
+
+    for (_, job) in jobs.map() {
+        let job_default = default_shell(job).or(workflow_default);
+        // The runner's OS only decides the shell when nothing else did, so it
+        // is worked out once per job rather than per step.
+        let undeclared = runner_shell(job);
+        let Some(steps) = job.get("steps") else {
+            continue;
+        };
+        for step in steps.seq() {
+            // `uses:` and `run:` in one step is a workflow GitHub rejects
+            // (`actions-step-uses-and-run` says so); the action is the half
+            // that would run, and it is not shell.
+            if step.get("uses").is_some() {
+                continue;
+            }
+            let (Some(run), Some(key)) = (step.get("run"), step.key_of("run")) else {
+                continue;
+            };
+            // `run:` with nothing under it. The node still exists so the schema
+            // rules can report on it, and its range covers the key.
+            if run.str().is_none() {
+                continue;
+            }
+            let declared = step
+                .get("shell")
+                .and_then(Node::str)
+                .or(job_default)
+                .or(workflow_default);
+            let shell = match declared {
+                // Declared and not POSIX -- pwsh, python, cmd, a custom
+                // template -- is a step to stay silent about, not to guess at.
+                Some(name) => crate::shell::Shell::named(name),
+                // Undeclared, so it is whatever the runner's OS makes it.
+                None => undeclared,
+            };
+            let Some(shell) = shell else { continue };
+            let (_, key_col) = crate::lint::line_col(text, key.at);
+            out.extend(crate::shell::yaml_run(
+                text,
+                run.at,
+                run.end,
+                key_col as usize,
+                shell,
+            ));
+        }
+    }
+    out
+}
+
+/// The `defaults.run.shell` a workflow or a job declares, if it declares one.
+fn default_shell(node: &Node) -> Option<&str> {
+    node.get("defaults")?.get("run")?.get("shell")?.str()
+}
+
+/// The shell GitHub gives a step in this job that names none, or `None` when
+/// poly cannot tell.
+///
+/// `bash` on Linux and macOS and `pwsh` on Windows, so the answer needs the
+/// runner's OS -- and a `runs-on:` that is computed does not say what it is.
+/// Windows and "poly cannot tell" both come back as `None`, because the cost of
+/// the two mistakes is not symmetric: reading PowerShell as bash produces a
+/// page of parse errors that are every one of them wrong, while declining a
+/// Linux job costs only what an explicit `shell: bash` would have got back.
+/// Over the 1366 workflows measured actionlint takes the other side of that
+/// trade, and one Windows workflow accounts for 24 of its shellcheck findings.
+fn runner_shell(job: &Node) -> Option<crate::shell::Shell> {
+    // No `runs-on` at all is a broken workflow rather than an unknown runner --
+    // `actions-missing-runs-on` already says so, and GitHub will not schedule
+    // it. Reading it as bash keeps the editor useful on a file somebody is
+    // still typing, which is the only place this shape occurs.
+    let Some(runs_on) = job.get("runs-on") else {
+        return Some(crate::shell::Shell::Bash);
+    };
+    // `runs-on: ${{ matrix.os }}` names a list written a few lines above it.
+    let labels = match matrix_reference(runs_on) {
+        Some(key) => runner_matrix_labels(job, key),
+        // `runs-on: {group: ..., labels: [...]}` names a runner group, and the
+        // labels are still the only description of the machine there is.
+        None => match runs_on.get("labels") {
+            Some(labels) => labels.strings(),
+            None => runs_on.strings(),
+        },
+    };
+    let known = !labels.is_empty()
+        && labels.iter().all(|label| !label.is_expression())
+        && !labels
+            .iter()
+            .any(|label| label.str().is_some_and(is_windows_label));
+    known.then_some(crate::shell::Shell::Bash)
+}
+
+/// Every label `matrix.<key>` could put on `runs-on`.
+///
+/// Deliberately a wider read than `matrix_labels`, which the runner rule uses.
+/// That one answers "which values may poly report a finding about", so it drops
+/// a declared list an `exclude` touches -- reporting on a value that was
+/// excluded would be a false positive. This one asks the opposite question,
+/// "which values must poly account for before it dares assume bash", so an
+/// unresolved value has to count rather than be dropped.
+fn runner_matrix_labels<'a>(job: &'a Node, key: &str) -> Vec<&'a Node> {
+    let Some(matrix) = job.get("strategy").and_then(|s| s.get("matrix")) else {
+        return Vec::new();
+    };
+    let mut labels = matrix.get(key).map(Node::strings).unwrap_or_default();
+    labels.extend(
+        matrix
+            .get("include")
+            .map(Node::seq)
+            .unwrap_or(&[])
+            .iter()
+            .filter_map(|entry| entry.get(key)),
+    );
+    labels
+}
+
+/// `windows-latest`, `windows-2022`, `windows-11-arm`, or a self-hosted set
+/// that simply says `windows`.
+fn is_windows_label(label: &str) -> bool {
+    label.to_ascii_lowercase().starts_with("windows")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

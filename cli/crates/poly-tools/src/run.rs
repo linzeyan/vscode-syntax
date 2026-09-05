@@ -166,6 +166,42 @@ pub fn shellcheck_stdin(cmd: &Path, text: &str) -> Result<Vec<Issue>> {
         .collect())
 }
 
+/// A shell script lifted out of a Dockerfile or a workflow, checked as the
+/// dialect its host said it would run under.
+///
+/// `-s` rather than shellcheck's shebang detection, which is what
+/// `shellcheck_stdin` relies on: an embedded snippet has no shebang, so
+/// shellcheck would fall back to `sh` and report the whole SC3xxx POSIX family
+/// against a `RUN` that a `SHELL ["/bin/bash", "-c"]` runs under bash. The
+/// dialect is knowable from the host file, so it is stated rather than guessed.
+///
+/// The script is passed through whole, comments included, so a
+/// `# shellcheck disable=SC2086` written inside the `RUN` or the `run:` is
+/// honoured by shellcheck itself. `exclude` is shellcheck's own `-e` for the
+/// same reason: the codes an embedded snippet cannot answer are turned off in
+/// the tool rather than filtered out of its output afterwards, so a directive
+/// in the file and this list are one mechanism instead of two.
+/// Positions come back relative to the snippet; `Snippet::relocate` is what
+/// puts them on the host file.
+pub fn shellcheck_script(
+    cmd: &Path,
+    script: &str,
+    shell: &str,
+    exclude: &[&str],
+) -> Result<Vec<Issue>> {
+    let exclude = exclude.join(",");
+    let out = run(
+        cmd,
+        &["-f", "json", "-s", shell, "-e", &exclude, "-"],
+        &[],
+        Some(script),
+    )?;
+    Ok(shellcheck_parse(&out)?
+        .into_iter()
+        .map(|f| f.issue)
+        .collect())
+}
+
 // ── hadolint ───────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]

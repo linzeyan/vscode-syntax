@@ -1491,6 +1491,20 @@ fn external_lint(
         }
     }
 
+    // Shell embedded in a file that is not a shell script: a Dockerfile `RUN`,
+    // a workflow `run:`. Independent of the tool below, and it has to be — the
+    // editor squiggle and `poly check`'s output are one answer (R5/A4), and
+    // `poly check` runs this over the same files.
+    //
+    // The snippets are extracted before shellcheck is resolved, so a Dockerfile
+    // whose every `RUN` is exec form never triggers a download.
+    let snippets = poly_engines::shell::embedded(lang, path, text);
+    if !snippets.is_empty() {
+        if let Some(shellcheck) = resolved_tool("shellcheck", config) {
+            issues.extend(crate::embedded_shell(&shellcheck, &snippets, text)?);
+        }
+    }
+
     // Managed tool for the language, if any. Independent of the above: a
     // project can run both, and their findings do not overlap.
     let name = match lang {
