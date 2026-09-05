@@ -42,7 +42,17 @@ jobs:
           BIN=target/${{ matrix.target }}/release/poly
           [ -f "$BIN.exe" ] && BIN="$BIN.exe"
           "$BIN" fmt --check . || test $? -le 1
-      - name: Binary size budget (02 §9)
+      # Reported, not enforced. The 40MB ceiling went when the four Rust tools
+      # were compiled in: linux-x64 and win-x64 landed at 96% of it, so the next
+      # dependency to grow would have failed a build over a number nobody is
+      # trading anything for. The release profile is still tuned for size --
+      # opt-level="s", fat LTO, one codegen unit, stripped -- because that costs
+      # ~8% latency and nothing else. What is gone is the cliff.
+      #
+      # Annotation, not just a log line: job logs need admin rights, so the
+      # number has to stay readable in the public check run. Losing the gate is
+      # exactly why it has to keep being printed.
+      - name: Binary size
         working-directory: cli
         shell: bash
         run: |
@@ -50,12 +60,7 @@ jobs:
           [ -f "$BIN.exe" ] && BIN="$BIN.exe"
           bytes=$(wc -c < "$BIN")
           mb=$(( bytes / 1048576 ))
-          # Annotation, not just a log line: job logs need admin rights, so
-          # the number has to survive into the publicly readable check run.
           echo "::notice title=binary size::${{ matrix.target }} ${mb}MB ($bytes bytes)"
-          test "$bytes" -lt $(( 40 * 1048576 )) || {
-            echo "::error title=binary size::${{ matrix.target }} ${mb}MB exceeds the 40MB budget (02 §9)"
-            exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: poly-${{ matrix.target }}

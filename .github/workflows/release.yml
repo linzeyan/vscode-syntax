@@ -76,12 +76,12 @@ jobs:
           BIN=target/${{ matrix.target }}/release/poly
           [ -f "$BIN.exe" ] && BIN="$BIN.exe"
           "$BIN" fmt --check . || test $? -le 1
+          # Reported, not enforced -- same as build.yml, and for the same
+          # reason. A release must not be the place a size ceiling is discovered
+          # anyway: by here the tag exists.
           bytes=$(wc -c < "$BIN")
           mb=$(( bytes / 1048576 ))
           echo "::notice title=binary size::${{ matrix.target }} ${mb}MB ($bytes bytes)"
-          test "$bytes" -lt $(( 40 * 1048576 )) || {
-            echo "::error title=binary size::${{ matrix.target }} ${mb}MB exceeds the 40MB budget (02 §9)"
-            exit 1; }
       - name: Package platform VSIX
         shell: bash
         run: |

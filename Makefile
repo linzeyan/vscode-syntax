@@ -132,10 +132,14 @@ grammars: ## Generated syntax files match sources.json; grammars tokenize
 version: build ## Check every version string agrees, binary included
 	python3 tools/bump.py --check $(POLY)
 
-# The order is ci.yml's, so a failure here fails at the same point CI would.
-# The list is ci.yml's too: this claims a green run means the push is already
+# The list is ci.yml's: this claims a green run means the push is already
 # checked the way CI checks it, and a gate missing from here makes that a lie.
-gates: lint test notices pins config smoke probe go tf rust deadcode dogfood version grammars e2e editor ## Everything above, in CI's order
+#
+# The order is ci.yml's four jobs read end to end -- cli, then acceptance, then
+# grammars, then extensions. CI runs them in parallel and a developer cannot, so
+# this is the serial reading of the same list rather than the same order; what
+# still holds is that a failure here lands on the gate CI would name.
+gates: lint test notices pins config smoke dogfood version probe go tf rust deadcode grammars e2e editor ## Everything above, grouped as CI's jobs are
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0
