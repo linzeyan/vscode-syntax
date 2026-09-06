@@ -1735,7 +1735,7 @@ fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn
     // suppressions have to be read from disk here. `lint_document` reads the
     // buffer instead, which is the only difference between the two.
     let mut inline = poly_core::InlineCache::new();
-    for found in found {
+    for mut found in found {
         // The same filters `lint_document` applies, for the same reason: a rule
         // silenced in poly.toml or in the file itself has to be silent in
         // Problems too.
@@ -1748,6 +1748,9 @@ fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn
             )
         {
             continue;
+        }
+        if let Some(severity) = config.lint_severity(found.issue.source, &found.issue.code) {
+            found.issue.severity = severity;
         }
         let Ok(uri) = Url::from_file_path(&found.file) else {
             continue;
@@ -1901,6 +1904,13 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
         !config.lint_ignored(path, i.source, &i.code)
             && !inline.suppresses(i.line, i.source, &i.code)
     });
+    // The colour of the squiggle is the project's decision too, and it is the
+    // same call `poly check` makes before it decides the exit code.
+    for issue in &mut issues {
+        if let Some(severity) = config.lint_severity(issue.source, &issue.code) {
+            issue.severity = severity;
+        }
+    }
     issues.into_iter().map(lint_diagnostic).collect()
 }
 
@@ -3138,6 +3148,50 @@ mod tests {
 
         assert!(lint_document(&root.join("vendor/a.sql"), sql).is_empty());
         assert!(!lint_document(&root.join("src/a.sql"), sql).is_empty());
+    }
+
+    /// `[lint.severity]` colours the squiggle, and `[lint] ignore` removes it.
+    ///
+    /// The daemon's half of `tests/check.rs`'s category cases. A level that
+    /// moved the terminal's word and the exit code but left the editor showing
+    /// the old colour would be the editor/CI split A4 exists to prevent, read
+    /// in its subtlest form: the finding is in both places and the two disagree
+    /// about how much it matters.
+    #[test]
+    fn the_editor_reads_the_projects_severity_and_its_ignores() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        let file = root.join("Dockerfile");
+        let text = "FROM alpine:3.19\nRUN apk add curl\n";
+        std::fs::write(&file, text).expect("write Dockerfile");
+
+        let level = |found: &[lsp_types::Diagnostic], code: &str| {
+            found
+                .iter()
+                .find(
+                    |d| matches!(&d.code, Some(lsp_types::NumberOrString::String(c)) if c == code),
+                )
+                .and_then(|d| d.severity)
+        };
+
+        let found = lint_document(&file, text);
+        assert_eq!(
+            level(&found, "docker-apk-unpinned"),
+            Some(lsp_types::DiagnosticSeverity::WARNING)
+        );
+
+        std::fs::write(
+            root.join("poly.toml"),
+            "[lint]\nignore = [\"wasted-bytes\"]\n\n\
+             [lint.severity]\nunpinned-dependency = \"hint\"\n",
+        )
+        .expect("write poly.toml");
+        let found = lint_document(&file, text);
+        assert_eq!(
+            level(&found, "docker-apk-unpinned"),
+            Some(lsp_types::DiagnosticSeverity::HINT)
+        );
+        assert_eq!(level(&found, "docker-apk-no-cache"), None);
     }
 
     /// `.proto` got nothing in the editor until now: `buf lint` ran only from

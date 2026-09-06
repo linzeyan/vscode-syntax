@@ -905,6 +905,21 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             }
             None => true,
         });
+        // Before the paths are made relative, because the level a rule is
+        // reported at is a decision of the poly.toml above *that* file, and
+        // before the report is built, so the word printed, the exit code and
+        // the `fatal` field cannot disagree about it.
+        for found in &mut issues {
+            let Some(path) = resolve_report(&found.file, &base) else {
+                continue;
+            };
+            if let Some(severity) = configs
+                .for_file(&path)
+                .lint_severity(found.issue.source, &found.issue.code)
+            {
+                found.issue.severity = severity;
+            }
+        }
         for issue in &mut issues {
             issue.file = relative_to_base(&issue.file, &base);
         }
@@ -1214,6 +1229,14 @@ fn cmd_deadcode(rest: &[String]) -> Result<i32> {
                 &found.issue.code,
             )
         });
+        for found in &mut issues {
+            if let Some(severity) = configs
+                .for_file(&found.file)
+                .lint_severity(found.issue.source, &found.issue.code)
+            {
+                found.issue.severity = severity;
+            }
+        }
         for issue in &mut issues {
             issue.file = relative_to_base(&issue.file, &base);
         }

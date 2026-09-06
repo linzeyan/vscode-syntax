@@ -324,22 +324,28 @@ struct RawLint {
     exclude: Vec<String>,
     #[serde(rename = "fail-on")]
     fail_on: Option<String>,
-    /// Glob -> the `tool/rule` codes that path may not report. See
-    /// `Config::lint_ignored`.
+    /// Rules this repository never wants reported. See `Config::lint_ignored`.
+    ignore: Vec<String>,
+    /// Rule -> the level poly reports it at here. See `Config::lint_severity`.
+    severity: BTreeMap<String, String>,
+    /// Glob -> the rules that path may not report. See `Config::lint_ignored`.
     #[serde(rename = "per-file-ignores")]
     per_file_ignores: BTreeMap<String, Vec<String>>,
 }
 
-/// One entry of a `[lint.per-file-ignores]` list.
+/// One rule, or one set of them, named the way poly.toml and a `poly: ignore`
+/// comment both name rules.
 ///
 /// Spelled exactly as poly prints it — `ruff/F401` is what `[ruff/F401]` in a
 /// finding means — so silencing a rule is copying the code out of the output
-/// rather than looking up a syntax. `ruff/*` covers every rule from one tool.
+/// rather than looking up a syntax. `ruff/*` covers every rule from one tool,
+/// and a category covers the same kind of defect in every language at once.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Suppression {
-    tool: String,
-    /// `None` for `tool/*`.
-    rule: Option<String>,
+enum Suppression {
+    /// `tool/rule`, or `tool/*` with no rule.
+    Rule { tool: String, rule: Option<String> },
+    /// A category from `catalog.toml`, matching whatever rules are in it.
+    Category(String),
 }
 
 impl Suppression {
@@ -349,34 +355,65 @@ impl Suppression {
     /// One function because there is one syntax: what poly prints is what you
     /// paste, into either place.
     fn parse_code(entry: &str) -> Result<Suppression, String> {
-        // Shape only: an unknown tool or rule name is self-revealing (the
-        // finding keeps appearing), but `"F401"` with no tool looks like a
-        // spelling poly ought to understand and would silently match nothing.
-        let (tool, rule) = entry
-            .split_once('/')
-            .filter(|(t, r)| !t.is_empty() && !r.is_empty())
-            .ok_or_else(|| {
-                format!(
-                    "{entry:?} is not a rule code — write it the way poly prints it, `tool/rule` \
-                     (e.g. \"ruff/F401\") or `tool/*`"
-                )
-            })?;
+        let Some((tool, rule)) = entry.split_once('/') else {
+            // No slash: a category, or a mistake. Checked against the catalog
+            // rather than accepted on shape, because a name nothing matches is
+            // a suppression that silences nothing and says nothing -- while an
+            // unknown *rule* is self-revealing, since the finding it was aimed
+            // at keeps being printed.
+            return if crate::catalog::catalog().contains_key(entry) {
+                Ok(Suppression::Category(entry.to_string()))
+            } else {
+                Err(format!(
+                    "{entry:?} is not a rule code or a category — write a rule the way poly prints \
+                     it, `tool/rule` (e.g. \"ruff/F401\") or `tool/*`, or a category (e.g. \
+                     \"unused-code\"); `poly config export` lists every category"
+                ))
+            };
+        };
+        if tool.is_empty() || rule.is_empty() {
+            return Err(format!(
+                "{entry:?} is not a rule code — write it the way poly prints it, `tool/rule` \
+                 (e.g. \"ruff/F401\") or `tool/*`"
+            ));
+        }
         if rule.contains('/') {
             return Err(format!("{entry:?} has more than one `/`"));
         }
-        Ok(Suppression {
+        Ok(Suppression::Rule {
             tool: tool.to_string(),
             rule: (rule != "*").then(|| rule.to_string()),
         })
     }
 
-    fn parse(entry: &str, pattern: &str) -> Result<Suppression> {
-        Suppression::parse_code(entry)
-            .map_err(|reason| anyhow::anyhow!("[lint.per-file-ignores] {pattern:?}: {reason}"))
+    fn parse(entry: &str, section: &str) -> Result<Suppression> {
+        Suppression::parse_code(entry).map_err(|reason| anyhow::anyhow!("{section}: {reason}"))
     }
 
     fn matches(&self, source: &str, code: &str) -> bool {
-        self.tool == source && self.rule.as_deref().is_none_or(|rule| rule == code)
+        match self {
+            Suppression::Rule { tool, rule } => {
+                tool == source && rule.as_deref().is_none_or(|rule| rule == code)
+            }
+            Suppression::Category(name) => {
+                crate::catalog::category_of(source, code) == Some(name.as_str())
+            }
+        }
+    }
+
+    /// How specifically this names a finding, lowest first.
+    ///
+    /// Only `[lint.severity]` needs it: silencing is an "any of these matched"
+    /// question, but two levels for one finding have to be settled, and the
+    /// entry that names it most precisely is the one that meant it. A category
+    /// is a default for a kind of defect; `tool/rule` is a decision about one
+    /// rule.
+    fn precision(&self) -> u8 {
+        match self {
+            Suppression::Rule { rule: Some(_), .. } => 0,
+            Suppression::Rule { rule: None, .. } => 1,
+            Suppression::Category(_) => 2,
+        }
     }
 }
 
@@ -997,6 +1034,10 @@ pub struct Config {
     /// `[lint.per-file-ignores]`, in file order. A GlobSet would say only
     /// *that* something matched, and each pattern carries its own rule list.
     lint_ignores: Vec<(GlobMatcher, Vec<Suppression>)>,
+    /// `[lint] ignore`: the same rule names, with no path attached.
+    lint_ignore: Vec<Suppression>,
+    /// `[lint.severity]`, sorted most precise first so the first match wins.
+    lint_severity: Vec<(Suppression, crate::diag::Severity)>,
     format_options: BTreeMap<String, FormatOptions>,
     pub tools: BTreeMap<String, String>,
     /// `[walk] include-hidden`. A project decision rather than a per-run one:
@@ -1064,6 +1105,13 @@ impl Config {
             format_exclude_set: compile_excludes(&raw.format.exclude)?,
             lint_exclude_set: compile_excludes(&raw.lint.exclude)?,
             lint_ignores: compile_per_file_ignores(&raw.lint.per_file_ignores)?,
+            lint_ignore: raw
+                .lint
+                .ignore
+                .iter()
+                .map(|entry| Suppression::parse(entry, "[lint] ignore"))
+                .collect::<Result<Vec<_>>>()?,
+            lint_severity: compile_severities(&raw.lint.severity)?,
             format_exclude: raw.format.exclude,
             lint_exclude: raw.lint.exclude,
             format_options: raw.format.languages,
@@ -1086,6 +1134,8 @@ impl Config {
             format_exclude_set: GlobSet::empty(),
             lint_exclude_set: GlobSet::empty(),
             lint_ignores: Vec::new(),
+            lint_ignore: Vec::new(),
+            lint_severity: Vec::new(),
             format_options: BTreeMap::new(),
             tools: BTreeMap::new(),
             include_hidden: false,
@@ -1108,19 +1158,24 @@ impl Config {
         set.is_match(self.relative(path))
     }
 
-    /// Is this finding silenced for this file by `[lint.per-file-ignores]`?
+    /// Is this finding silenced by `[lint] ignore` or `[lint.per-file-ignores]`?
     ///
-    /// The narrower neighbour of `[lint] exclude`: a test fixture with a
-    /// deliberate typo or a vendored script with one unquoted expansion is
-    /// still worth linting for everything *else*, and dropping the whole file
-    /// to silence one rule is how a suppression stops being reviewable.
+    /// Two lists because the questions differ: `ignore` is "this repository has
+    /// decided about this rule", and the per-file table is the narrower
+    /// neighbour of `[lint] exclude` -- a test fixture with a deliberate typo or
+    /// a vendored script with one unquoted expansion is still worth linting for
+    /// everything *else*, and dropping the whole file to silence one rule is how
+    /// a suppression stops being reviewable.
     ///
     /// Called with the same `source` and `code` the terminal prints as
     /// `[source/code]`, so what you read in the output is what you paste into
-    /// the config. Anchored at the config's own directory like `exclude`, and
-    /// consulted by the CLI and the daemon alike — a rule silenced only in the
-    /// editor is the editor/CI split A4 exists to prevent.
+    /// the config. Globs are anchored at the config's own directory like
+    /// `exclude`, and both lists are consulted by the CLI and the daemon alike —
+    /// a rule silenced only in the editor is the editor/CI split A4 prevents.
     pub fn lint_ignored(&self, path: &Path, source: &str, code: &str) -> bool {
+        if self.lint_ignore.iter().any(|e| e.matches(source, code)) {
+            return true;
+        }
         if self.lint_ignores.is_empty() {
             return false;
         }
@@ -1128,6 +1183,23 @@ impl Config {
         self.lint_ignores.iter().any(|(matcher, entries)| {
             matcher.is_match(relative) && entries.iter().any(|e| e.matches(source, code))
         })
+    }
+
+    /// The level this project reports this rule at, when it has said.
+    ///
+    /// `[lint.severity]` is where a repository disagrees with poly, and the
+    /// disagreement is legitimate: what "somebody should look at this" is worth
+    /// depends on the codebase, and the alternative to saying so here is
+    /// `exclude`, which is the same sentence written as "stop checking".
+    ///
+    /// Read by the CLI and the daemon at the point the findings are collected,
+    /// so the squiggle's colour, the terminal's word and `--fail-on`'s verdict
+    /// are one decision made once.
+    pub fn lint_severity(&self, source: &str, code: &str) -> Option<crate::diag::Severity> {
+        self.lint_severity
+            .iter()
+            .find(|(rule, _)| rule.matches(source, code))
+            .map(|(_, severity)| *severity)
     }
 
     /// Path as the patterns in this config were written: relative to the
@@ -1202,12 +1274,35 @@ fn compile_per_file_ignores(
     for (pattern, entries) in raw {
         let glob = Glob::new(pattern)
             .with_context(|| format!("invalid [lint.per-file-ignores] pattern {pattern:?}"))?;
+        let section = format!("[lint.per-file-ignores] {pattern:?}");
         let entries = entries
             .iter()
-            .map(|entry| Suppression::parse(entry, pattern))
+            .map(|entry| Suppression::parse(entry, &section))
             .collect::<Result<Vec<_>>>()?;
         compiled.push((glob.compile_matcher(), entries));
     }
+    Ok(compiled)
+}
+
+/// `[lint.severity]`, with the level each entry asks for.
+///
+/// Sorted by how precisely each entry names a finding, so `lint_severity` can
+/// take the first match: a `[lint.severity]` naming both a category and one
+/// rule inside it means "this kind is info, except that one".
+fn compile_severities(
+    raw: &BTreeMap<String, String>,
+) -> Result<Vec<(Suppression, crate::diag::Severity)>> {
+    let mut compiled = Vec::new();
+    for (entry, level) in raw {
+        let rule = Suppression::parse(entry, "[lint.severity]")?;
+        let severity = crate::diag::Severity::parse(level).ok_or_else(|| {
+            anyhow::anyhow!(
+                "[lint.severity] {entry:?} = {level:?}: expected error, warning, info or hint"
+            )
+        })?;
+        compiled.push((rule, severity));
+    }
+    compiled.sort_by_key(|(rule, _)| rule.precision());
     Ok(compiled)
 }
 
@@ -1687,6 +1782,107 @@ mod tests {
         // finding it was meant to silence keeps being printed.
         write("[lint.per-file-ignores]\n\"tests/**\" = [\"ruff/NOSUCHRULE\"]\n");
         assert!(Config::discover(root).is_ok());
+
+        // A category, on the other hand, is a closed set poly ships: a name
+        // that is not in it can never match, so it stops the run instead of
+        // sitting there looking like a working line.
+        write("[lint]\nignore = [\"unusd-code\"]\n");
+        let err = error(root);
+        assert!(err.contains("unusd-code"), "{err}");
+        assert!(err.contains("category"), "{err}");
+    }
+
+    /// `[lint] ignore` is the repo-wide half of the same syntax, and a category
+    /// silences the kind rather than the rule.
+    ///
+    /// The point of naming a category is that it keeps meaning what it meant
+    /// when a language is added: a repo that has decided it does not care about
+    /// unused exports should not have to come back and add `vulture/*` the day
+    /// somebody writes the first Python.
+    #[test]
+    fn lint_ignore_silences_a_rule_or_a_whole_category() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(
+            root.join("poly.toml"),
+            "[lint]\nignore = [\"typos/typo\", \"unused-code\"]\n",
+        )
+        .unwrap();
+        let config = Config::discover(root).unwrap();
+
+        // No path attached: the same answer wherever the file is.
+        assert!(config.lint_ignored(&root.join("a.py"), "typos", "typo"));
+        assert!(config.lint_ignored(&root.join("deep/nested/a.py"), "typos", "typo"));
+        // The category covers every tool that reports that kind of defect,
+        // including ones this repo has no files for yet.
+        assert!(config.lint_ignored(&root.join("a.go"), "deadcode", "unreachable"));
+        assert!(config.lint_ignored(&root.join("a.ts"), "knip", "unused-export"));
+        // And nothing else.
+        assert!(!config.lint_ignored(&root.join("a.py"), "ruff", "F401"));
+        assert!(!config.lint_ignored(&root.join("Dockerfile"), "poly", "docker-root-user"));
+    }
+
+    /// `[lint.severity]` is where a project disagrees with poly's level, and
+    /// the most precise entry wins.
+    ///
+    /// A category is a default for a kind of defect and a `tool/rule` is a
+    /// decision about one rule, so "this kind is info, except that one" has to
+    /// be sayable — otherwise the only way to make an exception is to stop
+    /// using the category at all.
+    #[test]
+    fn lint_severity_takes_the_most_precise_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(
+            root.join("poly.toml"),
+            "[lint.severity]\n\
+             unpinned-dependency = \"info\"\n\
+             \"poly/docker-latest-base\" = \"error\"\n\
+             \"typos/*\" = \"hint\"\n",
+        )
+        .unwrap();
+        let config = Config::discover(root).unwrap();
+
+        assert_eq!(
+            config.lint_severity("poly", "docker-apk-unpinned"),
+            Some(diag::Severity::Info)
+        );
+        assert_eq!(
+            config.lint_severity("poly", "docker-latest-base"),
+            Some(diag::Severity::Error)
+        );
+        assert_eq!(
+            config.lint_severity("typos", "typo"),
+            Some(diag::Severity::Hint)
+        );
+        // Silence about a rule nobody named: the level poly decided stands.
+        assert_eq!(config.lint_severity("ruff", "F401"), None);
+    }
+
+    /// A level poly does not report at cannot be asked for.
+    #[test]
+    fn an_unknown_severity_fails_the_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(
+            root.join("poly.toml"),
+            "[lint.severity]\nunused-code = \"critical\"\n",
+        )
+        .unwrap();
+        let err = match Config::discover(root) {
+            Ok(_) => panic!("expected the parse to fail"),
+            Err(e) => format!("{e:#}"),
+        };
+        assert!(err.contains("critical"), "{err}");
+        assert!(err.contains("error, warning, info or hint"), "{err}");
+        // `never` belongs to --fail-on: a rule reported at "never" is a rule
+        // that would be `ignore`, said in a way that reads like a severity.
+        std::fs::write(
+            root.join("poly.toml"),
+            "[lint.severity]\nunused-code = \"never\"\n",
+        )
+        .unwrap();
+        assert!(Config::discover(root).is_err());
     }
 
     /// The syntax is the config's, and the only difference is where it is

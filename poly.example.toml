@@ -139,6 +139,54 @@ exclude = []
 # codebase that would otherwise light up red on day one.
 fail-on = "hint"
 
+# Rules this repository has decided about, everywhere. The blunt one of the
+# three suppressions: no path, no line, no reason next to the code. Reach for
+# [lint.per-file-ignores] or a comment first -- "this vendored script" and
+# "this line" are reviewable, and "never anywhere" is the one nobody revisits.
+#
+# Entries are spelled the way poly prints them, `tool/rule` or `tool/*`, or a
+# category (below) to cover the same kind of defect in every language at once.
+#
+# e.g. ["typos/typo", "unused-code"]
+ignore = []
+
+# ── categories ─────────────────────────────────────────────────────────────
+# Every rule poly wrote carries one of these, and so do the upstream rules poly
+# replaced. They are what makes a decision portable: `unused-code` means the
+# same thing whether it was Go's deadcode, TypeScript's knip or Python's
+# vulture that found it, and it keeps meaning it when a language is added.
+#
+#   broken-reference, credential-exposure, excess-privilege,
+#   implicit-default, implicit-location, invalid, naming-convention,
+#   not-checked, redundant, silently-discarded, spelling, supply-chain,
+#   suppression, unintended-effect, unpinned-dependency, unrecognized-value,
+#   unused-code, wasted-bytes
+#
+# Most upstream rules have none -- ruff and clippy have hundreds each and a
+# project chooses which run, so poly names them by `tool/rule` rather than
+# inventing a second name that would drift. `--format json` carries `category`
+# on every finding (`null` when there is none) and counts the uncategorized
+# ones in its summary.
+
+# ── [lint.severity] ────────────────────────────────────────────────────────
+# Rule -> the level poly reports it at here. Where a project disagrees with
+# poly's judgement, which is legitimate: what "somebody should look at this" is
+# worth depends on the codebase. The alternative is `exclude`, which is the
+# same sentence written as "stop checking".
+#
+# The most precise entry wins, so a category sets the default for a kind of
+# defect and a `tool/rule` line is the exception to it. Accepted levels are
+# `error`, `warning`, `info` and `hint` -- `never` belongs to `fail-on`, and a
+# rule you want gone is `ignore`.
+#
+# The editor and CI read this the same way: the colour of the squiggle, the
+# word in the terminal and what `fail-on` blocks on are one decision.
+#
+# Default: empty.
+[lint.severity]
+# unpinned-dependency = "info"
+# "poly/docker-latest-base" = "error"
+
 # ── [lint.per-file-ignores] ────────────────────────────────────────────────
 # Glob -> the rules that path may not report. The narrower neighbour of
 # `exclude`: a fixture with a deliberate typo or a vendored script with one
@@ -151,8 +199,9 @@ fail-on = "hint"
 #   tests/fixtures/bad.py:1:8: warning [ruff/F401] `os` imported but unused
 #
 # is silenced by copying `ruff/F401` out of that line -- there is no second
-# syntax to look up. `tool/*` covers every rule from one tool. Anything else,
-# including a bare `F401`, fails the parse rather than matching nothing.
+# syntax to look up. `tool/*` covers every rule from one tool, and a category
+# covers a kind of defect. Anything else, including a bare `F401`, fails the
+# parse rather than matching nothing.
 #
 # Globs are anchored at this file's directory, like [format].exclude. Both the
 # CLI and the editor consult this, so a rule silenced here is gone from

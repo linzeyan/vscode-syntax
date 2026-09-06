@@ -282,8 +282,14 @@ pub fn export() -> String {
 
     let embedded: Vec<&str> = poly_tools::EMBEDDED.iter().map(|(n, _)| *n).collect();
 
+    let categories: Vec<&str> = poly_core::catalog::catalog()
+        .keys()
+        .map(String::as_str)
+        .collect();
+
     TEMPLATE
         .replace("{{version}}", env!("CARGO_PKG_VERSION"))
+        .replace("{{categories}}", &wrapped(&categories))
         .replace("{{languages}}", &wrapped(&languages))
         .replace("{{external_format_languages}}", &wrapped(&external))
         .replace("{{tools}}", tools.trim_end())
@@ -343,6 +349,14 @@ pub fn self_test() -> Result<()> {
     }
     if !text.contains(&wrapped(&languages)) {
         problems.push("the language list is not the one detection produces".to_string());
+    }
+    for category in poly_core::catalog::catalog().keys() {
+        // Named one at a time rather than as a block: a category nobody can
+        // find is one nobody writes in `[lint] ignore`, and the whole point of
+        // the vocabulary is that it is short enough to read in full.
+        if !text.contains(category.as_str()) {
+            problems.push(format!("the category `{category}` is not in the file"));
+        }
     }
     for tool in known_tools() {
         if !text.contains(&format!("#   {:<20}", tool.name)) {

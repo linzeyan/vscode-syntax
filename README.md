@@ -669,6 +669,11 @@ use-tabs = false
 
 [lint]
 exclude = ["third_party/**"]
+ignore = ["typos/typo", "unused-code"] # 整個 repo 都不報這些
+
+[lint.severity] # 不同意 poly 的等級就改掉，最精確的那條贏
+unpinned-dependency = "info"
+"poly/docker-latest-base" = "error"
 
 [lint.per-file-ignores] # 只關掉某條規則，檔案照樣 lint
 "tests/fixtures/**" = ["ruff/F401"]
@@ -682,11 +687,20 @@ shellcheck = "C:/tools/shellcheck.exe"
 tflint = "off"
 ```
 
-`[lint.per-file-ignores]` 的規則代碼就是輸出裡印的那個——看到
-`[ruff/F401]` 就複製 `ruff/F401`，沒有第二套語法要查。它與 `exclude` 的差別是範圍：
-exclude 讓整個檔案不進 lint，per-file-ignores 只拿掉那一條，同一個檔的其他問題照
-報。少了工具名的 `"F401"` 會讓 poly.toml 解析失敗，而不是安靜地什麼都沒關掉。編輯
-器與 CI 讀同一份設定，所以關掉的規則在 Problems 裡也不會出現。
+規則代碼就是輸出裡印的那個——看到 `[ruff/F401]` 就複製 `ruff/F401`，沒有第二套語法要
+查。三個地方（`ignore`、`[lint.severity]`、`[lint.per-file-ignores]`）與原始碼裡的註
+釋用的是同一套寫法，差別只在範圍：`exclude` 讓整個檔案不進 lint，`ignore` 是整個 repo
+不報這條，per-file-ignores 只拿掉某個路徑的那一條，註釋只管一行。少了工具名的
+`"F401"` 會讓 poly.toml 解析失敗，而不是安靜地什麼都沒關掉。
+
+**也可以寫類別**（`unused-code`、`unpinned-dependency`…）：就是 `--format json` 那個
+`category`，一句話管到所有語言——今天決定「不看沒用到的程式碼」，明天加進來的語言照樣
+算數，不必回頭補 `vulture/*`。`poly config export` 印得出完整清單；打錯字會讓解析失敗，
+因為類別是 poly 自己的封閉集合，拼錯就永遠對不到任何東西。
+
+`[lint.severity]` 是專案跟 poly 的等級意見不同時用的——**最精確的那條贏**，所以類別設
+基準、`tool/rule` 設例外。它同時改終端機印的字、編輯器波浪線的顏色與 `fail-on` 擋不擋，
+三者是同一個決定。編輯器與 CI 讀同一份設定，所以關掉的規則在 Problems 裡也不會出現。
 
 要關掉的只是某一行而不是整個檔案時，把同一組代碼寫成註釋放進原始碼：
 

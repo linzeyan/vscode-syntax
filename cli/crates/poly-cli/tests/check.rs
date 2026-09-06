@@ -1,6 +1,8 @@
-//! End-to-end `poly check`: the two ways to silence one rule without taking the
-//! file out of linting the way `exclude` would — `[lint.per-file-ignores]` for a
-//! path, and a `# poly: ignore` comment for a line.
+//! End-to-end `poly check`: the three ways to silence one rule without taking
+//! the file out of linting the way `exclude` would — `[lint] ignore` for the
+//! repository, `[lint.per-file-ignores]` for a path, and a `# poly: ignore`
+//! comment for a line — and `[lint.severity]`, which changes what a rule is
+//! worth rather than whether it is reported.
 //!
 //! Driven with the embedded engines because they need no managed download, so
 //! the test means the same thing offline and on every platform. The daemon's
@@ -378,6 +380,95 @@ fn a_language_without_a_comment_syntax_stays_silent() {
     assert!(stdout.contains("notes.md:1:20"), "{stdout}");
     // And no complaint about the comment either -- poly never recognised it.
     assert!(!stdout.contains("ignore-syntax"), "{stdout}");
+}
+
+/// `[lint] ignore` takes a category, and the category is one decision covering
+/// every language.
+///
+/// Two files, two engines, two rule codes with nothing in common but what they
+/// mean: a Dockerfile that cannot build and a TOML file that does not parse are
+/// both `invalid`. One line silences both, and leaves everything that is not
+/// that kind of defect exactly where it was -- which is what separates a
+/// category from `tool/*`.
+#[test]
+fn a_category_silences_a_kind_of_defect_across_languages() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("Dockerfile"), "RUN echo hi\n").unwrap();
+    std::fs::write(root.join("broken.toml"), "a = [\n").unwrap();
+    std::fs::write(root.join("q.sql"), TWO_FINDINGS).unwrap();
+
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    assert!(stdout.contains("poly/docker-missing-from"), "{stdout}");
+    assert!(stdout.contains("toml/syntax"), "{stdout}");
+    assert_eq!(code, 1, "{stderr}");
+
+    std::fs::write(root.join("poly.toml"), "[lint]\nignore = [\"invalid\"]\n").unwrap();
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    assert!(!stdout.contains("docker-missing-from"), "{stdout}");
+    assert!(!stdout.contains("toml/syntax"), "{stdout}");
+    // The SQL findings are a different kind of defect and are untouched, so
+    // this is still a red build.
+    assert!(stdout.contains("sqruff/LT01"), "{stdout}");
+    assert_eq!(code, 1, "{stderr}");
+}
+
+/// `[lint.severity]` moves the word poly prints and the exit code together.
+///
+/// The pair is the point: a level that changed the output but not what
+/// `--fail-on` blocks on would be a cosmetic setting, and a project that
+/// decided unpinned packages are informational here has decided about its
+/// build too.
+#[test]
+fn lint_severity_moves_the_level_and_what_fail_on_blocks_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("Dockerfile"),
+        "FROM alpine:3.19\nRUN apk add curl\n",
+    )
+    .unwrap();
+
+    let warning = |dir: &Path| poly(dir, &["check", "--compact", "--fail-on", "warning", "."]);
+    let (code, stdout, stderr) = warning(root);
+    assert!(
+        stdout.contains("warning [poly/docker-apk-unpinned]"),
+        "{stdout}"
+    );
+    assert_eq!(code, 1, "{stderr}");
+
+    // The category sets the kind, the rule line is the exception to it: the
+    // cache rule stays a warning and still fails the build.
+    std::fs::write(
+        root.join("poly.toml"),
+        "[lint.severity]\nunpinned-dependency = \"info\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = warning(root);
+    assert!(
+        stdout.contains("info [poly/docker-apk-unpinned]"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("warning [poly/docker-apk-no-cache]"),
+        "{stdout}"
+    );
+    assert_eq!(code, 1, "{stderr}");
+
+    // With the other two warnings silenced, nothing is left at or above the
+    // floor: the finding is still printed and the build is green.
+    std::fs::write(
+        root.join("poly.toml"),
+        "[lint]\nignore = [\"wasted-bytes\", \"excess-privilege\"]\n\n\
+         [lint.severity]\nunpinned-dependency = \"info\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = warning(root);
+    assert!(
+        stdout.contains("info [poly/docker-apk-unpinned]"),
+        "{stdout}"
+    );
+    assert_eq!(code, 0, "{stderr}");
 }
 
 /// A suppression that cannot match anything must stop the run rather than look

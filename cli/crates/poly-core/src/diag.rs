@@ -26,6 +26,22 @@ impl Severity {
             Severity::Hint => "hint",
         }
     }
+
+    /// The four words `as_str` prints, read back.
+    ///
+    /// `Option` rather than a message: the two callers -- `[lint.severity]` and
+    /// `--fail-on`, which also takes `never` -- word the failure around their
+    /// own accepted set, and one of them cannot use a sentence written by the
+    /// other.
+    pub fn parse(value: &str) -> Option<Severity> {
+        match value {
+            "error" => Some(Severity::Error),
+            "warning" => Some(Severity::Warning),
+            "info" => Some(Severity::Info),
+            "hint" => Some(Severity::Hint),
+            _ => None,
+        }
+    }
 }
 
 /// What the tool that found something called it, in the one vocabulary poly
@@ -194,16 +210,12 @@ impl FailOn {
     }
 
     pub fn parse(value: &str) -> Result<Self, String> {
-        match value {
-            "error" => Ok(FailOn::Severity(Severity::Error)),
-            "warning" => Ok(FailOn::Severity(Severity::Warning)),
-            "info" => Ok(FailOn::Severity(Severity::Info)),
-            "hint" => Ok(FailOn::Severity(Severity::Hint)),
-            "never" => Ok(FailOn::Never),
-            other => Err(format!(
-                "unknown fail-on value {other:?}: expected error, warning, info, hint or never"
-            )),
+        if value == "never" {
+            return Ok(FailOn::Never);
         }
+        Severity::parse(value).map(FailOn::Severity).ok_or_else(|| {
+            format!("unknown fail-on value {value:?}: expected error, warning, info, hint or never")
+        })
     }
 }
 
