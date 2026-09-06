@@ -119,7 +119,8 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   同一份檔案不會被兩套規則各報一次）、JSON／JSONC、
   Markdown（格式化，lint 是 rumdl 的 7 條規則，code 長 `rumdl/MD*`——見下面的說明）、
   TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
-  Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、GraphQL、
+  Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、
+  GraphQL（格式化，lint 只有語法檢查——見下面的說明）、
   Dockerfile（格式化，lint 是 poly 自己寫的規則，code 長 `poly/docker-*`；
   hadolint 預設關閉，因為它跟 poly 的規則大部分重疊——見下面的外部工具），
   Lua（格式化 stylua、lint selene）、
@@ -163,6 +164,13 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   poly 的 parser 還不支援 `edition = "2023"`，遇到讀不了的檔案會報
   `poly/proto-unreadable`——那是「poly 沒檢查這個檔案」，不是「這個檔案有問題」。
   格式化不受影響，`.proto` 一律格式化。
+- **GraphQL 的 lint 只有語法檢查**（code 是 `graphql/syntax`，等級 error），與 TOML、
+  TypeScript 一樣是「這個檔案不是它副檔名說的那個語言」。用的是格式化時的同一支 parser
+  （apollo-parser，October 2021 版規格），所以編輯器與 CI 指的是同一個字元。
+  **不做 schema 驗證**，這是量過的決定：854 個真實 `.graphql` 上，驗證器報的東西有 98.8%
+  是「定義在別的檔案」——federation 的 `@link`、隔壁模組宣告的 type、只有幾個 type 而沒有
+  root 的 schema 片段。一份 schema 是好幾個檔案組起來的，而 poly 一次看一個檔案，那些不是
+  這個檔案的缺陷。
 - **Markdown 的 lint 是 rumdl 的 7 條規則**，全部只報壞掉的東西：相對連結指向不存在的檔
   （MD057）、錨點不存在（MD051）、連結寫反 `(文字)[網址]`（MD011）、空連結（MD042）、
   參考式連結沒有定義（MD052）、標題跳級（MD001）、圖片沒有 alt（MD045）。code 長

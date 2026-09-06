@@ -166,6 +166,11 @@ const POLICY: &[(&str, Policy)] = &[
     // above -- one source cannot be two levels.
     ("toml", Policy::Poly(Severity::Error)),
     ("typescript", Policy::Poly(Severity::Error)),
+    // The third language poly parses itself, and the same claim about it. Named
+    // after the language rather than after apollo-parser for the reason
+    // `typescript` is: "this file is not GraphQL" outlives whichever parser said
+    // so, and `poly fmt` says it with the same words from the same parser.
+    ("graphql", Policy::Poly(Severity::Error)),
     ("poly", Policy::PerRule),
 ];
 

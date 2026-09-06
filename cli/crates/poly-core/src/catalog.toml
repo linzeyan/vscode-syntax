@@ -79,6 +79,7 @@ implicit-location = [
 # The format, or the tool that reads it, rejects this: it does not build or run.
 invalid = [
   "arity/syntax-error",
+  "graphql/syntax",
   "poly/actions-invalid-action-ref",
   "poly/actions-invalid-cron",
   "poly/actions-invalid-glob",

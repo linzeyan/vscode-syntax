@@ -47,6 +47,7 @@ pub fn engine(lang: &str, path: &Path) -> Option<&'static str> {
         "lua" => "selene",
         "python" | "jupyter" => "ruff",
         "typescript" => "deno_lint",
+        "graphql" => "graphql",
         "markdown" => "rumdl",
         "dockerfile" => "poly/docker",
         "yaml" if poly_core::is_workflow_file(path) => "poly/actions",
@@ -132,6 +133,7 @@ pub fn lint(lang: &str, path: &Path, text: &str) -> Result<Vec<Issue>> {
         // One language name for eight extensions (.ts through .cjs), so the
         // file name is what tells JSX from a comparison -- see `lint_typescript`.
         "typescript" => lint_typescript(path, text),
+        "graphql" => Ok(lint_graphql(text)),
         // Reads the path for a third reason: two of the seven rules ask the
         // file system about the links in the text -- see `lint_markdown`.
         "markdown" => lint_markdown(path, text),
@@ -979,6 +981,83 @@ fn span(text: &str, range: deno_ast::SourceRange) -> (u32, u32, u32, u32) {
     let (line, col) = line_col(text, range.start.as_byte_index(start));
     let (end_line, end_col) = line_col(text, range.end.as_byte_index(start));
     (line, col, end_line, end_col)
+}
+
+// ── graphql (apollo-parser) ────────────────────────────────────────────────
+
+/// GraphQL's grammar, and deliberately nothing else.
+///
+/// The same claim `toml/syntax` and `typescript/syntax` make: this file is not
+/// the language its name says it is, said at the character where that stopped
+/// being true. The parser is the one already in the binary -- pretty_graphql is
+/// built on apollo-parser, so `poly fmt` has been reading GraphQL with it all
+/// along -- which is what makes "the formatter refused it" and "the linter
+/// reported it" the same sentence about the same character rather than two
+/// tools' opinions.
+///
+/// *Validating* GraphQL is a different question, and the answer is no (09
+/// §4.7). apollo-compiler can do it, and over 854 real `.graphql` files its
+/// verdict was 908 findings of which about 99% were "defined in another file":
+/// federation's `@link` directives, types declared in a sibling module, a
+/// schema fragment with no root type. A schema is assembled from many files and
+/// poly reads one, so almost every validation rule would be reporting the
+/// shape of the project rather than a defect. The parser has no such problem:
+/// a file either is GraphQL or is not.
+fn lint_graphql(text: &str) -> Vec<Issue> {
+    apollo_parser::Parser::new(text)
+        .parse()
+        .errors()
+        .map(|error| {
+            let (line, col) = line_col(text, error.index());
+            // `data` is the token the parser choked on, so the squiggle covers
+            // it. It is empty for the errors that are about the end of the file
+            // rather than about a token, and there the range collapses to the
+            // position -- which is the honest extent of "it stopped here".
+            let (end_line, end_col) = line_col(text, error.index() + error.data().len());
+            Issue {
+                line,
+                col,
+                end_line,
+                end_col,
+                severity: severity_of("graphql", Reported::Nothing),
+                code: "syntax".to_string(),
+                message: error.message().to_string(),
+                source: "graphql",
+                fix: None,
+                // No rule to link, only the grammar the parser is enforcing.
+                // The edition matters and apollo-parser names it: October 2021.
+                url: Some("https://spec.graphql.org/October2021/".to_string()),
+            }
+        })
+        .collect()
+}
+
+/// The sentence `poly fmt` puts on a GraphQL file it could not parse.
+///
+/// pretty_graphql builds its own message in `Display`, and that code panics on
+/// an error at byte 0: it maps the offset to line 0 and then indexes
+/// `line_bounds[line - 1]`. `!!!` is enough to reach it, and the blast radius
+/// was the whole command -- `poly fmt` over a repository with one malformed
+/// `.graphql` in it exited 101 having formatted nothing, and in the editor it
+/// was the daemon that died. So poly never formats that error: it reads the
+/// same parser's errors itself, which also puts the column in characters like
+/// every other engine here rather than in bytes.
+pub(crate) fn graphql_format_error(text: &str) -> String {
+    match lint_graphql(text).first() {
+        // The wording pretty_graphql used, kept: `parse_position` reads it, and
+        // `every_engine_error_can_be_placed` holds every engine to a shape it
+        // can read.
+        Some(issue) => format!(
+            "syntax error at line {}, col {}: {}",
+            issue.line + 1,
+            issue.col + 1,
+            issue.message
+        ),
+        // The formatter refused a document this parser accepts. Same parser and
+        // same input, so there is nothing that can put us here -- and if
+        // something does, the file must still not format silently.
+        None => "syntax error".to_string(),
+    }
 }
 
 // ── markdown (rumdl) ───────────────────────────────────────────────────────
@@ -3711,6 +3790,59 @@ mod tests {
             ["no-window", "no-window-prefix"],
             "{flagged:?}"
         );
+    }
+
+    // ── graphql ────────────────────────────────────────────────────────────
+
+    /// A file that is not GraphQL, reported at the token the parser choked on.
+    ///
+    /// The CJK in the description is the unit test: `data` is a byte length and
+    /// the column is a character count, so an end column of 24 would mean the
+    /// span was measured in the wrong one.
+    #[test]
+    fn a_graphql_file_that_is_not_graphql_says_where() {
+        let text = "\"文件說明文字\"\ntype Query {\n  a: Int!\n";
+        let issues = lint("graphql", Path::new("a.graphql"), text).unwrap();
+        let [issue] = &issues[..] else {
+            panic!("expected one finding, got {issues:?}");
+        };
+        assert_eq!(issue.code, "syntax");
+        assert_eq!(issue.source, "graphql");
+        assert_eq!(issue.severity, Severity::Error);
+        assert_eq!(
+            issue.url.as_deref(),
+            Some("https://spec.graphql.org/October2021/")
+        );
+        // The closing brace never arrives, so the parser stops at the end of
+        // the last line it read.
+        assert_eq!((issue.line, issue.col), (3, 0), "{issue:?}");
+
+        // A valid document is silent, including one whose first definition is a
+        // description string -- the fixture above is only invalid because it
+        // does not close.
+        let whole = format!("{text}}}\n");
+        let quiet = lint("graphql", Path::new("a.graphql"), &whole).unwrap();
+        assert!(quiet.is_empty(), "{quiet:?}");
+    }
+
+    /// An error at the very first byte is reported like any other.
+    ///
+    /// It is called out because this is the offset that used to panic on the
+    /// formatter's path (`a_graphql_error_at_the_first_byte_is_a_message_not_a_crash`),
+    /// and because the two paths now share this parse: a file that lints as
+    /// broken and formats as fine would be the editor and CI disagreeing about
+    /// whether the file is GraphQL at all.
+    #[test]
+    fn a_graphql_error_at_the_first_byte_is_placed_at_the_first_character() {
+        let issues = lint("graphql", Path::new("a.graphql"), "!!!\n").unwrap();
+        assert_eq!((issues[0].line, issues[0].col), (0, 0), "{issues:?}");
+        assert_eq!(issues[0].code, "syntax");
+
+        // An empty file is not an empty document: GraphQL's grammar wants at
+        // least one definition, which is what every parser for it says.
+        let empty = lint("graphql", Path::new("a.graphql"), "").unwrap();
+        assert_eq!(empty.len(), 1, "{empty:?}");
+        assert_eq!((empty[0].line, empty[0].col), (0, 0), "{empty:?}");
     }
 
     // ── markdown ───────────────────────────────────────────────────────────

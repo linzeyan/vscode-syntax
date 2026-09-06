@@ -2890,6 +2890,7 @@ name = "poly-engines"
 version = "0.10.0"
 dependencies = [
  "anyhow",
+ "apollo-parser",
  "content_inspector",
  "deno_ast",
  "deno_lint",

@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+apollo-parser.workspace = true
 content_inspector.workspace = true
 deno_ast.workspace = true
 deno_lint.workspace = true

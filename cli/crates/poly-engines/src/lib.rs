@@ -651,7 +651,11 @@ fn format_graphql(text: &str, opts: FormatOptions) -> Result<Option<String>> {
     if let Some(tabs) = opts.use_tabs {
         options.layout.use_tabs = tabs;
     }
-    let result = pretty_graphql::format_text(text, &options).map_err(|e| anyhow!("graphql {e}"))?;
+    // The error is deliberately not the one pretty_graphql wrote: formatting it
+    // panics on a syntax error at byte 0, and `graphql_format_error` says the
+    // same thing from the same parser without that hole in it.
+    let result = pretty_graphql::format_text(text, &options)
+        .map_err(|_| anyhow!("graphql {}", crate::lint::graphql_format_error(text)))?;
     Ok((result != text).then_some(result))
 }
 
@@ -883,11 +887,36 @@ mod tests {
         }
 
         // xmlem discards the reader offset, so XML can only say what is wrong.
+        // (The GraphQL row above has a second half: see
+        // `a_graphql_error_at_the_first_byte_is_a_message_not_a_crash`.)
         // It must at least be a sentence rather than a Debug variant dump.
         let err = format_file(Path::new("a.xml"), "<root><a></root>\n")
             .expect_err("expected a parse failure")
             .to_string();
         assert!(!err.contains("IllFormed("), "raw Debug leaked: {err:?}");
+    }
+
+    /// A GraphQL file whose first character is already wrong is an error
+    /// message, not a panic.
+    ///
+    /// pretty_graphql formats its own message by mapping the byte offset to a
+    /// line and then indexing `line_bounds[line - 1]`; at offset 0 that line is
+    /// 0 and the subtraction wraps. Three exclamation marks were enough, an
+    /// empty file was enough, and one such file in a repository took the whole
+    /// `poly fmt` run down with it -- exit 101, nothing formatted, and in the
+    /// editor the daemon itself. Every case here reached the panic before the
+    /// error stopped being pretty_graphql's to write.
+    #[test]
+    fn a_graphql_error_at_the_first_byte_is_a_message_not_a_crash() {
+        for broken in ["!!!\n", "}\n", "&\n", ""] {
+            let err = format_file(Path::new("a.graphql"), broken)
+                .expect_err(&format!("{broken:?}: expected a parse failure"))
+                .to_string();
+            assert!(
+                poly_core::diag::parse_position(&err).is_some(),
+                "{broken:?}: {err:?} has no position"
+            );
+        }
     }
 
     #[test]

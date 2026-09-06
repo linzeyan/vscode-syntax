@@ -9,6 +9,14 @@ license = "MIT"
 
 [workspace.dependencies]
 anyhow = "1"
+# GraphQL's parser, named directly although it was already in the tree:
+# pretty_graphql is built on it, so `poly fmt` has been parsing GraphQL with
+# this crate all along and `poly check` now reads the same parser's errors. The
+# version has to be the one pretty_graphql resolves to rather than merely a
+# compatible one -- two apollo-parsers would mean the formatter and the linter
+# disagreeing about what the file is, which is the one thing this arrangement
+# exists to prevent.
+apollo-parser = "0.8"
 # Is this file text or a picture? typos asks before spell-checking, and so must
 # poly now that poly is the one reading the bytes. Same crate typos uses, so the
 # answer is the same one for the same file.
