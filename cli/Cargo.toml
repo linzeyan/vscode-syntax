@@ -173,8 +173,10 @@ xmlem = "0.5"
 # reads a bare `on` as the boolean true never gets a chance to apply.
 yaml_parser = "0.3"
 
-# Size/perf trade-off: thin LTO + strip keeps the single-binary target honest
-# without the slow codegen-units=1 builds during development.
+# The shipping profile, and only the shipping profile. Fat LTO and
+# codegen-units = 1 buy size on a release runner and cost 111s of whole-program
+# relink on a one-line local change, so Makefile and ci.yml both override those
+# two -- build.yml and release.yml are where this file is read as written.
 [profile.release]
 # The binary ships inside all six platform VSIX, so size is worth real
 # latency: opt-level="s" halved it when this was measured (28.9MB -> 14.7MB on

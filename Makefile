@@ -12,6 +12,25 @@ POLY := cli/target/release/poly
 # is appended after the verb instead of folded into a `cargo ...` variable.
 MANIFEST := --manifest-path cli/Cargo.toml
 
+# The release profile ships fat LTO and codegen-units = 1, which is right for
+# the binary users install and wrong for every build made here: measured on this
+# tree, a one-line change cost 111s before these two overrides and 2s after.
+# Almost none of that was compiling -- touching poly-cli and touching poly-core
+# both cost about 115s, because what is being paid for is a whole-program relink
+# of a 30MB binary rather than the crate that changed.
+#
+# ci.yml sets exactly these two, at the top, for exactly this reason: nothing
+# either of us builds is what ships. build.yml and release.yml compile the
+# profile as written, and that is what users install. So this is CI's override,
+# local, and a green `make gates` is still CI's answer to the same question.
+#
+# `make build CARGO_PROFILE_RELEASE_LTO=fat` gets the shipping profile back for
+# a size or throughput measurement. It rebuilds every dependency, which is why
+# it is a flag rather than the default.
+CARGO_PROFILE_RELEASE_LTO ?= false
+CARGO_PROFILE_RELEASE_CODEGEN_UNITS ?= 16
+export CARGO_PROFILE_RELEASE_LTO CARGO_PROFILE_RELEASE_CODEGEN_UNITS
+
 .DEFAULT_GOAL := help
 .PHONY: help build test lint notices pins config dogfood smoke probe e2e gates \
 	version grammars bump control clean
