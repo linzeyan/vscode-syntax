@@ -63,7 +63,38 @@ fn run_impl(
 /// Generic stdin->stdout formatter invocation (prettier, rustfmt, shfmt).
 /// Non-zero exit means the tool rejected the input (syntax error).
 pub fn format_stdin(cmd: &Path, args: &[&str], text: &str) -> Result<Option<String>> {
-    let mut child = Command::new(cmd)
+    format_stdin_impl(cmd, None, args, text)
+}
+
+/// Same, rooted at `cwd` for a formatter that discovers its own config from the
+/// working directory rather than from the filename it was told to assume.
+///
+/// arity is the one so far, and measurably: with rlang's `air.toml` two
+/// directories up, `arity format --stdin-filename R/call.R` produces 27,474
+/// bytes from inside the package and 27,385 from anywhere else. Left alone,
+/// that makes `poly fmt` answer differently depending on which directory it was
+/// invoked from -- and the project's own formatter config, which poly defers to
+/// everywhere else, silently stops applying.
+pub fn format_stdin_in(
+    cmd: &Path,
+    cwd: &Path,
+    args: &[&str],
+    text: &str,
+) -> Result<Option<String>> {
+    format_stdin_impl(cmd, Some(cwd), args, text)
+}
+
+fn format_stdin_impl(
+    cmd: &Path,
+    cwd: Option<&Path>,
+    args: &[&str],
+    text: &str,
+) -> Result<Option<String>> {
+    let mut command = Command::new(cmd);
+    if let Some(dir) = cwd {
+        command.current_dir(dir);
+    }
+    let mut child = command
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1526,6 +1557,224 @@ fn eslint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
     Ok(out)
 }
 
+// ── arity (R) ──────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct ArityRange {
+    start: usize,
+    end: usize,
+}
+
+#[derive(Deserialize)]
+struct ArityMessage {
+    body: String,
+    suggestion: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ArityFix {
+    applicability: String,
+    description: String,
+}
+
+#[derive(Deserialize)]
+struct ArityDiagnostic {
+    rule: String,
+    severity: String,
+    path: String,
+    range: ArityRange,
+    message: ArityMessage,
+    fix: Option<ArityFix>,
+}
+
+/// One page for every rule, each with an anchor named after the rule id.
+///
+/// `syntax-error` is the one code with no page, and deliberately so: it is the
+/// parser refusing the file rather than a rule anyone can read about or turn
+/// off. An anchor that does not exist would still serve the page -- silently,
+/// at the top -- which is the failure mode this returns `None` to avoid.
+fn arity_url(rule: &str) -> Option<String> {
+    (rule != "syntax-error").then(|| format!("https://arity.cc/reference/rules.html#{rule}"))
+}
+
+/// Byte offsets into one file, answered as poly's 0-based line and column.
+///
+/// arity reports ranges in bytes and computes line and column only for its own
+/// `--output concise`, so poly does the conversion its own way. Columns are
+/// counted in code points, which is both poly's convention and arity's, so the
+/// two agree on every file -- that equality is what the differential run
+/// checks, and it is why this counts characters rather than bytes.
+struct ArityLines {
+    text: String,
+    /// Byte offset of the first character of each line.
+    starts: Vec<usize>,
+}
+
+impl ArityLines {
+    fn new(text: String) -> Self {
+        let mut starts = vec![0];
+        starts.extend(text.match_indices('\n').map(|(i, _)| i + 1));
+        Self { text, starts }
+    }
+
+    fn at(&self, offset: usize) -> (u32, u32) {
+        // Clamped and walked back to a character boundary rather than indexed
+        // straight: arity's offsets come from its own lossless CST and land on
+        // one, but a slice that does not would panic in the middle of a lint
+        // run and take every other file's findings with it.
+        let mut offset = offset.min(self.text.len());
+        while !self.text.is_char_boundary(offset) {
+            offset -= 1;
+        }
+        let line = self.starts.partition_point(|&start| start <= offset) - 1;
+        let col = self.text[self.starts[line]..offset].chars().count();
+        (line as u32, col as u32)
+    }
+}
+
+/// arity's own words for how bad a finding is: `syntax-error` is Error, every
+/// lint rule is Warning, and the two levels below exist in its scale without
+/// being used yet.
+fn arity_level(severity: &str) -> Reported {
+    match severity {
+        "Error" => Reported::Error,
+        "Warning" => Reported::Warning,
+        "Info" => Reported::Info,
+        _ => Reported::Style,
+    }
+}
+
+/// Turn arity's diagnostics into poly's, reading each file once for its lines.
+///
+/// Paths come back exactly as they were passed in, which is relative to `root`
+/// -- see `arity_dir` for why they are passed that way.
+fn arity_parse(stdout: &[u8], root: &Path) -> Result<Vec<FileIssue>> {
+    // A clean run prints nothing at all, not an empty array -- swiftlint's
+    // shape, and the same reason this cannot be left to serde.
+    if stdout.iter().all(u8::is_ascii_whitespace) {
+        return Ok(Vec::new());
+    }
+    let diagnostics: Vec<ArityDiagnostic> =
+        serde_json::from_slice(stdout).context("parsing arity output")?;
+    let mut lines: std::collections::HashMap<String, ArityLines> = std::collections::HashMap::new();
+    let mut out = Vec::with_capacity(diagnostics.len());
+    for d in diagnostics {
+        let file = root.join(&d.path);
+        let index = match lines.entry(d.path.clone()) {
+            std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+            std::collections::hash_map::Entry::Vacant(e) => {
+                // A file that vanished between arity reading it and this loop
+                // leaves an empty index, which puts the finding at 1:1 rather
+                // than dropping it.
+                let text = std::fs::read_to_string(&file).unwrap_or_default();
+                e.insert(ArityLines::new(text))
+            }
+        };
+        let (line, col) = index.at(d.range.start);
+        let (end_line, end_col) = index.at(d.range.end);
+        out.push(FileIssue {
+            file,
+            issue: Issue {
+                line,
+                col,
+                end_line,
+                end_col,
+                severity: severity_of("arity", arity_level(&d.severity)),
+                url: arity_url(&d.rule),
+                code: d.rule,
+                // The suggestion is advice ("prefix the name with `.` to mark
+                // it intentional"), the fix below is the edit arity would make.
+                // Neither implies the other -- most rules carry both, some only
+                // one -- so they travel in their own slots.
+                message: match d.message.suggestion {
+                    Some(hint) => format!("{} ({hint})", d.message.body),
+                    None => d.message.body,
+                },
+                source: "arity",
+                fix: d.fix.map(|f| Fix::Described {
+                    what: f.description,
+                    safe: f.applicability == "safe",
+                }),
+            },
+        });
+    }
+    Ok(out)
+}
+
+/// The R package a file belongs to: the nearest ancestor holding a
+/// `DESCRIPTION`, or the file's own directory when it is a loose script.
+///
+/// Public because the daemon has to group the file it just saved the way the
+/// batch run groups the whole tree, or the editor and `poly check` answer
+/// differently about the same file (A4). Same reason `go_module_root` is.
+pub fn r_package_root(file: &Path) -> PathBuf {
+    poly_core::nearest_ancestor_file(file, &["DESCRIPTION"])
+        .as_deref()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .or_else(|| {
+            std::path::absolute(file)
+                .ok()?
+                .parent()
+                .map(Path::to_path_buf)
+        })
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Group by package and lint each group where it lives. See `arity_dir`.
+pub fn arity_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
+    let mut by_root: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
+    for file in files {
+        by_root
+            .entry(r_package_root(file))
+            .or_default()
+            .push(std::path::absolute(file).unwrap_or_else(|_| file.clone()));
+    }
+    let mut out = Vec::new();
+    for (root, files) in by_root {
+        out.extend(arity_dir(cmd, &root, &files)?);
+    }
+    Ok(out)
+}
+
+/// One package's files, linted from inside the package.
+///
+/// Both halves of that matter, and each was measured over seven pinned R
+/// repositories (1,428 files):
+///
+/// * **From inside**, with paths relative to the package. arity's `exclude`
+///   defaults are gitignore-style patterns for generated and vendored code
+///   (`RcppExports.R`, `import-standalone-*.R`, `revdep/`) and it matches them
+///   against the path as given, so an absolute one matches nothing at all.
+///   Named files are exempt from excludes by default, which is right for
+///   somebody typing a filename and wrong for poly -- every file poly passes
+///   came out of a walk, so `--force-exclude` is what makes the walk poly does
+///   and the walk arity would have done agree. Without both, poly reported 96
+///   findings in vendored files that arity itself refuses to look at.
+/// * **Files, not the directory**, so `[lint] exclude`, `--changed` and a named
+///   path still decide what gets read. arity resolves the package from each
+///   file's own ancestors, so a single file's findings are the same either way
+///   -- unlike tflint, this tool does not need the directory to be correct,
+///   only to be consistent about what it skips.
+pub fn arity_dir(cmd: &Path, root: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
+    let relative: Vec<PathBuf> = files
+        .iter()
+        .map(|file| {
+            file.strip_prefix(root)
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|_| file.clone())
+        })
+        .collect();
+    let stdout = run_in(
+        cmd,
+        root,
+        &["lint", "--output", "json", "--force-exclude"],
+        &relative,
+        None,
+    )?;
+    arity_parse(&stdout, root)
+}
+
 /// Distinguishes concurrent `buf format` calls. See `buf_format`.
 static FORMAT_SCRATCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -1957,5 +2206,74 @@ mod tests {
         assert_eq!(eslint_url(Some("@typescript-eslint/no-unused-vars")), None);
         // A message with no rule is a parse error or a broken config.
         assert_eq!(eslint_url(None), None);
+    }
+
+    /// arity reports byte ranges and no line numbers at all, so the position is
+    /// poly's to derive -- and it has to land where arity's own `--output
+    /// concise` puts it, because that equality is what the differential run
+    /// checks. Columns are code points on both sides, which is what the
+    /// accented text is here to hold: counting bytes puts this finding four
+    /// columns to the right of where arity says it is.
+    #[test]
+    fn an_arity_range_becomes_the_position_arity_itself_reports() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("a.R"), "x <- \"héllo wörld\"\ny = 1\n").expect("write");
+        let raw = br#"[
+          {"rule":"fixed-regex","severity":"Warning","path":"a.R",
+           "range":{"start":16,"end":19},
+           "message":{"name":"fixed-regex","body":"pattern is a literal","suggestion":"Use `fixed = TRUE`."},
+           "fix":{"content":"","start":16,"end":19,"applicability":"unsafe","description":"Add `fixed = TRUE`"}},
+          {"rule":"syntax-error","severity":"Error","path":"a.R",
+           "range":{"start":21,"end":22},
+           "message":{"name":"syntax-error","body":"unexpected '}'","suggestion":null}}
+        ]"#;
+        let issues = arity_parse(raw, dir.path()).expect("parse");
+        assert_eq!(issues.len(), 2);
+
+        assert_eq!(issues[0].file, dir.path().join("a.R"));
+        assert_eq!((issues[0].issue.line, issues[0].issue.col), (0, 14));
+        assert_eq!((issues[0].issue.end_line, issues[0].issue.end_col), (0, 17));
+        // The suggestion is advice and the fix is the edit; both are reported,
+        // in their own slots.
+        assert_eq!(
+            issues[0].issue.message,
+            "pattern is a literal (Use `fixed = TRUE`.)"
+        );
+        assert_eq!(
+            issues[0].issue.fix,
+            Some(Fix::Described {
+                what: "Add `fixed = TRUE`".to_string(),
+                safe: false,
+            })
+        );
+        assert_eq!(
+            issues[0].issue.url.as_deref(),
+            Some("https://arity.cc/reference/rules.html#fixed-regex")
+        );
+
+        // A file arity cannot parse is an error, and `syntax-error` is the one
+        // code with no page to link to.
+        assert_eq!((issues[1].issue.line, issues[1].issue.col), (1, 0));
+        assert_eq!(issues[1].issue.severity, Severity::Error);
+        assert_eq!(issues[1].issue.url, None);
+
+        // A clean run prints nothing at all rather than "[]".
+        assert!(arity_parse(b"", dir.path()).expect("empty").is_empty());
+    }
+
+    /// The unit arity's excludes and its package analysis are both relative to.
+    #[test]
+    fn an_r_file_belongs_to_the_package_that_describes_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pkg = dir.path().join("pkg");
+        std::fs::create_dir_all(pkg.join("R")).expect("mkdir");
+        std::fs::write(pkg.join("DESCRIPTION"), "Package: pkg\n").expect("write");
+        assert_eq!(r_package_root(&pkg.join("R/f.R")), pkg);
+
+        // A loose script has no package, and its own directory is the only
+        // honest root: the basename patterns still apply, and the directory
+        // ones have nothing above them to match.
+        let loose = dir.path().join("script.R");
+        assert_eq!(r_package_root(&loose), dir.path());
     }
 }

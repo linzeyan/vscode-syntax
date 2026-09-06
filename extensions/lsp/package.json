@@ -44,6 +44,7 @@
     "onLanguage:terraform",
     "onLanguage:swift",
     "onLanguage:protobuf",
+    "onLanguage:r",
     "onLanguage:handlebars",
     "onLanguage:dockercompose",
     "onLanguage:github-actions-workflow",
@@ -195,6 +196,7 @@
       "[swift]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[terraform]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[protobuf]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
+      "[r]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[handlebars]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[dockercompose]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true },
       "[github-actions-workflow]": { "editor.defaultFormatter": "ricky.poly-lsp", "editor.formatOnSave": true }

@@ -71,6 +71,10 @@ pub(crate) const LANGUAGE_SERVERS: &[(&str, &str)] = &[
     ("terraform", "terraform-ls"),
     ("lua", "lua-language-server"),
     ("protobuf", "buf"),
+    // buf's reasoning again: an R script has no build behind it, so there is no
+    // toolchain for `arity lsp` to be out of step with, and poly already pins
+    // this exact binary as R's formatter and linter.
+    ("r", "arity"),
 ];
 
 /// What a binary needs before it is a language server at all.
@@ -79,7 +83,11 @@ pub(crate) const LANGUAGE_SERVERS: &[(&str, &str)] = &[
 /// its usage and exits, because the language server is a subcommand of it.
 /// buf is the same shape -- it is a whole protobuf toolkit, and the server is
 /// one verb of it. Every other server here is its own entry point.
-const LAUNCH: &[(&str, &[&str])] = &[("terraform-ls", &["serve"]), ("buf", &["lsp", "serve"])];
+const LAUNCH: &[(&str, &[&str])] = &[
+    ("terraform-ls", &["serve"]),
+    ("buf", &["lsp", "serve"]),
+    ("arity", &["lsp"]),
+];
 
 /// How poly gets hold of a language server binary.
 ///
@@ -121,6 +129,16 @@ fn server_for(language: &str) -> Option<&'static str> {
         .iter()
         .find(|(known, _)| *known == language)
         .map(|(_, name)| *name)
+}
+
+/// Is `name` a binary poly runs as a language server?
+///
+/// Asked of a *finding's* source, which is why it is a membership test rather
+/// than a name: it is how `merged` tells "poly ran a linter the proxied server
+/// is not" (selene, swiftlint) from "poly ran the proxied server's own linter"
+/// (arity), without either side having to be listed twice.
+fn is_language_server(name: &str) -> bool {
+    LANGUAGE_SERVERS.iter().any(|(_, server)| *server == name)
 }
 
 /// Every language a server answers for.
@@ -304,6 +322,15 @@ impl Diagnostics {
     /// Lint findings are not dropped — selene and swiftlint report things no
     /// language server looks for, and silently losing them on a setting the
     /// user turned on for *more* information would be the wrong trade.
+    ///
+    /// One lint source is the exception, and it is the exception by identity
+    /// rather than by opinion: arity is R's linter *and* R's language server,
+    /// so on a proxied document arity has already published exactly these
+    /// findings under its own name. Keeping poly's copy would print every R
+    /// finding twice — the failure `[tools] hadolint` and actionlint's
+    /// shellcheck pass were both turned off to avoid. Nothing is lost: the
+    /// findings are the same ones, from the same binary, and `poly check` in CI
+    /// (where there is no server) still reports them itself.
     fn merged(&self, uri: &Url, proxied: bool) -> Vec<lsp_types::Diagnostic> {
         let mut all = self.lint.get(uri).cloned().unwrap_or_default();
         all.extend(
@@ -313,6 +340,9 @@ impl Diagnostics {
                 .flatten()
                 .cloned(),
         );
+        if proxied {
+            all.retain(|d| !d.source.as_deref().is_some_and(is_language_server));
+        }
         if !proxied {
             all.extend(self.format.get(uri).cloned());
         }
@@ -1490,6 +1520,22 @@ fn external_lint(
             issues.extend(poly_tools::run::eslint_stdin(&bin, path, text)?);
         }
     }
+    // R goes through the file for the reason biome does, and for a second one
+    // that is stronger: arity's stdin mode has no package around it, so every
+    // symbol another file in the package defines becomes `undefined-symbol`.
+    // On dplyr's `mutate.R` that is 87 findings against the 1 `poly check`
+    // reports -- an editor full of squiggles CI has never heard of, which is
+    // the split A4 exists to prevent.
+    if lang == "r" {
+        if let Some(bin) = resolved_tool("arity", config) {
+            let root = poly_tools::run::r_package_root(path);
+            issues.extend(
+                poly_tools::run::arity_dir(&bin, &root, &[path.to_path_buf()])?
+                    .into_iter()
+                    .map(|f| f.issue),
+            );
+        }
+    }
 
     // Shell embedded in a file that is not a shell script: a Dockerfile `RUN`,
     // a workflow `run:`. Independent of the tool below, and it has to be — the
@@ -2371,6 +2417,27 @@ mod tests {
             sources(&store.merged(&uri(), true)),
             ["selene", "Lua Diagnostics."]
         );
+    }
+
+    /// ...except when the linter and the server are the same binary.
+    ///
+    /// arity is R's linter and R's language server, so a proxied R document
+    /// gets arity's findings from arity itself and poly's copy is the same
+    /// finding a second time. selene is the control: lua-language-server is a
+    /// different tool looking for different things, so it stays either way.
+    #[test]
+    fn a_proxied_document_drops_the_linter_that_is_also_the_server() {
+        let mut store = Diagnostics::default();
+        store
+            .lint
+            .insert(uri(), vec![diagnostic("selene"), diagnostic("arity")]);
+        store.downstream.insert(uri(), vec![diagnostic("arity")]);
+
+        // Proxied: arity speaks once, as itself.
+        assert_eq!(sources(&store.merged(&uri(), true)), ["selene", "arity"]);
+        // Not proxied: nobody else is reporting, so poly's copy is the answer.
+        store.downstream.remove(&uri());
+        assert_eq!(sources(&store.merged(&uri(), false)), ["selene", "arity"]);
     }
 
     /// The formatter's parse failure is the one thing a server does replace,

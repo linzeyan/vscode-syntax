@@ -278,6 +278,41 @@ pub const TOOLS: &[Tool] = &[
             })
         },
     },
+    // R's whole toolchain in one binary: formatter, linter and language server
+    // (`arity lsp`). buf is the precedent and the reasoning is buf's -- an R
+    // script has no build for a server to be in step with, so there is no
+    // toolchain for poly to match and pinning the version is free. Without it R
+    // has nothing: no formatter ships with R, and the ecosystem's own tools are
+    // R packages that need an R installation poly cannot assume.
+    Tool {
+        name: "arity",
+        version: "0.22.0",
+        language: Some("r"),
+        // musl on Linux, not gnu, though upstream ships both. Every other
+        // managed binary here is Go or Haskell and statically linked, so the
+        // registry has never had a glibc floor; taking the gnu build would give
+        // arity one -- it is built on a current runner, so it would refuse to
+        // start on the older distributions CI images are still full of. The
+        // cost is musl's slower allocator on a parser that allocates, paid only
+        // on Linux and only against a binary that would otherwise not run.
+        asset: |v, p| {
+            let (target, kind) = match p {
+                "darwin-arm64" => ("aarch64-apple-darwin.tar.gz", Kind::TarGz),
+                "darwin-x64" => ("x86_64-apple-darwin.tar.gz", Kind::TarGz),
+                "linux-arm64" => ("aarch64-unknown-linux-musl.tar.gz", Kind::TarGz),
+                "linux-x64" => ("x86_64-unknown-linux-musl.tar.gz", Kind::TarGz),
+                "win-x64" => ("x86_64-pc-windows-msvc.zip", Kind::Zip),
+                "win-arm64" => ("aarch64-pc-windows-msvc.zip", Kind::Zip),
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/jolars/arity/releases/download/v{v}/arity-{target}"
+                ),
+                kind,
+            })
+        },
+    },
     // Toolchain-only tools (never downloaded, spec §4.3): registry entries so
     // poly.toml [tools] can still pin/disable them; resolution lands on PATH.
     Tool {

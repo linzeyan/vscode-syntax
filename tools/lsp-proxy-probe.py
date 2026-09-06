@@ -162,6 +162,17 @@ print(message)
 local unused = 1
 """
 
+# `greet` is defined on line 1 and called on line 5, and the call is what the
+# probe asks about. Exported through a NAMESPACE-less package: arity resolves
+# the package from the DESCRIPTION beside it, which is also what decides that
+# `greet` is used rather than an unused binding.
+MAIN_R = """greet <- function(name) {
+  paste0("hello ", name)
+}
+
+message(greet("world"))
+"""
+
 
 @dataclass
 class Second:
@@ -185,7 +196,9 @@ class Case:
     definition_line: int  # 0-based, as LSP counts
     call_line: int
     call_character: int
-    hover_needle: str
+    # `None` where the server's hover comes from an index this probe does not
+    # build; see the hover check for why that is still worth routing.
+    hover_needle: str = None
     # Set where one server covers several languages. clangd is why this
     # exists: it answers for both c and cpp, and there must be one of it.
     second: Second = None
@@ -475,6 +488,35 @@ CASES = [
         | LENS
         | SYMBOL
         | SEMTOK,
+    ),
+    # The second server poly pins, and pinned for buf's reason: an R script has
+    # no build behind it either. `arity lsp`, so it needs its subcommand too.
+    Case(
+        language="r",
+        server="arity",
+        managed=True,
+        files={"DESCRIPTION": "Package: probe\nVersion: 0.0.0\n", "R/main.R": MAIN_R},
+        entry="R/main.R",
+        definition_line=0,
+        call_line=4,
+        call_character=10,  # inside `greet` on the call line
+        # arity's hover is package help harvested by `arity index`, and this
+        # machine has no R for it to harvest.
+        hover_needle=None,
+        # No merged_source, and that is the finding rather than an omission:
+        # arity is R's linter as well as R's server, so poly's own copy of these
+        # findings is dropped for a proxied document. See `Diagnostics::merged`.
+        # No typeDefinition and no implementation: R has neither a type to jump
+        # to nor an interface to implement. The only server here that asks for
+        # both halves of a rename -- the edit before it happens and the news
+        # after -- which is why neither set is shared with anyone.
+        registers=(FULL - {"typeDefinition", "implementation"})
+        | {"selectionRange", "inlayHint"}
+        | HIERARCHY
+        | SYMBOL
+        | SEMTOK
+        | WILL_RENAME
+        | DID_RENAME,
     ),
     Case(
         language="lua",
@@ -897,15 +939,25 @@ def run(case, logs=True, graceful=True):
 
     # Hover on the same position must come from the server too, not from poly's
     # own sqruff-only hover -- the two share a method and must not shadow.
-    hover = settle(
-        3,
-        "textDocument/hover",
-        at_call,
-        lambda h: case.hover_needle in hover_text(h),
-        "hover",
-    )
-    summary = next(line for line in hover_text(hover).splitlines() if line.strip())
-    print(f"  hover: {summary[:60]}")
+    #
+    # A server with no needle written down is one whose hover text comes out of
+    # an index this probe never builds: arity harvests it from the R packages
+    # installed on the machine, and there is no R here. The same split
+    # `unindexed` makes for call hierarchy -- and the route is already proven
+    # above, by a definition only the server could have resolved.
+    if case.hover_needle is None:
+        settle(3, "textDocument/hover", at_call, lambda h: h is None, "hover")
+        print(f"  hover routed; {case.server} answers from an index, unbuilt here")
+    else:
+        hover = settle(
+            3,
+            "textDocument/hover",
+            at_call,
+            lambda h: case.hover_needle in hover_text(h),
+            "hover",
+        )
+        summary = next(line for line in hover_text(hover).splitlines() if line.strip())
+        print(f"  hover: {summary[:60]}")
 
     if case.second:
         # Opening a file in the server's other language must reach the process

@@ -47,17 +47,18 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 - **語言伺服器（預設關閉）**：`poly.languageServers` 打開後，poly 會啟動專案自己
   toolchain 裡的 language server，把 hover、go-to-definition、declaration、type
   definition、implementation、references、outline、completion、signature help、
-  symbol highlight、folding、expand selection、rename、code action 路由給它。目前七個：
+  symbol highlight、folding、expand selection、rename、code action 路由給它。目前八個：
   gopls（Go）、rust-analyzer（Rust）、clangd（C／C++）、sourcekit-lsp（Swift）、terraform-ls
-  （Terraform）、lua-language-server（Lua）、buf（Protobuf）。poly **不實作**這些功能，
+  （Terraform）、lua-language-server（Lua）、buf（Protobuf）、arity（R）。poly **不實作**這些功能，
   server 一律從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。
-  **buf 是唯一的例外**，poly 會代抓：其他 server 都得配合建置專案的 toolchain（gopls 讀
-  go.mod 的 Go 版本、rust-analyzer 要編譯該 crate 的 rustc），而 `.proto` 背後沒有建置，
-  buf 也早就是 poly 釘死版本代抓的 protobuf formatter／linter，所以 protobuf 不必先裝
+  **buf 與 arity 是例外**，poly 會代抓：其他 server 都得配合建置專案的 toolchain（gopls 讀
+  go.mod 的 Go 版本、rust-analyzer 要編譯該 crate 的 rustc），而 `.proto` 與 `.R` 背後沒有建置，
+  這兩支也早就是 poly 釘死版本代抓的 formatter／linter，所以 protobuf 與 R 不必先裝
   任何東西。實際能用
   哪幾項由 server 自己宣告，十四項裡：clangd 與 rust-analyzer 給滿 14、gopls 13、
-  sourcekit-lsp 12、lua-language-server 12、buf 10、terraform-ls 只有 7。有一個例外值得知道：
-  Swift 的 Go to Declaration 會失敗，Go to Definition 正常。**code action 只給燈泡那
+  sourcekit-lsp 12、lua-language-server 12、arity 11、buf 10、terraform-ls 只有 7。有兩個例外值得知道：
+  Swift 的 Go to Declaration 會失敗，Go to Definition 正常；arity 的 hover 讀的是
+  `arity index` 從機器上已安裝的 R 套件收集來的說明，沒裝 R 就是空的（其餘十項照常）。**code action 只給燈泡那
   些**：`editor.codeActionsOnSave` 跑的 `source.*` 一律不轉，否則會跟 poly 的格式化在
   同一次存檔搶同一段程式碼；代價是 gopls 的「Source Action…」選單在 poly 下是空的。
   **poly 自己的 lint 不會因此消失**：server 的診斷是跟 poly 的合併，不是取代，所以
@@ -127,7 +128,8 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   包含 poly 認不出語言的那些。
 - **外部工具**（受管下載）：shellcheck、shfmt、actionlint、
   tflint、gofumpt、golangci-lint、swiftlint、buf
-  （Protobuf 的格式化，同一支 binary 也是上面那個 language server）。版本釘死，
+  （Protobuf 的格式化，同一支 binary 也是上面那個 language server）、
+  arity（R 的格式化與 lint，同樣也是上面那個 language server）。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
   信任第一次抓到的東西。
 - **預設關閉但仍可用**：hadolint。poly 現在有自己的 Dockerfile 規則，兩邊一起跑
@@ -160,6 +162,14 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   poly 的 parser 還不支援 `edition = "2023"`，遇到讀不了的檔案會報
   `poly/proto-unreadable`——那是「poly 沒檢查這個檔案」，不是「這個檔案有問題」。
   格式化不受影響，`.proto` 一律格式化。
+- **R（`.R`／`.r`）的格式化、lint 與語言功能都是 arity**，一支 binary，poly 代抓，
+  不必先裝 R。專案自己的 `arity.toml` 或 `air.toml`（版面、`select`／`ignore`）照樣生效，
+  `# arity-ignore <rule>: 理由` 註釋也照樣有效。code 長 `arity/*`；lint 以 R 套件為
+  單位跑——`R/` 底下互相引用的符號不會被誤報成未定義，編輯器與 `poly check` 是同一個答案。
+  **一個已知落差**：arity 內建把 vendored／generated 檔（`RcppExports.R`、`cpp11.R`、
+  `import-standalone-*.R`、`revdep/`、`renv/`）排除在外，lint 照這份清單走，但格式化
+  是把 buffer 餵給 arity 的，那條路上 arity 不套用排除——所以 `poly fmt` 會重排這些檔案
+  （七個真實 R 套件、1,432 個檔裡有 19 個）。不想要就寫進 `[format] exclude`。
 - **`poly minify [路徑...]`**：把 JSON／JSONC 就地壓成一行，移除空白與註解。走跟
   `poly fmt` 同一套 walk 與 `[format] exclude`，所以 CLI 與編輯器命令答案一致。
   獨立命令而不是 `poly fmt` 的旗標——兩者契約相反，`fmt` 是「符合專案風格」，而沒有
@@ -426,7 +436,7 @@ summary 會加註 `(N below fail-on)`，所以綠色的 run 有輸出不會被�
 
 同一份判準套到每個工具，所以 `--fail-on error` 在 Lua、SQL、Dockerfile、workflow 上
 擋的是同一類東西。本來就有等級而且意思相同的工具（shellcheck、clippy、biome、eslint、
-swiftlint、selene、tflint、hadolint）照用它們自己的；不排序的工具由 poly 排一次
+swiftlint、selene、tflint、hadolint、arity）照用它們自己的；不排序的工具由 poly 排一次
 （ruff、golangci-lint、sqruff、deno_lint 是 warning，typos 是 info——deno_lint 把每一條
 都印成 error 是它 CLI 的顯示方式，不是分級）；poly 自己的規則則是一條規則一個等級。
 

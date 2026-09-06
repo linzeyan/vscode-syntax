@@ -113,6 +113,12 @@ const POLICY: &[(&str, Policy)] = &[
     // selene ranks its lints, and a Lua file it cannot parse is reported at
     // error by poly -- the tool did say the file is not Lua.
     ("selene", Policy::ItsOwn),
+    // arity's scale is LSP's four levels, and it already draws the line poly
+    // would draw itself: `syntax-error` is error, every lint rule is warning.
+    // Taking its word rather than restating it as `Poly(Warning)` is what keeps
+    // "this file is not R" loud -- and keeps it right the day arity ranks a
+    // rule differently, which a poly-side constant could not do.
+    ("arity", Policy::ItsOwn),
     // actionlint ranks nothing, and everything it reports now is a validity
     // problem: a workflow that fails its schema, id, event, permission or
     // expression checks fails at run time. Its shellcheck pass is off (poly

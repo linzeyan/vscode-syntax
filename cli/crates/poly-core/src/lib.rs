@@ -78,6 +78,11 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("azcli", "shellscript"),
     ("go", "go"),
     ("lua", "lua"),
+    // `.R` is what R itself, CRAN and every package skeleton write; `.r` turns
+    // up in older scripts. One row covers both because the lookup below
+    // lowercases, which is also why the uppercase spelling is not listed --
+    // a second row would never be reached and would read as if it were.
+    ("r", "r"),
     ("swift", "swift"),
     ("c", "c"),
     ("h", "cpp"),
@@ -537,6 +542,7 @@ const COMMENT_PREFIXES: &[(&str, &[&str])] = &[
     ("lua", &["--"]),
     ("protobuf", &["//"]),
     ("python", &["#"]),
+    ("r", &["#"]),
     ("rust", &["//"]),
     ("scss", &["//"]),
     ("shellscript", &["#"]),

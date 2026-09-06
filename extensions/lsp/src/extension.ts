@@ -45,6 +45,10 @@ const LANGUAGES = [
   "terraform",
   "swift",
   "protobuf",
+  // Not a built-in id either -- it arrives with REditorSupport.r. poly pins
+  // arity, which formats, lints and serves R, so the file works the moment the
+  // id exists and costs nothing while it does not.
+  "r",
   // Built-in id; poly only adds the formatter (markup_fmt's Mustache parser).
   "handlebars",
   // Neither id is poly's, and neither is guaranteed to exist -- they arrive

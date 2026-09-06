@@ -35,9 +35,9 @@
 # this table accepts:
 #
 #   astro, c, cpp, css, dockerfile, go, graphql, handlebars, hcl, html,
-#   jinja, json, jupyter, less, lua, markdown, protobuf, python, rust, scss,
-#   shellscript, sql, svelte, swift, terraform, toml, typescript, vue, xml,
-#   yaml
+#   jinja, json, jupyter, less, lua, markdown, protobuf, python, r, rust,
+#   scss, shellscript, sql, svelte, swift, terraform, toml, typescript, vue,
+#   xml, yaml
 #
 # Mapping to an id poly has no formatter or linter for is not an error -- the
 # file is simply skipped.
@@ -71,7 +71,7 @@ fail-on = "hint"
 # These reach the embedded engines only. Languages that dispatch to an external
 # tool are configured by that tool -- rustfmt.toml, .editorconfig, and so on:
 #
-#   c, cpp, go, protobuf, rust, shellscript, swift, terraform
+#   c, cpp, go, protobuf, r, rust, shellscript, swift, terraform
 #
 # Setting a knob the engine does not have fails the run and names the key,
 # rather than applying two of three and leaving you to diff the output. A table
@@ -280,6 +280,7 @@ include-hidden = false
 # The whole set, as of poly 0.10.0:
 #
 #   actionlint          1.7.12   downloaded on first use
+#   arity               0.22.0   downloaded on first use
 #   buf                 1.72.0   downloaded on first use
 #   cargo               system   from the project's toolchain, on PATH
 #   clang-format        system   from the project's toolchain, on PATH

@@ -15,7 +15,7 @@ pub fn formattable(lang: &str) -> bool {
     poly_engines::supported_language(lang)
         || matches!(
             lang,
-            "rust" | "shellscript" | "go" | "c" | "cpp" | "terraform" | "swift" | "protobuf"
+            "rust" | "shellscript" | "go" | "c" | "cpp" | "terraform" | "swift" | "protobuf" | "r"
         )
 }
 
@@ -114,6 +114,24 @@ fn dispatch(
             return Ok(None);
         };
         return poly_tools::run::buf_format(&bin, path, text);
+    }
+
+    // arity reads air.toml/arity.toml from the working directory, not from the
+    // filename it is handed, so this one runs where the package is. Its own
+    // call rather than a row in the table below for that reason alone -- see
+    // `format_stdin_in`.
+    if lang == "r" {
+        let Some(bin) = cached_tool("arity", config) else {
+            return Ok(None);
+        };
+        let root = poly_tools::run::r_package_root(path);
+        let path_arg = path.to_string_lossy();
+        return poly_tools::run::format_stdin_in(
+            &bin,
+            &root,
+            &["format", "--stdin-filename", &path_arg, "-"],
+            text,
+        );
     }
 
     let path_arg = path.to_string_lossy();

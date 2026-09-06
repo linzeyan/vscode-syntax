@@ -66,6 +66,7 @@ implicit-location = [
 
 # The format, or the tool that reads it, rejects this: it does not build or run.
 invalid = [
+  "arity/syntax-error",
   "poly/actions-invalid-action-ref",
   "poly/actions-invalid-cron",
   "poly/actions-invalid-glob",
@@ -172,6 +173,10 @@ unrecognized-value = ["poly/actions-unknown-runner"]
 
 # Nothing references this.
 unused-code = [
+  "arity/unreachable-code",
+  "arity/unused-binding",
+  "arity/unused-dependency",
+  "arity/unused-function",
   "deadcode/unreachable",
   "knip/unused-export",
   "knip/unused-file",
