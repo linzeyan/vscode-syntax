@@ -1,8 +1,8 @@
 //! Embedded lint: sqruff for SQL, selene for Lua, ruff for Python and Jupyter,
-//! poly's own rules for Dockerfiles and GitHub Actions workflows, and typos over
-//! every file regardless of language. External-tool lint (shellcheck, hadolint,
-//! actionlint) lives in poly-tools; the LSP daemon and the CLI merge both
-//! sources.
+//! deno_lint for JavaScript and TypeScript, poly's own rules for Dockerfiles and
+//! GitHub Actions workflows, and typos over every file regardless of language.
+//! External-tool lint (shellcheck, hadolint, actionlint) lives in poly-tools;
+//! the LSP daemon and the CLI merge both sources.
 //!
 //! Dockerfiles and workflows are the odd ones out and the module doc is the
 //! place to say so. Every other engine here is a *substitution*: poly links the
@@ -34,27 +34,23 @@ use poly_core::diag::{severity_of, Fix, Issue, Reported, Severity};
 /// `poly/docker-*` code, and `ruff` is what a Python finding is signed with.
 ///
 /// Spelling is not on this list and never can be: see `spell`.
+///
+/// "Which checker exists for this file", not "which one poly will run": a
+/// project that carries eslint or biome keeps them, and the caller that knows
+/// about project-local tools is the one that decides (`poly-cli`'s
+/// `lint_engine`, A3).
 pub fn engine(lang: &str, path: &Path) -> Option<&'static str> {
     Some(match lang {
         "sql" => "sqruff",
         "toml" => "toml",
         "lua" => "selene",
         "python" | "jupyter" => "ruff",
+        "typescript" => "deno_lint",
         "dockerfile" => "poly/docker",
         "yaml" if poly_core::is_workflow_file(path) => "poly/actions",
         other if crate::proto::supported(other) => "poly/proto",
         _ => return None,
     })
-}
-
-/// Does this file have an embedded linter? Batch callers use this to avoid
-/// reading thousands of files whose lint would return nothing.
-///
-/// Defined in terms of `engine` rather than beside it: "is this file linted"
-/// and "by what" are one question, and answering it twice is how a checker ends
-/// up counted in a coverage report and then never run.
-pub fn supported(lang: &str, path: &Path) -> bool {
-    engine(lang, path).is_some()
 }
 
 /// Rule documentation poly is holding that a diagnostic has no way to carry.
@@ -131,6 +127,9 @@ pub fn lint(lang: &str, path: &Path, text: &str) -> Result<Vec<Issue>> {
         "toml" => Ok(lint_toml(text)),
         "lua" => lint_lua(path, text),
         "python" | "jupyter" => lint_python(path, text),
+        // One language name for eight extensions (.ts through .cjs), so the
+        // file name is what tells JSX from a comparison -- see `lint_typescript`.
+        "typescript" => lint_typescript(path, text),
         "dockerfile" => Ok(lint_dockerfile(text)),
         // A workflow is YAML, so this is the one arm that reads the path as well
         // as the language: `poly check` on a Kubernetes repository must not
@@ -253,7 +252,7 @@ fn lua_linter(path: &Path) -> Result<Arc<LuaLinter>> {
     // selene resolved selene.toml against its own working directory, so poly
     // already found the file and passed `--config`; embedding changes only who
     // walks, not where the answer comes from.
-    let key = poly_core::nearest_ancestor_file(path, "selene.toml");
+    let key = poly_core::nearest_ancestor_file(path, &["selene.toml"]);
     let mut guard = CACHE.lock().expect("lua linter cache lock");
     let cache = guard.get_or_insert_with(HashMap::new);
     let built = match cache.get(&key) {
@@ -682,6 +681,299 @@ fn python_issue(
             }),
         url: diagnostic.documentation_url().map(str::to_string),
     })
+}
+
+// ── javascript and typescript (deno_lint) ──────────────────────────────────
+
+/// What a project's `deno.json` says about linting, and nothing else.
+///
+/// `lint.rules` is the whole of it. `deno lint` also reads `lint.include` and
+/// `lint.exclude`, and poly deliberately does not: which files are checked is
+/// the walk's answer and `[lint] exclude`'s, the same division ruff and selene
+/// already live under here -- their configs pick rules, poly picks files.
+#[derive(Default, serde::Deserialize)]
+struct DenoConfig {
+    lint: Option<DenoLint>,
+    #[serde(rename = "compilerOptions")]
+    compiler_options: Option<DenoCompilerOptions>,
+}
+
+/// The two compiler settings a *lint* run depends on.
+///
+/// Not a general reader of `compilerOptions`: these two name the function JSX
+/// compiles to, which is the difference between `import React` being used and
+/// being an unused import. Everything else there is the type checker's.
+#[derive(Default, serde::Deserialize)]
+struct DenoCompilerOptions {
+    #[serde(rename = "jsxFactory")]
+    jsx_factory: Option<String>,
+    #[serde(rename = "jsxFragmentFactory")]
+    jsx_fragment_factory: Option<String>,
+}
+
+#[derive(Default, serde::Deserialize)]
+struct DenoLint {
+    rules: Option<DenoRules>,
+}
+
+#[derive(Default, serde::Deserialize)]
+struct DenoRules {
+    tags: Option<Vec<String>>,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+}
+
+/// Recommended rules that are about Deno the runtime rather than about
+/// JavaScript, and are off in a project that is not a Deno project.
+///
+/// Both say so in their own message -- "Window is no longer available in Deno",
+/// "for compatibility between the Window context and the Web Workers" -- and
+/// both are simply untrue of a browser or Electron renderer, where `window` is
+/// the global that is supposed to be there. Over 25,489 real files they were
+/// 2,334 findings in 426 files, every one of them telling a browser project
+/// that a working line of code does not work.
+///
+/// This is not poly editing somebody's rule set: it is the same question
+/// `engine` asks about YAML, where a repository of Kubernetes manifests is
+/// thousands of files the workflow rules have no opinion about. A project with
+/// a `deno.json` *is* a Deno project, so there the recommended set is run
+/// whole and poly's answer is `deno lint`'s answer.
+///
+/// The rest of the recommended set stays on, including `require-await`, which
+/// was 67% of the findings in that corpus: an `async` function with no `await`
+/// in it is deno's default opinion and precisely poly's definition of a
+/// warning -- suspicious, possibly deliberate, worth a look. A project that
+/// disagrees has one line of poly.toml (`[lint] ignore`).
+const DENO_RUNTIME_RULES: &[&str] = &["no-window", "no-window-prefix"];
+
+/// deno's own defaults for the two settings above, which are TypeScript's.
+///
+/// They matter to one rule and matter a lot: with no factory named, the `React`
+/// in `import React from "react"` is used by nothing a linter can see, and
+/// `no-unused-vars` fires on every `.tsx` file in a project using the classic
+/// runtime. That was the entire difference between poly and `deno lint` over
+/// 25,489 files -- five findings, all of them this.
+const JSX_FACTORY: &str = "React.createElement";
+const JSX_FRAGMENT_FACTORY: &str = "React.Fragment";
+
+/// The rules and the JSX settings governing one file, built once per
+/// `deno.json`.
+struct JsLinter {
+    linter: deno_lint::linter::Linter,
+    config: deno_lint::linter::LintConfig,
+}
+
+/// The linter governing `path`, built once per `deno.json`.
+///
+/// Keyed by config file for the reason `lua_linter` is: a monorepo can have
+/// several, and building the 122 rule objects per file would be paid once per
+/// file in a repository of thousands.
+fn js_linter(path: &Path) -> Result<Arc<JsLinter>> {
+    type Cache = HashMap<Option<PathBuf>, std::result::Result<Arc<JsLinter>, String>>;
+    static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
+    let key = poly_core::nearest_ancestor_file(path, &["deno.json", "deno.jsonc"]);
+    let mut guard = CACHE.lock().expect("js linter cache lock");
+    let cache = guard.get_or_insert_with(HashMap::new);
+    let built = match cache.get(&key) {
+        Some(hit) => hit.clone(),
+        None => {
+            let built = build_js_linter(key.as_deref())
+                .map(Arc::new)
+                .map_err(|e| format!("{e:#}"));
+            cache.insert(key, built.clone());
+            built
+        }
+    };
+    built.map_err(|e| anyhow!(e))
+}
+
+fn build_js_linter(config_file: Option<&Path>) -> Result<JsLinter> {
+    let config: DenoConfig = match config_file {
+        Some(file) => {
+            let text = std::fs::read_to_string(file)
+                .with_context(|| format!("reading {}", file.display()))?;
+            // Comments are legal in both spellings -- `deno.jsonc` announces it
+            // and `deno.json` allows it anyway -- so this is the parser deno
+            // reads the file with rather than a plain JSON one.
+            let value = jsonc_parser::parse_to_serde_value(&text, &Default::default())
+                .with_context(|| format!("parsing {}", file.display()))?;
+            match value {
+                Some(value) => serde_json::from_value(value)
+                    .with_context(|| format!("reading the lint section of {}", file.display()))?,
+                None => DenoConfig::default(),
+            }
+        }
+        // No deno.json is the ordinary case: a Node or browser project is
+        // still JavaScript, and deno's own defaults are what it gets.
+        None => DenoConfig::default(),
+    };
+    let compiler_options = config.compiler_options.unwrap_or_default();
+    let rules = config.lint.unwrap_or_default().rules.unwrap_or_default();
+    let mut exclude = rules.exclude.unwrap_or_default();
+    if config_file.is_none() {
+        exclude.extend(DENO_RUNTIME_RULES.iter().map(|rule| (*rule).to_string()));
+    }
+    let selected = deno_lint::rules::filtered_rules(
+        deno_lint::rules::get_all_rules(),
+        // deno's default when `tags` is absent, spelled out because
+        // `filtered_rules` reads `None` as "every rule there is".
+        Some(
+            rules
+                .tags
+                .unwrap_or_else(|| vec!["recommended".to_string()]),
+        ),
+        Some(exclude),
+        rules.include,
+    );
+    Ok(JsLinter {
+        linter: deno_lint::linter::Linter::new(deno_lint::linter::LinterOptions {
+            rules: selected,
+            // Every code there is, not just the enabled ones: this is what
+            // `ban-unknown-rule-code` checks a `// deno-lint-ignore` against,
+            // and narrowing it would report a real rule as a typo.
+            all_rule_codes: deno_lint::rules::get_all_rules()
+                .into_iter()
+                .map(|rule| std::borrow::Cow::Borrowed(rule.code()))
+                .collect(),
+            // The directives deno itself honours. poly's own `# poly: ignore`
+            // is applied later, over every source alike.
+            custom_ignore_file_directive: None,
+            custom_ignore_diagnostic_directive: None,
+        }),
+        config: deno_lint::linter::LintConfig {
+            // A pragma in the file still wins; this is only what applies when
+            // the file says nothing, which is deno's rule for it too.
+            default_jsx_factory: Some(
+                compiler_options
+                    .jsx_factory
+                    .unwrap_or_else(|| JSX_FACTORY.to_string()),
+            ),
+            default_jsx_fragment_factory: Some(
+                compiler_options
+                    .jsx_fragment_factory
+                    .unwrap_or_else(|| JSX_FRAGMENT_FACTORY.to_string()),
+            ),
+        },
+    })
+}
+
+/// Lint one JavaScript or TypeScript file with the rules `deno lint` would.
+///
+/// A file that does not parse is reported as `typescript/syntax` rather than
+/// returned as an error: one unparsable file is a finding about that file, and
+/// failing the call would mark the whole embedded pass broken and take every
+/// other file's findings down with it.
+fn lint_typescript(path: &Path, text: &str) -> Result<Vec<Issue>> {
+    use deno_ast::diagnostics::Diagnostic;
+
+    let linter = js_linter(path)?;
+    // Absolute, because a `file://` URL cannot be built from a relative path.
+    // The specifier only names the file in diagnostics poly rewrites anyway, so
+    // a path that will not absolutize falls back to something parseable rather
+    // than skipping the file.
+    let specifier = std::path::absolute(path)
+        .ok()
+        .and_then(|abs| deno_ast::ModuleSpecifier::from_file_path(abs).ok())
+        .unwrap_or_else(|| {
+            deno_ast::ModuleSpecifier::parse("file:///buffer.ts").expect("a literal file URL")
+        });
+    let result = linter.linter.lint_file(deno_lint::linter::LintFileOptions {
+        specifier,
+        source_code: text.to_string(),
+        // From the path rather than from the specifier: the extension is what
+        // decides whether `<div/>` is JSX or a comparison, and poly maps eight
+        // of them to this one language.
+        media_type: deno_ast::MediaType::from_path(path),
+        config: linter.config.clone(),
+        // The hook deno's own CLI hangs its JavaScript plugins on. poly runs no
+        // plugins, and a project that wants them has `deno lint`.
+        external_linter: None,
+    });
+    let (parsed, diagnostics) = match result {
+        Ok(pair) => pair,
+        Err(parse) => return Ok(vec![js_parse_error(text, &parse)]),
+    };
+    // swc recovers from most syntax errors and keeps parsing, so a file can be
+    // linted and invalid at once. Those recovered errors are reported too:
+    // `Err` above is only the one swc could not get past, and a run that showed
+    // three lint findings while silently swallowing "unterminated string" would
+    // be describing a file that does not run as if it merely had opinions.
+    let mut issues: Vec<Issue> = parsed
+        .diagnostics()
+        .iter()
+        .map(|d| js_parse_error(text, d))
+        .collect();
+    issues.extend(diagnostics.iter().map(|d| {
+        // Diagnostics with no range are about the whole file; deno_lint has
+        // none today, and line 0 is where poly puts a file-wide claim.
+        let (line, col, end_line, end_col) = d
+            .range
+            .as_ref()
+            .map_or((0, 0, 0, 0), |r| span(text, r.range));
+        Issue {
+            line,
+            col,
+            end_line,
+            end_col,
+            severity: severity_of("deno_lint", Reported::Nothing),
+            code: d.details.code.clone(),
+            // The hint is half the message for most of these rules --
+            // `no-window` says what is wrong and the hint says to write
+            // `globalThis` -- and poly has one line to say both in.
+            message: match &d.details.hint {
+                Some(hint) => format!("{} ({hint})", d.details.message),
+                None => d.details.message.clone(),
+            },
+            source: "deno_lint",
+            // Every fix deno_lint carries is a rewrite it describes; poly
+            // does not apply them, so the description is the whole of what
+            // it can pass on.
+            fix: d.details.fixes.first().map(|fix| Fix::Described {
+                what: fix.description.to_string(),
+                // deno_lint has no unsafe tier: a rule offers a fix when
+                // the rewrite preserves behaviour.
+                safe: true,
+            }),
+            url: d.docs_url().map(|url| url.into_owned()),
+        }
+    }));
+    Ok(issues)
+}
+
+/// The file is not JavaScript. swc's message, at swc's position.
+fn js_parse_error(text: &str, parse: &deno_ast::ParseDiagnostic) -> Issue {
+    use deno_ast::diagnostics::Diagnostic;
+
+    // Through `span` rather than `display_position`, which is 1-based and
+    // counts a tab as two columns: a file indented with tabs would put the
+    // squiggle in the wrong place, and only in that file.
+    let (line, col, end_line, end_col) = span(text, parse.range());
+    Issue {
+        line,
+        col,
+        end_line,
+        end_col,
+        severity: severity_of("typescript", Reported::Nothing),
+        code: "syntax".to_string(),
+        message: parse.message().to_string(),
+        source: "typescript",
+        fix: None,
+        // There is no rule to link, only the grammar swc is enforcing.
+        url: None,
+    }
+}
+
+/// A deno_lint range as poly's four 0-based numbers.
+///
+/// `SourcePos` counts from `START_SOURCE_POS`, which is what deno_ast documents
+/// as the position every parse starts at, so subtracting it gives the byte
+/// offset into the text poly handed over -- and `line_col` takes it from there,
+/// so a deno_lint finding is placed exactly as a ruff or selene one is.
+fn span(text: &str, range: deno_ast::SourceRange) -> (u32, u32, u32, u32) {
+    let start = deno_ast::StartSourcePos::START_SOURCE_POS;
+    let (line, col) = line_col(text, range.start.as_byte_index(start));
+    let (end_line, end_col) = line_col(text, range.end.as_byte_index(start));
+    (line, col, end_line, end_col)
 }
 
 // ── dockerfile (poly's own rules) ──────────────────────────────────────────
@@ -3134,6 +3426,156 @@ mod tests {
         assert!(lint("toml", Path::new("a.toml"), "a = 1\n")
             .unwrap()
             .is_empty());
+    }
+
+    // ── javascript and typescript ──────────────────────────────────────────
+
+    fn js(path: &str, text: &str) -> Vec<Issue> {
+        lint("typescript", Path::new(path), text).expect("deno_lint runs")
+    }
+
+    /// The recommended set, at deno_lint's codes, with deno_lint's pages.
+    ///
+    /// Every number here is what `deno lint 2.6.1` prints for this file, so a
+    /// regression in the position arithmetic shows up as a disagreement with
+    /// the tool poly embeds rather than with a number somebody typed.
+    #[test]
+    fn typescript_findings_carry_deno_lints_codes_and_positions() {
+        let text = "const x: any = 1;\nlet y = 2;\nconsole.log(x, y);\n";
+        let issues = js("a.ts", text);
+        let codes: Vec<&str> = issues.iter().map(|i| i.code.as_str()).collect();
+        assert_eq!(codes, ["no-explicit-any", "prefer-const"], "{issues:?}");
+        assert!(issues.iter().all(|i| i.source == "deno_lint"), "{issues:?}");
+
+        // `any` is at 1:9 0-based, and the range covers the three characters.
+        let any = &issues[0];
+        assert_eq!((any.line, any.col), (0, 9), "{any:?}");
+        assert_eq!((any.end_line, any.end_col), (0, 12), "{any:?}");
+        // deno_lint ranks nothing -- every finding is printed as an error --
+        // so the level is poly's, and it is not error.
+        assert_eq!(any.severity, Severity::Warning);
+        assert_eq!(
+            any.url.as_deref(),
+            Some("https://docs.deno.com/lint/rules/no-explicit-any")
+        );
+        // The hint is where the remedy lives for most of these rules, and one
+        // line has to hold both halves.
+        assert!(any.message.contains("Use a specific type"), "{any:?}");
+    }
+
+    /// JSX is decided by the file name, which is the whole reason `lint` takes
+    /// the path: poly calls eight extensions "typescript", and `<T>(x)` is a
+    /// type assertion in one of them and an element in another.
+    #[test]
+    fn the_extension_decides_whether_angle_brackets_are_jsx() {
+        let text = "export const a = <div>{1}</div>;\n";
+        let jsx = js("a.tsx", text);
+        assert!(jsx.iter().all(|i| i.source != "typescript"), "{jsx:?}");
+        // The same text in a .ts file is not valid TypeScript.
+        let issues = js("a.ts", text);
+        assert!(
+            issues.iter().any(|i| i.source == "typescript"),
+            "{issues:?}"
+        );
+    }
+
+    /// A file that does not parse is invalid, said at the offending character.
+    ///
+    /// The position is the substance of the test: deno_ast hands back positions
+    /// counted from a constant it documents as the start of every parse, and if
+    /// that ever stops holding, every JavaScript finding poly prints lands
+    /// somewhere else. A tab is in the fixture because `display_position`, the
+    /// obvious alternative, counts one as two columns.
+    #[test]
+    fn an_unparsable_file_is_reported_as_invalid_typescript() {
+        let text = "const a = 1;\nfunction g() {\n\tconst b = \"unterminated;\n}\n";
+        let issues = js("a.ts", text);
+        let broken = issues
+            .iter()
+            .find(|i| i.source == "typescript")
+            .unwrap_or_else(|| panic!("no syntax finding in {issues:?}"));
+        assert_eq!(broken.code, "syntax");
+        assert_eq!(broken.severity, Severity::Error);
+        // The `"` is the 11th character of the third line, counting the tab as
+        // one; a column of 12 would mean the tab was counted as two.
+        assert_eq!((broken.line, broken.col), (2, 11), "{broken:?}");
+        assert_eq!(broken.message, "Unterminated string constant");
+        assert_eq!(broken.url, None);
+
+        // swc recovered, so the file was linted as well as reported on: a
+        // syntax error must not silently take the rest of the file's findings
+        // with it.
+        assert!(issues.iter().any(|i| i.source == "deno_lint"), "{issues:?}");
+    }
+
+    /// JSX uses the factory, so importing it is not an unused import.
+    ///
+    /// This was the whole of the difference between poly and `deno lint` over
+    /// 25,489 real files: five `.tsx` files whose `import React` poly called
+    /// unused because it had named no factory for JSX to compile to. The other
+    /// import in the fixture is the control -- the rule still works.
+    #[test]
+    fn a_jsx_file_uses_the_factory_it_imports() {
+        let text = "import React from \"react\";\nimport Unused from \"./x\";\nexport const a = <div />;\n";
+        let codes: Vec<String> = js("a.tsx", text).into_iter().map(|i| i.code).collect();
+        assert_eq!(codes, ["no-unused-vars"]);
+        let issues = js("a.tsx", text);
+        assert!(issues[0].message.contains("`Unused`"), "{issues:?}");
+    }
+
+    /// deno's own directive is honoured, because it is deno's linter running.
+    #[test]
+    fn a_deno_lint_ignore_comment_silences_the_rule_it_names() {
+        let text = "// deno-lint-ignore no-explicit-any\nexport const x: any = 1;\n";
+        let issues = js("a.ts", text);
+        assert!(issues.is_empty(), "{issues:?}");
+    }
+
+    /// The project's deno.json picks the rules, exactly as its selene.toml and
+    /// ruff.toml do for the other two embedded linters.
+    #[test]
+    fn deno_json_narrows_the_rule_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.ts");
+        let text = "export const x: any = 1;\n";
+        std::fs::write(&file, text).unwrap();
+        assert_eq!(js(file.to_str().unwrap(), text).len(), 1);
+
+        // Comments, because the file is allowed to have them and poly reads it
+        // with the parser deno reads it with.
+        std::fs::write(
+            dir.path().join("deno.json"),
+            "{\n  // ours\n  \"lint\": { \"rules\": { \"exclude\": [\"no-explicit-any\"] } }\n}\n",
+        )
+        .unwrap();
+        let issues = js(file.to_str().unwrap(), text);
+        assert!(issues.is_empty(), "{issues:?}");
+    }
+
+    /// The two rules that are about Deno rather than about JavaScript are off
+    /// until a project says it is a Deno project.
+    ///
+    /// A browser app is the case that matters: `window.addEventListener` is
+    /// how the platform works there, and "Window is no longer available in
+    /// Deno" is a sentence about somebody else's runtime.
+    #[test]
+    fn the_deno_runtime_rules_wait_for_a_deno_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let (browser, deno) = (dir.path().join("browser"), dir.path().join("deno"));
+        std::fs::create_dir_all(&browser).unwrap();
+        std::fs::create_dir_all(&deno).unwrap();
+        std::fs::write(deno.join("deno.json"), "{}\n").unwrap();
+
+        let text = "window.addEventListener(\"load\", () => {});\n";
+        let quiet = js(browser.join("a.ts").to_str().unwrap(), text);
+        assert!(quiet.is_empty(), "{quiet:?}");
+
+        let flagged = js(deno.join("a.ts").to_str().unwrap(), text);
+        assert_eq!(
+            flagged.iter().map(|i| i.code.as_str()).collect::<Vec<_>>(),
+            ["no-window", "no-window-prefix"],
+            "{flagged:?}"
+        );
     }
 
     // ── dockerfile ─────────────────────────────────────────────────────────

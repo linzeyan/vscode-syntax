@@ -7,6 +7,8 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 content_inspector.workspace = true
+deno_ast.workspace = true
+deno_lint.workspace = true
 dprint-plugin-dockerfile.workspace = true
 dprint-plugin-json.workspace = true
 dprint-plugin-markdown.workspace = true
@@ -15,6 +17,7 @@ dprint-plugin-typescript.workspace = true
 encoding_rs.workspace = true
 full_moon.workspace = true
 ignore.workspace = true
+jsonc-parser.workspace = true
 malva.workspace = true
 markup_fmt.workspace = true
 poly-core = { path = "../poly-core" }
@@ -34,6 +37,7 @@ ruff_text_size.workspace = true
 ruff_workspace.workspace = true
 selene-lib.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 serde_yaml.workspace = true
 sqruff-lib.workspace = true
 stylua.workspace = true

@@ -34,6 +34,9 @@ const registry = new vsctm.Registry({
     createOnigScanner: (s) => new oniguruma.OnigScanner(s),
     createOnigString: (s) => new oniguruma.OnigString(s),
   })),
+  // vscode-textmate's RegistryOptions declares this as returning a
+  // Promise, so the `async` is the interface rather than an oversight.
+  // poly: ignore deno_lint/require-await
   loadGrammar: async (scopeName) => {
     const path = byScope.get(scopeName);
     if (!path) return null; // embedded scopes we don't bundle (source.js etc.)

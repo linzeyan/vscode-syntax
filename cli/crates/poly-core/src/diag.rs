@@ -126,6 +126,12 @@ const POLICY: &[(&str, Policy)] = &[
     // Neither does ruff, whose default set is the same shape. A rule-level
     // answer -- F821 is a defect, E501 is style -- is what the catalog is for.
     ("ruff", Policy::Poly(Severity::Warning)),
+    // deno_lint prints every finding as an error because that is how its CLI
+    // displays them, not a ranking: it has one level and 85 recommended rules
+    // ranging from `no-const-assign` to `no-explicit-any`. Taking that word at
+    // face value would make a `prefer-const` fail a build under `--fail-on
+    // error`, so poly ranks the set, like the two above it.
+    ("deno_lint", Policy::Poly(Severity::Warning)),
     // sqruff ranks nothing either. Most of its rules are layout, but a `poly
     // check` that called SQL findings info would make them invisible under the
     // default fail-on, and this is the level SQL has always been reported at.
@@ -140,8 +146,13 @@ const POLICY: &[(&str, Policy)] = &[
     ("knip", Policy::Poly(Severity::Warning)),
     ("vulture", Policy::Poly(Severity::Warning)),
     // A file that does not parse is invalid, and that is the only thing poly
-    // reports about TOML.
+    // reports about TOML. `typescript` is the same claim about the other
+    // language poly parses itself: it is named after the language rather than
+    // after deno_lint because "this file is not JavaScript" outlives whichever
+    // parser said so, and because the rules deno_lint *did* run are the row
+    // above -- one source cannot be two levels.
     ("toml", Policy::Poly(Severity::Error)),
+    ("typescript", Policy::Poly(Severity::Error)),
     ("poly", Policy::PerRule),
 ];
 

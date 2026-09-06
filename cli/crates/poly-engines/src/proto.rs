@@ -289,7 +289,7 @@ const SELECTABLE: usize = CATALOGUE.len();
 /// Is this file linted by the rules in this module?
 ///
 /// Split out so the batch walk can skip reading files nothing will report on,
-/// and so `lint::supported` and `lint::lint` cannot drift apart about it.
+/// and so `lint::engine` and `lint::lint` cannot drift apart about it.
 pub fn supported(lang: &str) -> bool {
     lang == "protobuf"
 }
@@ -893,7 +893,7 @@ struct LintSection {
 fn policy_for(path: &Path) -> Arc<Policy> {
     type Cache = HashMap<Option<PathBuf>, Arc<Policy>>;
     static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
-    let key = poly_core::nearest_ancestor_file(path, "buf.yaml");
+    let key = poly_core::nearest_ancestor_file(path, &["buf.yaml"]);
     let mut guard = CACHE.lock().expect("proto policy cache lock");
     let cache = guard.get_or_insert_with(HashMap::new);
     if let Some(hit) = cache.get(&key) {
@@ -1129,7 +1129,7 @@ mod tests {
         assert!(crate::lint::rule_doc("buf", "FIELD_LOWER_SNAKE_CASE").is_none());
     }
 
-    /// The seam `lint::supported` and `lint::lint` share. The first decides
+    /// The seam `lint::engine` and `lint::lint` share. The first decides
     /// whether the file is read at all and the second what is done with it, so
     /// a language in one and not the other is a file poly opens and ignores --
     /// or worse, one it never opens and silently calls clean.
@@ -1137,10 +1137,10 @@ mod tests {
     fn protobuf_is_wired_into_both_halves_of_the_lint_seam() {
         let body = "syntax = \"proto3\";\npackage a.b;\nmessage bad {\n  string X = 1;\n}\n";
         let (dir, file) = project(None, body);
-        assert!(crate::lint::supported("protobuf", &file));
+        assert!(crate::lint::engine("protobuf", &file).is_some());
         assert_eq!(crate::lint::lint("protobuf", &file, body).unwrap().len(), 2);
         // ...and nothing else answers for `.proto`.
-        assert!(!crate::lint::supported("yaml", &file));
+        assert!(crate::lint::engine("yaml", &file).is_none());
         drop(dir);
     }
 

@@ -203,7 +203,7 @@ impl Snippet {
 
 /// Can a file of this kind carry embedded shell at all?
 ///
-/// The pairing `lint::supported` uses, for the reason it uses it: a workflow is
+/// The pairing `lint::engine` uses, for the reason it uses it: a workflow is
 /// YAML and a repository of Kubernetes manifests is thousands of files that are
 /// not. Asked before any file is read, so a repository with neither never pays
 /// for resolving -- or downloading -- a shellcheck it has no use for.

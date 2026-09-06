@@ -32,6 +32,9 @@ const registry = new vsctm.Registry({
     createOnigScanner: (s) => new oniguruma.OnigScanner(s),
     createOnigString: (s) => new oniguruma.OnigString(s),
   })),
+  // vscode-textmate's RegistryOptions declares this as returning a
+  // Promise, so the `async` is the interface rather than an oversight.
+  // poly: ignore deno_lint/require-await
   loadGrammar: async (s) => {
     const path = byScope.get(s);
     return path ? vsctm.parseRawGrammar(readFileSync(path, "utf8"), path) : null;

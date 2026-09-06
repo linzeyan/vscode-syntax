@@ -90,6 +90,7 @@ invalid = [
   "poly/docker-missing-from",
   "selene/parse_error",
   "toml/syntax",
+  "typescript/syntax",
 ]
 
 # The name breaks the convention the ecosystem's own tooling assumes, so

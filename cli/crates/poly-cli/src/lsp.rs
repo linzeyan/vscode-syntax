@@ -1870,12 +1870,19 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     let Some(lang) = config.language(path) else {
         return Vec::new();
     };
-    let mut issues = match poly_engines::lint::lint(&lang, path, text) {
-        Ok(issues) => issues,
-        Err(e) => {
-            eprintln!("[poly] lint error {}: {e:#}", path.display());
-            Vec::new()
-        }
+    // Asked before linting rather than dispatching straight into the engines,
+    // because for JavaScript and TypeScript the answer is "eslint has this
+    // file" -- and `poly check` steps back there too. An engine only one of
+    // them runs is the editor/CI split A4 exists to prevent.
+    let mut issues = match crate::lint_engine(&lang, path) {
+        None => Vec::new(),
+        Some(_) => match poly_engines::lint::lint(&lang, path, text) {
+            Ok(issues) => issues,
+            Err(e) => {
+                eprintln!("[poly] lint error {}: {e:#}", path.display());
+                Vec::new()
+            }
+        },
     };
     // Spelling is asked separately because it has no language to dispatch on,
     // and from disk rather than from the buffer: on stdin the document is

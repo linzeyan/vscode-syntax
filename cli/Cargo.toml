@@ -13,6 +13,20 @@ anyhow = "1"
 # poly now that poly is the one reading the bytes. Same crate typos uses, so the
 # answer is the same one for the same file.
 content_inspector = "0.2"
+# The types deno_lint hands a finding back in: MediaType, ModuleSpecifier, the
+# `Diagnostic` trait a diagnostic's message and documentation URL come from, and
+# StartSourcePos for turning its positions into byte offsets. Named directly
+# because deno_lint re-exports none of them. Already in the tree --
+# dprint-plugin-typescript is built on it -- so the version has to be the one
+# that resolves there: two deno_asts means two `SourcePos` types, and the one
+# deno_lint returns would be the other.
+deno_ast = "0.53"
+# JavaScript and TypeScript lint, embedded rather than downloaded. The crate
+# `deno lint` itself is built from, so the rules, codes, fixes, documentation
+# links and `// deno-lint-ignore` handling are the tool's own (09 §4.2). Exact
+# pin for the reason ruff's and sqruff's are: the API is pre-1.0, and a minor
+# bump can change which rules the recommended set contains.
+deno_lint = "=0.84.1"
 dprint-plugin-dockerfile = "0.6"
 dprint-plugin-json = "0.23"
 dprint-plugin-markdown = "0.22"
@@ -33,6 +47,11 @@ encoding_rs = "0.8"
 full_moon = "2.2"
 globset = "0.4"
 ignore = "0.4"
+# deno.json is JSON with comments, and deno.jsonc says so in its name. Already
+# in the tree (dprint-plugin-json parses with it), so reading a project's deno
+# config costs a feature rather than a dependency -- and it is the same parser
+# `deno lint` reads that file with.
+jsonc-parser = { version = "0.33", features = ["serde"] }
 lsp-server = "0.7"
 lsp-types = "0.94"
 malva = "0.16"

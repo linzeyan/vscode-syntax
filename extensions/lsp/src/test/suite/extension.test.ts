@@ -94,7 +94,7 @@ suite("poly-lsp in a real editor", () => {
   // so the pair the test host just wired up has to agree. A mismatch here is
   // the same defect a user would see as a warning badge, caught before release
   // rather than by whoever installs it.
-  test("the binary it talks to is its own version", async () => {
+  test("the binary it talks to is its own version", () => {
     const extension = vscode.extensions.getExtension(EXTENSION_ID);
     const serverPath = vscode.workspace
       .getConfiguration("poly")
@@ -382,7 +382,7 @@ func main() {
   // survives between runs: a stale copy naming the pre-rename extension id sat
   // there passing this test for the wrong reason. Delete that directory if this
   // ever disagrees with package.json.
-  test("format-on-save is on for a poly language out of the box", async () => {
+  test("format-on-save is on for a poly language out of the box", () => {
     const uri = writeFile("defaults.py", "x = 1\n");
     const editor = vscode.workspace.getConfiguration("editor", {
       uri,

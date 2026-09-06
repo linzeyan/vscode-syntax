@@ -547,6 +547,39 @@ fn failure(tool: &str, err: &anyhow::Error) -> coverage::Status {
 const NO_BIOME: &str = "no node_modules/.bin/biome with a biome.json above these files";
 const NO_ESLINT: &str = "no node_modules/.bin/eslint with an eslint config above these files";
 
+/// The embedded linter poly will actually run on this file.
+///
+/// `poly_engines::lint::engine` says which embedded checker *exists* for a
+/// file; for JavaScript and TypeScript that is a different question from
+/// whether poly runs it. A project carrying eslint or biome has chosen a
+/// linter, its CI runs that one, and poly reporting deno_lint's findings beside
+/// it would be the hadolint double-report again -- two codes and two levels for
+/// one defect, with `--fail-on` deciding by whoever spoke first (A3, 09 §4.2).
+/// Every other language has no project-local linter to hand off to, so there
+/// the two answers are the same.
+///
+/// One function rather than a check beside each caller, because the three
+/// callers are the two halves of `poly check` -- what gets read, and what the
+/// coverage block claims was read -- and the daemon, which has to agree with
+/// both or the editor squiggles a rule CI never reports (A4).
+pub fn lint_engine(lang: &str, path: &Path) -> Option<&'static str> {
+    let engine = poly_engines::lint::engine(lang, path)?;
+    if engine == "deno_lint" && project_js_linter(path) {
+        return None;
+    }
+    Some(engine)
+}
+
+/// Does this project carry its own JavaScript linter above `path`?
+///
+/// The same detection `poly check` and the daemon already use to run them:
+/// binary plus config, nearest first. A biome.json counts because biome lints
+/// as well as formats -- `poly fmt` defers to it for the same reason.
+fn project_js_linter(path: &Path) -> bool {
+    crate::fmt::cached_project_tool("eslint", path).is_some()
+        || crate::fmt::cached_project_tool("biome", path).is_some()
+}
+
 fn cmd_check(inv: &Invocation) -> Result<i32> {
     let (strict, compact) = (inv.has("--strict"), inv.has("--compact"));
     let paths = &inv.paths;
@@ -695,7 +728,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             .map(|(path, config)| {
                 let mut found = poly_engines::lint::spell(path)?;
                 if let Some(lang) = config.language(path) {
-                    let linted = poly_engines::lint::supported(&lang, path);
+                    let linted = lint_engine(&lang, path).is_some();
                     let embeds = embedded_shellcheck.is_some()
                         && poly_engines::shell::hosts_shell(&lang, path);
                     if linted || embeds {
@@ -748,7 +781,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             }
         }
 
-        // Which embedded checker had which files, from `lint::engine` -- the
+        // Which embedded checker had which files, from `lint_engine` -- the
         // same pairing the pass above used to decide what to read. Derived
         // rather than counted inside the parallel loop, and derived from that
         // function rather than from a list beside it, because a coverage report
@@ -756,7 +789,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         // report at all.
         let mut engines: std::collections::BTreeMap<&'static str, usize> = Default::default();
         for (path, lang, _) in &files {
-            if let Some(engine) = poly_engines::lint::engine(lang, path) {
+            if let Some(engine) = lint_engine(lang, path) {
                 *engines.entry(engine).or_default() += 1;
             }
         }
@@ -1411,6 +1444,53 @@ mod tests {
         // actionlint because it is one of the few with a build on all six
         // platforms, so this cannot start depending on where it runs.
         assert!(installable("actionlint", false));
+    }
+
+    /// A project that brought its own JavaScript linter keeps it, and poly's
+    /// embedded one steps back over exactly those files.
+    ///
+    /// The failure this prevents is the hadolint double-report: two tools on
+    /// one file, two codes and two levels for the same defect, and `--fail-on`
+    /// deciding by whichever spoke first. Only the JavaScript engine defers --
+    /// nothing in the project can take Python away from ruff -- so a
+    /// `.py` beside it is the control.
+    #[test]
+    fn a_project_with_eslint_keeps_eslint() {
+        // Two projects rather than one project before and after: detection is
+        // memoized per directory for the process, exactly as a real run wants
+        // it, so "the same folder, now with eslint" is a question no `poly
+        // check` ever asks.
+        let dir = tempfile::tempdir().unwrap();
+        let (plain, owned) = (dir.path().join("plain"), dir.path().join("owned"));
+        std::fs::create_dir_all(&plain).unwrap();
+        // Both halves of `project::eslint`: the binary and a config, because
+        // eslint turns up as somebody else's transitive dependency in projects
+        // that never chose it.
+        std::fs::create_dir_all(owned.join("node_modules").join(".bin")).unwrap();
+        std::fs::write(
+            owned
+                .join("node_modules")
+                .join(".bin")
+                .join(if cfg!(windows) {
+                    "eslint.cmd"
+                } else {
+                    "eslint"
+                }),
+            "",
+        )
+        .unwrap();
+        std::fs::write(owned.join("eslint.config.js"), "export default [];\n").unwrap();
+
+        assert_eq!(
+            lint_engine("typescript", &plain.join("a.ts")),
+            Some("deno_lint")
+        );
+        assert_eq!(lint_engine("typescript", &owned.join("a.ts")), None);
+        assert_eq!(
+            lint_engine("python", &owned.join("b.py")),
+            Some("ruff"),
+            "only the JavaScript engine defers to a project tool"
+        );
     }
 
     #[test]

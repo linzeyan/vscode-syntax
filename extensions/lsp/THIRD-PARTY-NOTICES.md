@@ -30,6 +30,7 @@ named inline.
 - atty 0.2.14 (MIT) — https://github.com/softprops/atty
 - autocfg 1.5.1 (Apache-2.0 OR MIT) — https://github.com/cuviper/autocfg
 - backtrace 0.3.76 (MIT OR Apache-2.0) — https://github.com/rust-lang/backtrace-rs
+- base64 0.22.1 (MIT OR Apache-2.0) — https://github.com/marshallpierce/rust-base64
 - base64 0.23.1 (MIT OR Apache-2.0) — https://github.com/marshallpierce/rust-base64
 - beef 0.5.2 (MIT OR Apache-2.0) — https://github.com/maciejhirsz/beef
 - better_scoped_tls 1.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
@@ -76,6 +77,7 @@ named inline.
 - console 0.15.11 (MIT) — https://github.com/console-rs/console
 - content_inspector 0.2.4 (MIT/Apache-2.0) — https://github.com/sharkdp/content_inspector
 - convert_case 0.10.0 (MIT) — https://github.com/rutrum/convert-case
+- convert_case 0.4.0 (MIT) — https://github.com/rutrum/convert-case
 - countme 3.0.1 (MIT OR Apache-2.0) — https://github.com/matklad/countme
 - cpufeatures 0.2.17 (MIT OR Apache-2.0) — https://github.com/RustCrypto/utils
 - cpufeatures 0.3.0 (MIT OR Apache-2.0) — https://github.com/RustCrypto/utils
@@ -100,9 +102,12 @@ named inline.
 - deno_ast 0.53.3 (MIT) — https://github.com/denoland/deno_ast
 - deno_error 0.7.3 (MIT) — https://github.com/denoland/deno_error
 - deno_error_macro 0.7.3 (MIT) — https://github.com/denoland/deno_error
+- deno_lint 0.84.1 (MIT) — https://github.com/denoland/deno_lint
 - deno_media_type 0.4.0 (MIT) — https://github.com/denoland/deno_media_type
+- deno_semver 0.10.1 (MIT) — https://github.com/denoland/deno_semver
 - deno_terminal 0.2.3 (MIT) — https://github.com/denoland/deno_terminal
 - derive-where 1.6.1 (MIT OR Apache-2.0) — https://github.com/ModProg/derive-where
+- derive_more 0.99.20 (MIT) — https://github.com/JelteF/derive_more
 - derive_more 1.0.0 (MIT) — https://github.com/JelteF/derive_more
 - derive_more 2.1.1 (MIT) — https://github.com/JelteF/derive_more
 - derive_more-impl 1.0.0 (MIT) — https://github.com/JelteF/derive_more
@@ -131,6 +136,7 @@ named inline.
 - dunce 1.0.5 (CC0-1.0 OR MIT-0 OR Apache-2.0) — https://gitlab.com/kornelski/dunce
 - dyn-clone 1.0.20 (MIT OR Apache-2.0) — https://github.com/dtolnay/dyn-clone
 - ec4rs 1.2.0 (Apache-2.0) — https://github.com/TheDaemoness/ec4rs
+- ecow 0.2.6 (MIT OR Apache-2.0) — https://github.com/typst/ecow
 - either 1.18.0 (MIT OR Apache-2.0) — https://github.com/rayon-rs/either
 - encode_unicode 1.0.0 (Apache-2.0 OR MIT) — https://github.com/tormol/encode_unicode
 - encoding_rs 0.8.35 ((Apache-2.0 OR MIT) AND BSD-3-Clause) — https://github.com/hsivonen/encoding_rs
@@ -178,6 +184,7 @@ named inline.
 - heck 0.5.0 (MIT OR Apache-2.0) — https://github.com/withoutboats/heck
 - hermit-abi 0.1.19 (MIT/Apache-2.0) — https://github.com/hermitcore/libhermit-rs
 - hermit-abi 0.5.3 (MIT OR Apache-2.0) — https://github.com/hermit-os/hermit-rs
+- hipstr 0.6.0 (MIT OR Apache-2.0) — https://github.com/polazarus/hipstr
 - hstr 3.0.6 (Apache-2.0) — https://github.com/swc-project/swc.git
 - http 1.5.0 (MIT OR Apache-2.0) — https://github.com/hyperium/http
 - httparse 1.10.1 (MIT OR Apache-2.0) — https://github.com/seanmonstar/httparse
@@ -259,6 +266,7 @@ named inline.
 - option-ext 0.2.0 (MPL-2.0) — https://github.com/soc/option-ext.git
 - ordermap 1.2.0 (Apache-2.0 OR MIT) — https://github.com/indexmap-rs/ordermap
 - os_str_bytes 6.6.1 (MIT OR Apache-2.0) — https://github.com/dylni/os_str_bytes
+- par-core 2.0.0 (Apache-2.0) — https://github.com/dudykr/ddbase.git
 - parking_lot 0.12.5 (MIT OR Apache-2.0) — https://github.com/Amanieu/parking_lot
 - parking_lot_core 0.9.12 (MIT OR Apache-2.0) — https://github.com/Amanieu/parking_lot
 - paste 1.0.15 (MIT OR Apache-2.0) — https://github.com/dtolnay/paste
@@ -376,6 +384,7 @@ named inline.
 - rustls-webpki 0.103.15 (ISC) — https://github.com/rustls/webpki
 - rustversion 1.0.23 (MIT OR Apache-2.0) — https://github.com/dtolnay/rustversion
 - ryu 1.0.23 (Apache-2.0 OR BSL-1.0) — https://github.com/dtolnay/ryu
+- ryu-js 1.0.3 (Apache-2.0 OR BSL-1.0) — https://github.com/boa-dev/ryu-js
 - salsa 0.28.2 (Apache-2.0 OR MIT) — https://github.com/salsa-rs/salsa
 - salsa-macro-rules 0.28.2 (Apache-2.0 OR MIT) — https://github.com/salsa-rs/salsa
 - salsa-macros 0.28.2 (Apache-2.0 OR MIT) — https://github.com/salsa-rs/salsa
@@ -393,6 +402,7 @@ named inline.
 - seq-macro 0.3.6 (MIT OR Apache-2.0) — https://github.com/dtolnay/seq-macro
 - serde 1.0.229 (MIT OR Apache-2.0) — https://github.com/serde-rs/serde
 - serde-sarif 0.8.0 (MIT) — https://github.com/psastras/sarif-rs
+- serde_bytes 0.11.19 (MIT OR Apache-2.0) — https://github.com/serde-rs/bytes
 - serde_core 1.0.229 (MIT OR Apache-2.0) — https://github.com/serde-rs/serde
 - serde_derive 1.0.229 (MIT OR Apache-2.0) — https://github.com/serde-rs/serde
 - serde_derive_internals 0.30.0 (MIT OR Apache-2.0) — https://github.com/serde-rs/serde
@@ -403,6 +413,7 @@ named inline.
 - serde_spanned 1.1.1 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
 - serde_yaml 0.9.34+deprecated (MIT OR Apache-2.0) — https://github.com/dtolnay/serde-yaml
 - servo_arc 0.4.3 (MIT OR Apache-2.0) — https://github.com/servo/stylo
+- sha1 0.10.7 (MIT OR Apache-2.0) — https://github.com/RustCrypto/hashes
 - sha2 0.10.9 (MIT OR Apache-2.0) — https://github.com/RustCrypto/hashes
 - shellexpand 3.1.2 (MIT/Apache-2.0) — https://gitlab.com/ijackson/rust-shellexpand
 - shlex 2.0.1 (MIT OR Apache-2.0) — https://github.com/comex/rust-shlex
@@ -417,6 +428,7 @@ named inline.
 - smallvec 1.15.2 (MIT OR Apache-2.0) — https://github.com/servo/rust-smallvec
 - smartstring 1.0.1 (MPL-2.0+) — https://github.com/bodil/smartstring
 - smol_str 0.3.6 (MIT OR Apache-2.0) — https://github.com/rust-lang/rust-analyzer/tree/master/lib/smol_str
+- sptr 0.3.2 (MIT OR Apache-2.0) — https://github.com/Gankra/sptr
 - sqruff-lib 0.40.0 (Apache-2.0) — https://github.com/quarylabs/sqruff
 - sqruff-lib-core 0.40.0 (Apache-2.0) — https://github.com/quarylabs/sqruff
 - sqruff-lib-dialects 0.40.0 (Apache-2.0) — https://github.com/quarylabs/sqruff
@@ -437,9 +449,17 @@ named inline.
 - supports-unicode 3.0.0 (Apache-2.0) — https://github.com/zkat/supports-unicode
 - swc_atoms 9.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_common 17.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
+- swc_config 3.1.2 (Apache-2.0) — https://github.com/swc-project/swc.git
+- swc_config_macro 1.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_ecma_ast 18.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_ecma_lexer 26.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
+- swc_ecma_loader 17.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_ecma_parser 27.0.7 (Apache-2.0) — https://github.com/swc-project/swc.git
+- swc_ecma_transforms_base 30.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
+- swc_ecma_transforms_macros 1.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
+- swc_ecma_transforms_react 33.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
+- swc_ecma_utils 24.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
+- swc_ecma_visit 18.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_eq_ignore_macros 1.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_macros_common 1.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
 - swc_visit 2.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git

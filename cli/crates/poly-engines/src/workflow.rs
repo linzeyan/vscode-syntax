@@ -3342,7 +3342,7 @@ jobs:
     ///
     /// A workflow is YAML, so without the path test `poly check` on a
     /// Kubernetes repository would report `unknown workflow key` on every
-    /// manifest in it. `lint::supported` and `lint::lint` both ask
+    /// manifest in it. `lint::engine` and `lint::lint` both ask
     /// `poly_core::is_workflow_file`, and they have to agree: the first decides
     /// whether the file is read at all and the second what is done with it.
     #[test]
@@ -3350,7 +3350,7 @@ jobs:
         use std::path::Path;
         let text = "on: push\njob: nope\n";
         let workflow = Path::new(".github/workflows/ci.yml");
-        assert!(crate::lint::supported("yaml", workflow));
+        assert!(crate::lint::engine("yaml", workflow).is_some());
         assert!(!crate::lint::lint("yaml", workflow, text)
             .unwrap()
             .is_empty());
@@ -3364,7 +3364,7 @@ jobs:
             ".github/actions/setup/action.yml",
         ] {
             let path = Path::new(other);
-            assert!(!crate::lint::supported("yaml", path), "{other}");
+            assert!(crate::lint::engine("yaml", path).is_none(), "{other}");
             assert!(
                 crate::lint::lint("yaml", path, text).unwrap().is_empty(),
                 "{other}"

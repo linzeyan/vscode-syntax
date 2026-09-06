@@ -95,7 +95,7 @@ let versionWarning: string | undefined;
 /// `poly --version` prints one line, `poly <version>`. Anything else -- a
 /// non-zero exit, no output, a hang -- means the binary is older than 0.3.0,
 /// which is itself the mismatch worth reporting rather than an error to raise.
-async function binaryVersion(serverPath: string): Promise<string | undefined> {
+function binaryVersion(serverPath: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     execFile(serverPath, ["--version"], { timeout: 5000 }, (err, stdout) => {
       const version = stdout.trim().split(/\s+/).pop();
@@ -677,7 +677,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // command line matches CI exactly.
     vscode.commands.registerCommand(
       "poly.lintPath",
-      async (uri?: vscode.Uri) => {
+      (uri?: vscode.Uri) => {
         const target = uri?.fsPath ?? workspacePaths()[0];
         if (!target) {
           return;
@@ -695,7 +695,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // reason; see `cmd_deadcode`.
     vscode.commands.registerCommand(
       "poly.analyzeDeadCode",
-      async (uri?: vscode.Uri) => {
+      (uri?: vscode.Uri) => {
         const target = uri?.fsPath
           ?? vscode.window.activeTextEditor?.document.uri.fsPath
           ?? workspacePaths()[0];

@@ -113,7 +113,9 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 
 ### poly — CLI
 
-- **內嵌引擎**（免安裝、離線可用）：TypeScript／JavaScript、JSON／JSONC、
+- **內嵌引擎**（免安裝、離線可用）：TypeScript／JavaScript（lint 是 deno_lint 的
+  recommended 規則集，code 長 `deno_lint/*`；專案自己裝了 eslint 或 biome 就換它們，
+  同一份檔案不會被兩套規則各報一次）、JSON／JSONC、
   Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
   Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、GraphQL、
   Dockerfile（格式化，lint 是 poly 自己寫的規則，code 長 `poly/docker-*`；
@@ -425,8 +427,8 @@ summary 會加註 `(N below fail-on)`，所以綠色的 run 有輸出不會被�
 同一份判準套到每個工具，所以 `--fail-on error` 在 Lua、SQL、Dockerfile、workflow 上
 擋的是同一類東西。本來就有等級而且意思相同的工具（shellcheck、clippy、biome、eslint、
 swiftlint、selene、tflint、hadolint）照用它們自己的；不排序的工具由 poly 排一次
-（ruff、golangci-lint、sqruff 是 warning，typos 是 info）；poly 自己的規則則是一條
-規則一個等級。
+（ruff、golangci-lint、sqruff、deno_lint 是 warning，typos 是 info——deno_lint 把每一條
+都印成 error 是它 CLI 的顯示方式，不是分級）；poly 自己的規則則是一條規則一個等級。
 
 寫進 `poly.toml` 才能讓編輯器與 CI 同一套標準，而且兩邊可以不同——「沒格式化要擋，
 錯字不用」是很常見的政策：
@@ -489,6 +491,7 @@ coverage:
   actionlint      6 files  ran
   biome          64 files  absent — no node_modules/.bin/biome with a biome.json above these files
   cargo          25 files  ran
+  deno_lint      27 files  ran
   eslint         27 files  absent — no node_modules/.bin/eslint with an eslint config above these files
   hadolint        1 file   off-by-default — add `hadolint = "on"` under [tools] to run it as well
   poly/actions    6 files  ran
