@@ -279,6 +279,40 @@ clang-format、swift-format、terraform fmt。
 docker run --rm -v "$PWD:/work" -v poly-cache:/cache ghcr.io/linzeyan/poly check .
 ```
 
+### 在 pre-commit 裡用
+
+單一 binary、沒有 runtime 依賴，直接當 hook 用。手寫 `.git/hooks/pre-commit`：
+
+```sh
+#!/bin/sh
+poly fmt --check --changed || {
+  echo "run: poly fmt --changed" >&2
+  exit 1
+}
+poly check --changed --strict
+```
+
+`--changed` 的範圍是 working tree vs HEAD 加上 untracked，比「只看 staged」寬——用
+`git add -p` 分次 stage 時會檢查到還沒 stage 的改動，是刻意的保守近似。
+
+用 pre-commit framework 的話它自己會把 staged 檔案逐個傳進來，範圍更準：
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: poly-fmt
+        name: poly fmt --check
+        entry: poly fmt --check
+        language: system
+        pass_filenames: true
+      - id: poly-check
+        name: poly check
+        entry: poly check --strict
+        language: system
+        pass_filenames: true
+```
+
 ### 驗證裝好了
 
 ```sh
