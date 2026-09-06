@@ -118,12 +118,14 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、GraphQL、
   Dockerfile（格式化，lint 是 poly 自己寫的規則，code 長 `poly/docker-*`；
   hadolint 預設關閉，因為它跟 poly 的規則大部分重疊——見下面的外部工具），
-  Lua（格式化 stylua、lint selene）。這些都是編進 binary 的 Rust library，
+  Lua（格式化 stylua、lint selene）、
+  Protobuf（lint 是 poly 自己寫的規則，code 長 `poly/proto-*`；格式化仍是 buf）。
+  這些都是編進 binary 的 Rust library，
   不再下載。拼字檢查（typos）也在裡面，而且不分語言——它讀的是每一個檔案，
   包含 poly 認不出語言的那些。
 - **外部工具**（受管下載）：shellcheck、shfmt、actionlint、
   tflint、gofumpt、golangci-lint、swiftlint、buf
-  （Protobuf 的格式化與 lint，同一支 binary 也是上面那個 language server）。版本釘死，
+  （Protobuf 的格式化，同一支 binary 也是上面那個 language server）。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
   信任第一次抓到的東西。
 - **預設關閉但仍可用**：hadolint。poly 現在有自己的 Dockerfile 規則，兩邊一起跑
@@ -141,9 +143,16 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   `target/poly` 而不是預設的 `target/`，這樣你在終端打的 `cargo test` 不會等
   編輯器（rust-analyzer 也是這麼做的）；代價是多一棵 build tree，第一次會編一次。
   不想要就 `[tools] cargo = "off"`。
-- **Protobuf 的 lint 需要 buf module**：`.proto` 上方沒有 `buf.yaml` 就大聲跳過。
-  沒有 module 時 buf 會拿當前工作目錄當根目錄，`PACKAGE_DIRECTORY_MATCH` 會對正常的
-  package 亂噴，而且結果隨你從哪執行而變——會漂移的檢查比沒有檢查更糟（R5／A4）。
+- **Protobuf 的 lint 是 poly 自己的規則**，不需要 buf module：`.proto` 上方沒有
+  `buf.yaml` 也照樣檢查（以前這種檔案是整個跳過的）。有 `buf.yaml` 的話，它的
+  `lint` 區段——`use`、`except`、`ignore`、`ignore_only`，v1 v2 都讀——決定哪幾條規則跑，
+  `// buf:lint:ignore` 註釋也照樣有效。poly 這 14 條對應 buf `BASIC` 那層的
+  單檔規則；buf `STANDARD` 多加的那批命名慣例（`ENUM_VALUE_PREFIX`、
+  `PACKAGE_VERSION_SUFFIX`、`SERVICE_SUFFIX` 等）、需要整個 module 的規則
+  （`PACKAGE_SAME_*`、`RPC_REQUEST_RESPONSE_UNIQUE` …）與需要解析 import 的規則
+  （`IMPORT_USED`、`PROTOVALIDATE` …）都沒有。編譯錯誤現在由 `poly fmt` 抓（那仍是 buf）。
+  poly 的 parser 還不支援 `edition = "2023"`，遇到讀不了的檔案會報
+  `poly/proto-unreadable`——那是「poly 沒檢查這個檔案」，不是「這個檔案有問題」。
   格式化不受影響，`.proto` 一律格式化。
 - **`poly minify [路徑...]`**：把 JSON／JSONC 就地壓成一行，移除空白與註解。走跟
   `poly fmt` 同一套 walk 與 `[format] exclude`，所以 CLI 與編輯器命令答案一致。

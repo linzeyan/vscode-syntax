@@ -39,6 +39,22 @@ malva = "0.16"
 markup_fmt = "0.27"
 pretty_graphql = "0.2"
 pretty_yaml = "0.6"
+# The descriptor types protox-parse hands a parsed .proto back in. Named
+# directly because naming `FileDescriptorProto`, `SourceCodeInfo` and the field
+# labels is unavoidable and protox-parse re-exports none of them. The version
+# has to be the one protox-parse resolves to rather than merely a compatible
+# one: two prost-types in the tree means two `FileDescriptorProto` types, and
+# the one protox-parse returns would be the other.
+prost-types = "0.14"
+# protobuf's parser, embedded rather than shelling out to `buf lint`. The
+# parser half of protox on its own: it reads one file with no import
+# resolution, which is exactly the scope of the rules poly has, and it returns
+# a descriptor carrying `SourceCodeInfo`. Those spans are buf's spans -- buf
+# reports FIELD_LOWER_SNAKE_CASE at 11:10-11:18 where this reports [11,9,17],
+# the same range 0-based -- so a poly finding lands on the character buf
+# underlined. Exact pin for the reason ruff's and sqruff's are exact: the API
+# is pre-1.0, and a minor bump could change which files parse at all.
+protox-parse = "=0.9.0"
 rayon = "1"
 # The syntax-tree library yaml_parser builds on. Named directly because walking
 # its AST means naming `rowan::ast::AstNode` and `rowan::TextRange`, and

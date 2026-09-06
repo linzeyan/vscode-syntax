@@ -31,6 +31,7 @@ named inline.
 - autocfg 1.5.1 (Apache-2.0 OR MIT) — https://github.com/cuviper/autocfg
 - backtrace 0.3.76 (MIT OR Apache-2.0) — https://github.com/rust-lang/backtrace-rs
 - base64 0.23.1 (MIT OR Apache-2.0) — https://github.com/marshallpierce/rust-base64
+- beef 0.5.2 (MIT OR Apache-2.0) — https://github.com/maciejhirsz/beef
 - better_scoped_tls 1.0.1 (Apache-2.0) — https://github.com/swc-project/swc.git
 - bit-set 0.8.0 (Apache-2.0 OR MIT) — https://github.com/contain-rs/bit-set
 - bit-vec 0.8.0 (Apache-2.0 OR MIT) — https://github.com/contain-rs/bit-vec
@@ -224,6 +225,9 @@ named inline.
 - litemap 0.8.3 (Unicode-3.0) — https://github.com/unicode-org/icu4x
 - lock_api 0.4.14 (MIT OR Apache-2.0) — https://github.com/Amanieu/parking_lot
 - log 0.4.34 (MIT OR Apache-2.0) — https://github.com/rust-lang/log
+- logos 0.15.1 (MIT OR Apache-2.0) — https://github.com/maciejhirsz/logos
+- logos-codegen 0.15.1 (MIT OR Apache-2.0) — https://github.com/maciejhirsz/logos
+- logos-derive 0.15.1 (MIT OR Apache-2.0) — https://github.com/maciejhirsz/logos
 - lsp-server 0.7.9 (MIT OR Apache-2.0) — https://github.com/rust-lang/rust-analyzer/tree/master/lib/lsp-server
 - lsp-types 0.94.1 (MIT) — https://github.com/gluon-lang/lsp-types
 - malva 0.16.0 (MIT) — https://github.com/g-plane/malva
@@ -233,6 +237,8 @@ named inline.
 - matches 0.1.10 (MIT) — https://github.com/SimonSapin/rust-std-candidates
 - matchit 0.9.2 (MIT AND BSD-3-Clause) — https://github.com/ibraheemdev/matchit
 - memchr 2.8.3 (Unlicense OR MIT) — https://github.com/BurntSushi/memchr
+- miette 7.6.0 (Apache-2.0) — https://github.com/zkat/miette
+- miette-derive 7.6.0 (Apache-2.0) — https://github.com/zkat/miette
 - miniz_oxide 0.8.9 (MIT OR Zlib OR Apache-2.0) — https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
 - monch 0.6.0 (MIT) — https://github.com/denoland/monch
 - natord 1.0.9 (MIT) — https://github.com/lifthrasiir/rust-natord
@@ -297,6 +303,10 @@ named inline.
 - proc-macro2 1.0.107 (MIT OR Apache-2.0) — https://github.com/dtolnay/proc-macro2
 - profiling 1.0.18 (MIT OR Apache-2.0) — https://github.com/aclysma/profiling
 - profiling-procmacros 1.0.18 (MIT OR Apache-2.0) — https://github.com/aclysma/profiling
+- prost 0.14.4 (Apache-2.0) — https://github.com/tokio-rs/prost
+- prost-derive 0.14.4 (Apache-2.0) — https://github.com/tokio-rs/prost
+- prost-types 0.14.4 (Apache-2.0) — https://github.com/tokio-rs/prost
+- protox-parse 0.9.0 (MIT OR Apache-2.0) — https://github.com/andrewhickman/protox
 - psm 0.1.32 (MIT OR Apache-2.0) — https://github.com/rust-lang/stacker/
 - pulldown-cmark 0.11.3 (MIT) — https://github.com/raphlinus/pulldown-cmark
 - pyproject-toml 0.13.7 (MIT) — https://github.com/PyO3/pyproject-toml-rs.git

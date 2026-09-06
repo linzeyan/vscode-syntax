@@ -263,6 +263,104 @@ fn a_malformed_inline_code_is_reported_not_fatal() {
     assert_eq!(code, 1, "{stderr}");
 }
 
+/// `.proto` end to end, which nothing else here covers: no `buf.yaml`, so no
+/// `buf lint` run would have reported anything at all, and no download either.
+///
+/// The daemon's half is `lsp::tests::a_proto_is_linted_in_the_editor_at_the_
+/// same_positions_as_the_cli`, on the same fixture and the same two positions.
+#[test]
+fn a_proto_is_linted_without_a_buf_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("acme/v1")).unwrap();
+    std::fs::write(
+        root.join("acme/v1/thing.proto"),
+        "syntax = \"proto3\";\npackage acme.v1;\nmessage bad {\n  string X = 1;\n}\n",
+    )
+    .unwrap();
+
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    // 1-based, as `report.rs` prints: the message name is line 3 column 9 and
+    // the field name line 4 column 10, which is where buf 1.72 underlines them.
+    assert!(
+        stdout.contains("acme/v1/thing.proto:3:9: warning [poly/proto-message-pascal-case]"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("acme/v1/thing.proto:4:10: warning [poly/proto-field-lower-snake-case]"),
+        "{stdout}"
+    );
+    assert_eq!(code, 1, "{stderr}");
+}
+
+/// The project's own `buf.yaml` decides which of poly's rules run, so a project
+/// that narrowed buf's set keeps that set when poly replaces the tool. istio's
+/// shape: a category minus one rule.
+#[test]
+fn a_buf_yaml_narrows_polys_own_rules() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let body = "syntax = \"proto3\";\npackage acme.v1;\nmessage bad {\n  string X = 1;\n}\n";
+    std::fs::write(root.join("a.proto"), body).unwrap();
+
+    std::fs::write(
+        root.join("buf.yaml"),
+        "version: v1\nlint:\n  use:\n    - BASIC\n  except:\n    - FIELD_LOWER_SNAKE_CASE\n",
+    )
+    .unwrap();
+    let (_, stdout, _) = poly(root, &["check", "--compact", "."]);
+    assert!(stdout.contains("proto-message-pascal-case"), "{stdout}");
+    assert!(!stdout.contains("proto-field-lower-snake-case"), "{stdout}");
+
+    // A rule poly does not have, asked for by name: nothing is reported, and
+    // the run says which rule it could not serve rather than silently linting
+    // with a set nobody chose.
+    std::fs::write(
+        root.join("buf.yaml"),
+        "version: v2\nlint:\n  use: [IMPORT_USED]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    assert!(!stdout.contains("poly/proto-"), "{stdout}");
+    assert!(stderr.contains("IMPORT_USED"), "{stderr}");
+    assert_eq!(code, 0, "{stderr}");
+}
+
+/// A file poly's parser cannot read is reported as unread, not as wrong, and
+/// not silently skipped -- a `.proto` poly was asked to check and did not check
+/// is what makes a green run mean less than it looks like it means.
+#[test]
+fn an_edition_proto_says_poly_could_not_read_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("a.proto"),
+        "edition = \"2023\";\npackage acme.v1;\nmessage bad {\n  string X = 1;\n}\n",
+    )
+    .unwrap();
+
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    assert!(
+        stdout.contains("a.proto:1:1: warning [poly/proto-unreadable]"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("edition"), "{stdout}");
+    // The claim is about poly, not about the file: the two rules that would
+    // have fired are not reported, because they never ran.
+    assert!(!stdout.contains("pascal-case"), "{stdout}");
+    assert_eq!(code, 1, "{stderr}");
+
+    // And it is silenceable like any other finding, in the file itself.
+    std::fs::write(
+        root.join("a.proto"),
+        "// poly: ignore poly/proto-unreadable\nedition = \"2023\";\npackage acme.v1;\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    assert!(!stdout.contains("proto-unreadable"), "{stdout}");
+    assert_eq!(code, 0, "{stderr}");
+}
+
 /// A language poly knows no comment syntax for gets no inline suppression, and
 /// says nothing about it: `[lint.per-file-ignores]` still covers that file, and
 /// the finding continuing to appear is how you find out.

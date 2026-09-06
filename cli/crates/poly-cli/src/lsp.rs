@@ -3145,6 +3145,52 @@ mod tests {
         assert!(!lint_document(&root.join("src/a.sql"), sql).is_empty());
     }
 
+    /// `.proto` got nothing in the editor until now: `buf lint` ran only from
+    /// `poly check`, and `external_lint` never had a protobuf arm, so a field
+    /// named `BadField` was a finding in CI and a clean file on screen. The
+    /// fixture is `tests/check.rs`'s, and the numbers are asserted rather than
+    /// the emptiness, so a rule that stops firing fails here too.
+    ///
+    /// The protocol-level half of this — real `publishDiagnostics` against real
+    /// `poly check` output — is in `tests/check.rs`, because this is a library
+    /// call and that is a daemon.
+    #[test]
+    fn a_proto_is_linted_in_the_editor_at_the_same_positions_as_the_cli() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("a.proto");
+        let text = "syntax = \"proto3\";\npackage a.b;\nmessage bad {\n  string X = 1;\n}\n";
+        std::fs::write(&file, text).expect("write proto");
+
+        let found = lint_document(&file, text);
+        let mut seen: Vec<(String, u32, u32)> = found
+            .iter()
+            .filter_map(|d| match &d.code {
+                Some(lsp_types::NumberOrString::String(code)) => {
+                    Some((code.clone(), d.range.start.line, d.range.start.character))
+                }
+                _ => None,
+            })
+            .collect();
+        seen.sort();
+        assert_eq!(
+            seen,
+            [
+                ("proto-field-lower-snake-case".to_string(), 3, 9),
+                ("proto-message-pascal-case".to_string(), 2, 8),
+            ]
+        );
+        assert!(found.iter().all(|d| d.source.as_deref() == Some("poly")));
+
+        // And the project's own `buf.yaml` narrows the editor exactly as it
+        // narrows CI -- a selection only one side honours is the same split.
+        std::fs::write(
+            dir.path().join("buf.yaml"),
+            "version: v2\nlint:\n  use: [MESSAGE_PASCAL_CASE]\n",
+        )
+        .expect("write buf.yaml");
+        assert_eq!(lint_document(&file, text).len(), 1);
+    }
+
     /// The daemon's half of `tests/check.rs`'s inline suppression cases, on the
     /// same fixtures.
     ///

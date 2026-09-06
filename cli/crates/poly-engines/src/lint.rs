@@ -35,7 +35,7 @@ pub fn supported(lang: &str, path: &Path) -> bool {
     match lang {
         "sql" | "toml" | "lua" | "python" | "jupyter" | "dockerfile" => true,
         "yaml" => poly_core::is_workflow_file(path),
-        _ => false,
+        other => crate::proto::supported(other),
     }
 }
 
@@ -70,14 +70,16 @@ pub fn rule_doc(source: &str, code: &str) -> Option<&'static str> {
             .get(code)
             .copied()
         }
-        // One namespace for every rule poly wrote, three tables behind it: the
-        // codes are already prefixed by what they lint (`docker-`, `actions-`),
-        // so a third engine adds a table here rather than a second source name
-        // the reader has to learn. `INLINE_RULES` is poly-core's because the
-        // rule is poly-core's -- a suppression comment is not a language's.
+        // One namespace for every rule poly wrote, four tables behind it: the
+        // codes are already prefixed by what they lint (`docker-`, `actions-`,
+        // `proto-`), so a fourth engine adds a table here rather than a second
+        // source name the reader has to learn. `INLINE_RULES` is poly-core's
+        // because the rule is poly-core's -- a suppression comment is not a
+        // language's.
         "poly" => DOCKER_RULES
             .iter()
             .chain(crate::workflow::RULES)
+            .chain(crate::proto::RULES)
             .chain(poly_core::INLINE_RULES)
             .find(|(rule, _)| *rule == code)
             .map(|(_, doc)| *doc),
@@ -98,6 +100,9 @@ pub fn lint(lang: &str, path: &Path, text: &str) -> Result<Vec<Issue>> {
         // as the language: `poly check` on a Kubernetes repository must not
         // report `unknown workflow key` on every manifest in it.
         "yaml" if poly_core::is_workflow_file(path) => Ok(crate::workflow::lint(text)),
+        // Reads the path for a different reason: the `buf.yaml` governing this
+        // file decides which of poly's rules the project asked for.
+        "protobuf" => Ok(crate::proto::lint(path, text)),
         _ => Ok(Vec::new()),
     }
 }

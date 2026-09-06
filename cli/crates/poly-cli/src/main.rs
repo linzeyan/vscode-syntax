@@ -593,11 +593,6 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             group("swift"),
             Box::new(poly_tools::run::swiftlint_files),
         ),
-        (
-            "buf",
-            group("protobuf"),
-            Box::new(poly_tools::run::buf_files),
-        ),
     ];
 
     let mut issues: Vec<FileIssue> = Vec::new();

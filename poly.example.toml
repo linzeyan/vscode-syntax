@@ -280,9 +280,45 @@ include-hidden = false
 # one exact rustc, and a downloaded one would disagree with the compiler that
 # builds the crate.
 #
-# buf is one binary doing three jobs -- it formats protobuf, lints it, and is
-# the language server `poly lsp` starts for it -- so an entry here governs all
-# three at once. "off" leaves .proto files untouched by every one of them.
+# buf does two jobs here -- it formats protobuf, and it is the language server
+# `poly lsp` starts for it -- so an entry here governs both at once, and "off"
+# turns both off. Lint used to be the third and is not any more: poly has its
+# own `.proto` rules, compiled in, and they run whether buf does or not. They
+# are silenced the way poly's Dockerfile and workflow rules are -- `[lint]
+# exclude`, `[lint.per-file-ignores]` and `# poly: ignore poly/proto-...`.
+#
+# Which of them run is still the project's decision, because poly reads the
+# `lint` section of the nearest `buf.yaml`: `use`, `except`, `ignore` and
+# `ignore_only`, in v1 and v2, plus a v2 module's `excludes`. `use: [STANDARD]`
+# selects all fourteen rules poly has, `use: [IMPORT_USED]` selects none of
+# them, and a category is expanded before it is compared. A `.proto` with no
+# buf.yaml above it is linted with all fourteen, which is new: `buf lint`
+# resolved a module by walking up for a buf.yaml and reported nothing without
+# one -- 8,443 of the 9,664 `.proto` files in the corpus this was measured over.
+#
+# What poly reproduces is the fourteen per-file rules of buf's BASIC tier and
+# nothing else, so three groups are missing and each is missing for its own
+# reason. STANDARD's configurable house style -- ENUM_VALUE_PREFIX,
+# ENUM_ZERO_VALUE_SUFFIX, PACKAGE_VERSION_SUFFIX, SERVICE_SUFFIX,
+# RPC_REQUEST_STANDARD_NAME, RPC_RESPONSE_STANDARD_NAME, FILE_LOWER_SNAKE_CASE
+# -- is declined rather than unimplemented: it was 78,939 of the 90,392
+# findings buf produced over that corpus, and googleapis, envoy, dapr and vitess
+# each switch parts of it off in their own buf.yaml. The eleven that need the
+# rest of the module (PACKAGE_SAME_*, RPC_REQUEST_RESPONSE_UNIQUE,
+# DIRECTORY_SAME_PACKAGE, PACKAGE_DIRECTORY_MATCH, PACKAGE_SAME_DIRECTORY) and
+# the three that need resolved imports (IMPORT_USED, PACKAGE_NO_IMPORT_CYCLE,
+# PROTOVALIDATE) are outside what a single-file engine can answer. And the
+# compile errors `buf lint` reported on its way to linting are gone with it: a
+# `.proto` that does not compile is now caught by `poly fmt`, which is still
+# buf. A buf.yaml that names a missing rule individually is told so once, by
+# name, at the start of the run.
+#
+# `// buf:lint:ignore RULE` comments keep working, for the same reason the rest
+# of the buf.yaml is read: each one is somebody who looked at a finding and
+# decided about it, and a suppression that stops working the day the tool
+# underneath it changes un-silences exactly what was already settled. v1's
+# `allow_comment_ignores` and v2's `disallow_comment_ignores` are read too, so
+# a project that turned them off keeps them off.
 #
 # The language servers `poly lsp` starts, and the whole-program analyses
 # `poly deadcode` runs, take the same two answers by the name poly runs them
