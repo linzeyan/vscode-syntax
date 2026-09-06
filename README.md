@@ -117,7 +117,8 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
 - **內嵌引擎**（免安裝、離線可用）：TypeScript／JavaScript（lint 是 deno_lint 的
   recommended 規則集，code 長 `deno_lint/*`；專案自己裝了 eslint 或 biome 就換它們，
   同一份檔案不會被兩套規則各報一次）、JSON／JSONC、
-  Markdown、TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
+  Markdown（格式化，lint 是 rumdl 的 7 條規則，code 長 `rumdl/MD*`——見下面的說明）、
+  TOML、YAML、CSS／SCSS／LESS、HTML／Vue／Svelte／Astro／Jinja、
   Python／Jupyter（格式化與 lint 都是 ruff）、SQL、XML、GraphQL、
   Dockerfile（格式化，lint 是 poly 自己寫的規則，code 長 `poly/docker-*`；
   hadolint 預設關閉，因為它跟 poly 的規則大部分重疊——見下面的外部工具），
@@ -162,6 +163,17 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   poly 的 parser 還不支援 `edition = "2023"`，遇到讀不了的檔案會報
   `poly/proto-unreadable`——那是「poly 沒檢查這個檔案」，不是「這個檔案有問題」。
   格式化不受影響，`.proto` 一律格式化。
+- **Markdown 的 lint 是 rumdl 的 7 條規則**，全部只報壞掉的東西：相對連結指向不存在的檔
+  （MD057）、錨點不存在（MD051）、連結寫反 `(文字)[網址]`（MD011）、空連結（MD042）、
+  參考式連結沒有定義（MD052）、標題跳級（MD001）、圖片沒有 alt（MD045）。code 長
+  `rumdl/MD*`，rumdl 自己的 `rumdl-disable`／`rumdl-disable-next-line` 註解（`<!-- ... -->`
+  那種形式，寫成 HTML 註解）照樣有效，要整個關掉某一條就寫 `[lint] ignore`。
+  版面的規則（行長、標題與清單前後的空行、強調的寫法…）一條都不開，專案自己的
+  `.rumdl.toml` 也不讀：那些是 `poly fmt` 的事，開下去等於報 `poly fmt` 前一秒才寫出來的
+  東西——實測 4,947 個檔案，光 MD036 就有 1,054 條是格式化自己造出來的。
+  **一個已知落差**：MD051 只答得出同一個檔案裡的錨點。`other.md#section` 這種跨檔錨點，
+  rumdl 自己是先索引整棵樹才能檢查的，而 poly 一次只看一個檔案（編輯器裡本來也只有那一個
+  檔案），所以不報——同一批檔案裡有 58 條。
 - **R（`.R`／`.r`）的格式化、lint 與語言功能都是 arity**，一支 binary，poly 代抓，
   不必先裝 R。專案自己的 `arity.toml` 或 `air.toml`（版面、`select`／`ignore`）照樣生效，
   `# arity-ignore <rule>: 理由` 註釋也照樣有效。code 長 `arity/*`；lint 以 R 套件為
@@ -436,7 +448,7 @@ summary 會加註 `(N below fail-on)`，所以綠色的 run 有輸出不會被�
 
 同一份判準套到每個工具，所以 `--fail-on error` 在 Lua、SQL、Dockerfile、workflow 上
 擋的是同一類東西。本來就有等級而且意思相同的工具（shellcheck、clippy、biome、eslint、
-swiftlint、selene、tflint、hadolint、arity）照用它們自己的；不排序的工具由 poly 排一次
+swiftlint、selene、tflint、hadolint、arity、rumdl）照用它們自己的；不排序的工具由 poly 排一次
 （ruff、golangci-lint、sqruff、deno_lint 是 warning，typos 是 info——deno_lint 把每一條
 都印成 error 是它 CLI 的顯示方式，不是分級）；poly 自己的規則則是一條規則一個等級。
 

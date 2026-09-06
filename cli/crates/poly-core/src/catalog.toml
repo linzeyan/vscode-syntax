@@ -29,6 +29,13 @@
 # renamed rule cannot leave a hadolint code pointing at a category that no
 # longer exists.
 #
+# Two of the seven rumdl rules are deliberately absent: MD001 (a heading level
+# is skipped) and MD045 (an image has no alt text) name a kind of defect nothing
+# else here reports, and a category with one tool's one rule in it is not a
+# category -- it is a rule with a longer name. They report and are counted under
+# `summary.uncategorized`, which is what that number is for. The day a second
+# language brings the same defect, that is when the category is worth having.
+#
 # `poly fmt`'s two findings (`unformatted`, `format`) are deliberately absent.
 # Categories exist to be named in `[lint]`, and a formatter's verdict is not a
 # lint rule.
@@ -40,6 +47,11 @@ broken-reference = [
   "poly/actions-invalid-id",
   "poly/actions-needs-cycle",
   "poly/actions-unknown-job-in-needs",
+  "rumdl/MD011",
+  "rumdl/MD042",
+  "rumdl/MD051",
+  "rumdl/MD052",
+  "rumdl/MD057",
 ]
 
 # A credential ends up somewhere it persists after the thing that needed it.

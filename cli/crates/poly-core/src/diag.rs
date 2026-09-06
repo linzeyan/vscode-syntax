@@ -119,6 +119,13 @@ const POLICY: &[(&str, Policy)] = &[
     // "this file is not R" loud -- and keeps it right the day arity ranks a
     // rule differently, which a poly-side constant could not do.
     ("arity", Policy::ItsOwn),
+    // rumdl's two levels split its rule set almost exactly where poly's error
+    // and warning divide it: 135 of its rules report at warning and are about
+    // layout, 20 report at error and are about something being broken. poly
+    // runs seven of the second kind, so this is a scale that already means what
+    // poly means -- and the day rumdl re-ranks one of them, taking its word is
+    // the only thing that stays right.
+    ("rumdl", Policy::ItsOwn),
     // actionlint ranks nothing, and everything it reports now is a validity
     // problem: a workflow that fails its schema, id, event, permission or
     // expression checks fails at run time. Its shellcheck pass is off (poly

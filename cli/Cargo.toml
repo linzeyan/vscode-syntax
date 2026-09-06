@@ -121,6 +121,21 @@ ruff_text_size = "=0.0.12"
 # selection, which is the point of embedding ruff rather than hardcoding a
 # default set poly invented.
 ruff_workspace = "=0.0.12"
+# Markdown's linter, embedded rather than downloaded: the crate rumdl's own CLI
+# is built from, so the codes, the positions, `<!-- rumdl-disable -->` and the
+# rumdl.dev rule pages are the tool's own. Seven of its eighty-four rules run,
+# and `lint::MARKDOWN_RULES` is where the measurement that picked them is
+# written down.
+#
+# Exact pin for the reason ruff's and sqruff's are: a minor bump changes which
+# rules exist and what they report, and here that is the whole of what poly says
+# about a Markdown file.
+#
+# Default features off, and neither of the two is a size decision: `native` is
+# rumdl's own language server (tower-lsp, tokio, notify) and `parallel` is its
+# own multi-file walk. poly is already the daemon and already the walk, so each
+# would be a second copy of something poly is.
+rumdl = { version = "=0.2.66", default-features = false }
 # Lua, embedded as a pair: both crates parse with full_moon, so the second one
 # costs little once the first is linked. Exact pins for a different reason than
 # ruff's -- these two crates *are* the answer poly prints. A minor bump changes

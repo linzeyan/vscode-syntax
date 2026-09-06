@@ -61,6 +61,7 @@ named inline.
 - clap-cargo 0.18.3 (MIT OR Apache-2.0) — https://github.com/crate-ci/clap-cargo
 - clap-verbosity-flag 3.0.4 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap-verbosity-flag
 - clap_builder 4.6.6 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap
+- clap_complete 4.6.9 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap
 - clap_derive 3.2.25 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap/tree/master/clap_derive
 - clap_derive 4.6.4 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap
 - clap_lex 0.2.4 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap/tree/master/clap_lex
@@ -149,6 +150,7 @@ named inline.
 - equivalent 1.0.2 (Apache-2.0 OR MIT) — https://github.com/indexmap-rs/equivalent
 - errno 0.3.14 (MIT OR Apache-2.0) — https://github.com/lambda-fairy/rust-errno
 - etcetera 0.11.0 (MIT OR Apache-2.0) — https://github.com/lunacookies/etcetera
+- fancy-regex 0.17.0 (MIT) — https://github.com/fancy-regex/fancy-regex
 - fancy-regex 0.19.0 (MIT) — https://github.com/fancy-regex/fancy-regex
 - fastrand 2.5.0 (Apache-2.0 OR MIT) — https://github.com/smol-rs/fastrand
 - fern 0.7.1 (MIT) — https://github.com/daboross/fern
@@ -227,6 +229,7 @@ named inline.
 - libc 0.2.189 (MIT OR Apache-2.0) — https://github.com/rust-lang/libc
 - libcst 1.8.6 (MIT AND (MIT AND PSF-2.0)) — https://github.com/Instagram/LibCST
 - libcst_derive 1.8.6 (MIT) — https://github.com/Instagram/LibCST
+- libmimalloc-sys 0.1.49 (MIT) — https://github.com/purpleprotocol/mimalloc_rust/tree/master/libmimalloc-sys
 - libredox 0.1.23 (MIT) — https://gitlab.redox-os.org/redox-os/libredox.git
 - linux-raw-sys 0.12.1 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) — https://github.com/sunfishcode/linux-raw-sys
 - litemap 0.8.3 (Unicode-3.0) — https://github.com/unicode-org/icu4x
@@ -246,6 +249,7 @@ named inline.
 - memchr 2.8.3 (Unlicense OR MIT) — https://github.com/BurntSushi/memchr
 - miette 7.6.0 (Apache-2.0) — https://github.com/zkat/miette
 - miette-derive 7.6.0 (Apache-2.0) — https://github.com/zkat/miette
+- mimalloc 0.1.52 (MIT) — https://github.com/purpleprotocol/mimalloc_rust
 - miniz_oxide 0.8.9 (MIT OR Zlib OR Apache-2.0) — https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
 - monch 0.6.0 (MIT) — https://github.com/denoland/monch
 - natord 1.0.9 (MIT) — https://github.com/lifthrasiir/rust-natord
@@ -317,6 +321,8 @@ named inline.
 - protox-parse 0.9.0 (MIT OR Apache-2.0) — https://github.com/andrewhickman/protox
 - psm 0.1.32 (MIT OR Apache-2.0) — https://github.com/rust-lang/stacker/
 - pulldown-cmark 0.11.3 (MIT) — https://github.com/raphlinus/pulldown-cmark
+- pulldown-cmark 0.13.4 (MIT) — https://github.com/raphlinus/pulldown-cmark
+- pulldown-cmark-escape 0.11.0 (MIT) — https://github.com/raphlinus/pulldown-cmark
 - pyproject-toml 0.13.7 (MIT) — https://github.com/PyO3/pyproject-toml-rs.git
 - qname 0.2.1 (Apache-2.0 OR MIT) — https://github.com/xmlem/qname
 - qname-impl 0.2.1 (Apache-2.0 OR MIT) — https://github.com/xmlem/qname
@@ -373,6 +379,7 @@ named inline.
 - ruff_source_file 0.0.12 (MIT) — https://github.com/astral-sh/ruff
 - ruff_text_size 0.0.12 (MIT) — https://github.com/astral-sh/ruff
 - ruff_workspace 0.0.12 (MIT) — https://github.com/astral-sh/ruff
+- rumdl 0.2.66 (MIT) — https://github.com/rvben/rumdl
 - rust-stemmers 1.2.0 (MIT/BSD-3-Clause) — https://github.com/CurrySoftware/rust-stemmers
 - rustc-demangle 0.1.28 (MIT/Apache-2.0) — https://github.com/rust-lang/rustc-demangle
 - rustc-hash 1.1.0 (Apache-2.0/MIT) — https://github.com/rust-lang-nursery/rustc-hash
@@ -482,6 +489,8 @@ named inline.
 - thiserror-impl 2.0.20 (MIT OR Apache-2.0) — https://github.com/dtolnay/thiserror
 - thread_local 1.1.10 (MIT OR Apache-2.0) — https://github.com/Amanieu/thread_local-rs
 - threadpool 1.8.1 (MIT/Apache-2.0) — https://github.com/rust-threadpool/rust-threadpool
+- tikv-jemalloc-sys 0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7 (MIT/Apache-2.0) — https://github.com/tikv/jemallocator
+- tikv-jemallocator 0.6.1 (MIT/Apache-2.0) — https://github.com/tikv/jemallocator
 - tiny_pretty 0.2.1 (MIT) — https://github.com/g-plane/tiny_pretty
 - tiny_pretty 0.4.3 (MIT) — https://github.com/g-plane/tiny_pretty
 - tinystr 0.8.4 (Unicode-3.0) — https://github.com/unicode-org/icu4x
@@ -496,6 +505,7 @@ named inline.
 - toml_datetime 1.1.1+spec-1.1.0 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
 - toml_edit 0.19.15 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
 - toml_edit 0.22.27 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
+- toml_edit 0.25.13+spec-1.1.0 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
 - toml_parser 1.1.3+spec-1.1.0 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
 - toml_write 0.1.2 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml
 - toml_writer 1.1.2+spec-1.1.0 (MIT OR Apache-2.0) — https://github.com/toml-rs/toml

@@ -35,6 +35,7 @@ ruff_python_ast.workspace = true
 ruff_python_formatter.workspace = true
 ruff_text_size.workspace = true
 ruff_workspace.workspace = true
+rumdl.workspace = true
 selene-lib.workspace = true
 serde.workspace = true
 serde_json.workspace = true

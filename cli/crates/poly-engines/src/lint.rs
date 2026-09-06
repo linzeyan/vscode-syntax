@@ -1,6 +1,7 @@
 //! Embedded lint: sqruff for SQL, selene for Lua, ruff for Python and Jupyter,
-//! deno_lint for JavaScript and TypeScript, poly's own rules for Dockerfiles and
-//! GitHub Actions workflows, and typos over every file regardless of language.
+//! deno_lint for JavaScript and TypeScript, rumdl for Markdown, poly's own
+//! rules for Dockerfiles and GitHub Actions workflows, and typos over every
+//! file regardless of language.
 //! External-tool lint (shellcheck, hadolint, actionlint) lives in poly-tools;
 //! the LSP daemon and the CLI merge both sources.
 //!
@@ -46,6 +47,7 @@ pub fn engine(lang: &str, path: &Path) -> Option<&'static str> {
         "lua" => "selene",
         "python" | "jupyter" => "ruff",
         "typescript" => "deno_lint",
+        "markdown" => "rumdl",
         "dockerfile" => "poly/docker",
         "yaml" if poly_core::is_workflow_file(path) => "poly/actions",
         other if crate::proto::supported(other) => "poly/proto",
@@ -130,6 +132,9 @@ pub fn lint(lang: &str, path: &Path, text: &str) -> Result<Vec<Issue>> {
         // One language name for eight extensions (.ts through .cjs), so the
         // file name is what tells JSX from a comparison -- see `lint_typescript`.
         "typescript" => lint_typescript(path, text),
+        // Reads the path for a third reason: two of the seven rules ask the
+        // file system about the links in the text -- see `lint_markdown`.
+        "markdown" => lint_markdown(path, text),
         "dockerfile" => Ok(lint_dockerfile(text)),
         // A workflow is YAML, so this is the one arm that reads the path as well
         // as the language: `poly check` on a Kubernetes repository must not
@@ -974,6 +979,136 @@ fn span(text: &str, range: deno_ast::SourceRange) -> (u32, u32, u32, u32) {
     let (line, col) = line_col(text, range.start.as_byte_index(start));
     let (end_line, end_col) = line_col(text, range.end.as_byte_index(start));
     (line, col, end_line, end_col)
+}
+
+// ── markdown (rumdl) ───────────────────────────────────────────────────────
+
+/// The seven rumdl rules poly runs, out of the eighty-four rumdl has.
+///
+/// rumdl is a linter *and* a formatter, and for Markdown poly is already the
+/// formatter. Over 4,947 real `.md` files rumdl reported 120,570 findings, and
+/// running `poly fmt` in between two runs of it is what divides them:
+///
+/// * 13 rules go to zero once the file has been formatted -- they were
+///   reporting the layout `poly fmt` produces.
+/// * MD013 (line length) survives formatting and is 77.3% of what is left, for
+///   the same reason: poly's Markdown formatter does not reflow prose.
+/// * MD036 goes *up*, 1,340 -> 2,394. `poly fmt` puts a blank line after a
+///   bold line that introduces a list, and MD036 then reads that line as a
+///   paragraph pretending to be a heading. `poly fmt` creates 1,054 of them.
+///
+/// So the whole set is not on the table: `poly check` would report 2,394
+/// findings that `poly fmt` wrote a second earlier, which is the failure that
+/// turned hadolint's and actionlint's shellcheck passes off.
+///
+/// These seven pass both halves of the test rather than one. Their count is
+/// identical either side of formatting -- 948 before, 948 after, so `poly fmt`
+/// has no opinion about them -- and each reports something *broken* rather than
+/// a preference: a link to a file that is not there, an anchor no heading
+/// defines, `(text)[url]` written backwards. 948 findings in 202 of those
+/// files, 0.93% of what rumdl says about them.
+///
+/// A project's own `.rumdl.toml` is deliberately not read, which is where this
+/// engine parts company with ruff, selene and deno_lint. Their configs pick
+/// rules for a tool that only lints; a rumdl config picks rules for a rumdl
+/// that also formats, and honouring one would put MD036 and the twelve like it
+/// back on top of poly's own formatter. Which rules run stays poly's answer
+/// (09 §1.3), and `[lint] ignore` is how a project subtracts from it.
+const MARKDOWN_RULES: &[&str] = &[
+    "MD001", "MD011", "MD042", "MD045", "MD051", "MD052", "MD057",
+];
+
+/// The seven, built once.
+///
+/// `Rule` is `Send + Sync`, so unlike the per-config caches above this is one
+/// set for the whole process: nothing about it depends on which file or which
+/// project is being linted.
+fn markdown_rules() -> &'static [Box<dyn rumdl_lib::rule::Rule>] {
+    static RULES: OnceLock<Vec<Box<dyn rumdl_lib::rule::Rule>>> = OnceLock::new();
+    RULES.get_or_init(|| {
+        let config = rumdl_lib::config::Config::default();
+        MARKDOWN_RULES
+            .iter()
+            .map(|name| {
+                rumdl_lib::rules::create_rule_by_name(name, &config)
+                    .expect("a rule name the pinned rumdl has")
+            })
+            .collect()
+    })
+}
+
+/// Which Markdown this file is written in.
+///
+/// poly maps `.mdx` onto the same language as `.md` -- one formatter, one
+/// language id in the editor -- but they are not the same grammar, and rumdl
+/// knows the difference: in MDX a `{expression}` and a `<Component />` are
+/// syntax rather than the stray braces and raw HTML that Standard reads them
+/// as. The other flavors rumdl has (MkDocs, Pandoc, Quarto) are project-wide
+/// choices with no extension to detect them by, so they stay out of reach until
+/// something asks for them.
+fn markdown_flavor(path: &Path) -> rumdl_lib::config::MarkdownFlavor {
+    match path.extension().and_then(std::ffi::OsStr::to_str) {
+        Some("mdx") => rumdl_lib::config::MarkdownFlavor::MDX,
+        _ => rumdl_lib::config::MarkdownFlavor::Standard,
+    }
+}
+
+/// Lint one Markdown file with the seven rules above.
+///
+/// The path is passed as well as the text because two of the seven resolve
+/// against the file system: MD057 asks whether `../CONTRIBUTING.md` exists, and
+/// both it and MD051 resolve relative to the file's own directory. The text is
+/// still what gets linted, so an editor buffer with unsaved edits is checked as
+/// it stands -- the path only says where it stands.
+fn lint_markdown(path: &Path, text: &str) -> Result<Vec<Issue>> {
+    let warnings = rumdl_lib::lint(
+        text,
+        markdown_rules(),
+        false,
+        markdown_flavor(path),
+        Some(path.to_path_buf()),
+        // rumdl's own `Config`, which the rules were already built from. It is
+        // read again here for per-file overrides poly does not use.
+        None,
+    )
+    .map_err(|e| anyhow!("rumdl error: {e}"))?;
+    Ok(warnings
+        .into_iter()
+        .map(|w| {
+            // Every rule signs its warnings; the field is an Option because the
+            // type is also what a rule's own tests construct by hand.
+            let code = w.rule_name.unwrap_or_default();
+            Issue {
+                // rumdl counts lines and columns from 1, in characters; poly
+                // counts from 0, in characters. Saturating because a rule that
+                // reported column 0 would otherwise wrap to the end of the line
+                // rather than land at its start.
+                line: w.line.saturating_sub(1) as u32,
+                col: w.column.saturating_sub(1) as u32,
+                end_line: w.end_line.saturating_sub(1) as u32,
+                end_col: w.end_column.saturating_sub(1) as u32,
+                severity: severity_of("rumdl", markdown_level(w.severity)),
+                message: w.message,
+                source: "rumdl",
+                // rumdl's fix is a rewrite with no sentence attached: a range
+                // and the text to put there. poly does not apply it -- `poly
+                // fmt` is dprint, not rumdl -- so "it can be rewritten" is the
+                // whole of what there is to pass on.
+                fix: w.fix.is_some().then_some(Fix::Automatic),
+                url: Some(format!("https://rumdl.dev/{}/", code.to_lowercase())),
+                code,
+            }
+        })
+        .collect())
+}
+
+/// rumdl's three levels in the vocabulary `severity_of` translates from.
+fn markdown_level(severity: rumdl_lib::rule::Severity) -> Reported {
+    match severity {
+        rumdl_lib::rule::Severity::Error => Reported::Error,
+        rumdl_lib::rule::Severity::Warning => Reported::Warning,
+        rumdl_lib::rule::Severity::Info => Reported::Info,
+    }
 }
 
 // ── dockerfile (poly's own rules) ──────────────────────────────────────────
@@ -3575,6 +3710,133 @@ mod tests {
             flagged.iter().map(|i| i.code.as_str()).collect::<Vec<_>>(),
             ["no-window", "no-window-prefix"],
             "{flagged:?}"
+        );
+    }
+
+    // ── markdown ───────────────────────────────────────────────────────────
+
+    /// Every name in `MARKDOWN_RULES` is a rule the pinned rumdl has.
+    ///
+    /// `markdown_rules` panics on a name rumdl does not know, and with an exact
+    /// pin that cannot happen without somebody changing the pin -- which is
+    /// exactly when it must fail here rather than in an editor.
+    ///
+    /// The catalog is asked in the same breath, in the direction the poly-rule
+    /// gate above cannot cover: a `rumdl/` row naming a rule poly stopped
+    /// running is a category entry nothing can ever land in. The other
+    /// direction is deliberately not asserted -- MD001 and MD045 have no
+    /// category on purpose, and `catalog.toml` says why.
+    #[test]
+    fn the_seven_markdown_rules_are_rules_rumdl_has() {
+        let names: Vec<&str> = markdown_rules().iter().map(|rule| rule.name()).collect();
+        assert_eq!(names, MARKDOWN_RULES);
+
+        for (category, rules) in poly_core::catalog::catalog() {
+            for id in rules {
+                let Some(code) = id.strip_prefix("rumdl/") else {
+                    continue;
+                };
+                assert!(
+                    MARKDOWN_RULES.contains(&code),
+                    "{category} names {id}, which is not a rule poly runs"
+                );
+            }
+        }
+    }
+
+    /// A link to a file that is not there, placed where rumdl places it.
+    ///
+    /// The position is the substance: rumdl counts lines and columns from one
+    /// and in characters, poly counts from zero and in characters, and the
+    /// CJK in the link text is there so that a byte count would give a
+    /// different answer from the right one.
+    #[test]
+    fn a_relative_link_to_a_missing_file_is_reported_where_rumdl_reports_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("README.md");
+        let text = "# Title\n\nSee [設定說明](./docs/config.md).\n";
+        std::fs::write(&file, text).unwrap();
+
+        let issues = lint("markdown", &file, text).unwrap();
+        let [issue] = &issues[..] else {
+            panic!("expected one finding, got {issues:?}");
+        };
+        assert_eq!(issue.code, "MD057");
+        assert_eq!(issue.source, "rumdl");
+        // rumdl calls a link to a missing file an error, and poly takes its
+        // word: this is the half of its scale that means what poly means.
+        assert_eq!(issue.severity, Severity::Error);
+        assert_eq!(issue.url.as_deref(), Some("https://rumdl.dev/md057/"));
+        // The squiggle covers the target rather than the whole link:
+        // `./docs/config.md` is characters 11..27 of the third line, 0-based.
+        // In bytes it starts at 19, because the four characters of the link
+        // text are three bytes each -- so this is the assertion that says the
+        // column is a character count.
+        assert_eq!((issue.line, issue.col), (2, 11), "{issue:?}");
+        assert_eq!((issue.end_line, issue.end_col), (2, 27), "{issue:?}");
+
+        // The same link with the file in place is not a finding. Without this
+        // the test above would pass just as well if MD057 flagged every link.
+        std::fs::create_dir(dir.path().join("docs")).unwrap();
+        std::fs::write(dir.path().join("docs/config.md"), "# Config\n").unwrap();
+        let quiet = lint("markdown", &file, text).unwrap();
+        assert!(quiet.is_empty(), "{quiet:?}");
+    }
+
+    /// What `poly fmt` decides, `poly check` does not also report.
+    ///
+    /// Four of the seventy-seven rules that stay off, in one file: a line over
+    /// rumdl's eighty columns (MD013), a heading with no blank line under it
+    /// (MD022), a list with no blank line above it (MD032), and a bold line
+    /// standing alone (MD036). The full rule set reports all four here; poly
+    /// reports none of them, because `poly fmt` decides all four.
+    ///
+    /// MD036 is the one worth the fixture. It is not in the file because
+    /// somebody wrote it that way -- it is what `poly fmt` *produces*: put the
+    /// blank line above the list that MD032 asks for, and the bold line above
+    /// it becomes a paragraph in bold. 1,054 of the 2,394 MD036 findings over
+    /// 4,947 real files were written by poly's own formatter, which is the
+    /// whole argument for `MARKDOWN_RULES` being seven names rather than a tag.
+    #[test]
+    fn the_markdown_rules_poly_fmt_owns_are_not_run() {
+        let text = "# Title\n\n**Not a heading**\n\n- one\n- two\n\nA line of prose that runs comfortably past the eighty columns rumdl's MD013 holds a line to.\n\n## Next\nStraight under the heading.\n- three\n";
+        let issues = lint("markdown", Path::new("a.md"), text).unwrap();
+        assert!(issues.is_empty(), "{issues:?}");
+    }
+
+    /// rumdl's own directive is honoured, because it is rumdl running.
+    #[test]
+    fn a_rumdl_disable_comment_silences_the_rule_it_names() {
+        let reversed = "See (the docs)[https://example.com] for more.\n";
+        let issues = lint("markdown", Path::new("a.md"), reversed).unwrap();
+        assert_eq!(
+            issues.iter().map(|i| i.code.as_str()).collect::<Vec<_>>(),
+            ["MD011"],
+            "{issues:?}"
+        );
+
+        let silenced = format!("<!-- rumdl-disable MD011 -->\n\n{reversed}");
+        let quiet = lint("markdown", Path::new("a.md"), &silenced).unwrap();
+        assert!(quiet.is_empty(), "{quiet:?}");
+    }
+
+    /// `.mdx` is a different grammar, and the extension is the only thing that
+    /// says so.
+    ///
+    /// poly calls both files "markdown" -- one formatter, one language id in the
+    /// editor -- so without the flavor every JSX component in an `.mdx` file is
+    /// read as raw HTML. Here that swallows the fenced block inside it, and the
+    /// reversed link in what is plainly code gets reported.
+    #[test]
+    fn mdx_is_linted_as_mdx() {
+        let text = "<Steps>\n  <Step>\n```text\nsee (this)[https://example.com] reversed\n```\n  </Step>\n</Steps>\n";
+        let mdx = lint("markdown", Path::new("a.mdx"), text).unwrap();
+        assert!(mdx.is_empty(), "{mdx:?}");
+        let md = lint("markdown", Path::new("a.md"), text).unwrap();
+        assert_eq!(
+            md.iter().map(|i| i.code.as_str()).collect::<Vec<_>>(),
+            ["MD011"],
+            "{md:?}"
         );
     }
 
