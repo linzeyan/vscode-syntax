@@ -460,6 +460,45 @@ schema.sql:1:1: warning [poly/unformatted] file is not formatted
 `poly/format`，位置指在 parser 停下來的地方；引擎畫的 code frame 縮排接在後面，一個
 問題仍然只佔一行有錨點的輸出。
 
+### 這次誰看過：coverage
+
+綠燈有兩種意思——「沒問題」跟「沒人看」。`poly check` 每次都在 stderr 印一份 coverage
+把兩者分開：這次走到的檔案是被誰檢查的、誰沒檢查、為什麼。
+
+```text
+coverage:
+  actionlint      6 files  ran
+  biome          64 files  absent — no node_modules/.bin/biome with a biome.json above these files
+  cargo          25 files  ran
+  eslint         27 files  absent — no node_modules/.bin/eslint with an eslint config above these files
+  hadolint        1 file   off-by-default — add `hadolint = "on"` under [tools] to run it as well
+  poly/actions    6 files  ran
+  poly/docker     1 file   ran
+  ruff           12 files  ran
+  shellcheck     10 files  ran
+  toml            8 files  ran
+  typos         136 files  ran
+8 tools ran, 0 issues
+```
+
+只列**這次有檔案可看**的 checker：沒有 Go 的 repo 不會印 golangci-lint。狀態六種：
+
+| 狀態             | 意思                                           |
+| ---------------- | ---------------------------------------------- |
+| `ran`            | 跑過了                                         |
+| `missing`        | poly 找不到這支工具，`--strict` 會因此 exit 2  |
+| `disabled`       | `poly.toml` 寫了 `[tools] <名字> = "off"`      |
+| `off-by-default` | poly 預設不跑它，`= "on"` 才會                 |
+| `absent`         | 專案自己沒有（eslint／biome 只用專案裝的那份） |
+| `failed`         | 跑了但壞了，exit 2                             |
+
+`files` 是 poly 交給它的檔案數，不是它最後讀了幾個——工具自己的設定（`_typos.toml`
+的 exclude、`buf.yaml` 選的規則）還會再縮一次。Windows 沒有 shellcheck build，所以
+Dockerfile 的 `RUN` 與 workflow 的 `run:` 在那裡是 `missing` 而不是靜靜地跳過。
+
+同一份資料在 `--format json` 的 `summary.coverage`，四個欄位：`tool`、`files`、
+`status`、`reason`。
+
 ### 換個形狀：`--format`
 
 `--format` 只改 stdout 的形狀，**不改判定結果**——exit code 與 stderr 的 summary
@@ -488,7 +527,7 @@ code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`
 
 ```jsonc
 {
-  "version": 1,
+  "version": 2,
   "command": "check",
   "issues": [
     {
@@ -506,7 +545,19 @@ code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`
       "fatal": true
     }
   ],
-  "summary": { "issues": 1, "fatal": 1, "tools_ran": 6, "tools_missing": [], "tools_failed": [] }
+  "summary": {
+    "issues": 1,
+    "fatal": 1,
+    "coverage": [
+      { "tool": "ruff", "files": 12, "status": "ran", "reason": null },
+      {
+        "tool": "shellcheck",
+        "files": 4,
+        "status": "missing",
+        "reason": "shellcheck has no managed build for win-x64 and is not on PATH"
+      }
+    ]
+  }
 }
 ```
 

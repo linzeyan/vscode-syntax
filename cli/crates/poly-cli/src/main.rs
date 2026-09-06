@@ -4,6 +4,7 @@
 //! Exit codes: 0 clean, 1 diffs/violations found, 2 errors.
 
 mod batch;
+mod coverage;
 mod fmt;
 mod lsp;
 mod proxy;
@@ -510,6 +511,42 @@ fn hadolint_is_off(config: &poly_core::Config) -> bool {
     )
 }
 
+/// The coverage verdict a resolution alone decides, or `None` when the tool is
+/// there and what happens next is the run's answer.
+fn resolution_status(resolved: &poly_tools::Resolved) -> Option<coverage::Status> {
+    match resolved {
+        poly_tools::Resolved::Managed(_)
+        | poly_tools::Resolved::Path(_)
+        | poly_tools::Resolved::Pinned(_) => None,
+        poly_tools::Resolved::Disabled => Some(coverage::Status::Disabled),
+        poly_tools::Resolved::OffByDefault => Some(coverage::Status::OffByDefault),
+        poly_tools::Resolved::Missing(reason) => Some(coverage::Status::Missing(reason.clone())),
+    }
+}
+
+/// A linter that ran and broke, said twice on purpose: here when it happens,
+/// and again in the coverage block at the end.
+///
+/// A golangci-lint that dies thirty seconds into a two-minute run is progress
+/// information, and the block cannot print until every other tool has finished.
+/// Both sentences are produced here so the two cannot word it differently.
+fn failure(tool: &str, err: &anyhow::Error) -> coverage::Status {
+    let why = format!("{err:#}");
+    eprintln!("{tool}: failed — {why}");
+    coverage::Status::Failed(why)
+}
+
+/// What poly says about a project-local linter this project does not carry.
+///
+/// Not a gap and not something to fix: eslint checks the files of projects that
+/// chose eslint, and poly downloading one would be poly formatting a repository
+/// with a tool its CI never runs (A3). It is still a row, because "nothing
+/// linted these 200 TypeScript files" is exactly the answer somebody reading a
+/// green run came for. The wording restates `project::eslint`'s own rule --
+/// binary plus config -- since that is what a reader has to satisfy.
+const NO_BIOME: &str = "no node_modules/.bin/biome with a biome.json above these files";
+const NO_ESLINT: &str = "no node_modules/.bin/eslint with an eslint config above these files";
+
 fn cmd_check(inv: &Invocation) -> Result<i32> {
     let (strict, compact) = (inv.has("--strict"), inv.has("--compact"));
     let paths = &inv.paths;
@@ -546,11 +583,29 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
             .map(|(p, _, _)| p.clone())
             .collect()
     };
+    // Every file that carries shell without being shell: a Dockerfile `RUN`, a
+    // workflow `run:`. Counted before anything is resolved, because it decides
+    // whether shellcheck is worth fetching at all -- and, when it is not there,
+    // it is the size of the hole nobody used to be told about.
+    let shell_hosts = files
+        .iter()
+        .filter(|(path, lang, _)| poly_engines::shell::hosts_shell(lang, path))
+        .count();
+    let shell_scripts = group("shellscript");
+    // Resolved once for the whole run and shared by its three consumers -- the
+    // `.sh` job, the shell embedded in those hosts, and the `-shellcheck` that
+    // actionlint is handed. They are one answer about one binary, and resolving
+    // separately made the coverage report depend on which consumer asked first.
+    // `None` when the run has no shell of either kind, so a repository with
+    // neither still never pays for a download it cannot use.
+    let shellcheck: Option<poly_tools::Resolved> = (!shell_scripts.is_empty() || shell_hosts > 0)
+        .then(|| poly_tools::resolve("shellcheck", &config, false));
+
     type Runner<'a> = Box<dyn Fn(&Path, &[PathBuf]) -> Result<Vec<FileIssue>> + 'a>;
     let jobs: Vec<(&str, Vec<PathBuf>, Runner)> = vec![
         (
             "shellcheck",
-            group("shellscript"),
+            shell_scripts.clone(),
             Box::new(poly_tools::run::shellcheck_files),
         ),
         (
@@ -566,11 +621,14 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                 .filter(|p| poly_core::is_workflow_file(p))
                 .cloned()
                 .collect(),
-            // Resolved inside the closure so a repo with no workflows never
-            // pays for a shellcheck download it will not use.
+            // A workflow file hosts shell, so the run-wide resolution above has
+            // already happened by the time this runs -- and it is the same
+            // answer the embedded snippets are checked with, which is what
+            // keeps actionlint's SC findings and poly's from disagreeing about
+            // whether shellcheck exists.
             Box::new(|cmd, files| {
-                let shellcheck = poly_tools::resolve("shellcheck", &config, false);
-                poly_tools::run::actionlint_files(cmd, files, shellcheck.command())
+                let found = shellcheck.as_ref().and_then(poly_tools::Resolved::command);
+                poly_tools::run::actionlint_files(cmd, files, found)
             }),
         ),
         (
@@ -596,13 +654,12 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     ];
 
     let mut issues: Vec<FileIssue> = Vec::new();
-    let mut missing: Vec<String> = Vec::new();
-    // A linter that malfunctions (bad config, concurrent run, unbuildable
-    // module) used to abort the whole command and throw away every other
-    // tool's findings. Report it, keep going, and still exit 2 at the end --
-    // "could not check" is not "clean".
-    let mut failed: Vec<String> = Vec::new();
-    let mut ran = 0usize;
+    // Which checker looked at what, and why the ones that did not, did not. It
+    // is also this run's bookkeeping: a linter that malfunctions (bad config,
+    // concurrent run, unbuildable module) must not abort the command and throw
+    // away every other tool's findings, so it is recorded here and still exits
+    // 2 at the end -- "could not check" is not "clean".
+    let mut coverage = coverage::Coverage::default();
 
     // Embedded engines (sqruff, selene, ruff, typos) linted only inside the
     // daemon, so `poly check` stayed silent on exactly the files the editor was
@@ -620,16 +677,25 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     // there, so it happens here, exactly as actionlint is already handed the
     // shellcheck poly resolved.
     //
-    // Resolved once, before any file is read, and only when the walk found a
-    // file that can carry shell -- resolution downloads, and a repository with
-    // no Dockerfile and no workflow must not pay for one. `None` when shellcheck
-    // is missing or `[tools] shellcheck = "off"`, and then this is silent: the
-    // `shellcheck` job below already says so for whoever has shell scripts.
-    let shellcheck: Option<PathBuf> = files
-        .iter()
-        .any(|(path, lang, _)| poly_engines::shell::hosts_shell(lang, path))
-        .then(|| poly_tools::resolve("shellcheck", &config, false))
-        .and_then(|resolved| resolved.command().map(Path::to_path_buf));
+    // The binary comes from the run-wide resolution above; `None` here means
+    // shellcheck is missing or off, and the coverage row says which. Silence was
+    // the old answer, and on Windows -- where shellcheck has no build at all --
+    // it meant every `RUN` and every `run:` in the repository went unchecked
+    // without one word about it.
+    let embedded_shellcheck: Option<PathBuf> = shellcheck
+        .as_ref()
+        .and_then(poly_tools::Resolved::command)
+        .map(Path::to_path_buf);
+    if let Some(resolved) = &shellcheck {
+        // Recorded before the run, from the resolution, so the row exists even
+        // when the only shell in the repository is embedded and the `.sh` job
+        // below never runs. The job overwrites it if the run itself fails.
+        coverage.record(
+            "shellcheck",
+            shell_scripts.len() + shell_hosts,
+            resolution_status(resolved).unwrap_or(coverage::Status::Ran),
+        );
+    }
 
     if !walked.is_empty() {
         init_thread_pool();
@@ -639,8 +705,8 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                 let mut found = poly_engines::lint::spell(path)?;
                 if let Some(lang) = config.language(path) {
                     let linted = poly_engines::lint::supported(&lang, path);
-                    let embeds =
-                        shellcheck.is_some() && poly_engines::shell::hosts_shell(&lang, path);
+                    let embeds = embedded_shellcheck.is_some()
+                        && poly_engines::shell::hosts_shell(&lang, path);
                     if linted || embeds {
                         let text = std::fs::read_to_string(path)
                             .with_context(|| format!("reading {}", path.display()))?;
@@ -650,7 +716,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                         if embeds {
                             let snippets = poly_engines::shell::embedded(&lang, path, &text);
                             found.extend(embedded_shell(
-                                shellcheck.as_deref().expect("checked above"),
+                                embedded_shellcheck.as_deref().expect("checked above"),
                                 &snippets,
                                 &text,
                             )?);
@@ -673,6 +739,10 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         // it -- which the repo-wide typos subprocess never did, because it read
         // the config once.
         let mut said: std::collections::HashSet<String> = std::collections::HashSet::new();
+        // The one the coverage row carries. First rather than any, because the
+        // walk is ordered and a row that reads differently between two runs
+        // over the same tree is a row nobody can diff.
+        let mut first_failure: Option<String> = None;
         for result in results {
             match result {
                 Ok(found) => issues.extend(found),
@@ -682,13 +752,36 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                     if said.insert(message.clone()) {
                         eprintln!("embedded lint: failed — {message}");
                     }
+                    first_failure.get_or_insert(message);
                 }
             }
         }
-        if broken > 0 {
-            failed.push(format!("embedded lint ({broken} files)"));
-        } else {
-            ran += 1;
+
+        // Which embedded checker had which files, from `lint::engine` -- the
+        // same pairing the pass above used to decide what to read. Derived
+        // rather than counted inside the parallel loop, and derived from that
+        // function rather than from a list beside it, because a coverage report
+        // claiming a checker ran over files it never saw is worse than no
+        // report at all.
+        let mut engines: std::collections::BTreeMap<&'static str, usize> = Default::default();
+        for (path, lang, _) in &files {
+            if let Some(engine) = poly_engines::lint::engine(lang, path) {
+                *engines.entry(engine).or_default() += 1;
+            }
+        }
+        for (engine, scope) in engines {
+            coverage.record(engine, scope, coverage::Status::Ran);
+        }
+        // Spelling is the one checker with no language: it reads a LICENSE and
+        // a .mailmap as readily as a .rs, so its scope is every file the walk
+        // kept (`spell`).
+        coverage.record("typos", walked.len(), coverage::Status::Ran);
+        // Not attributed to an engine: the failure is a file poly could not
+        // read or a configuration none of them could load, and blaming ruff for
+        // an unreadable _typos.toml would be a worse answer than naming the
+        // pass. The engine rows above stand -- they did run, over the rest.
+        if let Some(why) = first_failure {
+            coverage.record("embedded lint", broken, coverage::Status::Failed(why));
         }
     }
 
@@ -700,70 +793,85 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         .flat_map(|l| group(l))
         .collect();
     if let Some(first) = biome_targets.first() {
-        if let Some(bin) = poly_tools::project::biome(first) {
-            let root = poly_tools::project::root_of(&bin)
-                .unwrap_or(Path::new("."))
-                .to_path_buf();
-            match poly_tools::run::biome_files(&bin, &root, &biome_targets) {
-                Ok(found) => {
-                    issues.extend(found);
-                    ran += 1;
-                }
-                Err(err) => {
-                    eprintln!("biome: failed — {err:#}");
-                    failed.push("biome".to_string());
-                }
+        match poly_tools::project::biome(first) {
+            Some(bin) => {
+                let root = poly_tools::project::root_of(&bin)
+                    .unwrap_or(Path::new("."))
+                    .to_path_buf();
+                coverage.record(
+                    "biome",
+                    biome_targets.len(),
+                    match poly_tools::run::biome_files(&bin, &root, &biome_targets) {
+                        Ok(found) => {
+                            issues.extend(found);
+                            coverage::Status::Ran
+                        }
+                        Err(err) => failure("biome", &err),
+                    },
+                );
             }
+            None => coverage.record(
+                "biome",
+                biome_targets.len(),
+                coverage::Status::Absent(NO_BIOME),
+            ),
         }
     }
     let ts_files = group("typescript");
-    if !ts_files.is_empty() {
-        if let Some(eslint) = poly_tools::project::eslint(ts_files.first().unwrap()) {
-            match poly_tools::run::eslint_files(&eslint, &ts_files) {
-                Ok(found) => {
-                    issues.extend(found);
-                    ran += 1;
-                }
-                Err(err) => {
-                    eprintln!("eslint: failed — {err:#}");
-                    failed.push("eslint".to_string());
-                }
-            }
+    if let Some(first) = ts_files.first() {
+        match poly_tools::project::eslint(first) {
+            Some(eslint) => coverage.record(
+                "eslint",
+                ts_files.len(),
+                match poly_tools::run::eslint_files(&eslint, &ts_files) {
+                    Ok(found) => {
+                        issues.extend(found);
+                        coverage::Status::Ran
+                    }
+                    Err(err) => failure("eslint", &err),
+                },
+            ),
+            None => coverage.record(
+                "eslint",
+                ts_files.len(),
+                coverage::Status::Absent(NO_ESLINT),
+            ),
         }
     }
     for (name, targets, runner) in jobs {
         if targets.is_empty() {
             continue;
         }
-        match poly_tools::resolve(name, &config, false) {
-            resolved @ (poly_tools::Resolved::Managed(_)
-            | poly_tools::Resolved::Path(_)
-            | poly_tools::Resolved::Pinned(_)) => {
-                let cmd = resolved.command().unwrap();
+        // shellcheck is resolved once for the whole run, above, because three
+        // consumers share the answer; every other tool is resolved here, when
+        // its own files turn out to exist.
+        let own;
+        let resolved = match (name, shellcheck.as_ref()) {
+            ("shellcheck", Some(hoisted)) => hoisted,
+            _ => {
+                own = poly_tools::resolve(name, &config, false);
+                &own
+            }
+        };
+        // The embedded snippets are shellcheck's too, so its row counts them;
+        // see the pre-run record above, which this one supersedes.
+        let scope = targets.len() + if name == "shellcheck" { shell_hosts } else { 0 };
+        let status = match resolution_status(resolved) {
+            Some(status) => status,
+            None => {
+                let cmd = resolved
+                    .command()
+                    .expect("resolution_status said it resolved");
                 match runner(cmd, &targets) {
                     Ok(found) => {
                         issues.extend(found);
-                        ran += 1;
+                        coverage::Status::Ran
                     }
-                    Err(err) => {
-                        eprintln!("{name}: failed — {err:#}");
-                        failed.push(name.to_string());
-                    }
+                    Err(err) => failure(name, &err),
                 }
             }
-            poly_tools::Resolved::Disabled => {
-                eprintln!("{name}: disabled in poly.toml");
-            }
-            // Silent on purpose. A project that never mentioned hadolint has
-            // not lost anything it asked for -- poly's own Dockerfile rules
-            // covered these files -- and a line per run about a tool nobody
-            // configured is the nagging `poly/ignore-syntax` exists to avoid.
-            poly_tools::Resolved::OffByDefault => {}
-            poly_tools::Resolved::Missing(reason) => {
-                eprintln!("{name}: skipped — {reason}");
-                missing.push(name.to_string());
-            }
-        }
+        };
+        coverage.record(name, scope, status);
     }
 
     // Both steps need the same thing — the absolute path behind whatever shape
@@ -816,36 +924,33 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     let report = report::Check {
         issues: &issues,
         fail_on,
-        ran,
-        missing: &missing,
-        failed: &failed,
+        coverage: &coverage,
     };
     print!("{}", report.render(inv.format, compact));
+    // Above the summary line and below the report: a reader who wants to know
+    // whether a green run means anything reads it in the order they ask --
+    // findings, then who looked.
+    eprint!("{}", coverage.render());
     // Every issue is still printed; fail-on only decides the exit code. The
     // count of what is below the line is spelled out so a green run with
     // visible findings does not read as a bug.
     let fatal = report.fatal();
     eprintln!(
-        "{} tools ran, {} issues{}{}{}",
-        ran,
+        "{} tools ran, {} issues{}",
+        coverage.ran(),
         issues.len(),
         if fatal == issues.len() {
             String::new()
         } else {
             format!(" ({} below fail-on)", issues.len() - fatal)
         },
-        if missing.is_empty() {
-            String::new()
-        } else {
-            format!(", {} tools missing", missing.len())
-        },
-        if failed.is_empty() {
-            String::new()
-        } else {
-            format!(", {} tools failed", failed.len())
-        }
     );
-    if !failed.is_empty() || (strict && !missing.is_empty()) {
+    // A tool that broke means this run cannot say the tree is clean. `--strict`
+    // extends that to a tool poly could not find at all -- an absent tool is a
+    // skipped file, and a skipped file is the CI/editor split poly exists to
+    // close. Neither covers a tool that is off or one this project does not
+    // carry: those are decisions somebody made, not gaps.
+    if coverage.failed() > 0 || (strict && coverage.missing() > 0) {
         return Ok(2);
     }
     Ok(if fatal == 0 { 0 } else { 1 })
@@ -1074,13 +1179,11 @@ fn cmd_deadcode(rest: &[String]) -> Result<i32> {
     }
 
     let mut issues = Vec::new();
-    let mut missing: Vec<String> = Vec::new();
     let mut failed: Vec<String> = Vec::new();
     let mut ran = 0usize;
     for job in &jobs {
         let Some(cmd) = dead_code_tool(job, &config, &target) else {
             eprintln!("{} is not installed. {}", job.tool, install_hint(job.tool));
-            missing.push(job.tool.to_string());
             continue;
         };
         // One tool failing is not a reason to throw away another's answer:
@@ -1127,14 +1230,15 @@ fn cmd_deadcode(rest: &[String]) -> Result<i32> {
     issues.sort_by(|a, b| {
         (&a.file, a.issue.line, a.issue.col).cmp(&(&b.file, b.issue.line, b.issue.col))
     });
-    let report = report::Check {
-        issues: &issues,
-        fail_on: FailOn::Severity(poly_core::diag::Severity::Warning),
-        ran,
-        missing: &missing,
-        failed: &failed,
-    };
-    print!("{}", report.render(Format::Text, false));
+    // The records themselves rather than a `report::Check`: this command has no
+    // coverage to report -- it says its own piece about a tool it could not
+    // find, in that tool's own install instructions -- and no shape but text,
+    // so all a `Check` would carry here is fields nothing reads.
+    let out: String = issues
+        .iter()
+        .map(|found| report::render_issue(found, false))
+        .collect();
+    print!("{out}");
     // "could not answer" is not "nothing to report", so a tool that was
     // missing or broke outranks a clean run.
     if ran == 0 || !failed.is_empty() {

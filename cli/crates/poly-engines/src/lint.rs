@@ -21,8 +21,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use anyhow::{anyhow, bail, Context, Result};
 use poly_core::diag::{Fix, Issue, Severity};
 
-/// Does this file have an embedded linter? Batch callers use this to avoid
-/// reading thousands of files whose lint would return nothing.
+/// Which embedded checker lints this file, under the name its findings carry.
 ///
 /// Takes the path as well as the language because YAML is only linted when it
 /// is a workflow: a repository of Kubernetes manifests and Helm charts is
@@ -30,13 +29,32 @@ use poly_core::diag::{Fix, Issue, Severity};
 /// the same question `lint` asks below. The two have to agree, which is why
 /// neither answers it alone.
 ///
+/// The name is the one that appears in `[source/code]`, so a coverage line and
+/// a finding are the same word -- `poly/docker` is the prefix of every
+/// `poly/docker-*` code, and `ruff` is what a Python finding is signed with.
+///
 /// Spelling is not on this list and never can be: see `spell`.
+pub fn engine(lang: &str, path: &Path) -> Option<&'static str> {
+    Some(match lang {
+        "sql" => "sqruff",
+        "toml" => "toml",
+        "lua" => "selene",
+        "python" | "jupyter" => "ruff",
+        "dockerfile" => "poly/docker",
+        "yaml" if poly_core::is_workflow_file(path) => "poly/actions",
+        other if crate::proto::supported(other) => "poly/proto",
+        _ => return None,
+    })
+}
+
+/// Does this file have an embedded linter? Batch callers use this to avoid
+/// reading thousands of files whose lint would return nothing.
+///
+/// Defined in terms of `engine` rather than beside it: "is this file linted"
+/// and "by what" are one question, and answering it twice is how a checker ends
+/// up counted in a coverage report and then never run.
 pub fn supported(lang: &str, path: &Path) -> bool {
-    match lang {
-        "sql" | "toml" | "lua" | "python" | "jupyter" | "dockerfile" => true,
-        "yaml" => poly_core::is_workflow_file(path),
-        other => crate::proto::supported(other),
-    }
+    engine(lang, path).is_some()
 }
 
 /// Rule documentation poly is holding that a diagnostic has no way to carry.

@@ -20,9 +20,15 @@ use poly_core::diag::{FailOn, Severity};
 use poly_tools::run::FileIssue;
 use serde_json::{json, Value};
 
+use crate::coverage::Coverage;
+
 /// Bumped when a field changes meaning or leaves. A new field does not bump it:
 /// a consumer reading `issues[].file` is unaffected by a sibling appearing.
-const SCHEMA_VERSION: u32 = 1;
+///
+/// 2: `tools_ran`, `tools_missing` and `tools_failed` left, replaced by
+/// `coverage` -- three summaries of one list, none of which could say why a
+/// tool did not run.
+const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Format {
@@ -262,9 +268,7 @@ fn table_markdown(issues: &[FileIssue]) -> String {
 pub struct Check<'a> {
     pub issues: &'a [FileIssue],
     pub fail_on: FailOn,
-    pub ran: usize,
-    pub missing: &'a [String],
-    pub failed: &'a [String],
+    pub coverage: &'a Coverage,
 }
 
 impl Check<'_> {
@@ -284,12 +288,13 @@ impl Check<'_> {
                 json!({
                     "issues": self.issues.len(),
                     "fatal": self.fatal(),
-                    "tools_ran": self.ran,
-                    // Named, not counted: "2 tools missing" sends a reader back
-                    // to the stderr log to find out which, which is the whole
-                    // thing these formats exist to avoid.
-                    "tools_missing": self.missing,
-                    "tools_failed": self.failed,
+                    // Named and explained, not counted: "2 tools missing" sends
+                    // a reader back to the stderr log to find out which and
+                    // why, which is the whole thing these formats exist to
+                    // avoid. Every checker the walk found files for is here,
+                    // the ones that ran included -- "what did not run" is only
+                    // half of what a pipeline needs to trust a green result.
+                    "coverage": self.coverage.json(),
                 }),
             ),
         }
@@ -435,16 +440,21 @@ mod tests {
             }),
             Some("https://docs.astral.sh/ruff/rules/unused-import"),
         )];
+        let mut coverage = Coverage::default();
+        coverage.record("ruff", 4, crate::coverage::Status::Ran);
+        coverage.record(
+            "tflint",
+            2,
+            crate::coverage::Status::Missing("not on PATH".to_string()),
+        );
         let report = Check {
             issues: &found,
             fail_on: FailOn::Severity(Severity::Error),
-            ran: 3,
-            missing: &["tflint".to_string()],
-            failed: &[],
+            coverage: &coverage,
         };
         let doc: Value = serde_json::from_str(&report.render(Format::Json, false)).unwrap();
 
-        assert_eq!(doc["version"], 1);
+        assert_eq!(doc["version"], SCHEMA_VERSION);
         assert_eq!(doc["command"], "check");
         let issue = &doc["issues"][0];
         assert_eq!(issue["file"], "lint.py");
@@ -469,7 +479,15 @@ mod tests {
         assert_eq!(issue["fatal"], false);
         assert_eq!(doc["summary"]["fatal"], 0);
         assert_eq!(doc["summary"]["issues"], 1);
-        assert_eq!(doc["summary"]["tools_missing"][0], "tflint");
+        // A checker that did not run says so *and* says why, in the same
+        // document as the findings: a consumer deciding whether a green result
+        // is trustworthy has no other place to look.
+        let coverage = &doc["summary"]["coverage"];
+        assert_eq!(coverage[1]["tool"], "tflint");
+        assert_eq!(coverage[1]["status"], "missing");
+        assert_eq!(coverage[1]["reason"], "not on PATH");
+        assert_eq!(coverage[0]["tool"], "ruff");
+        assert_eq!(coverage[0]["status"], "ran");
     }
 
     /// A tool that said nothing about a remedy has to serialize as null, not as
@@ -481,9 +499,7 @@ mod tests {
             &Check {
                 issues: &found,
                 fail_on: FailOn::default(),
-                ran: 1,
-                missing: &[],
-                failed: &[],
+                coverage: &Coverage::default(),
             }
             .render(Format::Json, false),
         )
