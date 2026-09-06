@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Context, Result};
-use poly_core::diag::{Fix, Issue, Severity};
+use poly_core::diag::{severity_of, Fix, Issue, Reported};
 use serde::Deserialize;
 
 pub struct FileIssue {
@@ -16,7 +16,7 @@ pub struct FileIssue {
 }
 
 fn run(cmd: &Path, args: &[&str], files: &[PathBuf], stdin: Option<&str>) -> Result<Vec<u8>> {
-    run_impl(cmd, None, args, files, stdin, None)
+    run_impl(cmd, None, args, files, stdin)
 }
 
 /// Same, but rooted at `cwd` for tools that resolve config relative to it.
@@ -27,7 +27,7 @@ fn run_in(
     files: &[PathBuf],
     stdin: Option<&str>,
 ) -> Result<Vec<u8>> {
-    run_impl(cmd, Some(cwd), args, files, stdin, None)
+    run_impl(cmd, Some(cwd), args, files, stdin)
 }
 
 fn run_impl(
@@ -36,16 +36,10 @@ fn run_impl(
     args: &[&str],
     files: &[PathBuf],
     stdin: Option<&str>,
-    path: Option<std::ffi::OsString>,
 ) -> Result<Vec<u8>> {
     let mut command = Command::new(cmd);
     if let Some(dir) = cwd {
         command.current_dir(dir);
-    }
-    // Only actionlint needs this: it is the one tool that shells out to
-    // another tool poly resolves.
-    if let Some(path) = path {
-        command.env("PATH", path);
     }
     command.args(args);
     command.args(files.iter().map(|p| p.as_os_str()));
@@ -95,12 +89,15 @@ pub fn format_stdin(cmd: &Path, args: &[&str], text: &str) -> Result<Option<Stri
     Ok((formatted != text).then_some(formatted))
 }
 
-fn shellcheck_severity(level: &str) -> Severity {
+/// shellcheck's own words for how bad a finding is, which hadolint reports in
+/// too. What they are worth is `severity_of`'s answer, not this one's.
+fn shellcheck_level(level: &str) -> Reported {
     match level {
-        "error" => Severity::Error,
-        "warning" => Severity::Warning,
-        "info" => Severity::Info,
-        _ => Severity::Hint,
+        "error" => Reported::Error,
+        "warning" => Reported::Warning,
+        "info" => Reported::Info,
+        // `style`, and whatever a later version ranks below info.
+        _ => Reported::Style,
     }
 }
 
@@ -143,7 +140,7 @@ fn shellcheck_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                 col: i.column.saturating_sub(1),
                 end_line: i.end_line.saturating_sub(1),
                 end_col: i.end_column.saturating_sub(1),
-                severity: shellcheck_severity(&i.level),
+                severity: severity_of("shellcheck", shellcheck_level(&i.level)),
                 code: format!("SC{}", i.code),
                 message: i.message,
                 source: "shellcheck",
@@ -238,7 +235,7 @@ fn hadolint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     col,
                     end_line: line,
                     end_col: col + 1,
-                    severity: shellcheck_severity(&i.level),
+                    severity: severity_of("hadolint", shellcheck_level(&i.level)),
                     source: "hadolint",
                     fix: None,
                     url: Some(hadolint_url(&i.code)),
@@ -308,7 +305,7 @@ fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     col,
                     end_line: line,
                     end_col: col + 1,
-                    severity: Severity::Error,
+                    severity: severity_of("actionlint", Reported::Nothing),
                     code: i.kind,
                     message,
                     source: "actionlint",
@@ -320,42 +317,39 @@ fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
         .collect())
 }
 
-/// actionlint runs shellcheck over every `run:` block, but only if it finds
-/// one on PATH -- and poly resolves shellcheck itself, into a cache directory
-/// that is on nobody's PATH. Without this, poly's answer depends on whether
-/// the developer happened to install shellcheck separately: this repo's own CI
-/// reported two SC findings that no local run could reproduce, because GitHub
-/// runners ship shellcheck and a laptop does not. Handing over the one poly
-/// already manages is what makes the two agree.
-fn with_shellcheck(shellcheck: Option<&Path>) -> Option<std::ffi::OsString> {
-    let dir = shellcheck?.parent()?;
-    let mut dirs = vec![dir.to_path_buf()];
-    dirs.extend(std::env::split_paths(
-        &std::env::var_os("PATH").unwrap_or_default(),
-    ));
-    std::env::join_paths(dirs).ok()
-}
+/// actionlint's own flag for "do not run shellcheck", and the reason poly sets
+/// it rather than leaving it alone.
+///
+/// actionlint shells out to shellcheck for every `run:` block, and poly does
+/// the same thing itself (`poly_engines::shell`) with a better answer: the
+/// finding lands on the offending word instead of on the `run:` key, under
+/// shellcheck's own code and shellcheck's own severity instead of `actionlint/
+/// shellcheck` at error. Both running means one SC2086 printed twice, at two
+/// positions, with two severities -- and the louder of the two is the wrong
+/// one, so `--fail-on error` failed on a finding shellcheck itself calls info.
+///
+/// Set explicitly rather than by withholding the binary: an unset flag makes
+/// actionlint look on PATH, so the answer would depend on whether this machine
+/// happens to have shellcheck installed. That is the CI/laptop split this used
+/// to have in the other direction, and the same reason it has to be a flag.
+///
+/// What is given up is the 269 findings in 1183 that poly's own pass does not
+/// reproduce over a 1366-workflow corpus -- ~216 of them actionlint reading a
+/// PowerShell script as bash, the rest cross-platform matrix jobs where the
+/// script genuinely is two scripts and poly declines to guess which. Every
+/// other actionlint check is untouched: its expression type checker is still
+/// the reason the tool is here.
+const NO_SHELLCHECK: &str = "-shellcheck=";
 
-pub fn actionlint_files(
-    cmd: &Path,
-    files: &[PathBuf],
-    shellcheck: Option<&Path>,
-) -> Result<Vec<FileIssue>> {
-    let args = ["-format", "{{json .}}"];
-    let out = run_impl(cmd, None, &args, files, None, with_shellcheck(shellcheck))?;
+pub fn actionlint_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
+    let args = ["-format", "{{json .}}", NO_SHELLCHECK];
+    let out = run(cmd, &args, files, None)?;
     actionlint_parse(&out)
 }
 
-pub fn actionlint_stdin(cmd: &Path, text: &str, shellcheck: Option<&Path>) -> Result<Vec<Issue>> {
-    let args = ["-format", "{{json .}}", "-"];
-    let out = run_impl(
-        cmd,
-        None,
-        &args,
-        &[],
-        Some(text),
-        with_shellcheck(shellcheck),
-    )?;
+pub fn actionlint_stdin(cmd: &Path, text: &str) -> Result<Vec<Issue>> {
+    let args = ["-format", "{{json .}}", NO_SHELLCHECK, "-"];
+    let out = run(cmd, &args, &[], Some(text))?;
     Ok(actionlint_parse(&out)?
         .into_iter()
         .map(|f| f.issue)
@@ -402,11 +396,14 @@ fn swiftlint_parse(stdout: &[u8], fallback: &Path) -> Result<Vec<FileIssue>> {
                     col,
                     end_line: line,
                     end_col: col + 1,
-                    severity: if i.severity.eq_ignore_ascii_case("error") {
-                        Severity::Error
-                    } else {
-                        Severity::Warning
-                    },
+                    severity: severity_of(
+                        "swiftlint",
+                        if i.severity.eq_ignore_ascii_case("error") {
+                            Reported::Error
+                        } else {
+                            Reported::Warning
+                        },
+                    ),
                     url: Some(swiftlint_url(&i.rule_id)),
                     code: i.rule_id,
                     message: i.reason,
@@ -516,7 +513,7 @@ pub fn deadcode_module(cmd: &Path, root: &Path) -> Result<Vec<FileIssue>> {
                 col: found.position.col.saturating_sub(1),
                 end_line: found.position.line.saturating_sub(1),
                 end_col: found.position.col.max(1),
-                severity: Severity::Warning,
+                severity: severity_of("deadcode", Reported::Nothing),
                 code: "unreachable".to_string(),
                 message: format!("func {} is never called", found.name),
                 source: "deadcode",
@@ -611,7 +608,7 @@ pub fn knip_project(cmd: &Path, root: &Path) -> Result<Vec<FileIssue>> {
                     col: 0,
                     end_line: 0,
                     end_col: 1,
-                    severity: Severity::Warning,
+                    severity: severity_of("knip", Reported::Nothing),
                     code: "unused-file".to_string(),
                     message: format!("nothing imports {}", entry.file),
                     source: "knip",
@@ -633,7 +630,7 @@ pub fn knip_project(cmd: &Path, root: &Path) -> Result<Vec<FileIssue>> {
                     col: export.col.saturating_sub(1),
                     end_line: export.line.saturating_sub(1),
                     end_col: export.col.saturating_sub(1) + export.name.len() as u32,
-                    severity: Severity::Warning,
+                    severity: severity_of("knip", Reported::Nothing),
                     code: kind.to_string(),
                     message: format!("nothing imports {}", export.name),
                     source: "knip",
@@ -741,7 +738,7 @@ fn vulture_line(line: &str, root: &Path) -> Option<FileIssue> {
             col: 0,
             end_line: number.saturating_sub(1),
             end_col: 1,
-            severity: Severity::Warning,
+            severity: severity_of("vulture", Reported::Nothing),
             code,
             message,
             source: "vulture",
@@ -889,11 +886,17 @@ fn tflint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                 col: i.range.start.column.saturating_sub(1),
                 end_line: i.range.end.line.saturating_sub(1),
                 end_col: i.range.end.column.saturating_sub(1),
-                severity: if i.rule.severity == "error" {
-                    Severity::Error
-                } else {
-                    Severity::Warning
-                },
+                severity: severity_of(
+                    "tflint",
+                    match i.rule.severity.as_str() {
+                        "error" => Reported::Error,
+                        // tflint's third level, and style by its own
+                        // definition -- it used to collapse into warning
+                        // because everything that was not an error did.
+                        "notice" => Reported::Info,
+                        _ => Reported::Warning,
+                    },
+                ),
                 code: i.rule.name,
                 message: i.message,
                 source: "tflint",
@@ -1022,7 +1025,7 @@ fn golangci_issues(parsed: GolangciOutput, root: &Path) -> Vec<FileIssue> {
                     col: i.pos.column.saturating_sub(1),
                     end_line: i.pos.line.saturating_sub(1),
                     end_col: i.pos.column.max(1),
-                    severity: Severity::Warning,
+                    severity: severity_of("golangci-lint", Reported::Nothing),
                     url: Some(golangci_url(&i.from_linter)),
                     code: i.from_linter,
                     message: i.text,
@@ -1186,8 +1189,8 @@ fn clippy_url(code: &str) -> Option<String> {
 /// each span into its own entry would put three Problems on one mistake.
 fn clippy_issues(diagnostic: RustcDiagnostic, root: &Path) -> Vec<FileIssue> {
     let severity = match diagnostic.level.as_str() {
-        "error" | "error: internal compiler error" => Severity::Error,
-        "warning" => Severity::Warning,
+        "error" | "error: internal compiler error" => severity_of("clippy", Reported::Error),
+        "warning" => severity_of("clippy", Reported::Warning),
         // note/help arrive as children of something already reported, and a
         // top-level one is a summary line ("aborting due to 2 errors").
         _ => return Vec::new(),
@@ -1455,12 +1458,15 @@ fn biome_parse(stdout: &[u8], root: &Path) -> Result<Vec<FileIssue>> {
                     col: d.location.start.column.saturating_sub(1),
                     end_line: d.location.end.line.saturating_sub(1),
                     end_col: d.location.end.column.saturating_sub(1),
-                    severity: match d.severity.as_str() {
-                        "error" | "fatal" => Severity::Error,
-                        "warning" => Severity::Warning,
-                        "information" => Severity::Info,
-                        _ => Severity::Hint,
-                    },
+                    severity: severity_of(
+                        "biome",
+                        match d.severity.as_str() {
+                            "error" | "fatal" => Reported::Error,
+                            "warning" => Reported::Warning,
+                            "information" => Reported::Info,
+                            _ => Reported::Style,
+                        },
+                    ),
                     url: biome_url(&d.category),
                     code: d.category,
                     message: d.message,
@@ -1498,11 +1504,14 @@ fn eslint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
                     col,
                     end_line: m.end_line.map_or(line, |l| l.saturating_sub(1)),
                     end_col: m.end_column.map_or(col + 1, |c| c.saturating_sub(1)),
-                    severity: if m.severity >= 2 {
-                        Severity::Error
-                    } else {
-                        Severity::Warning
-                    },
+                    severity: severity_of(
+                        "eslint",
+                        if m.severity >= 2 {
+                            Reported::Error
+                        } else {
+                            Reported::Warning
+                        },
+                    ),
                     url: eslint_url(m.rule_id.as_deref()),
                     // No ruleId means eslint failed before any rule ran: a
                     // parse error or a broken config, not a violation.
@@ -1580,6 +1589,9 @@ pub fn buf_format(cmd: &Path, path: &Path, text: &str) -> Result<Option<String>>
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Asserted on rather than constructed here: what a parser reports is
+    // `severity_of`'s answer now, and these tests are how that is pinned.
+    use poly_core::diag::Severity;
 
     /// Captured from `cargo clippy --message-format=json` (clippy 0.1.97), cut
     /// down to the fields poly reads. One diagnostic, several spans: the

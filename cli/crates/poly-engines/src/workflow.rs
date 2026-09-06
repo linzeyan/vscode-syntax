@@ -38,9 +38,16 @@ use crate::lint::line_col;
 /// an undocumented code reaches a reader as a few words in a terminal with
 /// nothing behind them. `every_workflow_rule_is_documented` holds this list and
 /// the codes the linter emits to the same set, in both directions.
-pub const RULES: &[(&str, &str)] = &[
+///
+/// The level sits beside the prose for the reason it does on `DOCKER_RULES`,
+/// and means the same four things: most of a workflow's rules are validity
+/// checks -- GitHub rejects the file, or the run does something other than what
+/// it reads as -- which is why `Error` is the common level here and the
+/// uncommon one there.
+pub const RULES: &[(&str, Severity, &str)] = &[
     (
         "actions-duplicate-key",
+        Severity::Warning,
         "A YAML mapping keeps the last value for a repeated key and silently \
          discards the earlier ones. In a workflow that means a second `env:` \
          entry, a second job with an id already used, or a step key typed twice \
@@ -50,6 +57,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-duplicate-step-id",
+        Severity::Error,
         "Step ids are how a later step reads an earlier one's outputs, through \
          `steps.<id>.outputs`. Two steps with the same id make that reference \
          ambiguous -- the second step's outputs win, so the expression reads a \
@@ -58,6 +66,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-invalid-action-ref",
+        Severity::Error,
         "`uses:` takes one of three shapes: `owner/repo@ref` (optionally with a \
          subdirectory, `owner/repo/path@ref`), a path beginning with `./` for an \
          action in this repository, or `docker://image:tag`. Anything else is \
@@ -66,6 +75,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-invalid-cron",
+        Severity::Error,
         "`schedule` takes POSIX cron with five fields -- minute, hour, day of \
          month, month, day of week -- and GitHub supports only `*`, ranges, \
          lists and steps within them. The Quartz extensions (`?`, `L`, `W`, `#`) \
@@ -75,6 +85,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-invalid-env-name",
+        Severity::Warning,
         "A variable is read either by the shell inside `run:` or through a \
          `${{ env.NAME }}` expression, and a name starting with a digit or \
          containing a space or punctuation is reachable by neither -- it is set \
@@ -85,6 +96,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-invalid-glob",
+        Severity::Warning,
         "`branches`, `tags` and `paths` take GitHub's filter pattern syntax, \
          where `!` negates and only at the start of a pattern, and `[` opens a \
          character class that has to be closed. A pattern outside that grammar is \
@@ -93,6 +105,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-invalid-id",
+        Severity::Error,
         "A job id or step id has to start with a letter or `_` and may then \
          contain letters, digits, `-` and `_`. This is not style: the id becomes \
          a key in the `needs` and `steps` contexts, so anything else cannot be \
@@ -101,6 +114,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-invalid-permission",
+        Severity::Error,
         "`permissions` grants the job's `GITHUB_TOKEN` a level per scope, and \
          both halves are a closed set: the scope has to be one GitHub defines and \
          the value has to be `read`, `write` or `none`. A misspelled scope is the \
@@ -111,6 +125,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-job-without-steps",
+        Severity::Error,
         "A job either runs steps or calls a reusable workflow with `uses:`. One \
          with neither is a job that starts a runner, does nothing and reports \
          success -- which is worse than failing, because anything gating on it \
@@ -118,12 +133,14 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-max-parallel-out-of-range",
+        Severity::Error,
         "`max-parallel` caps how many matrix jobs run at once, so it has to be a \
          positive whole number. `0` is not \"unlimited\", and a non-numeric value \
          is rejected with the workflow.",
     ),
     (
         "actions-missing-required-key",
+        Severity::Error,
         "A workflow needs `on:` to say when it runs and `jobs:` to say what it \
          does. Without `on:` nothing ever triggers it, and the file sits in the \
          repository looking like coverage that does not exist. Note that YAML 1.1 \
@@ -132,6 +149,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-missing-runs-on",
+        Severity::Error,
         "A job with steps has to say which runner they run on. GitHub rejects the \
          workflow rather than picking a default, so this is a file that does not \
          run at all -- and the usual cause is `runs-on` indented one level too \
@@ -139,6 +157,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-mutable-action-ref",
+        Severity::Warning,
         "`uses: some/action@main` re-resolves on every run, so the code executing \
          in your CI -- with your `GITHUB_TOKEN` and your secrets -- is whatever \
          that branch contains at the moment the job starts. Nobody reviews that \
@@ -148,6 +167,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-needs-cycle",
+        Severity::Error,
         "`needs` describes a dependency order, so a cycle has no order to run in. \
          GitHub rejects the workflow, and the cycle is usually not visible from \
          any single job -- each line reads as reasonable and only the closed loop \
@@ -155,6 +175,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-step-uses-and-run",
+        Severity::Error,
         "A step either runs an action or runs a command; `uses:` and `run:` in \
          one step is rejected. The usual cause is an edit that replaced one with \
          the other and left both behind, which reads as though the action still \
@@ -162,6 +183,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-step-without-uses-or-run",
+        Severity::Error,
         "A step with neither `uses:` nor `run:` does nothing. It is almost always \
          a `run:` that lost its body to a bad indent, or a `name:` left behind \
          after the step it named was deleted -- either way the job is quietly \
@@ -169,6 +191,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-timeout-out-of-range",
+        Severity::Error,
         "`timeout-minutes` has to be a positive whole number of minutes. `0` does \
          not mean \"no limit\", it means the job is cancelled the moment it starts; \
          and GitHub will not run anything longer than 35 days, so a larger number \
@@ -177,6 +200,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-unknown-event",
+        Severity::Error,
         "`on:` takes events from a closed set GitHub defines. A misspelled one is \
          not an error at load time in any way you will see: the workflow is \
          accepted, the event never arrives, and the workflow never runs. This is \
@@ -184,6 +208,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-unknown-event-filter",
+        Severity::Error,
         "Each event accepts its own filters, and they are not interchangeable: \
          `push` has `tags` and `tags-ignore` where `pull_request` has neither, \
          `workflow_dispatch` takes only `inputs`, and `paths` is meaningless on \
@@ -193,6 +218,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-unknown-job-in-needs",
+        Severity::Error,
         "`needs` names other jobs by their id. A name that matches no job in this \
          workflow is rejected, and the usual cause is a job that was renamed \
          while the jobs depending on it were not -- or `needs` naming the job's \
@@ -200,6 +226,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-unknown-job-key",
+        Severity::Error,
         "Job keys are a closed set. GitHub rejects a workflow containing one it \
          does not define, so an unknown key here is a file that does not run -- \
          most often a step key (`run`, `uses`, `with`) that lost an indent level \
@@ -207,6 +234,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-unknown-runner",
+        Severity::Warning,
         "A `runs-on` label nothing answers to means the job never runs: an image \
          GitHub has retired fails to start, and a label that was never real \
          leaves the job pending until the workflow times out. This rule speaks up \
@@ -223,6 +251,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-unknown-step-key",
+        Severity::Error,
         "Step keys are a closed set and GitHub rejects a workflow containing one \
          it does not define. An action's own inputs go under `with:`, which is \
          where a key like `path` or `node-version` written directly on the step \
@@ -230,6 +259,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-unknown-workflow-key",
+        Severity::Error,
         "The top level of a workflow accepts eight keys and nothing else. An \
          unknown one is rejected with the whole file, and the usual cause is a \
          job key (`steps`, `runs-on`) written at column zero after an indent \
@@ -237,6 +267,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-unpinned-action",
+        Severity::Error,
         "`uses: actions/checkout` names no version, and GitHub requires one -- \
          there is no implicit default branch. The workflow is rejected at load \
          time, so this is not a supply-chain preference like the mutable-ref rule \
@@ -244,6 +275,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "actions-with-without-uses",
+        Severity::Error,
         "`with:` supplies inputs to the action a step runs, so it has no meaning \
          on a step that has `run:` instead, and GitHub rejects the pair. A `run:` \
          step takes its inputs from `env:`.",
@@ -785,14 +817,7 @@ fn unquote_double(text: &str) -> String {
 /// The end is clamped to that line, for the reason `docker_issue` clamps it: a
 /// `run: |` body or a `jobs:` mapping is one node spanning most of the file, and
 /// underlining all of it to complain about one key fills the screen.
-fn issue(
-    text: &str,
-    node: &Node,
-    code: &str,
-    severity: Severity,
-    message: String,
-    fix: Option<Fix>,
-) -> Issue {
+fn issue(text: &str, node: &Node, code: &str, message: String, fix: Option<Fix>) -> Issue {
     let at = node.at.min(text.len());
     let (line, col) = line_col(text, at);
     let line_end = text[at..].find('\n').map_or(text.len(), |i| at + i);
@@ -807,7 +832,7 @@ fn issue(
         col,
         end_line,
         end_col,
-        severity,
+        severity: crate::lint::rule_severity(code),
         code: code.to_string(),
         message,
         // poly's own rules, under poly's own name. See `RULES`.
@@ -862,7 +887,6 @@ fn duplicate_keys(text: &str, node: &Node, found: &mut Vec<Issue>) {
                             text,
                             key,
                             "actions-duplicate-key",
-                            Severity::Warning,
                             format!(
                                 "`{name}` is set more than once here; YAML keeps only the last"
                             ),
@@ -894,7 +918,6 @@ fn workflow_keys(text: &str, root: &Node, found: &mut Vec<Issue>) {
             text,
             key,
             "actions-unknown-workflow-key",
-            Severity::Error,
             format!(
                 "`{name}` is not a workflow key{}",
                 suggestion(name, WORKFLOW_KEYS)
@@ -908,7 +931,6 @@ fn workflow_keys(text: &str, root: &Node, found: &mut Vec<Issue>) {
                 text,
                 root,
                 "actions-missing-required-key",
-                Severity::Error,
                 format!("a workflow needs a `{required}:` key"),
                 None,
             ));
@@ -957,7 +979,6 @@ fn check_event(text: &str, node: &Node, found: &mut Vec<Issue>) -> bool {
         text,
         node,
         "actions-unknown-event",
-        Severity::Error,
         format!(
             "`{name}` is not a GitHub Actions event, so nothing will ever trigger this workflow{}",
             suggestion(name, &names)
@@ -983,7 +1004,6 @@ fn event_filters(text: &str, event: &str, value: &Node, found: &mut Vec<Issue>) 
                 text,
                 key,
                 "actions-unknown-event-filter",
-                Severity::Error,
                 format!("`{name}` is not a filter for `{event}`: {closing}"),
                 None,
             ));
@@ -1014,7 +1034,6 @@ fn schedule(text: &str, value: &Node, found: &mut Vec<Issue>) {
                 text,
                 cron,
                 "actions-invalid-cron",
-                Severity::Error,
                 format!("`{spec}` is not a schedule GitHub can parse: {why}"),
                 None,
             ));
@@ -1118,7 +1137,6 @@ fn globs(text: &str, pattern: &Node, found: &mut Vec<Issue>) {
             text,
             pattern,
             "actions-invalid-glob",
-            Severity::Warning,
             format!("`{glob}` is not a filter pattern: {why}"),
             None,
         ));
@@ -1138,7 +1156,6 @@ fn permissions(text: &str, root: &Node, found: &mut Vec<Issue>) {
                     text,
                     key,
                     "actions-invalid-permission",
-                    Severity::Error,
                     format!(
                         "`{scope}` is not a permission scope{}",
                         suggestion(scope, PERMISSION_SCOPES)
@@ -1156,7 +1173,6 @@ fn permissions(text: &str, root: &Node, found: &mut Vec<Issue>) {
                     text,
                     value,
                     "actions-invalid-permission",
-                    Severity::Error,
                     format!("`{scope}: {level}` is not a permission: use read, write or none"),
                     None,
                 ));
@@ -1182,7 +1198,6 @@ fn env_names(text: &str, root: &Node, found: &mut Vec<Issue>) {
                 text,
                 key,
                 "actions-invalid-env-name",
-                Severity::Warning,
                 format!(
                     "`{name}` is not a name a shell can expand: use letters, digits and \
                      underscores, not starting with a digit"
@@ -1254,7 +1269,6 @@ fn check_id(text: &str, node: &Node, name: &str, what: &str, found: &mut Vec<Iss
         text,
         node,
         "actions-invalid-id",
-        Severity::Error,
         format!(
             "`{name}` cannot be a {what} id: it has to start with a letter or `_` and \
              then use only letters, digits, `-` and `_`"
@@ -1273,7 +1287,6 @@ fn job_keys(text: &str, id: &Node, job: &Node, found: &mut Vec<Issue>) {
             text,
             key,
             "actions-unknown-job-key",
-            Severity::Error,
             format!("`{name}` is not a job key{}", suggestion(name, JOB_KEYS)),
             None,
         ));
@@ -1286,7 +1299,6 @@ fn job_keys(text: &str, id: &Node, job: &Node, found: &mut Vec<Issue>) {
             text,
             id,
             "actions-job-without-steps",
-            Severity::Error,
             "this job has neither `steps:` nor `uses:`, so it starts a runner and does nothing"
                 .to_string(),
             None,
@@ -1310,7 +1322,6 @@ fn needs(text: &str, id: &Node, job: &Node, ids: &[&str], found: &mut Vec<Issue>
             text,
             name,
             "actions-unknown-job-in-needs",
-            Severity::Error,
             format!(
                 "`{}` needs `{needed}`, which is not a job in this workflow{}",
                 id.str().unwrap_or("this job"),
@@ -1362,7 +1373,6 @@ fn cycles(text: &str, all: &Node, found: &mut Vec<Issue>) {
             text,
             node,
             "actions-needs-cycle",
-            Severity::Error,
             format!("`{name}` needs itself: {}", path.join(" -> ")),
             None,
         ));
@@ -1408,7 +1418,6 @@ fn runs_on(text: &str, id: &Node, job: &Node, found: &mut Vec<Issue>) {
                 text,
                 id,
                 "actions-missing-runs-on",
-                Severity::Error,
                 "this job has steps but no `runs-on:`, so GitHub has no runner to schedule it on"
                     .to_string(),
                 None,
@@ -1470,7 +1479,6 @@ fn report_label(text: &str, label: &Node, lead: &str, found: &mut Vec<Issue>) {
             text,
             label,
             "actions-unknown-runner",
-            Severity::Warning,
             format!("{lead}{why}"),
             None,
         ));
@@ -1695,7 +1703,6 @@ fn bounded(
         text,
         node,
         code,
-        Severity::Error,
         format!("`{key}: {value}` is not a whole number in {low}..={high}"),
         None,
     ));
@@ -1717,7 +1724,6 @@ fn steps(text: &str, job: &Node, found: &mut Vec<Issue>) {
                 text,
                 key,
                 "actions-unknown-step-key",
-                Severity::Error,
                 format!(
                     "`{name}` is not a step key{}; an action's own inputs go under `with:`",
                     suggestion(name, STEP_KEYS)
@@ -1734,7 +1740,6 @@ fn steps(text: &str, job: &Node, found: &mut Vec<Issue>) {
                         text,
                         id,
                         "actions-duplicate-step-id",
-                        Severity::Error,
                         format!(
                             "`{name}` is already a step id in this job, so `steps.{name}.outputs` \
                              reads the later step"
@@ -1753,7 +1758,6 @@ fn steps(text: &str, job: &Node, found: &mut Vec<Issue>) {
                 text,
                 step.key_of("uses").unwrap_or(step),
                 "actions-step-uses-and-run",
-                Severity::Error,
                 "a step runs an action or a command, not both: `uses:` and `run:` are \
                  in the same step"
                     .to_string(),
@@ -1763,7 +1767,6 @@ fn steps(text: &str, job: &Node, found: &mut Vec<Issue>) {
                 text,
                 step,
                 "actions-step-without-uses-or-run",
-                Severity::Error,
                 "this step has neither `uses:` nor `run:`, so it does nothing".to_string(),
                 None,
             )),
@@ -1775,7 +1778,6 @@ fn steps(text: &str, job: &Node, found: &mut Vec<Issue>) {
                     text,
                     with,
                     "actions-with-without-uses",
-                    Severity::Error,
                     "`with:` supplies an action's inputs and has no meaning on a `run:` \
                      step; use `env:`"
                         .to_string(),
@@ -1814,7 +1816,6 @@ fn action_ref(text: &str, node: &Node, found: &mut Vec<Issue>) {
             text,
             node,
             "actions-unpinned-action",
-            Severity::Error,
             format!("`{reference}` names no version; GitHub requires `@<ref>`"),
             Some(Fix::Described {
                 what: format!("Write `{reference}@<tag-or-sha>`"),
@@ -1832,7 +1833,6 @@ fn action_ref(text: &str, node: &Node, found: &mut Vec<Issue>) {
             text,
             node,
             "actions-invalid-action-ref",
-            Severity::Error,
             format!(
                 "`{reference}` is not an action reference: use `owner/repo@ref`, `./path` \
                  or `docker://image`"
@@ -1846,7 +1846,6 @@ fn action_ref(text: &str, node: &Node, found: &mut Vec<Issue>) {
             text,
             node,
             "actions-mutable-action-ref",
-            Severity::Warning,
             format!(
                 "`{git_ref}` is a branch, so this runs whatever it contains at the moment \
                  the job starts"
@@ -2030,7 +2029,7 @@ fn is_windows_label(label: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// The codes linting `text` reports, with the two invariants every one of
+    /// The codes linting `text` reports, with the three invariants every one of
     /// poly's own findings has to hold checked on the way past.
     fn codes(text: &str) -> Vec<String> {
         lint(text)
@@ -2038,6 +2037,15 @@ mod tests {
             .map(|issue| {
                 assert_eq!(issue.source, "poly", "{issue:?}");
                 assert_eq!(issue.url, None, "poly's own rules have no page to link");
+                // `issue` reads the level from the rule's row, so what this
+                // catches is a finding built without it -- an `Issue` written
+                // out by hand, carrying a severity picked at the emit site.
+                assert_eq!(
+                    issue.severity,
+                    crate::lint::rule_severity(&issue.code),
+                    "{} is reported at a level `RULES` does not state",
+                    issue.code
+                );
                 issue.code
             })
             .collect()
@@ -2190,15 +2198,16 @@ mod tests {
         }
         emitted.sort_unstable();
         emitted.dedup();
-        let mut documented: Vec<&str> = RULES.iter().map(|(code, _)| *code).collect();
+        let mut documented: Vec<&str> = RULES.iter().map(|(code, _, _)| *code).collect();
         documented.sort_unstable();
         assert_eq!(
             emitted, documented,
             "rules and their documentation disagree"
         );
 
-        for (code, doc) in RULES {
+        for (code, severity, doc) in RULES {
             assert_eq!(crate::lint::rule_doc("poly", code), Some(*doc), "{code}");
+            assert_eq!(crate::lint::rule_severity(code), *severity, "{code}");
             assert!(doc.len() > 80, "{code}: {doc}");
         }
         assert!(crate::lint::rule_doc("poly", "actions-no-such-rule").is_none());

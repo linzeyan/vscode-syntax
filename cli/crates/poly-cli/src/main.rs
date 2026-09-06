@@ -592,12 +592,11 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         .filter(|(path, lang, _)| poly_engines::shell::hosts_shell(lang, path))
         .count();
     let shell_scripts = group("shellscript");
-    // Resolved once for the whole run and shared by its three consumers -- the
-    // `.sh` job, the shell embedded in those hosts, and the `-shellcheck` that
-    // actionlint is handed. They are one answer about one binary, and resolving
-    // separately made the coverage report depend on which consumer asked first.
-    // `None` when the run has no shell of either kind, so a repository with
-    // neither still never pays for a download it cannot use.
+    // Resolved once for the whole run and shared by both consumers -- the `.sh`
+    // job and the shell embedded in those hosts. They are one answer about one
+    // binary, and resolving separately made the coverage report depend on which
+    // consumer asked first. `None` when the run has no shell of either kind, so
+    // a repository with neither still never pays for a download it cannot use.
     let shellcheck: Option<poly_tools::Resolved> = (!shell_scripts.is_empty() || shell_hosts > 0)
         .then(|| poly_tools::resolve("shellcheck", &config, false));
 
@@ -621,15 +620,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                 .filter(|p| poly_core::is_workflow_file(p))
                 .cloned()
                 .collect(),
-            // A workflow file hosts shell, so the run-wide resolution above has
-            // already happened by the time this runs -- and it is the same
-            // answer the embedded snippets are checked with, which is what
-            // keeps actionlint's SC findings and poly's from disagreeing about
-            // whether shellcheck exists.
-            Box::new(|cmd, files| {
-                let found = shellcheck.as_ref().and_then(poly_tools::Resolved::command);
-                poly_tools::run::actionlint_files(cmd, files, found)
-            }),
+            Box::new(poly_tools::run::actionlint_files),
         ),
         (
             "tflint",

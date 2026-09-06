@@ -359,6 +359,15 @@ impl Fmt<'_> {
 
 /// The severity a `poly fmt --check` finding carries, shared with `main` so the
 /// exit code and the `fatal` field cannot disagree about it.
+///
+/// Warning, where the levels in `severity_of` would say info: formatting is
+/// style, and nothing about an unformatted file is wrong at run time. It is the
+/// one place that reading loses, because this severity is not only a label --
+/// `poly fmt --check` exits on `fail_on.fails(UNFORMATTED)`, so info would make
+/// the command print "file is not formatted" and exit 0 for every repo that set
+/// `fail-on = "warning"`, which is a check that no longer checks. A finding
+/// that decides its own command's exit code is not in the same business as one
+/// that adds a line to a report.
 pub const UNFORMATTED: Severity = Severity::Warning;
 
 #[cfg(test)]

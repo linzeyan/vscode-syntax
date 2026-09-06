@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use anyhow::{anyhow, bail, Context, Result};
-use poly_core::diag::{Fix, Issue, Severity};
+use poly_core::diag::{severity_of, Fix, Issue, Reported, Severity};
 
 /// Which embedded checker lints this file, under the name its findings carry.
 ///
@@ -94,15 +94,33 @@ pub fn rule_doc(source: &str, code: &str) -> Option<&'static str> {
         // source name the reader has to learn. `INLINE_RULES` is poly-core's
         // because the rule is poly-core's -- a suppression comment is not a
         // language's.
-        "poly" => DOCKER_RULES
-            .iter()
-            .chain(crate::workflow::RULES)
-            .chain(crate::proto::RULES)
-            .chain(poly_core::INLINE_RULES)
-            .find(|(rule, _)| *rule == code)
-            .map(|(_, doc)| *doc),
+        "poly" => poly_rule(code).map(|(_, _, doc)| *doc),
         _ => None,
     }
+}
+
+/// The level poly reports its own `code` at.
+///
+/// `severity_of` answers this for every other source, from what the tool said.
+/// poly's rules have no upstream to take a word from, so the level is a
+/// property of the rule and lives in the rule's own row -- one place per rule
+/// for what it says, what it means and how loud it is, rather than a level
+/// chosen at whichever of the 63 emit sites happens to construct it.
+///
+/// A code with no row falls back to warning and cannot happen: the
+/// both-directions tests over the four tables hold them to the codes the
+/// linters emit, so an unlisted rule fails a test rather than arriving here.
+pub fn rule_severity(code: &str) -> Severity {
+    poly_rule(code).map_or(Severity::Warning, |(_, severity, _)| *severity)
+}
+
+fn poly_rule(code: &str) -> Option<&'static (&'static str, Severity, &'static str)> {
+    DOCKER_RULES
+        .iter()
+        .chain(crate::workflow::RULES)
+        .chain(crate::proto::RULES)
+        .chain(poly_core::INLINE_RULES)
+        .find(|(rule, _, _)| *rule == code)
 }
 
 /// Lint `text` as `lang` with embedded engines only. Languages without one
@@ -143,7 +161,7 @@ fn lint_toml(text: &str) -> Vec<Issue> {
         col,
         end_line,
         end_col,
-        severity: Severity::Error,
+        severity: severity_of("toml", Reported::Nothing),
         code: "syntax".to_string(),
         // toml wraps its messages over several lines for terminal display;
         // diagnostics are one line in every consumer we have.
@@ -189,7 +207,7 @@ fn lint_sql(text: &str) -> Result<Vec<Issue>> {
                 col,
                 end_line: line,
                 end_col: col + 1,
-                severity: Severity::Warning,
+                severity: severity_of("sqruff", Reported::Nothing),
                 code: v.rule_code().to_string(),
                 message: v.description.clone(),
                 source: "sqruff",
@@ -400,8 +418,8 @@ fn lint_lua(path: &Path, text: &str) -> Result<Vec<Issue>> {
                 // `lints.<name> = "allow"` in selene.toml. Reaching poly at
                 // all would make the setting look broken.
                 selene_lib::lints::Severity::Allow => return None,
-                selene_lib::lints::Severity::Error => Severity::Error,
-                selene_lib::lints::Severity::Warning => Severity::Warning,
+                selene_lib::lints::Severity::Error => severity_of("selene", Reported::Error),
+                selene_lib::lints::Severity::Warning => severity_of("selene", Reported::Warning),
             };
             let diagnostic = one.diagnostic;
             let (line, col) = line_col(text, diagnostic.primary_label.range.0 as usize);
@@ -448,7 +466,7 @@ fn lua_parse_error(text: &str, error: &full_moon::Error) -> Issue {
         col,
         end_line,
         end_col,
-        severity: Severity::Error,
+        severity: severity_of("selene", Reported::Error),
         code: "parse_error".to_string(),
         message,
         source: "selene",
@@ -633,11 +651,11 @@ fn python_issue(
         col: start.column.get().saturating_sub(1) as u32,
         end_line: end.line.get().saturating_sub(1) as u32,
         end_col: end.column.get().saturating_sub(1) as u32,
-        // Uniformly a warning, as it was when poly read ruff's JSON: ruff calls
-        // every finding an error there, including the style rules, and passing
-        // that through would make a missing trailing comma as loud as a syntax
-        // error.
-        severity: Severity::Warning,
+        // `Nothing`, not what ruff says: ruff calls every finding an error,
+        // including the style rules, and passing that through would make a
+        // missing trailing comma as loud as a syntax error. A scale that ranks
+        // everything the same ranks nothing, so poly ranks it (`severity_of`).
+        severity: severity_of("ruff", Reported::Nothing),
         // `secondary_code_or_id`, not `secondary_code`: a syntax error has no
         // rule code and ruff falls back to the diagnostic's own id, which is
         // how `invalid-syntax` reaches the output. Verified against the 0.16.5
@@ -689,13 +707,11 @@ fn python_issue(
 ///
 /// poly is the only opinion on a Dockerfile now -- hadolint defaults to off --
 /// so these decide what `[lint] fail-on` blocks a build on, and a tier picked
-/// per rule by feel is a tier nobody can predict. One definition, applied to
-/// every rule below:
+/// per rule by feel is a tier nobody can predict. Every rule carries its level
+/// in the row below, under one definition:
 ///
 /// * `Error` -- poly expects the build, or Docker itself, to reject this. It is
-///   about to fail; the only question is how far in. Four rules qualify:
-///   `docker-missing-from`, `docker-invalid-port`,
-///   `docker-copy-multiple-sources-no-slash` and `docker-apt-get-interactive`.
+///   about to fail; the only question is how far in. Four rules qualify.
 /// * `Warning` -- it builds, and the image or the build is wrong, fragile or
 ///   contradictory in a way with a cost somebody pays later. Most rules.
 /// * `Info` -- it builds and behaves; what is here is redundant or deprecated,
@@ -708,9 +724,10 @@ fn python_issue(
 /// does not build", and then the tier stops predicting anything. `MAINTAINER`
 /// is hadolint's error and poly's info for the same reason read the other way:
 /// it builds, it runs, and the value is simply not in the image's metadata.
-const DOCKER_RULES: &[(&str, &str)] = &[
+const DOCKER_RULES: &[(&str, Severity, &str)] = &[
     (
         "docker-add-instead-of-copy",
+        Severity::Warning,
         "`ADD` does three jobs: it copies, it downloads URLs, and it unpacks \
          local tar archives in place. Only the first is usually meant, and the \
          other two happen silently -- a source that turns out to be a tarball \
@@ -720,6 +737,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-apk-no-cache",
+        Severity::Warning,
         "`apk add` writes a package index under /var/cache/apk that nothing \
          reads again, and it stays in the layer forever. `--no-cache` fetches \
          the index, uses it, and never writes it -- equivalent to \
@@ -728,6 +746,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-apk-unpinned",
+        Severity::Warning,
         "`apk add curl` installs whichever curl the Alpine mirror serves today. \
          The same Dockerfile then builds different software next week, and a \
          build that worked cannot be reproduced to find out what changed. \
@@ -735,12 +754,19 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-apt-get-interactive",
+        // The one rule where poly is louder than hadolint (which calls it a
+        // warning), and it stays that way now poly is the only voice. The
+        // corpus agrees in the way that matters -- one occurrence in 256 real
+        // Dockerfiles, because a file with this in it never built and so never
+        // got committed.
+        Severity::Error,
         "Without `-y`, `apt-get install` asks for a confirmation. A build has no \
          terminal to type it into, so apt reads EOF and aborts -- or, worse, \
          waits. This is a broken build, not a style preference.",
     ),
     (
         "docker-apt-get-no-clean",
+        Severity::Warning,
         "`apt-get update` leaves tens of megabytes of package lists under \
          /var/lib/apt/lists. Nothing reads them after the install, and deleting \
          them in a *later* layer does not shrink the image -- the bytes are \
@@ -750,6 +776,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-apt-get-no-recommends",
+        Severity::Warning,
         "Debian's recommended packages are installed by default and are \
          routinely larger than what was asked for -- a build tool pulling in a \
          documentation set, a client pulling in a server. Every one of them is \
@@ -758,6 +785,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-apt-get-unpinned",
+        Severity::Warning,
         "`apt-get install curl` installs whichever curl the archive serves \
          today, so the same Dockerfile builds different software over time and a \
          build that worked cannot be reproduced. `curl=7.88.1-10` says which \
@@ -769,6 +797,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-apt-get-update-alone",
+        Severity::Warning,
         "An `apt-get update` in its own `RUN` becomes a layer Docker will \
          happily reuse for months. The `apt-get install` in the next `RUN` then \
          resolves against a package index from whenever that layer was built, \
@@ -778,6 +807,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-apt-not-apt-get",
+        Severity::Warning,
         "`apt` prints \"this APT has Super Cow Powers\" and, more to the point, \
          \"WARNING: apt does not have a stable CLI interface. Use with caution \
          in scripts.\" -- upstream's own words. Its output format and its flags \
@@ -788,6 +818,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-cd-in-run",
+        Severity::Warning,
         "A `cd` inside `RUN` lasts exactly as long as that instruction's shell. \
          The next `RUN` starts back where the last `WORKDIR` left it, so a file \
          written by the line below lands somewhere other than the line above \
@@ -796,6 +827,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-copy-multiple-sources-no-slash",
+        Severity::Error,
         "With more than one source, `COPY` requires the destination to be a \
          directory, and the way to say so is a trailing slash. Without it the \
          build fails outright -- and on the day someone deletes one of the \
@@ -804,6 +836,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-copy-relative-no-workdir",
+        Severity::Warning,
         "With no `WORKDIR` anywhere in the stage, a relative `COPY` destination \
          resolves against `/`. `COPY app.jar .` therefore lands the file at \
          `/app.jar`, which is almost never where the line was aiming -- and \
@@ -813,6 +846,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-copy-whole-filesystem",
+        Severity::Warning,
         "`COPY --from=stage / /` copies that stage's entire root over this one: \
          its `/etc/passwd`, its package database, its `/var`, its libraries. \
          What ships is then neither image, and the parts of the base that were \
@@ -822,12 +856,14 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-duplicate-env-key",
+        Severity::Warning,
         "Only the last `ENV` for a key survives into the image. The earlier one \
          is dead, and there is nothing in the file to say which of the two the \
          author meant -- the reader has to know that later wins.",
     ),
     (
         "docker-duplicate-label-key",
+        Severity::Warning,
         "Only the last `LABEL` for a key survives into the image metadata. The \
          earlier one is dead, and a reader looking for the version an image \
          claims has two answers in front of them and no way to tell which one \
@@ -835,6 +871,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-from-platform-pinned",
+        Severity::Warning,
         "`FROM --platform=linux/amd64 ...` builds that stage for that \
          architecture whatever the host is, and it *succeeds* on an arm64 \
          machine -- producing an image whose binaries cannot exec, which is a \
@@ -845,6 +882,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-from-platform-redundant",
+        Severity::Info,
         "`--platform=$TARGETPLATFORM` is what `FROM` already does. buildx sets \
          `TARGETPLATFORM` to the platform it is building for and resolves every \
          unflagged `FROM` against exactly that, so the flag restates the \
@@ -853,6 +891,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-go-install-unpinned",
+        Severity::Warning,
         "`go install example.com/cmd@latest`, or a `go get` with no version at \
          all, resolves against whatever the module proxy serves at build time. \
          The binary in the image is then not the one that was tested, and \
@@ -861,6 +900,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-invalid-port",
+        Severity::Error,
         "`EXPOSE` takes a TCP or UDP port: a number in 1..=65535, optionally \
          `/tcp` or `/udp`, optionally a range. Anything else is either a typo or \
          a misunderstanding of what the instruction takes, and Docker rejects \
@@ -868,6 +908,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-latest-base",
+        Severity::Warning,
         "`latest` is a tag that moves. The image that built and passed its tests \
          yesterday is not the image the same Dockerfile pulls today, and there \
          is nothing in the repository recording which one it was. Name the \
@@ -876,6 +917,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-maintainer-deprecated",
+        Severity::Info,
         "`MAINTAINER` has been deprecated since Docker 1.13 and its value is not \
          part of the image's structured metadata. \
          `LABEL org.opencontainers.image.authors=\"...\"` is the replacement, is \
@@ -883,18 +925,21 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-missing-from",
+        Severity::Error,
         "A build starts from a base image, so the first instruction has to be \
          `FROM` (an `ARG` used to parameterise it may come before). Anything \
          else is a file that does not build.",
     ),
     (
         "docker-multiple-cmd",
+        Severity::Warning,
         "Only the last `CMD` in a stage has any effect. An earlier one is dead \
          and reads as though it applies -- the usual cause is a second `CMD` \
          added without noticing the first.",
     ),
     (
         "docker-multiple-entrypoint",
+        Severity::Warning,
         "Only the last `ENTRYPOINT` in a stage has any effect. An earlier one is \
          dead and reads as though it applies, and unlike a dead `CMD` there is \
          nothing at runtime that hints the container is starting something other \
@@ -902,6 +947,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-npm-unpinned",
+        Severity::Warning,
         "`npm install -g typescript` installs whatever the registry serves \
          today, so the same Dockerfile builds against a different compiler next \
          week. `typescript@5.4.5` says which one. Installing from a \
@@ -910,6 +956,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-pip-cache",
+        Severity::Warning,
         "pip downloads every wheel into ~/.cache/pip and then never reads it \
          again: the image is built once, and the layer carries the cache for \
          the rest of its life. On a Python image that is routinely more than \
@@ -918,6 +965,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-pip-unpinned",
+        Severity::Warning,
         "`pip install requests` installs whatever PyPI serves at build time, \
          including major versions released after the Dockerfile was written. \
          `requests==2.31.0`, or a requirements file that pins, makes the build \
@@ -926,6 +974,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-pipe-without-pipefail",
+        Severity::Warning,
         "`/bin/sh` reports the exit status of the *last* command in a pipeline. \
          `RUN curl ... | tar x` therefore succeeds when curl 404s, because tar \
          cheerfully unpacked nothing, and the failure surfaces much later as a \
@@ -934,6 +983,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-root-user",
+        Severity::Warning,
         "With no `USER`, the container's process runs as root -- root in the \
          container is root on the host kernel, and the only thing between them \
          is the namespace. It is also the account that ends up owning every file \
@@ -944,6 +994,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-secret-in-env",
+        Severity::Warning,
         "`ENV` and `ARG` values are baked into the image and are readable with \
          `docker history` by anyone who can pull it -- deleting the file later \
          does not remove them, because the layer that set them is still there. \
@@ -952,6 +1003,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-shell-form-command",
+        Severity::Warning,
         "The shell form wraps the process in `/bin/sh -c`, which becomes PID 1 \
          and does not forward signals to its child. `docker stop` then reaches \
          the shell, the real process never sees SIGTERM, and the container is \
@@ -960,6 +1012,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-sudo-in-run",
+        Severity::Warning,
         "A `RUN` already runs as whatever the last `USER` said, which is root \
          unless the file says otherwise -- so `sudo` is either doing nothing or \
          is not installed. It also needs a TTY it does not have. If the step \
@@ -967,6 +1020,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-untagged-base",
+        Severity::Warning,
         "An image reference with no tag means `:latest`, which is a tag that \
          moves. The same Dockerfile builds different software on different days \
          and nothing in the repository records which base it was. Name a \
@@ -974,6 +1028,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-wget-and-curl",
+        Severity::Info,
         "Two programs that fetch a URL, where the image needs one. Whichever \
          arrived second is a package to install, patch and carry for the life \
          of the image, for a job the first one already did. Reported as info \
@@ -984,6 +1039,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-workdir-relative",
+        Severity::Warning,
         "A relative `WORKDIR` resolves against whatever the previous one left \
          behind, so inserting an instruction above it silently moves everything \
          below. An absolute path means the same thing wherever it appears in the \
@@ -991,6 +1047,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-yum-no-clean",
+        Severity::Warning,
         "`yum install` leaves its downloaded rpms and metadata under \
          /var/cache/yum, and they stay in the layer forever. `yum clean all` in \
          the same `RUN` removes them; in a later `RUN` it removes nothing, \
@@ -1000,6 +1057,7 @@ const DOCKER_RULES: &[(&str, &str)] = &[
     ),
     (
         "docker-yum-unpinned",
+        Severity::Warning,
         "`yum install -y nginx` installs whichever nginx the repository serves \
          today, so the same Dockerfile builds different software over time. \
          `nginx-1.20.1` says which one. The counter-argument is the same as for \
@@ -1024,7 +1082,6 @@ fn docker_issue(
     at: usize,
     end: usize,
     code: &str,
-    severity: Severity,
     message: String,
     fix: Option<Fix>,
 ) -> Issue {
@@ -1047,7 +1104,7 @@ fn docker_issue(
         col,
         end_line,
         end_col,
-        severity,
+        severity: rule_severity(code),
         code: code.to_string(),
         message,
         // poly's own rules, under poly's own name. See `DOCKER_RULES`.
@@ -1357,7 +1414,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                         span.start,
                         span.end,
                         "docker-missing-from",
-                        Severity::Error,
                         "a build has to start from a base image: the first \
                          instruction should be FROM"
                             .to_string(),
@@ -1400,7 +1456,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                         from.image.span.start,
                         from.image.span.end,
                         "docker-untagged-base",
-                        Severity::Warning,
                         format!("`{image}` has no tag, so the build pulls whatever `latest` points at today"),
                         None,
                     )),
@@ -1409,7 +1464,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                         from.image.span.start,
                         from.image.span.end,
                         "docker-latest-base",
-                        Severity::Warning,
                         format!("`{image}` is a tag that moves: name the version the build was tested against"),
                         None,
                     )),
@@ -1432,7 +1486,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                         span.start,
                         span.end,
                         "docker-multiple-cmd",
-                        Severity::Warning,
                         "only the last CMD in a stage has any effect".to_string(),
                         None,
                     ));
@@ -1449,7 +1502,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                         span.start,
                         span.end,
                         "docker-multiple-entrypoint",
-                        Severity::Warning,
                         "only the last ENTRYPOINT in a stage has any effect".to_string(),
                         None,
                     ));
@@ -1470,7 +1522,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                             var.key.span.start,
                             var.key.span.end,
                             "docker-duplicate-env-key",
-                            Severity::Warning,
                             format!("`{key}` is set more than once in this stage; only the last one survives"),
                             None,
                         ));
@@ -1508,7 +1559,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                             one.name.span.start,
                             one.name.span.end,
                             "docker-duplicate-label-key",
-                            Severity::Warning,
                             format!("`{key}` is labelled more than once in this stage; only the last one survives"),
                             None,
                         ));
@@ -1543,7 +1593,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                         span.start,
                         span.end,
                         "docker-copy-whole-filesystem",
-                        Severity::Warning,
                         "copying `/` out of another stage overwrites this image's own \
                          root with that stage's"
                             .to_string(),
@@ -1568,7 +1617,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                             span.start,
                             span.end,
                             "docker-copy-relative-no-workdir",
-                            Severity::Warning,
                             format!(
                                 "no WORKDIR in this stage, so `{destination}` resolves against `/`"
                             ),
@@ -1581,7 +1629,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                             span.start,
                             span.end,
                             "docker-copy-multiple-sources-no-slash",
-                            Severity::Error,
                             format!(
                                 "COPY has {sources} sources, so `{destination}` has to end in `/` to be a directory"
                             ),
@@ -1621,10 +1668,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
             at,
             at,
             "docker-wget-and-curl",
-            // Info, not warning: see the rule's entry in `DOCKER_RULES`. It
-            // costs image size, not correctness, and there are real files that
-            // need both.
-            Severity::Info,
             format!(
                 "`{second}` fetches URLs and so does the `{first}` above; the image ships both"
             ),
@@ -1649,7 +1692,6 @@ fn lint_dockerfile(text: &str) -> Vec<Issue> {
                     last.from,
                     last.from,
                     "docker-root-user",
-                    Severity::Warning,
                     format!("{complaint}: root in the container is root on the host kernel"),
                     None,
                 ));
@@ -1689,9 +1731,6 @@ fn docker_from_platform(
             start,
             end,
             "docker-from-platform-redundant",
-            // Info: removing it changes nothing about the image. See the
-            // severity tiers on `DOCKER_RULES`.
-            Severity::Info,
             "`--platform=$TARGETPLATFORM` is what FROM already does".to_string(),
             Some(Fix::Described {
                 what: "Drop the `--platform` flag".to_string(),
@@ -1704,7 +1743,6 @@ fn docker_from_platform(
             start,
             end,
             "docker-from-platform-pinned",
-            Severity::Warning,
             format!(
                 "`--platform={value}` builds this stage for {value} on every host, and \
                  the mismatch surfaces at `docker run` rather than here"
@@ -1720,7 +1758,6 @@ fn docker_shell_form(text: &str, span: DockerSpan, keyword: &str) -> Issue {
         span.start,
         span.end,
         "docker-shell-form-command",
-        Severity::Warning,
         format!(
             "{keyword} in shell form runs under `/bin/sh -c`, which becomes PID 1 \
              and does not forward SIGTERM to the real process"
@@ -1783,7 +1820,6 @@ fn docker_misc_rules(
                 docker_locate(text, span, path),
                 span.end,
                 "docker-workdir-relative",
-                Severity::Warning,
                 format!(
                     "`{path}` is relative, so it resolves against whatever WORKDIR came before it"
                 ),
@@ -1800,7 +1836,6 @@ fn docker_misc_rules(
             span.start,
             span.end,
             "docker-maintainer-deprecated",
-            Severity::Info,
             "MAINTAINER was deprecated in Docker 1.13 and is not part of the image's metadata"
                 .to_string(),
             Some(Fix::Described {
@@ -1824,7 +1859,6 @@ fn docker_misc_rules(
                     docker_locate(text, span, port),
                     span.end,
                     "docker-invalid-port",
-                    Severity::Error,
                     format!(
                         "`{port}` is not a port: EXPOSE takes 1..=65535, optionally /tcp or /udp"
                     ),
@@ -1854,7 +1888,6 @@ fn docker_misc_rules(
                 span.start,
                 span.end,
                 "docker-add-instead-of-copy",
-                Severity::Warning,
                 "ADD also downloads URLs and unpacks archives; COPY only copies".to_string(),
                 Some(Fix::Described {
                     what: "Use COPY".to_string(),
@@ -1938,7 +1971,6 @@ fn docker_secret(
         span.start,
         span.end,
         "docker-secret-in-env",
-        Severity::Warning,
         format!(
             "{keyword} `{key}` bakes a literal value into the image, where \
              `docker history` reads it back"
@@ -2046,7 +2078,6 @@ fn docker_run_rules(
                 docker_locate(text, span, "cd"),
                 span.end,
                 "docker-cd-in-run",
-                Severity::Warning,
                 "a `cd` inside RUN ends with this instruction's shell; WORKDIR \
                  changes the directory for everything after it"
                     .to_string(),
@@ -2057,7 +2088,6 @@ fn docker_run_rules(
                 docker_locate(text, span, "sudo"),
                 span.end,
                 "docker-sudo-in-run",
-                Severity::Warning,
                 "a RUN already runs as the current USER, which is root unless a \
                  USER instruction said otherwise"
                     .to_string(),
@@ -2081,7 +2111,6 @@ fn docker_run_rules(
                         docker_locate(text, span, "apt"),
                         span.end,
                         "docker-apt-not-apt-get",
-                        Severity::Warning,
                         "`apt` has no stable CLI, by its own warning: use `apt-get` \
                          (or `apt-cache`) in a build"
                             .to_string(),
@@ -2162,7 +2191,6 @@ fn docker_run_rules(
             docker_locate(text, span, "apt-get"),
             span.end,
             "docker-apt-get-update-alone",
-            Severity::Warning,
             "an `apt-get update` on its own becomes a cached layer, and the next \
              RUN's install then resolves against a stale package index"
                 .to_string(),
@@ -2175,7 +2203,6 @@ fn docker_run_rules(
             docker_locate(text, span, "apt-get"),
             span.end,
             "docker-apt-get-no-clean",
-            Severity::Warning,
             "the package lists stay in this layer; deleting them in a later RUN \
              does not shrink the image"
                 .to_string(),
@@ -2191,7 +2218,6 @@ fn docker_run_rules(
             docker_locate(text, span, "yum"),
             span.end,
             "docker-yum-no-clean",
-            Severity::Warning,
             "the downloaded rpms and metadata stay in this layer; `yum clean all` \
              in a later RUN does not shrink the image"
                 .to_string(),
@@ -2207,7 +2233,6 @@ fn docker_run_rules(
             span.start,
             span.end,
             "docker-pipe-without-pipefail",
-            Severity::Warning,
             "`/bin/sh` reports only the last command in a pipeline, so a failure \
              upstream of the `|` passes as a successful build"
                 .to_string(),
@@ -2234,14 +2259,6 @@ fn docker_apt_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, "install"),
             span.end,
             "docker-apt-get-interactive",
-            // The one rule where poly is louder than hadolint (which calls it a
-            // warning), and it stays that way now poly is the only voice. A
-            // build has no terminal, so apt reads EOF at its confirmation
-            // prompt and exits non-zero: this predicts a failing build, which is
-            // what `Error` means here. The corpus agrees in the way that
-            // matters -- one occurrence in 256 real Dockerfiles, because a file
-            // with this in it never built and so never got committed.
-            Severity::Error,
             "`apt-get install` without `-y` waits for a confirmation the build \
              has no terminal to type"
                 .to_string(),
@@ -2262,7 +2279,6 @@ fn docker_apt_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, "install"),
             span.end,
             "docker-apt-get-no-recommends",
-            Severity::Warning,
             "recommended packages are installed by default, so the image gets \
              software the line never named"
                 .to_string(),
@@ -2283,7 +2299,6 @@ fn docker_apt_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, package),
             span.end,
             "docker-apt-get-unpinned",
-            Severity::Warning,
             format!(
                 "`{package}` has no version, so this installs whatever the archive serves today"
             ),
@@ -2299,7 +2314,6 @@ fn docker_apk_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, "add"),
             span.end,
             "docker-apk-no-cache",
-            Severity::Warning,
             "`apk add` writes a package index into the layer that nothing reads \
              again"
                 .to_string(),
@@ -2318,7 +2332,6 @@ fn docker_apk_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, package),
             span.end,
             "docker-apk-unpinned",
-            Severity::Warning,
             format!(
                 "`{package}` has no version, so this installs whatever the mirror serves today"
             ),
@@ -2347,7 +2360,6 @@ fn docker_yum_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, package),
             span.end,
             "docker-yum-unpinned",
-            Severity::Warning,
             format!(
                 "`{package}` has no version, so this installs whatever the repository serves today"
             ),
@@ -2381,7 +2393,6 @@ fn docker_npm_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, package),
             span.end,
             "docker-npm-unpinned",
-            Severity::Warning,
             format!(
                 "`{package}` has no version, so this installs whatever the registry serves today"
             ),
@@ -2407,7 +2418,6 @@ fn docker_go_rules(text: &str, span: DockerSpan, command: &DockerCommand, found:
             docker_locate(text, span, package),
             span.end,
             "docker-go-install-unpinned",
-            Severity::Warning,
             format!(
                 "`{package}` has no `@version`, so this builds whatever the proxy serves today"
             ),
@@ -2436,7 +2446,6 @@ fn docker_pip_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, "install"),
             span.end,
             "docker-pip-cache",
-            Severity::Warning,
             "pip writes every downloaded wheel into the layer's cache directory, \
              where nothing reads it again"
                 .to_string(),
@@ -2471,7 +2480,6 @@ fn docker_pip_rules(text: &str, span: DockerSpan, command: &DockerCommand, found
             docker_locate(text, span, package),
             span.end,
             "docker-pip-unpinned",
-            Severity::Warning,
             format!("`{package}` has no version, so this installs whatever PyPI serves today"),
             None,
         ));
@@ -2589,7 +2597,7 @@ fn spell_issue(typo: &typos::Typo<'_>, at: Option<(u32, u32)>) -> Issue {
         col,
         end_line: line,
         end_col: col + width,
-        severity: Severity::Info,
+        severity: severity_of("typos", Reported::Nothing),
         code: "typo".to_string(),
         message: format!(
             "`{}` should be `{}`{}",
@@ -3137,6 +3145,17 @@ mod tests {
             .map(|issue| {
                 assert_eq!(issue.source, "poly", "{issue:?}");
                 assert_eq!(issue.url, None, "poly's own rules have no page to link");
+                // `docker_issue` reads the level from the rule's row, so this
+                // is asking whether a finding got built without it: an `Issue`
+                // written out by hand can still carry a severity chosen at the
+                // emit site, which is what this step removed. Every fixture in
+                // the file passes through here, so all of them are asked.
+                assert_eq!(
+                    issue.severity,
+                    rule_severity(&issue.code),
+                    "{} is reported at a level `DOCKER_RULES` does not state",
+                    issue.code
+                );
                 issue.code
             })
             .collect()
@@ -3258,15 +3277,16 @@ mod tests {
         }
         emitted.sort_unstable();
         emitted.dedup();
-        let mut documented: Vec<&str> = DOCKER_RULES.iter().map(|(code, _)| *code).collect();
+        let mut documented: Vec<&str> = DOCKER_RULES.iter().map(|(code, _, _)| *code).collect();
         documented.sort_unstable();
         assert_eq!(
             emitted, documented,
             "rules and their documentation disagree"
         );
 
-        for (code, doc) in DOCKER_RULES {
+        for (code, severity, doc) in DOCKER_RULES {
             assert_eq!(rule_doc("poly", code), Some(*doc), "{code}");
+            assert_eq!(rule_severity(code), *severity, "{code}");
             assert!(doc.len() > 80, "{code}: {doc}");
         }
         assert!(rule_doc("poly", "docker-no-such-rule").is_none());
@@ -3285,7 +3305,7 @@ mod tests {
     /// migration signal exists to report.
     #[test]
     fn hadolint_replacements_name_real_rules() {
-        let rules: Vec<&str> = DOCKER_RULES.iter().map(|(code, _)| *code).collect();
+        let rules: Vec<&str> = DOCKER_RULES.iter().map(|(code, _, _)| *code).collect();
         for (hadolint, poly) in poly_core::HADOLINT_REPLACEMENTS {
             assert!(rules.contains(poly), "{hadolint} -> {poly}: no such rule");
             assert!(

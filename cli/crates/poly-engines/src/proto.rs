@@ -57,15 +57,16 @@ use serde::Deserialize;
 ///   every language at once, a `required` field that can never be removed, a
 ///   public import that re-exports somebody else's file, an enum whose JSON
 ///   round trip is lossy, a missing `package` that puts every symbol in the
-///   global namespace. **All fourteen rules, and `proto-unreadable`.**
+///   global namespace. **Every rule below.**
 /// * `Info` -- it compiles, it behaves, and changing it changes nothing anyone
 ///   can observe. **Nothing is in this tier either**, and that is the point:
 ///   the rules that would land here are buf's `ENUM_VALUE_PREFIX`,
 ///   `PACKAGE_VERSION_SUFFIX` and the rest of its suffix conventions, which are
 ///   declined rather than demoted.
-pub const RULES: &[(&str, &str)] = &[
+pub const RULES: &[(&str, Severity, &str)] = &[
     (
         "proto-enum-allow-alias",
+        Severity::Warning,
         "`option allow_alias = true` lets two names share one number. On the \
          wire there is only the number, so a decoder has to pick one name to \
          hand back and the other is unreachable -- a value written as \
@@ -77,6 +78,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-enum-first-value-nonzero",
+        Severity::Warning,
         "The first value of an enum is its default: a field of that type that \
          was never set decodes as whatever value comes first, and there is no \
          way to tell that apart from someone setting it deliberately. When the \
@@ -88,6 +90,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-enum-pascal-case",
+        Severity::Warning,
         "An enum's name is a type name in every language protoc generates, and \
          each generator applies its own transformation to whatever is here. \
          `badEnum` becomes `BadEnum` in Go and C#, stays `badEnum` in Java, and \
@@ -97,6 +100,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-enum-value-upper-snake-case",
+        Severity::Warning,
         "Enum value names share a namespace with their siblings in C++ and are \
          emitted as constants everywhere else, and the generators assume \
          UPPER_SNAKE_CASE when they split the name up -- Go strips the enum's \
@@ -107,6 +111,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-field-lower-snake-case",
+        Severity::Warning,
         "A field's name is the one thing about it that reaches every consumer \
          unaltered: the JSON encoding uses it verbatim as `lowerCamelCase` \
          derived from the snake_case spelling, and every generator derives its \
@@ -117,6 +122,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-field-required",
+        Severity::Warning,
         "A proto2 `required` field can never be removed, and never made \
          optional, for as long as any peer still runs the old schema: a message \
          missing it fails to parse outright rather than arriving with the field \
@@ -127,6 +133,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-import-public",
+        Severity::Warning,
         "`import public` re-exports everything the imported file declares, so a \
          file importing yours also gets that one, transitively and invisibly. \
          Nothing in the importing file says where those types came from, and \
@@ -136,6 +143,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-message-pascal-case",
+        Severity::Warning,
         "A message's name is a type name in every language protoc generates, and \
          each generator re-cases it differently: `myMessage` reaches Go and C# \
          as `MyMessage` and Java as `myMessage`, so the type a caller has to \
@@ -144,6 +152,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-oneof-lower-snake-case",
+        Severity::Warning,
         "A oneof's name becomes a case-selector type or accessor in the \
          generated code -- Go's `isFoo_Kind`, Java's `getKindCase()` -- built by \
          re-casing whatever is written here. A name that is not \
@@ -154,6 +163,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-package-lower-snake-case",
+        Severity::Warning,
         "The package becomes a namespace in C++, a module path in Python, a Go \
          package and part of the Java package, and the mapping to each assumes \
          lower_snake_case components. An upper-case letter reaches C++ verbatim \
@@ -162,6 +172,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-package-missing",
+        Severity::Warning,
         "A file with no `package` puts every message, enum and service it \
          declares in the global namespace. Two such files that happen to name a \
          message the same thing cannot be compiled together at all, and nothing \
@@ -172,6 +183,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-rpc-pascal-case",
+        Severity::Warning,
         "An RPC's name is half of its wire path: gRPC addresses a method as \
          `/package.Service/Method`, spelled exactly as written here. Every \
          generator then re-cases it for the client stub, so `doThing` is \
@@ -182,6 +194,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-service-pascal-case",
+        Severity::Warning,
         "A service's name is the other half of the gRPC path \
          (`/package.Service/Method`) and a type name in every generated client, \
          re-cased by each generator on the way. PascalCase is the spelling that \
@@ -189,6 +202,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-syntax-missing",
+        Severity::Warning,
         "A `.proto` with no `syntax` line is proto2, silently. That is a \
          different language from the one most files are written in: fields need \
          an explicit `optional` or `repeated`, unset scalars come back as their \
@@ -200,6 +214,7 @@ pub const RULES: &[(&str, &str)] = &[
     ),
     (
         "proto-unreadable",
+        Severity::Warning,
         "poly could not read this file, so none of poly's protobuf rules ran on \
          it -- this is a statement about poly, not about the file, which may be \
          perfectly valid. The usual cause is `edition = \"2023\"`: poly's \
@@ -339,7 +354,7 @@ fn unreadable(text: &str, policy: &Policy, path: &Path) -> Vec<Issue> {
         col: 0,
         end_line: 0,
         end_col: text.lines().next().map_or(0, |l| l.chars().count() as u32),
-        severity: Severity::Warning,
+        severity: crate::lint::rule_severity("proto-unreadable"),
         code: "proto-unreadable".to_string(),
         message: message.to_string(),
         source: "poly",
@@ -408,7 +423,7 @@ impl Linter<'_> {
             col,
             end_line,
             end_col,
-            severity: Severity::Warning,
+            severity: crate::lint::rule_severity(code),
             code: code.to_string(),
             message,
             // poly's own rules, under poly's own name. See `RULES`.
@@ -1068,7 +1083,22 @@ mod tests {
 
     fn codes(config: Option<&str>, body: &str) -> Vec<String> {
         let (dir, file) = project(config, body);
-        let mut found: Vec<String> = lint(&file, body).into_iter().map(|i| i.code).collect();
+        let mut found: Vec<String> = lint(&file, body)
+            .into_iter()
+            .map(|issue| {
+                // Both emitters here build their `Issue` by hand -- there is no
+                // constructor to route them through, the way Dockerfiles and
+                // workflows have one -- so this is the only thing holding a
+                // finding's level to the level its row states.
+                assert_eq!(
+                    issue.severity,
+                    crate::lint::rule_severity(&issue.code),
+                    "{} is reported at a level `RULES` does not state",
+                    issue.code
+                );
+                issue.code
+            })
+            .collect();
         found.sort();
         drop(dir);
         found
@@ -1079,7 +1109,7 @@ mod tests {
     /// alone lets a code reach a reader with nothing behind it.
     #[test]
     fn every_proto_rule_is_documented() {
-        let documented: HashSet<&str> = RULES.iter().map(|(code, _)| *code).collect();
+        let documented: HashSet<&str> = RULES.iter().map(|(code, _, _)| *code).collect();
         let emitted: HashSet<&str> = CATALOGUE
             .iter()
             .map(|(code, _, _)| *code)
@@ -1087,8 +1117,9 @@ mod tests {
             .collect();
         assert_eq!(documented, emitted);
         assert_eq!(RULES.len(), documented.len(), "a code is listed twice");
-        for (code, doc) in RULES {
+        for (code, severity, doc) in RULES {
             assert!(doc.len() > 120, "{code} has no real explanation");
+            assert_eq!(crate::lint::rule_severity(code), *severity, "{code}");
             // Reached through the one namespace every poly rule shares.
             assert_eq!(crate::lint::rule_doc("poly", code), Some(*doc), "{code}");
         }

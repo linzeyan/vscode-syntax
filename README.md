@@ -135,6 +135,10 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   （每個 RUN 的第 1 欄，poly 指到出問題的那個字）。poly 沒有補的是它三條 info 級
   規則：DL3047、DL3059、DL3066。想同時看兩邊就寫 `[tools] hadolint = "on"`，
   poly 會照樣下載並執行它，不會囉嗦。
+- **actionlint 的 shellcheck pass 也關掉**，同一個道理：workflow 的 `run:` 由 poly
+  自己跑 shellcheck，掛 `shellcheck/SC…` 並指到出問題的那個字；開著等於同一個缺陷
+  被 actionlint 用 error 再報一次、指在 `run:` 那一鍵。actionlint 自己的檢查
+  （schema、job id、event、權限、expression）一條都沒少。
 - **只用專案 toolchain、不代裝**：rustfmt、clang-format、swift-format、
   terraform fmt、`cargo clippy`。
 - **Rust 的 lint 是 `cargo clippy`**，範圍是整個 cargo workspace——跟 Go 的
@@ -408,6 +412,21 @@ poly check --fail-on never .     # 純報告，永遠 exit 0
 
 `--fail-on=warning` 與 `--fail-on warning` 都認得。低於門檻的問題**還是會印出來**，
 summary 會加註 `(N below fail-on)`，所以綠色的 run 有輸出不會被誤讀成 bug。
+
+四個等級是 poly 的判斷，不是照抄上游工具的：
+
+| 等級      | 意思                                   |
+| --------- | -------------------------------------- |
+| `error`   | 幾乎確定是缺陷：會壞、不安全，或不合法 |
+| `warning` | 可疑但可能是故意的，值得看一眼         |
+| `info`    | 風格與一致性，不影響正確性             |
+| `hint`    | 建議與偏好                             |
+
+同一份判準套到每個工具，所以 `--fail-on error` 在 Lua、SQL、Dockerfile、workflow 上
+擋的是同一類東西。本來就有等級而且意思相同的工具（shellcheck、clippy、biome、eslint、
+swiftlint、selene、tflint、hadolint）照用它們自己的；不排序的工具由 poly 排一次
+（ruff、golangci-lint、sqruff 是 warning，typos 是 info）；poly 自己的規則則是一條
+規則一個等級。
 
 寫進 `poly.toml` 才能讓編輯器與 CI 同一套標準，而且兩邊可以不同——「沒格式化要擋，
 錯字不用」是很常見的政策：

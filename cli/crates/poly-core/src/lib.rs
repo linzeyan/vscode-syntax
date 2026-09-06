@@ -392,8 +392,11 @@ const INLINE_MARKER: &str = "poly: ignore";
 /// poly's Dockerfile and workflow rules do -- poly's own rules have no upstream
 /// page to link, so the prose ships in the binary or the reader has nothing to
 /// look up.
-pub const INLINE_RULES: &[(&str, &str)] = &[(
+pub const INLINE_RULES: &[(&str, crate::diag::Severity, &str)] = &[(
     "ignore-syntax",
+    // A comment that silences nothing is suspicious rather than certainly
+    // wrong: it may be a typo, or a rule that has since been renamed away.
+    crate::diag::Severity::Warning,
     "A `poly: ignore` comment poly will not act on. Codes are spelled the way \
      poly prints them -- `[ruff/F401]` in a finding is `ruff/F401` in the \
      comment -- and `tool/*` covers one tool entirely. A bare `F401` names no \
@@ -733,7 +736,7 @@ impl InlineIgnores {
             col,
             end_line: line,
             end_col,
-            severity: crate::diag::Severity::Warning,
+            severity: INLINE_RULES[0].1,
             code: INLINE_RULES[0].0.to_string(),
             message,
             // poly's own rule about a comment poly will not act on. See
