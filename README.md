@@ -542,7 +542,12 @@ run.sh:2:6   info      shellcheck/SC2086  Double quote to prevent globbing and w
 
 `json` 是給 pipeline 的。位置是 1-based（跟紀錄一致），`message` 完整保留（含引擎畫的
 code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`fatal` 直接告訴你這一筆在
-當前 `--fail-on` 下算不算擋——消費端不用重寫嚴重度排序：
+當前 `--fail-on` 下算不算擋——消費端不用重寫嚴重度排序。`category` 是**這是哪一類缺
+陷**，全部語言共用同一套詞（`unpinned-dependency`、`unused-code`、`silently-discarded`
+…），所以一份 pipeline 的 findings 可以照類別分組而不是照工具。poly 自己的規則每條都
+有；大部分上游規則是 `null`——ruff、clippy、eslint 各有數百條而且專案可以自由開關，替
+每一條取一個 poly 名字等於再養一套會漂移的規則表。`summary.uncategorized` 就是這一次
+有幾筆沒有類別：
 
 ```jsonc
 {
@@ -558,6 +563,7 @@ code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`
       "severity": "warning",
       "tool": "ruff",
       "rule": "F401",
+      "category": null,
       "message": "`os` imported but unused",
       "fix": "Remove unused import: `os`",
       "docs": "https://docs.astral.sh/ruff/rules/unused-import",
@@ -567,6 +573,7 @@ code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`
   "summary": {
     "issues": 1,
     "fatal": 1,
+    "uncategorized": 1,
     "coverage": [
       { "tool": "ruff", "files": 12, "status": "ran", "reason": null },
       {

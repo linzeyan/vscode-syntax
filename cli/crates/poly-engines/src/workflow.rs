@@ -96,7 +96,11 @@ pub const RULES: &[(&str, Severity, &str)] = &[
     ),
     (
         "actions-invalid-glob",
-        Severity::Warning,
+        // Was warning until the `invalid` category asked why: this rule's own
+        // prose says the pattern is rejected with the whole workflow, which is
+        // what every other rule in that category means by error. The tier was
+        // picked before there was a definition to pick it against.
+        Severity::Error,
         "`branches`, `tags` and `paths` take GitHub's filter pattern syntax, \
          where `!` negates and only at the start of a pattern, and `[` opens a \
          character class that has to be closed. A pattern outside that grammar is \

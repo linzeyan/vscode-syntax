@@ -3295,6 +3295,82 @@ mod tests {
         assert!(rule_doc("hadolint", "DL3006").is_none());
     }
 
+    /// Every rule poly wrote has a category, and every `poly/` id in the
+    /// catalog is a rule poly still has.
+    ///
+    /// The catalog lives in poly-core because a category is cross-language and
+    /// the rules live here, so nothing but this holds the two together. A rule
+    /// with no category cannot be named in `[lint]` by anything but its own
+    /// code, and an entry for a rule that no longer exists is a category line
+    /// that silently covers nothing.
+    #[test]
+    fn every_poly_rule_has_a_category() {
+        let mine: Vec<&str> = DOCKER_RULES
+            .iter()
+            .chain(crate::workflow::RULES)
+            .chain(crate::proto::RULES)
+            .chain(poly_core::INLINE_RULES)
+            .map(|(code, _, _)| *code)
+            .collect();
+        for code in &mine {
+            assert!(
+                poly_core::catalog::category_of("poly", code).is_some(),
+                "{code} has no category"
+            );
+        }
+        for (category, rules) in poly_core::catalog::catalog() {
+            for id in rules {
+                let Some(code) = id.strip_prefix("poly/") else {
+                    continue;
+                };
+                assert!(
+                    mine.contains(&code),
+                    "{category} names {id}, which is not a rule poly has"
+                );
+            }
+        }
+    }
+
+    /// Every rule in a category is reported at the same severity.
+    ///
+    /// This is the half of "unified rules" a machine can hold: the vocabulary
+    /// is only worth something if `unpinned-dependency` means one thing to
+    /// `--fail-on`, whichever language it was found in. It has already earned
+    /// its keep -- `actions-invalid-glob` sat at warning next to twenty rules
+    /// about a workflow GitHub rejects, all of them error.
+    ///
+    /// Sources with their own scale are skipped rather than guessed at: they
+    /// rank each finding when they report it, so there is no level here to
+    /// compare. `ranks_its_own` is the same table `severity_of` reads.
+    #[test]
+    fn a_category_reports_at_one_severity() {
+        for (category, rules) in poly_core::catalog::catalog() {
+            let mut levels: Vec<(&str, Severity)> = Vec::new();
+            for id in rules {
+                let (source, code) = id.split_once('/').expect("a tool/rule id");
+                let severity = if source == "poly" {
+                    rule_severity(code)
+                } else if poly_core::diag::ranks_its_own(source) {
+                    continue;
+                } else {
+                    severity_of(source, Reported::Nothing)
+                };
+                levels.push((id, severity));
+            }
+            if let Some((first, level)) = levels.first() {
+                for (id, other) in &levels {
+                    assert_eq!(
+                        level,
+                        other,
+                        "{category}: {first} is {} and {id} is {}",
+                        level.as_str(),
+                        other.as_str()
+                    );
+                }
+            }
+        }
+    }
+
     /// Every replacement poly offers for a `# hadolint ignore=` is a rule poly
     /// actually has.
     ///

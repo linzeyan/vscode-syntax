@@ -1,6 +1,7 @@
 //! Language detection, poly.toml config, and file walking — shared by the CLI
 //! and the LSP daemon so editor and CI behavior stay identical (R5/A4).
 
+pub mod catalog;
 pub mod diag;
 
 use std::collections::{BTreeMap, HashMap};

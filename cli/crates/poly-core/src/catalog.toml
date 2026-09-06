@@ -1,0 +1,193 @@
+# What kind of defect each rule reports, in one place for every language.
+#
+# A rule's code says which check found something and a severity says how loud
+# it is; neither says *what kind of thing it is*, and that is the question a
+# reader asks across languages: "unused code" is `deadcode/unreachable` in Go,
+# `knip/unused-export` in TypeScript, `vulture/unused-function` in Python and
+# `ruff/F401` in an import line. One file rather than a field on each rule,
+# because a category is only worth anything next to the others -- the point is
+# to see the same defect in four languages at once, and a per-language table
+# hides exactly that.
+#
+# Two gates hold this file up, both in poly-engines:
+#
+# * Every rule poly wrote appears here exactly once, and every `poly/` entry
+#   here is a rule poly still has. A category nobody can reach and a rule with
+#   no category are the same bug read from two ends.
+# * Every rule in a category is reported at the same severity. "Unified" that
+#   depends on somebody remembering is not unified, and this is the machine
+#   check for it -- it is also how `poly/actions-invalid-glob` was found at
+#   warning while every other rule about a workflow GitHub rejects was error.
+#
+# The second gate can only ask about a severity poly decides: a source with its
+# own scale (hadolint, clippy, biome, eslint, swiftlint, selene, tflint,
+# shellcheck) ranks each finding at run time, so its rows are here to be
+# selected and ignored by category, not to be checked against one.
+#
+# hadolint's codes are not listed: each one takes the category of the poly rule
+# that replaced it, through `HADOLINT_REPLACEMENTS`. Deriving them means a
+# renamed rule cannot leave a hadolint code pointing at a category that no
+# longer exists.
+#
+# `poly fmt`'s two findings (`unformatted`, `format`) are deliberately absent.
+# Categories exist to be named in `[lint]`, and a formatter's verdict is not a
+# lint rule.
+
+# A name resolves to nothing, to itself, or to something other than what it
+# looks like it names.
+broken-reference = [
+  "poly/actions-duplicate-step-id",
+  "poly/actions-invalid-id",
+  "poly/actions-needs-cycle",
+  "poly/actions-unknown-job-in-needs",
+]
+
+# A credential ends up somewhere it persists after the thing that needed it.
+credential-exposure = ["poly/docker-secret-in-env"]
+
+# It runs with more rights than the job needs.
+excess-privilege = ["poly/docker-root-user", "poly/docker-sudo-in-run"]
+
+# The format fills this in when it is left out, and the value it fills in is
+# not the one the file reads as choosing.
+implicit-default = [
+  "poly/proto-enum-first-value-nonzero",
+  "poly/proto-package-missing",
+  "poly/proto-syntax-missing",
+]
+
+# Where this lands is decided by a line above it rather than by this line, so
+# inserting something in between moves it.
+implicit-location = [
+  "poly/docker-cd-in-run",
+  "poly/docker-copy-relative-no-workdir",
+  "poly/docker-workdir-relative",
+]
+
+# The format, or the tool that reads it, rejects this: it does not build or run.
+invalid = [
+  "poly/actions-invalid-action-ref",
+  "poly/actions-invalid-cron",
+  "poly/actions-invalid-glob",
+  "poly/actions-invalid-permission",
+  "poly/actions-job-without-steps",
+  "poly/actions-max-parallel-out-of-range",
+  "poly/actions-missing-required-key",
+  "poly/actions-missing-runs-on",
+  "poly/actions-step-uses-and-run",
+  "poly/actions-step-without-uses-or-run",
+  "poly/actions-timeout-out-of-range",
+  "poly/actions-unknown-event",
+  "poly/actions-unknown-event-filter",
+  "poly/actions-unknown-job-key",
+  "poly/actions-unknown-step-key",
+  "poly/actions-unknown-workflow-key",
+  "poly/actions-unpinned-action",
+  "poly/actions-with-without-uses",
+  "poly/docker-apt-get-interactive",
+  "poly/docker-copy-multiple-sources-no-slash",
+  "poly/docker-invalid-port",
+  "poly/docker-missing-from",
+  "selene/parse_error",
+  "toml/syntax",
+]
+
+# The name breaks the convention the ecosystem's own tooling assumes, so
+# generated code and documentation read wrong.
+naming-convention = [
+  "poly/proto-enum-pascal-case",
+  "poly/proto-enum-value-upper-snake-case",
+  "poly/proto-field-lower-snake-case",
+  "poly/proto-message-pascal-case",
+  "poly/proto-oneof-lower-snake-case",
+  "poly/proto-package-lower-snake-case",
+  "poly/proto-rpc-pascal-case",
+  "poly/proto-service-pascal-case",
+]
+
+# poly could not check this, and says so rather than reporting it clean.
+not-checked = ["poly/proto-unreadable"]
+
+# It is here, and removing it changes nothing anyone can observe.
+redundant = [
+  "poly/docker-from-platform-redundant",
+  "poly/docker-maintainer-deprecated",
+  "poly/docker-wget-and-curl",
+]
+
+# A value is written and then lost, with nothing in the file to say which one
+# survived.
+silently-discarded = [
+  "poly/actions-duplicate-key",
+  "poly/actions-invalid-env-name",
+  "poly/docker-duplicate-env-key",
+  "poly/docker-duplicate-label-key",
+  "poly/docker-multiple-cmd",
+  "poly/docker-multiple-entrypoint",
+]
+
+# A word is misspelled.
+spelling = ["typos/typo"]
+
+# Third-party code runs here and can change without any change to this
+# repository.
+supply-chain = ["poly/actions-mutable-action-ref"]
+
+# A suppression that silences nothing.
+suppression = ["poly/ignore-syntax"]
+
+# It works today, and what it does is not what the line says -- now, or after
+# something outside this file changes.
+unintended-effect = [
+  "poly/docker-add-instead-of-copy",
+  "poly/docker-apt-get-no-recommends",
+  "poly/docker-apt-not-apt-get",
+  "poly/docker-copy-whole-filesystem",
+  "poly/docker-from-platform-pinned",
+  "poly/docker-pipe-without-pipefail",
+  "poly/docker-shell-form-command",
+  "poly/proto-enum-allow-alias",
+  "poly/proto-field-required",
+  "poly/proto-import-public",
+]
+
+# What gets installed is decided when the build runs, not by this file, so the
+# same source builds different software over time.
+unpinned-dependency = [
+  "poly/docker-apk-unpinned",
+  "poly/docker-apt-get-unpinned",
+  "poly/docker-apt-get-update-alone",
+  "poly/docker-go-install-unpinned",
+  "poly/docker-latest-base",
+  "poly/docker-npm-unpinned",
+  "poly/docker-pip-unpinned",
+  "poly/docker-untagged-base",
+  "poly/docker-yum-unpinned",
+]
+
+# poly does not recognize this value and is confident enough to say so; where
+# it is not confident it stays quiet, which is why this is not `invalid`.
+unrecognized-value = ["poly/actions-unknown-runner"]
+
+# Nothing references this.
+unused-code = [
+  "deadcode/unreachable",
+  "knip/unused-export",
+  "knip/unused-file",
+  "knip/unused-type",
+  "vulture/unused-attribute",
+  "vulture/unused-class",
+  "vulture/unused-function",
+  "vulture/unused-import",
+  "vulture/unused-method",
+  "vulture/unused-property",
+  "vulture/unused-variable",
+]
+
+# The artifact carries bytes nothing reads again.
+wasted-bytes = [
+  "poly/docker-apk-no-cache",
+  "poly/docker-apt-get-no-clean",
+  "poly/docker-pip-cache",
+  "poly/docker-yum-no-clean",
+]

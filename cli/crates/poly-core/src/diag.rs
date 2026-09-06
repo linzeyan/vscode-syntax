@@ -129,6 +129,19 @@ const POLICY: &[(&str, Policy)] = &[
     ("poly", Policy::PerRule),
 ];
 
+/// Does this source rank its own findings?
+///
+/// Asked by the gate over `catalog.toml`: a category's severity can only be
+/// held to one value where poly is the one deciding it. A source with its own
+/// scale answers per finding, at run time, and there is nothing to compare
+/// until it does.
+pub fn ranks_its_own(source: &str) -> bool {
+    matches!(
+        POLICY.iter().find(|(name, _)| *name == source),
+        Some((_, Policy::ItsOwn))
+    )
+}
+
 /// poly's opinion of one finding, from what the tool said about it.
 ///
 /// An unknown source is ranked warning rather than dropped or panicked over: a

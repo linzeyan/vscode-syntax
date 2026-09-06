@@ -145,6 +145,12 @@ fn json_issue(found: &FileIssue, fail_on: FailOn) -> Value {
         "severity": i.severity.as_str(),
         "tool": i.source,
         "rule": i.code,
+        // What kind of defect this is, in one vocabulary for every language --
+        // `null` for the upstream rules poly has not classified, which is most
+        // of them and says so rather than guessing. A consumer grouping a
+        // pipeline's findings wants this; `tool`/`rule` stay because they are
+        // what the tool's own documentation is filed under.
+        "category": poly_core::catalog::category_of(i.source, &i.code),
         "message": i.message,
         // The rendered sentence rather than the variant: the terminal, the
         // editor hover and this have to word a remedy identically, or a reader
@@ -288,6 +294,12 @@ impl Check<'_> {
                 json!({
                     "issues": self.issues.len(),
                     "fatal": self.fatal(),
+                    // How many findings no category covers. A count rather than
+                    // a list because the reader who needs the detail already
+                    // has it -- every issue above carries its own `category`,
+                    // or `null`. What this answers in one number is "can I
+                    // group this run's findings by kind, or only some of it".
+                    "uncategorized": self.uncategorized(),
                     // Named and explained, not counted: "2 tools missing" sends
                     // a reader back to the stderr log to find out which and
                     // why, which is the whole thing these formats exist to
@@ -304,6 +316,13 @@ impl Check<'_> {
         self.issues
             .iter()
             .filter(|i| self.fail_on.fails(i.issue.severity))
+            .count()
+    }
+
+    fn uncategorized(&self) -> usize {
+        self.issues
+            .iter()
+            .filter(|i| poly_core::catalog::category_of(i.issue.source, &i.issue.code).is_none())
             .count()
     }
 }
@@ -497,6 +516,35 @@ mod tests {
         assert_eq!(coverage[1]["reason"], "not on PATH");
         assert_eq!(coverage[0]["tool"], "ruff");
         assert_eq!(coverage[0]["status"], "ran");
+    }
+
+    /// A finding says what kind of defect it is, and says nothing rather than
+    /// guessing when poly has not classified the rule.
+    ///
+    /// Both halves matter to the same consumer: one grouping a pipeline's
+    /// findings by kind needs to know how much of the run it can group, and a
+    /// category invented for `ruff/F401` would be poly paraphrasing somebody
+    /// else's rule -- the thing `rule_doc` refuses to do for the same reason.
+    #[test]
+    fn json_carries_the_category_and_counts_what_has_none() {
+        let mut root = issue(None, None);
+        root.issue.source = "poly";
+        root.issue.code = "docker-root-user".to_string();
+        let found = [root, issue(None, None)];
+        let doc: Value = serde_json::from_str(
+            &Check {
+                issues: &found,
+                fail_on: FailOn::default(),
+                coverage: &Coverage::default(),
+            }
+            .render(Format::Json, false),
+        )
+        .unwrap();
+
+        assert_eq!(doc["issues"][0]["category"], "excess-privilege");
+        assert_eq!(doc["issues"][1]["tool"], "ruff");
+        assert!(doc["issues"][1]["category"].is_null());
+        assert_eq!(doc["summary"]["uncategorized"], 1);
     }
 
     /// A tool that said nothing about a remedy has to serialize as null, not as
