@@ -216,10 +216,11 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   不必先裝 R。專案自己的 `arity.toml` 或 `air.toml`（版面、`select`／`ignore`）照樣生效，
   `# arity-ignore <rule>: 理由` 註釋也照樣有效。code 長 `arity/*`；lint 以 R 套件為
   單位跑——`R/` 底下互相引用的符號不會被誤報成未定義，編輯器與 `poly check` 是同一個答案。
-  **一個已知落差**：arity 內建把 vendored／generated 檔（`RcppExports.R`、`cpp11.R`、
-  `import-standalone-*.R`、`revdep/`、`renv/`）排除在外，lint 照這份清單走，但格式化
-  是把 buffer 餵給 arity 的，那條路上 arity 不套用排除——所以 `poly fmt` 會重排這些檔案
-  （七個真實 R 套件、1,432 個檔裡有 19 個）。不想要就寫進 `[format] exclude`。
+  **自己宣告是產生出來的檔案不會被重排**：開頭八行有註釋寫 `do not edit` 的，`poly fmt`
+  一律跳過——Rcpp 的 `RcppExports.R`、cpp11 的 `cpp11.R`、rlang 的
+  `import-standalone-*.R` 都是這一類。**剩下一個已知落差**：arity 另外還跳過 `revdep/`
+  與 `renv/` 這兩個目錄，poly 不跳，因為那底下是手寫腳本而不是產生出來的（七個真實 R
+  套件、1,464 個檔裡有 8 個）。不想格式化就寫進 `[format] exclude`。
 - **`poly minify [路徑...]`**：把 JSON／JSONC 就地壓成一行，移除空白與註解。走跟
   `poly fmt` 同一套 walk 與 `[format] exclude`，所以 CLI 與編輯器命令答案一致。
   獨立命令而不是 `poly fmt` 的旗標——兩者契約相反，`fmt` 是「符合專案風格」，而沒有
