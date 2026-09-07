@@ -371,8 +371,7 @@ func main() {
     await vscode.window.showTextDocument(document);
     await eventually(
       "the syntax finding",
-      () =>
-        vscode.languages.getDiagnostics(uri).find((d) => d.source === "typescript"),
+      () => vscode.languages.getDiagnostics(uri).find((d) => d.source === "typescript"),
     );
     // The server publishes before it answers this request and the client
     // handles messages in order, so anything the formatter had to say has
