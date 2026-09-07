@@ -6,7 +6,7 @@
     }
   },
   "microsoft/vscode": {
-    "sha": "fc0a9e94576224c89cc08d390b38ab760a261f1f",
+    "sha": "70a1d06d93f6a90d3cae4bf84754b096d818ef40",
     "files": {
       "extensions/swift/syntaxes/swift.tmLanguage.json": "acd12f33c06092e1",
       "extensions/csharp/syntaxes/csharp.tmLanguage.json": "152d4586a2ddf518",
@@ -447,7 +447,7 @@
     }
   },
   "vuejs/language-tools": {
-    "sha": "ffb85e57723d4a1a5107d43c0a09408814c4608a",
+    "sha": "88e8500c1e5f1b29d80f42c8ca065cc9cbd56899",
     "contributes": {
       "text.html.vue": {
         "embeddedLanguages": {
@@ -652,7 +652,7 @@
     }
   },
   "ocamllabs/vscode-ocaml-platform": {
-    "sha": "715202f37fd92b6f16b03e1314ac1f8467e03869",
+    "sha": "a05e0ec76a3bd3d7f7053fadfc5b8d08733af08f",
     "files": {
       "syntaxes/ocaml.json": "6ce207aebaaf677f",
       "syntaxes/ocaml-markdown-codeblock.json": "d39e8739966911d3",
