@@ -331,6 +331,10 @@ impl Diagnostics {
     /// shellcheck pass were both turned off to avoid. Nothing is lost: the
     /// findings are the same ones, from the same binary, and `poly check` in CI
     /// (where there is no server) still reports them itself.
+    ///
+    /// The formatter is dropped on an unparsable document for a third reason,
+    /// and this one applies whether or not a server is proxying: see
+    /// `says_it_does_not_parse`.
     fn merged(&self, uri: &Url, proxied: bool) -> Vec<lsp_types::Diagnostic> {
         let mut all = self.lint.get(uri).cloned().unwrap_or_default();
         all.extend(
@@ -343,7 +347,7 @@ impl Diagnostics {
         if proxied {
             all.retain(|d| !d.source.as_deref().is_some_and(is_language_server));
         }
-        if !proxied {
+        if !proxied && !all.iter().any(says_it_does_not_parse) {
             all.extend(self.format.get(uri).cloned());
         }
         all.extend(self.downstream.get(uri).cloned().unwrap_or_default());
@@ -358,6 +362,40 @@ impl Diagnostics {
         self.format.remove(uri);
         self.downstream.remove(uri);
     }
+}
+
+/// Whether a lint finding is the claim "this file does not parse".
+///
+/// Five rules make it -- `toml/syntax`, `typescript/syntax`, `graphql/syntax`,
+/// `php/syntax` and arity's `syntax-error` -- and when one of them has spoken,
+/// the formatter's error on save is the same sentence in the same place. It is
+/// the formatter's copy that goes: `toml/syntax` carries a category, a rule
+/// doc and a suppression key, and `poly/format` carries none of the three.
+/// Measured by hand on one broken file per language: four of the five arrive at
+/// the identical line *and* column, and three of those repeat the parser's
+/// sentence verbatim.
+///
+/// The whole format error goes rather than only the ones that carry a position,
+/// which was the obvious rule and is wrong: arity reports "input contains 2
+/// parser diagnostic(s)" with no position at all, so the obvious rule would
+/// have left R -- the one language where the duplicate is *three* findings --
+/// exactly as it was.
+///
+/// What that gives up is a format error of the other kind, one saying the
+/// formatter is missing or that it refused an option, on a file that also does
+/// not parse. In practice there is almost nothing there to give up: for a rule
+/// above to have fired, that language's parser has to have run, and in four of
+/// the five it is the formatter's own parser. The fifth is arity, which is R's
+/// linter and R's formatter in one binary -- if it were missing there would be
+/// no `arity/syntax-error` either. And the message is not lost, only deferred:
+/// it comes back the moment the file parses, which is the moment the user could
+/// have acted on it.
+fn says_it_does_not_parse(found: &lsp_types::Diagnostic) -> bool {
+    matches!(
+        &found.code,
+        Some(lsp_types::NumberOrString::String(code))
+            if code == "syntax" || code == "syntax-error"
+    )
 }
 
 fn serve(connection: Connection) -> Result<()> {
@@ -2187,6 +2225,14 @@ mod tests {
         }
     }
 
+    /// The same, reporting a named rule: `merged` reads the code, not the name.
+    fn finding(source: &str, code: &str) -> lsp_types::Diagnostic {
+        lsp_types::Diagnostic {
+            code: Some(lsp_types::NumberOrString::String(code.to_string())),
+            ..diagnostic(source)
+        }
+    }
+
     fn sources(diagnostics: &[lsp_types::Diagnostic]) -> Vec<&str> {
         diagnostics
             .iter()
@@ -2453,6 +2499,70 @@ mod tests {
             ["selene", "poly/format"]
         );
         assert_eq!(sources(&store.merged(&uri(), true)), ["selene"]);
+    }
+
+    /// A file that does not parse says so once, not twice.
+    ///
+    /// The linter reports `toml/syntax` on change and the formatter fails on
+    /// the same error on save, at the same line and column and in the same
+    /// words. Both were published, so the editor drew two squiggles over one
+    /// character -- and the second of them had no rule doc to hover and no
+    /// code to suppress.
+    #[test]
+    fn the_formatter_does_not_repeat_a_parse_failure() {
+        let mut store = Diagnostics::default();
+        store.format.insert(uri(), diagnostic("poly/format"));
+
+        // The control: a finding about something other than parsing leaves the
+        // formatter alone. A file can be misspelt *and* badly formatted, and
+        // those are two things to say.
+        store.lint.insert(uri(), vec![finding("typos", "spelling")]);
+        assert_eq!(
+            sources(&store.merged(&uri(), false)),
+            ["typos", "poly/format"]
+        );
+
+        store.lint.insert(uri(), vec![finding("toml", "syntax")]);
+        assert_eq!(sources(&store.merged(&uri(), false)), ["toml"]);
+
+        // arity spells the same claim differently, and it is the case a rule
+        // keyed on "does the format error carry a position" would have missed:
+        // arity's does not carry one.
+        store
+            .lint
+            .insert(uri(), vec![finding("arity", "syntax-error")]);
+        assert_eq!(sources(&store.merged(&uri(), false)), ["arity"]);
+    }
+
+    /// The rules the editor treats as "this file does not parse" are exactly
+    /// the ones the catalog has.
+    ///
+    /// Both directions matter and they fail differently. A new syntax rule
+    /// spelled some third way keeps the double report and nobody would notice;
+    /// a rule renamed *into* this shape starts silencing the formatter on files
+    /// that parse perfectly well.
+    #[test]
+    fn the_parse_failures_the_editor_knows_are_the_ones_the_catalog_has() {
+        let mut ids: Vec<&str> = poly_core::catalog::catalog()
+            .values()
+            .flatten()
+            .filter(|id| {
+                let (_, rule) = id.split_once('/').expect("a tool/rule id");
+                says_it_does_not_parse(&finding("t", rule))
+            })
+            .map(String::as_str)
+            .collect();
+        ids.sort_unstable();
+        assert_eq!(
+            ids,
+            [
+                "arity/syntax-error",
+                "graphql/syntax",
+                "php/syntax",
+                "toml/syntax",
+                "typescript/syntax",
+            ]
+        );
     }
 
     /// Four publishers, one uri, and `publishDiagnostics` replaces the whole

@@ -354,6 +354,45 @@ func main() {
     );
   });
 
+  // The other half of the test above. YAML has no poly rule that reports a
+  // parse failure, so there the formatter's error is the only report of it;
+  // TypeScript has one, and a broken .ts used to draw two squiggles over the
+  // same character -- `typescript/syntax` from the linter on change and
+  // `poly/format` from the formatter on save, same line, same column, the same
+  // sentence. Only the real editor can show which of them the Problems panel
+  // ends up with, because the merge happens on the way out of the server.
+  //
+  // TypeScript rather than TOML, which is where this test started: the host
+  // runs poly-lsp alone, and the `toml` language id comes from poly-highlight,
+  // so a .toml file is plaintext here and never reaches the document selector.
+  test("a file that does not parse reports it once", async () => {
+    const uri = writeFile("broken.ts", "const = 1\n");
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document);
+    await eventually(
+      "the syntax finding",
+      () =>
+        vscode.languages.getDiagnostics(uri).find((d) => d.source === "typescript"),
+    );
+    // The server publishes before it answers this request and the client
+    // handles messages in order, so anything the formatter had to say has
+    // arrived by the time this resolves -- no sleep, and no false pass.
+    await vscode.commands.executeCommand(
+      "vscode.executeFormatDocumentProvider",
+      uri,
+      { tabSize: 2, insertSpaces: true },
+    );
+    // `ts` is the built-in TypeScript service, entitled to its own opinion
+    // about the same file. `poly` is the formatter's copy of the linter's, and
+    // it is the only source this test is about.
+    const sources = vscode.languages.getDiagnostics(uri).map((d) => d.source);
+    assert.ok(sources.includes("typescript"), `lost the syntax finding: ${sources}`);
+    assert.ok(
+      !sources.includes("poly"),
+      `the formatter repeated a parse failure the linter already reported: ${sources}`,
+    );
+  });
+
   // The batch commands go through workspace/executeCommand rather than the
   // document APIs, so they exercise a path no formatting test touches.
   test("Format Folder rewrites files on disk", async () => {
