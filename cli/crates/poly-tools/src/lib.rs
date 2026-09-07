@@ -144,6 +144,9 @@ pub const TOOLS: &[Tool] = &[
     Tool {
         name: "shfmt",
         version: "3.13.1",
+        // Also `zsh`, which the field cannot say: shfmt's `-ln=auto` parses
+        // that dialect and shellcheck has no mode for it, which is why the two
+        // ids exist. The one named here is the one they share.
         language: Some("shellscript"),
         // Bare binaries; Windows is amd64-only (arm64 emulates).
         asset: |v, p| {

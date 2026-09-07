@@ -15,7 +15,16 @@ pub fn formattable(lang: &str) -> bool {
     poly_engines::supported_language(lang)
         || matches!(
             lang,
-            "rust" | "shellscript" | "go" | "c" | "cpp" | "terraform" | "swift" | "protobuf" | "r"
+            "rust"
+                | "shellscript"
+                | "zsh"
+                | "go"
+                | "c"
+                | "cpp"
+                | "terraform"
+                | "swift"
+                | "protobuf"
+                | "r"
         )
 }
 
@@ -136,7 +145,11 @@ fn dispatch(
 
     let path_arg = path.to_string_lossy();
     let (tool, args): (&str, Vec<&str>) = match lang {
-        "shellscript" => ("shfmt", vec!["--filename", &path_arg]),
+        // `--filename` is what carries the dialect: shfmt's `-ln=auto` reads
+        // the extension, so a .zsh file is parsed as zsh rather than as the
+        // bash poly's other shell id means. That is the whole reason zsh can
+        // keep its formatter while losing its linter.
+        "shellscript" | "zsh" => ("shfmt", vec!["--filename", &path_arg]),
         "go" => ("gofumpt", vec![]),
         "c" | "cpp" => ("clang-format", vec!["--assume-filename", &path_arg]),
         "terraform" => ("terraform", vec!["fmt", "-"]),

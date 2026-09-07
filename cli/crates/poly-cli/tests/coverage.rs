@@ -75,6 +75,31 @@ fn a_skipped_checker_is_named_with_its_reason() {
     );
 }
 
+/// A zsh script is not in shellcheck's scope, and the row is where that shows.
+///
+/// shellcheck reads sh, bash, dash and ksh. Handed a .zsh file it parses zsh as
+/// bash and reports the difference as defects -- 2,454 findings over 361 real
+/// .zsh files in the 09 §4.5 corpus, 55% of every shellcheck finding in it, the
+/// largest code among them telling you to quote an expansion zsh does not
+/// split. So `.zsh` has its own language id and the row counts one file rather
+/// than two.
+///
+/// `= "off"` for the same reason as the test above: the scope is the claim, and
+/// this way the fixture means the same thing on a machine with no shellcheck.
+#[test]
+fn a_zsh_script_is_not_shellchecked() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("poly.toml"), "[tools]\nshellcheck = \"off\"\n").unwrap();
+    std::fs::write(root.join("a.sh"), "#!/bin/sh\necho hi\n").unwrap();
+    std::fs::write(root.join("b.zsh"), "echo hi\n").unwrap();
+
+    let (_, _, stderr) = poly(root, &["check", "--compact", "."]);
+    let shellcheck = row(&stderr, "shellcheck");
+    assert!(shellcheck.contains("1 file"), "{stderr}");
+    assert!(!shellcheck.contains("2 files"), "{stderr}");
+}
+
 /// A checker with nothing to check here is not a row.
 ///
 /// The non-vacuity half of the test above: the block answers for *these* files,

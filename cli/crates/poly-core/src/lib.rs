@@ -81,7 +81,16 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("proto", "protobuf"),
     ("sh", "shellscript"),
     ("bash", "shellscript"),
-    ("zsh", "shellscript"),
+    // zsh is its own id for the reason .ipynb is: so the file never reaches the
+    // wrong engine. shellcheck reads sh, bash, dash and ksh and says so; it has
+    // no zsh mode and no plan for one. Handed a .zsh file it parses zsh as bash
+    // -- 2,454 findings over 361 real .zsh files, 55% of every shellcheck
+    // finding in the 09 §4.5 corpus, and the largest single code among them is
+    // SC2086 telling you to quote an expansion that zsh does not word-split in
+    // the first place. shfmt is the other half of the argument: its -ln=auto
+    // reads the extension and parses zsh *as zsh*, so formatting was never the
+    // broken half and does not have to move.
+    ("zsh", "zsh"),
     // Both are shell with a different job, and neither is in VSCode's built-in
     // shellscript extension list -- which is why an extension existed to
     // format them. shfmt reads them as what they are.
@@ -564,6 +573,7 @@ const COMMENT_PREFIXES: &[(&str, &[&str])] = &[
     ("toml", &["#"]),
     ("typescript", &["//"]),
     ("yaml", &["#"]),
+    ("zsh", &["#"]),
 ];
 
 fn comment_prefixes(lang: &str) -> &'static [&'static str] {
@@ -1566,6 +1576,16 @@ mod tests {
             ("base.dockerfile", Some("dockerfile")),
             ("noext", None),
             ("a.unknown", None),
+            // The four shell extensions shellcheck reads share an id, and zsh
+            // -- which it does not read -- has its own. The split is the whole
+            // reason `.zsh` stopped being handed to a bash parser; see the
+            // comment on the table and 09 §4.5.
+            ("a.sh", Some("shellscript")),
+            ("a.bash", Some("shellscript")),
+            ("a.bats", Some("shellscript")),
+            ("a.zsh", Some("zsh")),
+            ("a.php", Some("php")),
+            ("a.phtml", Some("php")),
         ];
         for (path, expected) in cases {
             assert_eq!(builtin_language(Path::new(path)), expected, "{path}");

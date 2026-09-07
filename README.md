@@ -135,6 +135,12 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   arity（R 的格式化與 lint，同樣也是上面那個 language server）。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
   信任第一次抓到的東西。
+- **zsh 只格式化，不 lint**（`.zsh`）。shfmt 讀得懂 zsh 文法，shellcheck 讀不懂——它只支
+  援 sh／bash／dash／ksh。以前 poly 把 `.zsh` 一起丟給 shellcheck，結果是拿 bash 文法解析
+  zsh：361 個真實 `.zsh` 檔案上產生 2,454 條 findings，佔量測語料裡全部 shellcheck findings
+  的 55%，其中最多的一條還是叫你替 zsh 根本不會做 word splitting 的展開加引號。現在 `.zsh`
+  是自己的語言，格式化照舊，lint 沒有——覆蓋回報的 `shellcheck N files` 也不再把它們算進
+  去。`[format.zsh]` 是它的設定區段。
 - **預設關閉但仍可用**：hadolint。poly 現在有自己的 Dockerfile 規則，兩邊一起跑
   等於同一個缺陷印兩次、掛兩個 code、兩種嚴重度，`[lint] fail-on` 會變成看誰先講話。
   拿 256 個真實 Dockerfile 量過：hadolint 的 shellcheck findings 是 poly 自己那套

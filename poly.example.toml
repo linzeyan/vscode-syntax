@@ -37,7 +37,7 @@
 #   astro, c, cpp, css, dockerfile, go, graphql, handlebars, hcl, html,
 #   jinja, json, jupyter, less, lua, markdown, php, protobuf, python, r,
 #   rust, scss, shellscript, sql, svelte, swift, terraform, toml,
-#   typescript, vue, xml, yaml
+#   typescript, vue, xml, yaml, zsh
 #
 # Mapping to an id poly has no formatter or linter for is not an error -- the
 # file is simply skipped.
@@ -71,7 +71,7 @@ fail-on = "hint"
 # These reach the embedded engines only. Languages that dispatch to an external
 # tool are configured by that tool -- rustfmt.toml, .editorconfig, and so on:
 #
-#   c, cpp, go, protobuf, r, rust, shellscript, swift, terraform
+#   c, cpp, go, protobuf, r, rust, shellscript, swift, terraform, zsh
 #
 # Setting a knob the engine does not have fails the run and names the key,
 # rather than applying two of three and leaving you to diff the output. A table
