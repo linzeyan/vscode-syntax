@@ -91,6 +91,7 @@ fail-on = "hint"
 #   json                          120         2             false
 #   toml                          120         2             false
 #   lua                           120         4             true
+#   php                           120         4             false
 #   dockerfile                    120         2             (rejected)
 #   python / jupyter              88          4             false
 #   markdown                      80          (rejected)    (rejected)

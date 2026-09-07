@@ -35,9 +35,9 @@
 # this table accepts:
 #
 #   astro, c, cpp, css, dockerfile, go, graphql, handlebars, hcl, html,
-#   jinja, json, jupyter, less, lua, markdown, protobuf, python, r, rust,
-#   scss, shellscript, sql, svelte, swift, terraform, toml, typescript, vue,
-#   xml, yaml
+#   jinja, json, jupyter, less, lua, markdown, php, protobuf, python, r,
+#   rust, scss, shellscript, sql, svelte, swift, terraform, toml,
+#   typescript, vue, xml, yaml
 #
 # Mapping to an id poly has no formatter or linter for is not an error -- the
 # file is simply skipped.
@@ -94,6 +94,7 @@ fail-on = "hint"
 #   json                          120         2             false
 #   toml                          120         2             false
 #   lua                           120         4             true
+#   php                           120         4             false
 #   dockerfile                    120         2             (rejected)
 #   python / jupyter              88          4             false
 #   markdown                      80          (rejected)    (rejected)

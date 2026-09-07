@@ -39,6 +39,7 @@ pub fn supported_language(lang: &str) -> bool {
             | "graphql"
             | "dockerfile"
             | "lua"
+            | "php"
     )
 }
 
@@ -120,6 +121,7 @@ pub fn format(lang: &str, path: &Path, text: &str, opts: FormatOptions) -> Resul
             format_markup(text, lang, opts)
         }
         "graphql" => format_graphql(text, opts),
+        "php" => format_php(path, text, opts),
         "dockerfile" => format_dockerfile(path, text, opts),
         "lua" => format_lua(text, opts),
         other => Err(anyhow!("no embedded formatter for language {other:?}")),
@@ -659,6 +661,39 @@ fn format_graphql(text: &str, opts: FormatOptions) -> Result<Option<String>> {
     Ok((result != text).then_some(result))
 }
 
+/// PHP, through mago's formatter.
+///
+/// Its three settings are poly's three, and its defaults are already PSR-12's
+/// (120 columns, four spaces), so there is nothing for poly to override -- the
+/// house style a PHP repository already has is the one it gets.
+///
+/// The output was compared byte for byte against the released `mago 1.47.6`
+/// binary over 20,200 files from eight pinned packages: identical everywhere,
+/// including the three files neither of them can parse.
+fn format_php(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<String>> {
+    let mut settings = mago_formatter::settings::FormatSettings::default();
+    if let Some(width) = opts.line_width {
+        settings.print_width = width.into();
+    }
+    if let Some(width) = opts.indent_width {
+        settings.tab_width = width.into();
+    }
+    if let Some(tabs) = opts.use_tabs {
+        settings.use_tabs = tabs;
+    }
+    let arena = mago_allocator::LocalArena::new();
+    let file = crate::lint::php_file(path, text);
+    let formatter = mago_formatter::Formatter::new(&arena, crate::lint::php_version(), settings);
+    // mago's own error names neither the position nor the token; the parser it
+    // just used does, and `php_format_error` is what `poly check` reports.
+    let formatted = formatter
+        .format_file(&file)
+        .map_err(|_| anyhow!("php {}", crate::lint::php_format_error(text)))?;
+    let result = String::from_utf8(formatted.to_vec())
+        .map_err(|_| anyhow!("php formatter produced invalid UTF-8"))?;
+    Ok((result != text).then_some(result))
+}
+
 fn format_dockerfile(path: &Path, text: &str, opts: FormatOptions) -> Result<Option<String>> {
     use dprint_plugin_dockerfile::configuration::{Configuration, ConfigurationBuilder};
     static CONFIG: OnceLock<Configuration> = OnceLock::new();
@@ -917,6 +952,96 @@ mod tests {
                 "{broken:?}: {err:?} has no position"
             );
         }
+    }
+
+    /// PHP takes all three knobs, and like lua has no `honored` arm saying so,
+    /// so each is asserted against output only it could produce.
+    #[test]
+    fn php_honors_all_three_format_options() {
+        let php = |text: &str, opts| format("php", Path::new("a.php"), text, opts);
+
+        // Four spaces are mago's default, so both a two-space indent and a tab
+        // can only have come from the knob that asked for them.
+        let body = "<?php\nif ($x) {\nreturn 1;\n}\n";
+        let two = php(
+            body,
+            FormatOptions {
+                line_width: None,
+                indent_width: Some(2),
+                use_tabs: None,
+            },
+        )
+        .expect("php formats")
+        .expect("the indent has to change");
+        assert!(two.contains("\n  return 1;"), "{two}");
+        let tabbed = php(
+            body,
+            FormatOptions {
+                line_width: None,
+                indent_width: None,
+                use_tabs: Some(true),
+            },
+        )
+        .expect("php formats")
+        .expect("the indent has to change");
+        assert!(tabbed.contains("\n\treturn 1;"), "{tabbed}");
+
+        // Inside mago's default 120 columns and outside 40, so the wrapping is
+        // the setting and nothing else.
+        let call = "<?php\n\n$result = compute($alpha, $beta, $gamma, $delta, $epsilon);\n";
+        assert_eq!(
+            php(call, FormatOptions::default()).unwrap(),
+            None,
+            "already formatted at the default width"
+        );
+        let narrow = php(
+            call,
+            FormatOptions {
+                line_width: Some(40),
+                indent_width: None,
+                use_tabs: None,
+            },
+        )
+        .expect("php formats")
+        .expect("40 columns cannot hold that line");
+        assert!(narrow.contains("\n    $alpha,"), "{narrow}");
+    }
+
+    /// A PHP file that does not parse is an error that says where.
+    ///
+    /// mago's own `ParseError` names neither the position nor the file, and a
+    /// `poly fmt` line with no position is one no editor can place -- which is
+    /// why this goes through the parser a second time. The offsets here are the
+    /// ones that were worth checking for GraphQL: the first byte, and an empty
+    /// file.
+    #[test]
+    fn a_php_parse_failure_is_a_message_with_a_position() {
+        for broken in [
+            "<?php\nclass X {\n",
+            "<?php\n$x = ;\n",
+            "<?php\nfunction (\n",
+        ] {
+            let err = format_file(Path::new("a.php"), broken)
+                .expect_err(&format!("{broken:?}: expected a parse failure"))
+                .to_string();
+            assert!(
+                poly_core::diag::parse_position(&err).is_some(),
+                "{broken:?}: {err:?} has no position"
+            );
+        }
+
+        // Neither an empty file nor one that is all inline HTML is broken PHP:
+        // both are a document with no statements in it, which is what a `.phtml`
+        // template is until the first `<?php`. The empty file gains the newline
+        // every file here ends with, and the template is returned untouched --
+        // both checked against the released binary, because a formatter that
+        // reindented somebody's HTML would be the reason not to ship this.
+        assert_eq!(
+            format_file(Path::new("a.php"), "").unwrap().as_deref(),
+            Some("\n")
+        );
+        let html = "<div>\n  <p>hello</p>\n</div>\n";
+        assert_eq!(format_file(Path::new("a.phtml"), html).unwrap(), None);
     }
 
     #[test]

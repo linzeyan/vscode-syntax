@@ -23,6 +23,7 @@ named inline.
 - apollo-parser 0.8.6 (MIT OR Apache-2.0) — https://github.com/apollographql/apollo-rs
 - ar_archive_writer 0.5.3 (Apache-2.0 WITH LLVM-exception) — https://github.com/rust-lang/ar_archive_writer
 - arc-swap 1.9.2 (MIT OR Apache-2.0) — https://github.com/vorner/arc-swap
+- ariadne 0.6.0 (MIT) — https://github.com/zesterer/ariadne
 - arrayvec 0.7.8 (MIT OR Apache-2.0) — https://github.com/bluss/arrayvec
 - ast_node 5.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
 - attribute-derive 0.10.5 (MIT OR Apache-2.0) — https://github.com/ModProg/attribute-derive
@@ -38,6 +39,8 @@ named inline.
 - bit-vec 0.8.0 (Apache-2.0 OR MIT) — https://github.com/contain-rs/bit-vec
 - bitflags 1.3.2 (MIT/Apache-2.0) — https://github.com/bitflags/bitflags
 - bitflags 2.13.1 (MIT OR Apache-2.0) — https://github.com/bitflags/bitflags
+- blake3 1.8.7 (CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception) — https://github.com/BLAKE3-team/BLAKE3
+- blink-alloc 0.3.1 (MIT OR Apache-2.0) — https://github.com/zakarumych/blink-alloc
 - block-buffer 0.10.4 (MIT OR Apache-2.0) — https://github.com/RustCrypto/utils
 - borsh 1.8.0 (MIT OR Apache-2.0) — https://github.com/near/borsh-rs
 - boxcar 0.2.14 (MIT) — https://github.com/ibraheemdev/boxcar
@@ -68,6 +71,7 @@ named inline.
 - clap_lex 1.1.0 (MIT OR Apache-2.0) — https://github.com/clap-rs/clap
 - codespan 0.11.1 (Apache-2.0) — https://github.com/brendanzab/codespan
 - codespan-reporting 0.11.1 (Apache-2.0) — https://github.com/brendanzab/codespan
+- codespan-reporting 0.13.1 (Apache-2.0) — https://github.com/brendanzab/codespan
 - collection_literals 1.0.3 (MIT) — https://github.com/staedoix/collection_literals
 - colorchoice 1.0.5 (MIT OR Apache-2.0) — https://github.com/rust-cli/anstyle.git
 - colorchoice-clap 1.0.8 (MIT OR Apache-2.0) — https://github.com/rust-cli/anstyle.git
@@ -76,6 +80,7 @@ named inline.
 - compact_str 0.10.0 (MIT) — https://github.com/ParkMyCar/compact_str
 - configparser 3.2.0 (MIT OR LGPL-3.0-or-later; poly takes MIT) — https://github.com/QEDK/configparser-rs
 - console 0.15.11 (MIT) — https://github.com/console-rs/console
+- constant_time_eq 0.4.2 (CC0-1.0 OR MIT-0 OR Apache-2.0) — https://github.com/cesarb/constant_time_eq
 - content_inspector 0.2.4 (MIT/Apache-2.0) — https://github.com/sharkdp/content_inspector
 - convert_case 0.10.0 (MIT) — https://github.com/rutrum/convert-case
 - convert_case 0.4.0 (MIT) — https://github.com/rutrum/convert-case
@@ -162,6 +167,7 @@ named inline.
 - foldhash 0.2.0 (Zlib) — https://github.com/orlp/foldhash
 - form_urlencoded 1.2.2 (MIT OR Apache-2.0) — https://github.com/servo/rust-url
 - from_variant 3.0.0 (Apache-2.0) — https://github.com/swc-project/swc.git
+- fsevent-sys 4.1.0 (MIT) — https://github.com/octplane/fsevent-rust/tree/master/fsevent-sys
 - full_moon 2.2.0 (MPL-2.0) — https://github.com/Kampfkarren/full-moon
 - full_moon_derive 0.11.0 (MPL-2.0) — https://github.com/Kampfkarren/full-moon
 - futures-core 0.3.34 (MIT OR Apache-2.0) — https://github.com/rust-lang/futures-rs
@@ -207,6 +213,9 @@ named inline.
 - imperative 1.0.7 (MIT OR Apache-2.0) — https://github.com/crate-ci/imperative
 - indexmap 1.9.3 (Apache-2.0 OR MIT) — https://github.com/bluss/indexmap
 - indexmap 2.14.0 (Apache-2.0 OR MIT) — https://github.com/indexmap-rs/indexmap
+- indoc 2.0.7 (MIT OR Apache-2.0) — https://github.com/dtolnay/indoc
+- inotify 0.11.5 (ISC) — https://github.com/hannobraun/inotify-rs
+- inotify-sys 0.1.8 (ISC) — https://github.com/hannobraun/inotify-sys
 - interpolator 0.5.0 (MIT OR Apache-2.0) — https://github.com/ModProg/interpolator
 - intrusive-collections 0.10.3 (MIT OR Apache-2.0) — https://github.com/Amanieu/intrusive-rs
 - inventory 0.3.24 (MIT OR Apache-2.0) — https://github.com/dtolnay/inventory
@@ -223,6 +232,8 @@ named inline.
 - jiff-tzdb-platform 0.1.3 (Unlicense OR MIT) — https://github.com/BurntSushi/jiff
 - js-sys 0.3.104 (MIT OR Apache-2.0) — https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys
 - jsonc-parser 0.33.1 (MIT) — https://github.com/dprint/jsonc-parser
+- kqueue 1.2.1 (MIT) — https://gitlab.com/rust-kqueue/rust-kqueue
+- kqueue-sys 1.1.2 (MIT) — https://gitlab.com/rust-kqueue/rust-kqueue-sys
 - lazy-regex 3.6.1 (MIT) — https://github.com/Canop/lazy-regex
 - lazy-regex-proc_macros 3.6.1 (MIT) — https://github.com/Canop/lazy-regex/tree/main/src/proc_macros
 - lazy_static 1.5.0 (MIT OR Apache-2.0) — https://github.com/rust-lang-nursery/lazy-static.rs
@@ -240,6 +251,23 @@ named inline.
 - logos-derive 0.15.1 (MIT OR Apache-2.0) — https://github.com/maciejhirsz/logos
 - lsp-server 0.7.9 (MIT OR Apache-2.0) — https://github.com/rust-lang/rust-analyzer/tree/master/lib/lsp-server
 - lsp-types 0.94.1 (MIT) — https://github.com/gluon-lang/lsp-types
+- mago-allocator 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-bytes 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-casing 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-collector 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-database 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-extension 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-formatter 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-linter 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-names 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-php-version 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-phpdoc-syntax 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-reporting 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-span 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-syntax 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-syntax-core 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-text-edit 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
+- mago-word 1.47.6 (MIT OR Apache-2.0) — https://github.com/carthage-software/mago
 - malva 0.16.0 (MIT) — https://github.com/g-plane/malva
 - manyhow 0.11.4 (MIT OR Apache-2.0) — https://github.com/ModProg/manyhow
 - manyhow-macros 0.11.4 (MIT OR Apache-2.0) — https://github.com/ModProg/manyhow
@@ -251,11 +279,14 @@ named inline.
 - miette-derive 7.6.0 (Apache-2.0) — https://github.com/zkat/miette
 - mimalloc 0.1.52 (MIT) — https://github.com/purpleprotocol/mimalloc_rust
 - miniz_oxide 0.8.9 (MIT OR Zlib OR Apache-2.0) — https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
+- mio 1.2.3 (MIT) — https://github.com/tokio-rs/mio
 - monch 0.6.0 (MIT) — https://github.com/denoland/monch
 - natord 1.0.9 (MIT) — https://github.com/lifthrasiir/rust-natord
 - new_debug_unreachable 1.0.6 (MIT) — https://github.com/mbrubeck/rust-debug-unreachable
 - newtype-uuid 1.4.0 (MIT OR Apache-2.0) — https://github.com/oxidecomputer/newtype-uuid
 - nohash-hasher 0.2.0 (Apache-2.0 OR MIT) — https://github.com/paritytech/nohash-hasher
+- notify 8.2.0 (CC0-1.0) — https://github.com/notify-rs/notify.git
+- notify-types 2.1.0 (MIT OR Apache-2.0) — https://github.com/notify-rs/notify.git
 - ntapi 0.4.3 (Apache-2.0 OR MIT) — https://github.com/MSxDOS/ntapi
 - num-bigint 0.4.8 (MIT OR Apache-2.0) — https://github.com/rust-num/num-bigint
 - num-integer 0.1.47 (MIT OR Apache-2.0) — https://github.com/rust-num/num-integer
@@ -268,6 +299,7 @@ named inline.
 - once_cell 1.21.4 (MIT OR Apache-2.0) — https://github.com/matklad/once_cell
 - once_cell_polyfill 1.70.2 (MIT OR Apache-2.0) — https://github.com/polyfill-rs/once_cell_polyfill
 - option-ext 0.2.0 (MPL-2.0) — https://github.com/soc/option-ext.git
+- ordered-float 5.5.0 (MIT) — https://github.com/reem/rust-ordered-float
 - ordermap 1.2.0 (Apache-2.0 OR MIT) — https://github.com/indexmap-rs/ordermap
 - os_str_bytes 6.6.1 (MIT OR Apache-2.0) — https://github.com/dylni/os_str_bytes
 - par-core 2.0.0 (Apache-2.0) — https://github.com/dudykr/ddbase.git
@@ -338,9 +370,12 @@ named inline.
 - raffia_macro 0.2.0 (MIT) — https://github.com/g-plane/raffia
 - rand 0.10.2 (MIT OR Apache-2.0) — https://github.com/rust-random/rand
 - rand 0.8.7 (MIT OR Apache-2.0) — https://github.com/rust-random/rand
+- rand 0.9.5 (MIT OR Apache-2.0) — https://github.com/rust-random/rand
 - rand_chacha 0.3.1 (MIT OR Apache-2.0) — https://github.com/rust-random/rand
+- rand_chacha 0.9.0 (MIT OR Apache-2.0) — https://github.com/rust-random/rand
 - rand_core 0.10.1 (MIT OR Apache-2.0) — https://github.com/rust-random/rand_core
 - rand_core 0.6.4 (MIT OR Apache-2.0) — https://github.com/rust-random/rand
+- rand_core 0.9.5 (MIT OR Apache-2.0) — https://github.com/rust-random/rand
 - rayon 1.12.0 (MIT OR Apache-2.0) — https://github.com/rayon-rs/rayon
 - rayon-core 1.13.0 (MIT OR Apache-2.0) — https://github.com/rayon-rs/rayon
 - redox_syscall 0.5.18 (MIT) — https://gitlab.redox-os.org/redox-os/syscall
@@ -594,17 +629,27 @@ named inline.
 - windows-strings 0.5.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-sys 0.52.0 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-sys 0.59.0 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-sys 0.60.2 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-sys 0.61.2 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-targets 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows-targets 0.53.5 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows-threading 0.2.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_aarch64_gnullvm 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows_aarch64_gnullvm 0.53.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_aarch64_msvc 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows_aarch64_msvc 0.53.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_i686_gnu 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows_i686_gnu 0.53.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_i686_gnullvm 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows_i686_gnullvm 0.53.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_i686_msvc 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows_i686_msvc 0.53.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_x86_64_gnu 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows_x86_64_gnu 0.53.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_x86_64_gnullvm 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows_x86_64_gnullvm 0.53.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - windows_x86_64_msvc 0.52.6 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
+- windows_x86_64_msvc 0.53.1 (MIT OR Apache-2.0) — https://github.com/microsoft/windows-rs
 - winnow 0.5.40 (MIT) — https://github.com/winnow-rs/winnow
 - winnow 0.7.15 (MIT) — https://github.com/winnow-rs/winnow
 - winnow 1.0.4 (MIT) — https://github.com/winnow-rs/winnow

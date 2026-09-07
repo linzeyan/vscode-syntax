@@ -149,6 +149,13 @@ const POLICY: &[(&str, Policy)] = &[
     // check` that called SQL findings info would make them invisible under the
     // default fail-on, and this is the level SQL has always been reported at.
     ("sqruff", Policy::Poly(Severity::Warning)),
+    // mago does rank its findings, on four levels -- and unlike rumdl's two,
+    // they are not poly's. 64% of what it calls error on real code is a
+    // complexity metric: `too-many-methods`, `cyclomatic-complexity`,
+    // `kan-defect`. A source cannot be two levels, so poly picks the level for
+    // the seven rules it runs, and picks warning: each one is suspicious and
+    // occasionally deliberate, which is exactly this row.
+    ("mago", Policy::Poly(Severity::Warning)),
     // A misspelling is not a correctness claim, which is exactly info -- and
     // why `--fail-on warning` is the setting a repo with prose adopts first.
     ("typos", Policy::Poly(Severity::Info)),
@@ -171,6 +178,11 @@ const POLICY: &[(&str, Policy)] = &[
     // `typescript` is: "this file is not GraphQL" outlives whichever parser said
     // so, and `poly fmt` says it with the same words from the same parser.
     ("graphql", Policy::Poly(Severity::Error)),
+    // The fourth, and the same claim again. mago's parser says it, the row above
+    // is the rules that same parse fed, and the two are separate sources for the
+    // reason `typescript` and `deno_lint` are: one is "PHP will not run this
+    // file" at error, the other is seven lint rules at warning.
+    ("php", Policy::Poly(Severity::Error)),
     ("poly", Policy::PerRule),
 ];
 

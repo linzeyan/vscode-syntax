@@ -1,7 +1,7 @@
 //! Embedded lint: sqruff for SQL, selene for Lua, ruff for Python and Jupyter,
-//! deno_lint for JavaScript and TypeScript, rumdl for Markdown, poly's own
-//! rules for Dockerfiles and GitHub Actions workflows, and typos over every
-//! file regardless of language.
+//! deno_lint for JavaScript and TypeScript, rumdl for Markdown, mago for PHP,
+//! poly's own rules for Dockerfiles and GitHub Actions workflows, and typos over
+//! every file regardless of language.
 //! External-tool lint (shellcheck, hadolint, actionlint) lives in poly-tools;
 //! the LSP daemon and the CLI merge both sources.
 //!
@@ -49,6 +49,7 @@ pub fn engine(lang: &str, path: &Path) -> Option<&'static str> {
         "typescript" => "deno_lint",
         "graphql" => "graphql",
         "markdown" => "rumdl",
+        "php" => "mago",
         "dockerfile" => "poly/docker",
         "yaml" if poly_core::is_workflow_file(path) => "poly/actions",
         other if crate::proto::supported(other) => "poly/proto",
@@ -137,6 +138,9 @@ pub fn lint(lang: &str, path: &Path, text: &str) -> Result<Vec<Issue>> {
         // Reads the path for a third reason: two of the seven rules ask the
         // file system about the links in the text -- see `lint_markdown`.
         "markdown" => lint_markdown(path, text),
+        // Reads the path for a fourth: mago names the file in its own errors,
+        // and a diagnostic that says `<stdin>` is one nobody can act on.
+        "php" => Ok(lint_php(path, text)),
         "dockerfile" => Ok(lint_dockerfile(text)),
         // A workflow is YAML, so this is the one arm that reads the path as well
         // as the language: `poly check` on a Kubernetes repository must not
@@ -1187,6 +1191,194 @@ fn markdown_level(severity: rumdl_lib::rule::Severity) -> Reported {
         rumdl_lib::rule::Severity::Error => Reported::Error,
         rumdl_lib::rule::Severity::Warning => Reported::Warning,
         rumdl_lib::rule::Severity::Info => Reported::Info,
+    }
+}
+
+// ── php (mago) ─────────────────────────────────────────────────────────────
+
+/// The seven mago rules poly runs, out of the 113 its defaults enable.
+///
+/// The other 106 are a house style, and measurably so: over 20,200 files from
+/// eight pinned PHP packages the default set reports 83,756 times -- 4.1 per
+/// file, 81% of files -- and two thirds of that is eight rules asking for
+/// `declare(strict_types=1)` in every file, for named arguments to be literal,
+/// for closures to be static, for `isset` and `else` not to be used. A linter
+/// nobody can leave on is a linter nobody runs.
+///
+/// The seven that stay are the ones that name a defect rather than a
+/// preference, and the test for it is `catalog.toml`: each lands in
+/// `unintended-effect`, next to the Dockerfile and protobuf rules that make the
+/// same claim about their own languages. Together they report 204 times over
+/// the same 20,200 files -- 1% of them.
+///
+/// Rules a reader might expect and will not find, each for a measured reason:
+/// `no-literal-password` is 97% test fixtures, `no-eval` 92%, and poly has no
+/// way to say "except in tests" -- nor should it grow one for a single rule.
+/// `identity-comparison` and `strict-behavior` are 867 findings that all say
+/// "migrate the codebase", which is a project's decision and not a defect.
+/// `invalid-open-tag` is a defect and belongs at error, which this source is
+/// not: it reports at one level, and everything else here is a warning.
+const PHP_RULES: &[&str] = &[
+    "loop-does-not-iterate",
+    "no-insecure-comparison",
+    "no-missing-format-argument",
+    "no-short-opening-tag",
+    "no-unsafe-finally",
+    "require-preg-quote-delimiter",
+    "suspicious-explode-arguments",
+];
+
+/// The seven, resolved once.
+///
+/// `RuleRegistry::build` walks all 190 rules and builds each one's config, so
+/// doing it per file would pay for 183 rules poly then discards. The registry
+/// owns everything it holds and depends on no file, which is what makes one for
+/// the whole process correct.
+fn php_registry() -> Arc<mago_linter::registry::RuleRegistry> {
+    static REGISTRY: OnceLock<Arc<mago_linter::registry::RuleRegistry>> = OnceLock::new();
+    REGISTRY
+        .get_or_init(|| {
+            let only: Vec<String> = PHP_RULES.iter().map(|rule| (*rule).to_string()).collect();
+            let settings = mago_linter::settings::Settings {
+                php_version: php_version(),
+                ..Default::default()
+            };
+            Arc::new(mago_linter::registry::RuleRegistry::build(
+                &settings,
+                Some(&only),
+                false,
+            ))
+        })
+        .clone()
+}
+
+/// Which PHP the rules are read against.
+///
+/// mago's library defaults to PHP 8.0 and its CLI to the newest it knows; poly
+/// takes the CLI's answer, because that is the one the differential was run
+/// against and because a project that has not said which PHP it targets is
+/// asking about the PHP it is being written in today. Two of the seven rules
+/// are version-sensitive, and reading a 2026 file as 8.0 would have them
+/// disagree with the tool poly is standing in for.
+pub(crate) fn php_version() -> mago_php_version::PHPVersion {
+    mago_php_version::PHPVersion::LATEST
+}
+
+/// mago's own `File`, which both halves of the PHP engine need.
+///
+/// `File::ephemeral` wants `Cow<'static, [u8]>`, so the text is copied rather
+/// than borrowed -- once per file, which is what an arena-based parser costs
+/// when the caller already has a `&str`.
+pub(crate) fn php_file(path: &Path, text: &str) -> mago_database::file::File {
+    mago_database::file::File::ephemeral(
+        std::borrow::Cow::Owned(path.to_string_lossy().into_owned().into_bytes()),
+        std::borrow::Cow::Owned(text.as_bytes().to_vec()),
+    )
+}
+
+fn lint_php(path: &Path, text: &str) -> Vec<Issue> {
+    use mago_reporting::AnnotationKind;
+
+    let arena = mago_allocator::LocalArena::new();
+    let file = php_file(path, text);
+    let program = mago_syntax::parser::parse_file(&arena, &file);
+
+    // A file PHP will not run is the only thing worth saying about it: the
+    // seven rules below all reason about code that parsed, and reporting them
+    // over a half-parsed tree is how a missing brace turns into a page of
+    // findings that vanish when it is added.
+    if program.has_errors() {
+        return program.errors.iter().map(|e| php_syntax(text, e)).collect();
+    }
+
+    let names = mago_names::resolver::NameResolver::new(&arena).resolve(program);
+    let linter = mago_linter::Linter::from_registry(&arena, php_registry(), php_version());
+    linter
+        .lint(&file, program, &names)
+        .into_iter()
+        .map(|issue| {
+            // Every issue mago's rules raise carries one primary annotation --
+            // the span the finding is about. The secondary ones are the
+            // surrounding context its terminal output underlines, which a
+            // diagnostic has nowhere to put.
+            let span = issue
+                .annotations
+                .iter()
+                .find(|a| a.kind == AnnotationKind::Primary)
+                .map(|a| a.span);
+            let (start, end) = span.map_or((0, 0), |s| (s.start.offset, s.end.offset));
+            let (line, col) = line_col(text, start as usize);
+            let (end_line, end_col) = line_col(text, end as usize);
+            // mago's `Issue` has a `link` field and its rules leave it empty;
+            // the documentation is one page with an anchor per rule, so the
+            // code poly already prints is the whole of the address. Unversioned
+            // like rumdl's, because a renamed rule leaves a page that still
+            // loads rather than a version that no longer exists.
+            let code = issue.code.unwrap_or_default();
+            let url =
+                format!("https://mago.carthage.software/latest/en/tools/linter/rules/#{code}");
+            Issue {
+                line,
+                col,
+                end_line,
+                end_col,
+                severity: severity_of("mago", Reported::Nothing),
+                message: issue.message,
+                source: "mago",
+                // mago's edits are a rewrite with no sentence attached, and
+                // poly does not apply them -- `poly fmt` on PHP is mago's
+                // formatter, not its linter. Same reading as rumdl's.
+                fix: (!issue.edits.is_empty()).then_some(Fix::Automatic),
+                url: Some(url),
+                code,
+            }
+        })
+        .collect()
+}
+
+/// One parse error, as `php/syntax`.
+fn php_syntax(text: &str, error: &mago_syntax::error::ParseError) -> Issue {
+    use mago_span::HasSpan;
+
+    let span = error.span();
+    let (line, col) = line_col(text, span.start.offset as usize);
+    let (end_line, end_col) = line_col(text, span.end.offset as usize);
+    Issue {
+        line,
+        col,
+        end_line,
+        end_col,
+        severity: severity_of("php", Reported::Nothing),
+        code: "syntax".to_string(),
+        message: error.to_string(),
+        source: "php",
+        fix: None,
+        // No rule to link, only the grammar. PHP's own manual is the document
+        // the parser is enforcing and the one that outlives this parser.
+        url: Some("https://www.php.net/manual/en/langref.php".to_string()),
+    }
+}
+
+/// The message `format_php` reports when mago's formatter refuses a file.
+///
+/// Same arrangement as GraphQL's: one parser, so the sentence `poly fmt` prints
+/// and the sentence `poly check` prints about a broken PHP file are the same
+/// sentence. mago's `ParseError` says where it is; its `Display` does not.
+pub(crate) fn php_format_error(text: &str) -> String {
+    let arena = mago_allocator::LocalArena::new();
+    let file = php_file(Path::new("<stdin>"), text);
+    let program = mago_syntax::parser::parse_file(&arena, &file);
+    match program.errors.first() {
+        Some(error) => {
+            let issue = php_syntax(text, error);
+            format!(
+                "syntax error at line {}, col {}: {}",
+                issue.line + 1,
+                issue.col + 1,
+                issue.message
+            )
+        }
+        None => "syntax error".to_string(),
     }
 }
 
@@ -3970,6 +4162,103 @@ mod tests {
             ["MD011"],
             "{md:?}"
         );
+    }
+
+    // ── php ────────────────────────────────────────────────────────────────
+
+    /// Every name in `PHP_RULES` is a rule the pinned mago has, and every
+    /// `mago/` row in the catalog is one of them.
+    ///
+    /// `RuleRegistry::build` silently drops a code it does not know, so a
+    /// renamed rule would not fail anywhere -- poly would simply stop reporting
+    /// it, which is the failure mode this test exists for. Both directions are
+    /// asserted here, unlike rumdl's: nothing about PHP is deliberately left
+    /// out of `catalog.toml`.
+    #[test]
+    fn the_seven_php_rules_are_rules_mago_has() {
+        let mut codes: Vec<&str> = php_registry().rules().iter().map(|r| r.code()).collect();
+        codes.sort_unstable();
+        assert_eq!(codes, PHP_RULES);
+
+        let mut catalogued: Vec<&str> = poly_core::catalog::catalog()
+            .values()
+            .flatten()
+            .filter_map(|id| id.strip_prefix("mago/"))
+            .collect();
+        catalogued.sort_unstable();
+        assert_eq!(catalogued, PHP_RULES);
+    }
+
+    /// A file PHP will not run, reported under the language's name.
+    #[test]
+    fn a_php_file_that_is_not_php_says_where() {
+        let issues = lint("php", Path::new("a.php"), "<?php\nclass X {\n").unwrap();
+        let first = &issues[0];
+        assert_eq!(first.source, "php");
+        assert_eq!(first.code, "syntax");
+        // `invalid` is an error category, and this is the one PHP finding in it.
+        assert_eq!(first.severity, Severity::Error);
+        assert_eq!((first.line, first.col), (1, 9), "{issues:?}");
+
+        // The same file closed is not a finding, so the fixture is invalid for
+        // the reason the test says rather than for some other one.
+        let quiet = lint("php", Path::new("a.php"), "<?php\nclass X {\n}\n").unwrap();
+        assert!(quiet.is_empty(), "{quiet:?}");
+    }
+
+    /// A parse error is the only thing said about a file that does not parse.
+    ///
+    /// The seven rules all reason about code that parsed; running them over a
+    /// half-built tree is how one missing brace becomes a page of findings that
+    /// disappear when it is typed.
+    #[test]
+    fn a_broken_php_file_reports_no_rule_findings() {
+        let text = "<?php\nif ($token === $_GET['t']) { echo 1;\n";
+        let issues = lint("php", Path::new("a.php"), text).unwrap();
+        assert!(!issues.is_empty());
+        assert!(
+            issues.iter().all(|i| i.source == "php"),
+            "a rule reported over a file that does not parse: {issues:?}"
+        );
+    }
+
+    /// An insecure comparison, placed where mago places it.
+    ///
+    /// The position is the substance: mago counts lines and columns from zero
+    /// like poly does, but its columns are *bytes*, and poly's are characters.
+    /// The CJK string literal ahead of the operator on the same line is what
+    /// makes the two answers differ -- 13 characters, 15 bytes.
+    #[test]
+    fn an_insecure_comparison_is_reported_where_mago_reports_it() {
+        let text = "<?php\nif (('中'.$a) === $_GET['token']) { echo 1; }\n";
+        let issues = lint("php", Path::new("a.php"), text).unwrap();
+        let [issue] = &issues[..] else {
+            panic!("expected one finding, got {issues:?}");
+        };
+        assert_eq!(issue.code, "no-insecure-comparison");
+        assert_eq!(issue.source, "mago");
+        // mago calls this one error and four of the others warning; poly ranks
+        // the set it chose, at one level. See the `mago` row in `POLICY`.
+        assert_eq!(issue.severity, Severity::Warning);
+        assert_eq!((issue.line, issue.col), (1, 13), "{issue:?}");
+        assert_eq!((issue.end_line, issue.end_col), (1, 16), "{issue:?}");
+        assert_eq!(
+            issue.url.as_deref(),
+            Some("https://mago.carthage.software/latest/en/tools/linter/rules/#no-insecure-comparison")
+        );
+    }
+
+    /// The rules poly does not run are not run.
+    ///
+    /// Six of the 106 that stay off, in one file that mago's defaults report
+    /// eight times: no `declare(strict_types=1)`, a class in a file that also
+    /// declares a function, `isset`, `else`, a non-static closure and a literal
+    /// password. poly reports none of them.
+    #[test]
+    fn the_php_rules_poly_does_not_run_stay_quiet() {
+        let text = "<?php\n\nnamespace App;\n\nfunction pick(array $items): string\n{\n    $get = function () use ($items) {\n        return $items;\n    };\n    if (isset($items['a'])) {\n        return $items['a'];\n    } else {\n        return 'none';\n    }\n}\n\nclass Thing\n{\n    public string $password = 'hunter2';\n}\n";
+        let issues = lint("php", Path::new("a.php"), text).unwrap();
+        assert!(issues.is_empty(), "{issues:?}");
     }
 
     // ── dockerfile ─────────────────────────────────────────────────────────

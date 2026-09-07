@@ -67,6 +67,17 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("graphql", "graphql"),
     ("gql", "graphql"),
     ("graphqls", "graphql"),
+    // VSCode's built-in php extension owns the id and this exact list, so poly
+    // matches it for the reason it matches handlebars': the editor sends a `php`
+    // document for all five, and an extension poly left out is a file the LSP
+    // has an engine for and cannot name. The last three are templates and legacy
+    // spellings rather than dead weight -- `.phtml` is what Magento and Laminas
+    // views are written in, and mago parses the inline HTML in them as PHP does.
+    ("php", "php"),
+    ("php4", "php"),
+    ("php5", "php"),
+    ("phtml", "php"),
+    ("ctp", "php"),
     ("proto", "protobuf"),
     ("sh", "shellscript"),
     ("bash", "shellscript"),
@@ -540,6 +551,8 @@ const COMMENT_PREFIXES: &[(&str, &[&str])] = &[
     ("json", &["//"]),
     ("less", &["//"]),
     ("lua", &["--"]),
+    // Both spellings are PHP's own, like HCL's.
+    ("php", &["//", "#"]),
     ("protobuf", &["//"]),
     ("python", &["#"]),
     ("r", &["#"]),
@@ -1973,6 +1986,13 @@ mod tests {
                 true,
             ),
             ("sql", "select a -- poly: ignore sqruff/LT01", true),
+            // PHP writes a line comment two ways and both are its own, so both
+            // have to work -- the README says so. The first row lands in the
+            // same false accept the terraform one documents below, and takes
+            // the same suppression.
+            // poly: ignore poly/ignore-syntax
+            ("php", "$x = 1; // poly: ignore mago/no-eval", true),
+            ("php", "$x = 1; # poly: ignore mago/no-eval", true),
             (
                 "lua",
                 "local x -- poly: ignore selene/unused_variable",

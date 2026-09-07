@@ -62,6 +62,30 @@ ignore = "0.4"
 jsonc-parser = { version = "0.33", features = ["serde"] }
 lsp-server = "0.7"
 lsp-types = "0.94"
+# PHP's formatter and linter. The top-level `mago` crate is the CLI; the work is
+# in these eight, which is why the row is eight lines rather than one -- an arena
+# (`LocalArena`), a file abstraction, the parser, the name resolver the linter
+# needs, and the reporting types its findings arrive in.
+#
+# One version for all eight, exact, because they are one release: mago publishes
+# them together and a `Program` from one version is not a `Program` the next
+# version's linter accepts. The pin is also what makes `PHP_RULES` checkable --
+# seven names that must still be rules the linter has.
+#
+# Both halves were measured against the released 1.47.6 binary over 20,200 files
+# from eight pinned PHP packages: the formatter is byte-identical, and the linter
+# agrees on every finding of the seven rules poly runs.
+mago-allocator = "=1.47.6"
+mago-database = "=1.47.6"
+mago-formatter = "=1.47.6"
+mago-linter = "=1.47.6"
+mago-names = "=1.47.6"
+mago-php-version = "=1.47.6"
+mago-reporting = "=1.47.6"
+# `HasSpan`, which is how a parse error says where it is. mago-syntax does not
+# re-export the trait, so naming the crate is the only way to call the method.
+mago-span = "=1.47.6"
+mago-syntax = "=1.47.6"
 malva = "0.16"
 markup_fmt = "0.27"
 pretty_graphql = "0.2"

@@ -80,6 +80,7 @@ implicit-location = [
 invalid = [
   "arity/syntax-error",
   "graphql/syntax",
+  "php/syntax",
   "poly/actions-invalid-action-ref",
   "poly/actions-invalid-cron",
   "poly/actions-invalid-glob",
@@ -154,6 +155,13 @@ suppression = ["poly/ignore-syntax"]
 # It works today, and what it does is not what the line says -- now, or after
 # something outside this file changes.
 unintended-effect = [
+  "mago/loop-does-not-iterate",
+  "mago/no-insecure-comparison",
+  "mago/no-missing-format-argument",
+  "mago/no-short-opening-tag",
+  "mago/no-unsafe-finally",
+  "mago/require-preg-quote-delimiter",
+  "mago/suspicious-explode-arguments",
   "poly/docker-add-instead-of-copy",
   "poly/docker-apt-get-no-recommends",
   "poly/docker-apt-not-apt-get",

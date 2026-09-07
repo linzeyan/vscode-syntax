@@ -124,6 +124,7 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   Dockerfile（格式化，lint 是 poly 自己寫的規則，code 長 `poly/docker-*`；
   hadolint 預設關閉，因為它跟 poly 的規則大部分重疊——見下面的外部工具），
   Lua（格式化 stylua、lint selene）、
+  PHP（格式化與 lint 都是 mago，lint 是它 190 條規則裡的 7 條——見下面的說明）、
   Protobuf（lint 是 poly 自己寫的規則，code 長 `poly/proto-*`；格式化仍是 buf）。
   這些都是編進 binary 的 Rust library，
   不再下載。拼字檢查（typos）也在裡面，而且不分語言——它讀的是每一個檔案，
@@ -182,6 +183,18 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   **一個已知落差**：MD051 只答得出同一個檔案裡的錨點。`other.md#section` 這種跨檔錨點，
   rumdl 自己是先索引整棵樹才能檢查的，而 poly 一次只看一個檔案（編輯器裡本來也只有那一個
   檔案），所以不報——同一批檔案裡有 58 條。
+- **PHP 的格式化是 mago**，預設就是 PSR-12 的 120 欄／4 空白，`[format.php]` 三個 knob
+  全部有效。`.php`／`.php4`／`.php5`／`.phtml`／`.ctp` 都認，模板裡的 HTML 不動。
+  **lint 只開 7 條**（code 長 `mago/*`，等級 warning）：`preg_quote()` 沒給 delimiter、
+  用 `==`／`===` 比對 token 或密碼、迴圈第一圈就必定跳出、`printf` 佔位符比引數多、
+  `finally` 裡有 return／break、短開頭標籤 `<?`、`explode()` 兩個引數寫反。
+  另外 `php/syntax`（等級 error）是「PHP 不會跑這個檔案」，與 TOML、TypeScript、GraphQL
+  同一種說法。**其餘 106 條預設規則一條都不開**，這是量過的決定：8 個真實 PHP 專案的
+  20,200 個檔案上，mago 的預設規則集報 83,756 條、命中 81.5% 的檔案，其中三分之二是
+  「每個檔案都要寫 `declare(strict_types=1)`」「不要用 `isset`」「不要用 `else`」這類
+  house style；它的 error 等級也有 64% 是複雜度指標而不是缺陷。專案自己的 `mago.toml`
+  不讀，`@mago-ignore` 註釋也不是 poly 的抑制方式——要關某一條就寫 `[lint] ignore`，
+  單行就寫 `// poly: ignore mago/<rule>`。
 - **R（`.R`／`.r`）的格式化、lint 與語言功能都是 arity**，一支 binary，poly 代抓，
   不必先裝 R。專案自己的 `arity.toml` 或 `air.toml`（版面、`select`／`ignore`）照樣生效，
   `# arity-ignore <rule>: 理由` 註釋也照樣有效。code 長 `arity/*`；lint 以 R 套件為

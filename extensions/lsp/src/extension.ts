@@ -35,6 +35,7 @@ const LANGUAGES = [
   "svelte",
   "astro",
   "graphql",
+  "php",
   "dockerfile",
   "shellscript",
   "rust",

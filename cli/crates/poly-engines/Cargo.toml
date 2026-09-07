@@ -19,6 +19,15 @@ encoding_rs.workspace = true
 full_moon.workspace = true
 ignore.workspace = true
 jsonc-parser.workspace = true
+mago-allocator.workspace = true
+mago-database.workspace = true
+mago-formatter.workspace = true
+mago-linter.workspace = true
+mago-names.workspace = true
+mago-php-version.workspace = true
+mago-reporting.workspace = true
+mago-span.workspace = true
+mago-syntax.workspace = true
 malva.workspace = true
 markup_fmt.workspace = true
 poly-core = { path = "../poly-core" }
