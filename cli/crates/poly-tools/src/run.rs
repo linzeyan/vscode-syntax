@@ -320,11 +320,24 @@ fn actionlint_docs(message: &str) -> (String, Option<String>) {
     (message[..at].to_string(), Some(url.to_string()))
 }
 
+/// Whether poly makes this check itself, per `ACTIONLINT_REPLACED`.
+///
+/// Dropped here rather than by `-ignore`, which actionlint does offer: that
+/// flag takes a regular expression over the message and nothing else, so the
+/// same prose appearing under another kind would be silenced with it. The kind
+/// is structured output and the phrase only has to be unique inside it.
+fn actionlint_replaced(kind: &str, message: &str) -> bool {
+    poly_core::ACTIONLINT_REPLACED
+        .iter()
+        .any(|(replaced, phrase, _)| *replaced == kind && message.contains(phrase))
+}
+
 fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
     let items: Vec<ActionlintItem> =
         serde_json::from_slice(stdout).context("parsing actionlint output")?;
     Ok(items
         .into_iter()
+        .filter(|i| !actionlint_replaced(&i.kind, &i.message))
         .map(|i| {
             let line = i.line.saturating_sub(1);
             let col = i.column.saturating_sub(1);
@@ -367,9 +380,12 @@ fn actionlint_parse(stdout: &[u8]) -> Result<Vec<FileIssue>> {
 /// What is given up is the 269 findings in 1183 that poly's own pass does not
 /// reproduce over a 1366-workflow corpus -- ~216 of them actionlint reading a
 /// PowerShell script as bash, the rest cross-platform matrix jobs where the
-/// script genuinely is two scripts and poly declines to guess which. Every
-/// other actionlint check is untouched: its expression type checker is still
-/// the reason the tool is here.
+/// script genuinely is two scripts and poly declines to guess which.
+///
+/// The shell pass is the one poly can turn off with a flag; five more checks
+/// duplicate poly's own rules and come off in `actionlint_parse`, against
+/// `ACTIONLINT_REPLACED`. What is left after both is untouched, and its
+/// expression type checker is still the reason the tool is here.
 const NO_SHELLCHECK: &str = "-shellcheck=";
 
 pub fn actionlint_files(cmd: &Path, files: &[PathBuf]) -> Result<Vec<FileIssue>> {
@@ -2148,6 +2164,45 @@ mod tests {
         // Most checks have no reference at all, and their prose is untouched.
         assert_eq!(issues[1].issue.url, None);
         assert!(issues[1].issue.message.ends_with("to fix this issue"));
+    }
+
+    /// The checks poly makes itself never become a second finding, and the ones
+    /// it does not make survive the filter.
+    ///
+    /// Every message below is a real one, sampled from actionlint 1.7.12 over
+    /// the corpus `ACTIONLINT_REPLACED` was measured on. The `"concurrency"`
+    /// entry is the reason this is a phrase inside a kind rather than a prefix:
+    /// it opens with the same four words as the step-key check poly replaces,
+    /// and it is a check poly does not make.
+    #[test]
+    fn the_checks_poly_makes_itself_do_not_arrive_twice() {
+        let raw = br#"[
+          {"message":"label \"blacksmith-4vcpu-ubuntu-2404\" is unknown. available labels are \"windows-latest\", \"ubuntu-latest\"","filepath":"w.yml","line":9,"column":14,"kind":"runner-label"},
+          {"message":"unexpected key \"path\" for step to execute action. expected one of \"env\", \"id\", \"uses\", \"with\"","filepath":"w.yml","line":12,"column":9,"kind":"syntax-check"},
+          {"message":"step must run script with \"run\" section or run action with \"uses\" section","filepath":"w.yml","line":15,"column":7,"kind":"syntax-check"},
+          {"message":"\"branches\" filter is not available for issue_comment event. it is only for merge_group, push","filepath":"w.yml","line":4,"column":5,"kind":"events"},
+          {"message":"unknown permission scope \"copilot-requests\". all available permission scopes are \"actions\", \"checks\"","filepath":"w.yml","line":7,"column":7,"kind":"permissions"},
+          {"message":"unexpected key \"queue\" for \"concurrency\" section. expected one of \"cancel-in-progress\", \"group\"","filepath":"w.yml","line":20,"column":7,"kind":"syntax-check"},
+          {"message":"property \"nope\" is not defined in object type {}","filepath":"w.yml","line":22,"column":15,"kind":"expression"}
+        ]"#;
+        let kept: Vec<String> = actionlint_parse(raw)
+            .unwrap()
+            .iter()
+            .map(|found| found.issue.code.clone())
+            .collect();
+        assert_eq!(kept, ["syntax-check", "expression"]);
+
+        // Non-vacuity, and the way this test ages: every phrase in the table
+        // matches one of the samples above, so a phrase actionlint has since
+        // reworded fails here rather than silently silencing nothing and
+        // putting the double report back without a word about it.
+        let sample = String::from_utf8_lossy(raw);
+        for (kind, phrase, rule) in poly_core::ACTIONLINT_REPLACED {
+            assert!(
+                sample.contains(phrase),
+                "{kind}/{rule}: no sample message carries {phrase:?}"
+            );
+        }
     }
 
     /// These tools name their rules well enough that the documentation URL

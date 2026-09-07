@@ -127,10 +127,14 @@ const POLICY: &[(&str, Policy)] = &[
     // the only thing that stays right.
     ("rumdl", Policy::ItsOwn),
     // actionlint ranks nothing, and everything it reports now is a validity
-    // problem: a workflow that fails its schema, id, event, permission or
-    // expression checks fails at run time. Its shellcheck pass is off (poly
-    // runs shellcheck itself, at the offending word), which is what makes this
-    // constant true; the pyflakes pass is the one remaining finding that is a
+    // problem: a workflow that fails its schema, id, event or expression checks
+    // fails at run time. Two passes being off is what makes this constant true
+    // -- shellcheck (poly runs it itself, at the offending word) and the five
+    // checks in `ACTIONLINT_REPLACED`. One level for the source was flatly
+    // wrong while `runner-label` was in it: 621 of that check's 655 findings
+    // over 1,190 workflows named self-hosted labels actionlint has no way to
+    // know are real, and at error every repository with its own runner pool
+    // failed on sight. The pyflakes pass is the one remaining finding that is a
     // lint rather than a validity error, and it is rare enough to live with.
     ("actionlint", Policy::Poly(Severity::Error)),
     // golangci-lint ranks nothing. Its default set is govet, staticcheck and

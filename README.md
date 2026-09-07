@@ -148,10 +148,21 @@ poly binary 都不需要。分開是因為失敗模式不同——poly-lsp 的 d
   （每個 RUN 的第 1 欄，poly 指到出問題的那個字）。poly 沒有補的是它三條 info 級
   規則：DL3047、DL3059、DL3066。想同時看兩邊就寫 `[tools] hadolint = "on"`，
   poly 會照樣下載並執行它，不會囉嗦。
-- **actionlint 的 shellcheck pass 也關掉**，同一個道理：workflow 的 `run:` 由 poly
-  自己跑 shellcheck，掛 `shellcheck/SC…` 並指到出問題的那個字；開著等於同一個缺陷
-  被 actionlint 用 error 再報一次、指在 `run:` 那一鍵。actionlint 自己的檢查
-  （schema、job id、event、權限、expression）一條都沒少。
+- **actionlint 有兩組檢查關掉了**，都是同一個道理：poly 自己已經在做那件事。一是它
+  的 shellcheck pass——workflow 的 `run:` 由 poly 自己跑 shellcheck，掛
+  `shellcheck/SC…` 並指到出問題的那個字；開著等於同一個缺陷被 actionlint 用 error
+  再報一次、指在 `run:` 那一鍵。二是跟 poly 規則重疊的五個檢查：runner label、step
+  的未知 key、既沒 `uses:` 也沒 `run:` 的 step、event filter、permission scope。
+- **其中 runner label 那條原本會讓自架 runner 的專案一跑就整片紅。** 1,190 個真實
+  workflow 上，actionlint 全部 926 條 findings 有 655 條是它（70.7%），而其中 621
+  條是自架 runner 的名字：`amd-medium`、`blacksmith-4vcpu-ubuntu-2404`，某個 repo
+  自己的 pool 就佔 530 次。它沒有辦法知道那些名字是真的，而且每一條都是 error。poly
+  的規則只在三種情況出聲——已退役的 image、跟真名差一兩個字、不存在的版本號——其餘
+  一律當作自架或第三方 runner 放過。另外四個檢查關掉零成本：重複的 69 條全部落在同
+  一行同一欄，而且 poly 報得不比 actionlint 少（27:14、13:13、7:4、5:4）。代價只有
+  一項：你如果在 `.github/actionlint.yaml` 列了自己的 label，actionlint 讀得到而
+  poly 讀不到，那份清單裡的拼錯就沒人抓。actionlint 其餘的檢查一條都沒少，它的
+  expression type checker 更是它留在這裡的全部理由。
 - **只用專案 toolchain、不代裝**：rustfmt、clang-format、swift-format、
   terraform fmt、`cargo clippy`。
 - **Rust 的 lint 是 `cargo clippy`**，範圍是整個 cargo workspace——跟 Go 的

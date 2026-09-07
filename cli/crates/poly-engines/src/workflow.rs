@@ -2220,6 +2220,25 @@ mod tests {
         assert!(crate::lint::rule_doc("actionlint", "syntax-check").is_none());
     }
 
+    /// Every actionlint check poly switches off is a check poly still makes.
+    ///
+    /// The table lives in poly-core, beside the measurement that chose it, and
+    /// the rules live here; nothing but this test holds the two together.
+    /// Without it, renaming or deleting a rule would leave poly suppressing
+    /// actionlint's answer and giving none of its own -- a check that reads as
+    /// covered in the coverage block and is not being made anywhere.
+    #[test]
+    fn actionlint_replacements_name_real_rules() {
+        let rules: Vec<&str> = RULES.iter().map(|(code, _, _)| *code).collect();
+        for (kind, phrase, rule) in poly_core::ACTIONLINT_REPLACED {
+            assert!(rules.contains(rule), "{kind} -> {rule}: no such rule");
+            // A phrase is matched inside a kind, so an empty one would take the
+            // whole kind with it -- which is a different decision from this one
+            // and would have to be argued on its own findings.
+            assert!(!phrase.is_empty(), "{kind} -> {rule}: empty phrase");
+        }
+    }
+
     /// A workflow with nothing wrong with it reports nothing.
     ///
     /// The test that makes every other one in this file mean something: 26 rules

@@ -533,6 +533,65 @@ pub const HADOLINT_REPLACEMENTS: &[(&str, &str)] = &[
     ("DL4006", "docker-pipe-without-pipefail"),
 ];
 
+/// actionlint checks poly runs itself: the kind, the phrase that identifies the
+/// check inside it, and the poly rule that replaces it.
+///
+/// `actionlint_parse` drops a finding whose kind is the first field and whose
+/// message contains the second. This is the `-shellcheck=` argument one level
+/// down. actionlint is not turned off and cannot be -- its expression type
+/// checker is the reason poly runs it and poly has nothing like it -- so what
+/// goes off is the five checks poly already makes.
+///
+/// A kind is not enough on its own: `syntax-check` is actionlint's whole
+/// schema pass, and two of its messages are poly's rules while the rest are
+/// checks poly does not make at all. Hence a phrase, matched inside a kind so a
+/// wording that recurs elsewhere cannot silence the wrong check.
+///
+/// Measured over 1,190 workflow files from thirty-six repositories. 69 findings
+/// arrived twice at the same line and the same column, these five families are
+/// all of them, and after the filter the corpus has none. Four of the five cost
+/// nothing whatsoever: every finding they drop is one poly reports at the same
+/// position, and poly's rule fires more often than actionlint's check in three
+/// of the four -- 27 step keys to 14, 7 event filters to 4, 5 permission scopes
+/// to 4.
+///
+/// `runner-label` is the one that changes an answer, and the reason this is a
+/// table rather than a note. It was 655 of actionlint's 926 findings -- 70.7%
+/// -- and 621 of them named labels poly deliberately says nothing about:
+/// `amd-medium`, `blacksmith-4vcpu-ubuntu-2404`, `1ES.Pool=...`, one
+/// repository's own runner pool 530 times. actionlint cannot know a self-hosted
+/// label is real, `actions-unknown-runner` says exactly that in its own doc,
+/// and every one of those arrived at error -- so a repository with its own
+/// runners failed `poly check` on sight. What is given up is a typo in a
+/// self-hosted label in a project that lists its labels in
+/// `.github/actionlint.yaml`, which actionlint reads and poly does not.
+///
+/// Held to the rules that exist by `actionlint_replacements_name_real_rules` in
+/// poly-engines, which is the crate that owns `workflow::RULES`.
+pub const ACTIONLINT_REPLACED: &[(&str, &str, &str)] = &[
+    (
+        "events",
+        " filter is not available for ",
+        "actions-unknown-event-filter",
+    ),
+    (
+        "permissions",
+        "unknown permission scope ",
+        "actions-invalid-permission",
+    ),
+    (
+        "runner-label",
+        " is unknown. available labels are ",
+        "actions-unknown-runner",
+    ),
+    (
+        "syntax-check",
+        "step must run script with ",
+        "actions-step-without-uses-or-run",
+    ),
+    ("syntax-check", " for step to ", "actions-unknown-step-key"),
+];
+
 /// Comment introducers an inline suppression may follow, by language id.
 ///
 /// Keyed on the id `Config::language` produces, so `EXTENSIONS` stays the only
