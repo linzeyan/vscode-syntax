@@ -242,16 +242,17 @@ pub const RULES: &[(&str, Severity, &str)] = &[
         "A `runs-on` label nothing answers to means the job never runs: an image \
          GitHub has retired fails to start, and a label that was never real \
          leaves the job pending until the workflow times out. This rule speaks up \
-         in three cases only -- a retired image, a label one or two characters \
-         from a real one, or a GitHub-hosted OS at a version that never existed. \
-         Anything else is assumed to be a self-hosted or third-party runner and \
-         left alone, because poly cannot know what somebody named their machines. \
-         A `runs-on:` that is exactly `${{ matrix.<key> }}` is followed to the \
-         list that key declares in this job's `strategy.matrix`, and each value \
-         judged the same three ways; a reference with anything else in it, or to \
-         a key whose values are not written out, is left alone too. The list of \
-         live images is a snapshot and will age: when GitHub ships a new one, \
-         this rule reports it until poly's next release.",
+         in two cases only -- a retired image, or a label one or two characters \
+         from a real one. Anything else is assumed to be a self-hosted or \
+         third-party runner and left alone, because poly cannot know what \
+         somebody named their machines. A `runs-on:` that is exactly \
+         `${{ matrix.<key> }}` is followed to the list that key declares in this \
+         job's `strategy.matrix`, and each value judged the same two ways; a \
+         reference with anything else in it, or to a key whose values are not \
+         written out, is left alone too. A version number is never the \
+         difference: `ubuntu-26.04` is one character from `ubuntu-24.04` without \
+         being a misspelling of it, so an image poly's snapshot has not caught \
+         up with is silence rather than a finding.",
     ),
     (
         "actions-unknown-step-key",
@@ -464,6 +465,15 @@ const RUNNERS: &[&str] = &[
     "ubuntu-22.04-arm",
     "ubuntu-24.04",
     "ubuntu-24.04-arm",
+    // Newer than the rest of this snapshot, and here on three independent
+    // pieces of evidence rather than a guess: actionlint's own PR #683 adds it
+    // to the same list, cpython declares it in `.github/actionlint.yaml` to
+    // work around actionlint not having shipped that yet, and moby runs 32 jobs
+    // on it. `version_blind` means the rule stays quiet about it either way;
+    // what the entry buys is a correct "did you mean" target for a misspelling
+    // of it.
+    "ubuntu-26.04",
+    "ubuntu-26.04-arm",
     "ubuntu-latest",
     "ubuntu-latest-16-cores",
     "ubuntu-latest-4-cores",
@@ -1574,15 +1584,20 @@ fn matrix_labels<'a>(job: &'a Node, key: &str) -> Vec<&'a Node> {
 
 /// Why `label` cannot be a runner, when poly is confident enough to say so.
 ///
-/// Three ways to be confident, and nothing else reports. The label is one GitHub
-/// has retired; or it is one or two characters from a real one, which is a typo
-/// rather than a runner somebody provisioned; or it claims a GitHub-hosted OS
-/// with a version-shaped suffix that GitHub never offered. Everything else is
-/// silently accepted, because the corpus is full of
-/// `blacksmith-4vcpu-ubuntu-2404`, `ubicloud-standard-8` and `style-checker`,
-/// and poly has no way to know what a third party named its machines. That is
-/// the difference measured against actionlint over the same 1372 workflows: it
-/// reports every label not on its list, which is right 152 times and wrong 41.
+/// Two ways to be confident, and nothing else reports. The label is one GitHub
+/// has retired; or it is one or two characters from a real one *and the
+/// difference is not a version number*, which is a typo rather than a runner
+/// somebody provisioned. Everything else is silently accepted, because the
+/// corpus is full of `blacksmith-4vcpu-ubuntu-2404`, `ubicloud-standard-8` and
+/// `style-checker`, and poly has no way to know what a third party named its
+/// machines. That is the difference measured against actionlint over the same
+/// 1372 workflows: it reports every label not on its list, which is right 152
+/// times and wrong 41.
+///
+/// There was a third way and it was removed: a GitHub-hosted OS with a
+/// version-shaped suffix GitHub never offered. See the version check below for
+/// why -- poly cannot tell that from an image that shipped last month, and the
+/// half of the pair it was wrong about is the half that costs a green CI.
 fn unknown_runner(label: &str) -> Option<String> {
     let lower = label.to_ascii_lowercase();
     if RUNNERS.contains(&lower.as_str()) {
@@ -1598,30 +1613,59 @@ fn unknown_runner(label: &str) -> Option<String> {
              than running on something newer; `{replacement}` is the current one"
         ));
     }
-    if let Some(near) = RUNNERS
+    // A version number is not a spelling mistake, and this is the check that
+    // keeps the rule from saying it is. GitHub's next image is always about one
+    // edit from the current one -- `ubuntu-26.04` is distance 1 from both
+    // `ubuntu-24.04` and `ubuntu-22.04`, `macos-27` will be 1 from `macos-26`
+    // -- so without this every image GitHub ships is announced as a typo of the
+    // one before it, to exactly the projects that adopted it early, at warning,
+    // which the default `fail-on` fails. Measured: 45 of the 47 findings this
+    // rule produced over 1,190 real workflows were `ubuntu-26.04`, which is a
+    // real image poly's snapshot had not caught up with, and cpython had
+    // already written the same workaround into its `.github/actionlint.yaml`
+    // against actionlint's copy of the same mistake.
+    //
+    // What this gives up with it is `ubuntu-25.04` and `macos-16`: versions
+    // GitHub genuinely never published, which used to be reported as "no such
+    // image". poly cannot tell those from an image that shipped last month, and
+    // over those 1,190 workflows that arm never once fired -- so the trade is a
+    // check with no observed catch for a mistake with 45.
+    if RUNNERS
         .iter()
-        .filter(|known| distance(&lower, known) <= 2)
-        .min_by_key(|known| distance(&lower, known))
+        .any(|known| version_blind(known) == version_blind(&lower))
     {
-        return Some(format!(
-            "`{label}` is not a runner label; did you mean `{near}`?"
-        ));
-    }
-    // `ubuntu-25.04` and `macos-16` claim an image GitHub publishes and name a
-    // version it does not have. `ubuntu-slim` does not: the suffix is a word, so
-    // it is somebody's self-hosted label and none of poly's business.
-    let (os, version) = lower.split_once('-')?;
-    let versioned = !version.is_empty()
-        && version
-            .chars()
-            .all(|c| c.is_ascii_digit() || c == '.' || c == '-');
-    if !versioned || !matches!(os, "ubuntu" | "windows" | "macos") {
         return None;
     }
+    let near = RUNNERS
+        .iter()
+        .filter(|known| distance(&lower, known) <= 2)
+        .min_by_key(|known| distance(&lower, known))?;
     Some(format!(
-        "GitHub has no `{label}` image, so this job has no runner to schedule on and \
-         will queue until the workflow times out"
+        "`{label}` is not a runner label; did you mean `{near}`?"
     ))
+}
+
+/// A label with every run of digits collapsed, so two spellings that differ
+/// only in a version number compare equal.
+///
+/// `ubuntu-26.04` and `ubuntu-22.04` both become `ubuntu-#.#`. The suffix has
+/// to survive: `ubuntu-latest-8core` becomes `ubuntu-latest-#core` and
+/// `ubuntu-latest-8-cores` becomes `ubuntu-latest-#-cores`, which is the shape
+/// of a real misspelling rather than of a newer version, and still reported.
+fn version_blind(label: &str) -> String {
+    let mut blind = String::with_capacity(label.len());
+    let mut digits = false;
+    for character in label.chars() {
+        if character.is_ascii_digit() {
+            if !digits {
+                blind.push('#');
+            }
+        } else {
+            blind.push(character);
+        }
+        digits = character.is_ascii_digit();
+    }
+    blind
 }
 
 /// Levenshtein distance, capped where the answer stops mattering.
@@ -2528,8 +2572,20 @@ jobs:
             format!("on: push\njobs:\n  a:\n    runs-on: {label}\n    steps:\n      - run: x\n")
         };
         assert!(fires(&on("ubunutu-latest"), "actions-unknown-runner"));
-        // A GitHub-hosted OS at a version GitHub never published.
-        assert!(fires(&on("ubuntu-25.04"), "actions-unknown-runner"));
+
+        // A version number is not a misspelling, and this is the case that
+        // costs: `ubuntu-25.04` is a version GitHub never published and poly no
+        // longer says so. It cannot tell that from `ubuntu-26.04`, which is one
+        // edit from the same neighbours and is real -- 45 of the 47 findings
+        // this rule produced over 1,190 workflows were exactly that, to the two
+        // projects that adopted the new image first. The silent half of the
+        // pair is a check nobody notices; the loud half is a red CI.
+        assert!(!fires(&on("ubuntu-25.04"), "actions-unknown-runner"));
+        assert!(!fires(&on("ubuntu-26.04"), "actions-unknown-runner"));
+        assert!(!fires(&on("macos-16"), "actions-unknown-runner"));
+        // Digits that are not a version still spell a typo: the suffix differs
+        // by more than the number in it.
+        assert!(fires(&on("ubuntu-latest-8core"), "actions-unknown-runner"));
 
         // A retired image, which is the most common thing wrong with the real
         // workflows measured: 152 of 1372 ask for one, over half `ubuntu-20.04`.
