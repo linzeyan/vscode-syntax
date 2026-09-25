@@ -39,7 +39,7 @@ import { entryLine, entryPoints, findsEntryInText, runLine } from "./runnable";
 import { colorSheet, scopesIn } from "./scopes";
 import { offerMessage, serverToOffer } from "./servers";
 import { registerTodoTree } from "./todoTree";
-import { drawsNothing, explain, findSuspects, Level, levelOf, SUSPECTS } from "./unicode";
+import { drawsNothing, explain, findSuspects, label, Level, levelOf, Suspect, SUSPECTS } from "./unicode";
 
 /** Languages already offered a server this session — see `offerServer`. */
 const offered = new Set<string>();
@@ -596,24 +596,48 @@ function highlightUnicode(context: vscode.ExtensionContext): void {
     return type;
   };
   context.subscriptions.push({ dispose: () => types.forEach((type) => type.dispose()) });
+  // The name goes at the end of the line rather than beside the character: a
+  // name is several words, and inline it would push the rest of the line aside
+  // at every curly quote in a paragraph. The mark says where, this says what,
+  // and it is muted like a code lens because the mark is what should catch the
+  // eye. Italic, or in the same monospace as the line it reads as part of the
+  // file. Styled per instance, since the text is.
+  const names = vscode.window.createTextEditorDecorationType({});
+  context.subscriptions.push(names);
+  const nameColor = new vscode.ThemeColor("editorCodeLens.foreground");
 
   const paint = (editor: vscode.TextEditor) => {
     const ranges = new Map<vscode.TextEditorDecorationType, vscode.Range[]>(
       [...types.values()].map((type) => [type, []]),
     );
+    const tags: vscode.DecorationOptions[] = [];
     if (on()) {
       const { document } = editor;
+      const lines = new Map<number, Suspect[]>();
       for (const { offset, suspect } of findSuspects(document.getText())) {
         const start = document.positionAt(offset);
         const type = typeOf(levelOf(suspect), drawsNothing(suspect));
         const list = ranges.get(type) ?? [];
         list.push(new vscode.Range(start, start.translate(0, 1)));
         ranges.set(type, list);
+        const onLine = lines.get(start.line) ?? [];
+        onLine.push(suspect);
+        lines.set(start.line, onLine);
       }
+      lines.forEach((suspects, line) => {
+        const end = document.lineAt(line).range.end;
+        tags.push({
+          range: new vscode.Range(end, end),
+          renderOptions: {
+            after: { contentText: label(suspects), color: nameColor, fontStyle: "italic", margin: "0 0 0 2ch" },
+          },
+        });
+      });
     }
     // Every type, including the ones with nothing to draw now: setting an
     // empty list is the only way to clear what the last paint left.
     ranges.forEach((list, type) => editor.setDecorations(type, list));
+    editor.setDecorations(names, tags);
   };
 
   // Same debounce as the indent tint, for the same reason.

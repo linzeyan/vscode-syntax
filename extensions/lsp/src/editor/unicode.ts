@@ -157,12 +157,29 @@ export function findSuspects(text: string): Found[] {
   return found;
 }
 
+/** The code point and the name: what it is, and what to search for. */
+export function nameOf(suspect: Suspect): string {
+  return `U+${suspect.codePoint.toString(16).toUpperCase().padStart(4, "0")} ${suspect.name}`;
+}
+
+/**
+ * What the end of a line says about the suspects on it: each one's name, once,
+ * in the order they appear.
+ *
+ * Once, because a line of prose carries its curly quotes in pairs and fours,
+ * and the fill already shows where each one is -- the label only has to say
+ * what they are.
+ */
+export function label(suspects: readonly Suspect[]): string {
+  return [...new Set(suspects)].map(nameOf).join(" · ");
+}
+
 /**
  * What the hover says: the character's name, which the Problems entry does
  * not carry, and the same claim the daemon's rule makes about it.
  */
 export function explain(suspect: Suspect): string {
-  const id = `U+${suspect.codePoint.toString(16).toUpperCase().padStart(4, "0")} ${suspect.name}`;
+  const id = nameOf(suspect);
   switch (suspect.rule) {
     case "bidi":
       return `${id} reorders how the rest of this line is displayed without changing what is compiled`;

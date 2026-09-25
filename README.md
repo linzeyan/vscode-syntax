@@ -147,7 +147,7 @@
   「縮排改到一半」的樣子。內建的 indent guides 畫線回答「block 從哪開始」，上色回答的
   是「我在第幾層」。只畫可見範圍，顏色走 theme color。
 - **Unicode 高亮**：gremlins 的替代。不可見字元、雙向控制字元、怪空白、冒充 ASCII 的字元
-  （en dash、彎引號），所有檔案、邊打邊標：gutter 記號、捲軸刻度、hover 說出字元名稱，
+  （en dash、彎引號），所有檔案、邊打邊標：gutter 記號、捲軸刻度、行尾寫出字元名稱，
   等級與顏色照 gremlins。`poly.unicodeHighlight.enabled` 打開。
 - **Gutter 圖片預覽**：某行提到的圖檔存在就在 gutter 放縮圖。不寫語法解析器——
   markdown／HTML／CSS 各有寫法，而檔案存不存在才是真正的過濾器。

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { drawsNothing, explain, findSuspects, levelOf, Rule, SUSPECTS } from "./unicode";
+import { drawsNothing, explain, findSuspects, label, levelOf, Rule, SUSPECTS } from "./unicode";
 
 /** The four tables `unicode::check` reads, parsed out of the Rust source. */
 function rustTables(): string[] {
@@ -100,6 +100,17 @@ test("a byte order mark is exempt only as the first character", () => {
 
 test("an em dash is prose, not a lookalike", () => {
   assert.deepEqual(findSuspects("a\u2014b"), []);
+});
+
+test("a line's label names each character once, in the order they appear", () => {
+  // Two quoted words, a zero-width space inside the first: five suspects,
+  // three characters. Naming a quote twice would say nothing the fill does not.
+  const suspects = findSuspects("\u201ca\u200bb\u201d \u201cc\u201d").map((f) => f.suspect);
+  assert.equal(suspects.length, 5);
+  assert.equal(
+    label(suspects),
+    "U+201C LEFT DOUBLE QUOTATION MARK · U+200B ZERO WIDTH SPACE · U+201D RIGHT DOUBLE QUOTATION MARK",
+  );
 });
 
 test("the hover names the character and what it stands in for", () => {

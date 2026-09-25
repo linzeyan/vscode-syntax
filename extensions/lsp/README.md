@@ -125,9 +125,10 @@ C/C++、Swift、HashiCorp Terraform、Lua（sumneko）、Bash IDE、Buf 的那�
 - **Gutter 圖片預覽**（設定）：某行提到的圖檔存在就在 gutter 放縮圖。
 - **Unicode 高亮**（設定）：gremlins 的替代。不可見字元、雙向控制字元、不是 U+0020 的空白、
   en dash 與彎引號這類冒充 ASCII 的字元，**所有檔案都標、邊打邊標**：gutter 記號、捲軸刻度、
-  字元本身加底色（沒有寬度的加框），hover 說出字元名稱。等級照 gremlins（error／warning／
-  info），顏色是 `poly.unicodeError`／`poly.unicodeWarning`／`poly.unicodeInfo` 三個佈景主題色，
-  在 `workbench.colorCustomizations` 改。em dash 不標。
+  字元本身加底色（沒有寬度的加框），行尾寫出字元名稱（同一行重複的只寫一次），hover 說明
+  為什麼標它。等級照 gremlins（error／warning／info），顏色是 `poly.unicodeError`／
+  `poly.unicodeWarning`／`poly.unicodeInfo` 三個佈景主題色，在 `workbench.colorCustomizations`
+  改。em dash 不標。
   - Problems 裡的同一批字元是 lint 規則 `poly/unicode-*`，存檔時才跑；`poly: ignore` 與
     `poly.toml` 管那邊，管不到高亮。
 - **TODOs 檢視**（設定）：檔案總管多一個面板，列出整個 workspace 的 `TODO`／`FIXME`／
