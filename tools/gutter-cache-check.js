@@ -262,7 +262,7 @@ const vscode = {
     registerCodeActionsProvider: () => nothing,
     registerHoverProvider: () => nothing,
   },
-  extensions: { all: [], getExtension: () => undefined },
+  extensions: { all: [], getExtension: () => undefined, onDidChange: on("extensions") },
   env: { clipboard: { writeText: async () => {} } },
 };
 
@@ -325,7 +325,11 @@ async function main() {
   const pinned = openEditor(openDocument(join(WORKSPACE, "pinned.md"), lines.pinned), 0, 1);
   visible = [scroller, pinned];
 
-  extension.activate({ subscriptions: [], extensionUri: Uri.file(LSP) });
+  extension.activate({
+    subscriptions: [],
+    extensionUri: Uri.file(LSP),
+    extension: { id: "ricky.poly-lsp", packageJSON: {} },
+  });
 
   const steps = [];
   for (let top = 0; top + WINDOW <= IMAGES; top += WINDOW) {
