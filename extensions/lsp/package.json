@@ -2,7 +2,7 @@
   "name": "poly-lsp",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.18.3",
+  "version": "0.18.4",
   "publisher": "ricky",
   "license": "MIT",
   "engines": {
