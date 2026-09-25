@@ -344,13 +344,13 @@
         "command": "poly.extractVariable",
         "key": "ctrl+alt+v",
         "mac": "cmd+alt+v",
-        "when": "editorTextFocus && !editorReadonly"
+        "when": "editorTextFocus && !editorReadonly && !poly.yield.extractVariable"
       },
       {
         "command": "poly.inlineVariable",
         "key": "ctrl+alt+shift+v",
         "mac": "cmd+alt+shift+v",
-        "when": "editorTextFocus && !editorReadonly"
+        "when": "editorTextFocus && !editorReadonly && !poly.yield.inlineVariable"
       }
     ],
     "configuration": {

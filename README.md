@@ -116,6 +116,8 @@
   `Extract subexpression to variable`／`Extract to constant in enclosing scope`），快捷鍵
   綁不到任何一個。poly 問的是 LSP 標準的 `refactor.extract`／`refactor.inline` kind，
   過濾掉 `Extract function` 那種不是變數的，剛好一項就直接套用。做事的是語言自己的 server。
+  你裝的別的擴充綁了同一組鍵（Paste Image 的貼圖、quicktype 的 Paste JSON as Types）時
+  poly 讓出來，命令面板照樣叫得到。
 - **`Poly: Move to New File` ／ `Change Signature` ／ `Implement Interface`**：同一個形狀再
   三個，從命令面板叫。Move to New File 問 `refactor.extract` 挑 `toNewFile`；Change Signature
   在游標原位問 `refactor.rewrite`，**游標要在參數上**；Implement Interface 問 `quickfix` 挑
@@ -774,6 +776,10 @@ poly **不寫使用者的 `settings.json`**（A8），所以下面這些必須�
 `$XDG_CONFIG_HOME/git/ignore`），沿路每一層祖先目錄的都算。跟 git 一樣，全域忽略
 檔只在 git repo 裡生效。點開頭的檔案與目錄預設跳過，`.github/` 例外（workflow 是原
 始碼，actionlint 就是為它接的）。
+
+drawio 與 excalidraw 的存檔（`.drawio.svg`、`.dio.svg`、`.excalidraw.svg`、
+`.excalidraw.json`）不歸任何語言：編輯器每次存檔都照自己的排版整份重寫，格式化它只會
+跟下一次存檔來回改。真的要格式化，在 `[languages.map]` 指定。
 
 `--no-ignore` 關掉前一段的忽略檔，`--hidden` 讓走訪進入點開頭的路徑；`.git/` 兩者
 都進不去，物件庫不是原始碼。用在要檢查的正好是被藏起來的東西：generated code、

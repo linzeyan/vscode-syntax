@@ -3,6 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { nextChangedFile } from "./changes";
+import { Binding, YIELDING, yieldKey, yieldsTo } from "./chords";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import {
@@ -2076,6 +2077,32 @@ function rendersMermaid(): boolean {
  */
 const extendMarkdownIt = mermaidPlugin(rendersMermaid);
 
+/**
+ * Hands Extract/Inline Variable's keys to an installed extension that binds
+ * them too (see chords.ts). Re-checked when extensions come and go, so
+ * uninstalling the other one gives the key back without a reload.
+ */
+function yieldChords(context: vscode.ExtensionContext) {
+  // `keybindings` may be one object rather than an array; VSCode takes both.
+  const bindings = (e: vscode.Extension<unknown>): Binding[] => [e.packageJSON.contributes?.keybindings ?? []].flat();
+  const own = bindings(context.extension);
+  const check = () => {
+    const others = vscode.extensions.all
+      .filter((e) => !e.packageJSON.isBuiltin && e.id !== context.extension.id)
+      .map((e) => ({ id: e.id, bindings: bindings(e) }));
+    const taken = yieldsTo(own, others, process.platform);
+    for (const command of YIELDING) {
+      const taker = taken.get(command);
+      void vscode.commands.executeCommand("setContext", yieldKey(command), taker !== undefined);
+      if (taker) {
+        log?.info(`${command} leaves its key to ${taker}; bind it in keybindings.json to take it back`);
+      }
+    }
+  };
+  check();
+  context.subscriptions.push(vscode.extensions.onDidChange(check));
+}
+
 export function activate(context: vscode.ExtensionContext) {
   tintIndentation(context);
   highlightUnicode(context);
@@ -2089,6 +2116,7 @@ export function activate(context: vscode.ExtensionContext) {
     log,
     vscode.commands.registerCommand("poly.showLocations", present),
   );
+  yieldChords(context);
   countReferencesInGutter(context);
   runFromGutter(context);
   linkGeneratedGo(context);

@@ -154,6 +154,11 @@ C/C++、Swift、HashiCorp Terraform、Lua（sumneko）、Bash IDE、Buf 的那�
 | `Go to Previous Changed File`      | `cmd+alt+a`       | `ctrl+alt+a`                        | 有 git              |
 | `Revert Selected Changes and Save` | `alt+q`           | `alt+q`                             | 有 git、檔案        |
 
+`Extract Variable`／`Inline Variable` 的鍵若已被你裝的別的擴充綁走（例如 Paste Image 的
+`cmd+alt+v`、quicktype 的 `cmd+alt+shift+v`），poly 會讓出來，Poly Editor 輸出面板記一行
+讓給了誰；命令面板與重構選單照樣叫得到。要搶回來，在 `keybindings.json` 綁
+`poly.extractVariable`／`poly.inlineVariable`。
+
 其餘命令沒有預設快捷鍵，從命令面板叫，或自己在 `keybindings.json` 綁：
 `poly.formatFile`／`formatPath`／`formatWorkspace`／`formatGitRepo`／`formatGitChanged`、
 `poly.lintPath`、`poly.analyzeDeadCode`、`poly.toggleFormat`、`poly.toggleLint`、`poly.createGoWork`、

@@ -301,6 +301,25 @@ pub fn builtin_language(path: &Path) -> Option<&'static str> {
     if name == "Dockerfile" || name.starts_with("Dockerfile.") || name.ends_with(".dockerfile") {
         return Some("dockerfile");
     }
+    // A diagram editor's save file, not a document: drawio and excalidraw write
+    // the whole file in their own layout on every save -- the SVG on one line,
+    // the JSON without a final newline. Formatting it is a diff the next save
+    // undoes, and a `--check` that cannot stay green in a repo that commits
+    // diagrams. The drawing survives poly's formatting (measured on the
+    // editors' own samples, 2026-09-25), so this is churn, not damage, and
+    // `[languages.map]` still reaches these for a project that wants them.
+    let lower = name.to_ascii_lowercase();
+    if [
+        ".drawio.svg",
+        ".dio.svg",
+        ".excalidraw.svg",
+        ".excalidraw.json",
+    ]
+    .iter()
+    .any(|diagram| lower.ends_with(diagram))
+    {
+        return None;
+    }
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     EXTENSIONS.iter().find(|(e, _)| *e == ext).map(|(_, l)| *l)
 }
@@ -1645,6 +1664,15 @@ mod tests {
             ("a.zsh", Some("zsh")),
             ("a.php", Some("php")),
             ("a.phtml", Some("php")),
+            // Diagram editors own these and rewrite them whole on every save;
+            // their plain siblings are still ordinary XML and JSON.
+            ("docs/arch.drawio.svg", None),
+            ("a.dio.svg", None),
+            ("A.Excalidraw.SVG", None),
+            ("a.excalidraw.json", None),
+            ("icon.svg", Some("xml")),
+            ("drawio.svg", Some("xml")),
+            ("a.json", Some("json")),
         ];
         for (path, expected) in cases {
             assert_eq!(builtin_language(Path::new(path)), expected, "{path}");
