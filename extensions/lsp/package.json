@@ -327,18 +327,18 @@
         "command": "poly.nextChangedFile",
         "key": "ctrl+alt+z",
         "mac": "cmd+alt+z",
-        "when": "config.git.enabled && !git.missing"
+        "when": "config.git.enabled && !git.missing && !poly.yield.nextChangedFile"
       },
       {
         "command": "poly.previousChangedFile",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
-        "when": "config.git.enabled && !git.missing"
+        "when": "config.git.enabled && !git.missing && !poly.yield.previousChangedFile"
       },
       {
         "command": "poly.revertAndSave",
         "key": "alt+q",
-        "when": "editorTextFocus && !editorReadonly && config.git.enabled && !git.missing && resourceScheme == file"
+        "when": "editorTextFocus && !editorReadonly && config.git.enabled && !git.missing && resourceScheme == file && !poly.yield.revertAndSave"
       },
       {
         "command": "poly.extractVariable",

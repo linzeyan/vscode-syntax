@@ -2550,9 +2550,12 @@ fn editor_config(argument: Option<&serde_json::Value>) -> Result<serde_json::Val
     let path = uri_path(&uri);
     let settings = poly_core::editorconfig_editor_settings(&path);
     let config = poly_core::Config::discover(&path).unwrap_or_else(|_| poly_core::Config::empty());
-    let formatted = config
-        .language(&path)
-        .is_some_and(|lang| crate::fmt::formattable(&lang));
+    // A diagram editor is the other program that writes the whole file on
+    // save; a final newline added here is one its next save takes out again.
+    let formatted = poly_core::diagram_file(&path)
+        || config
+            .language(&path)
+            .is_some_and(|lang| crate::fmt::formattable(&lang));
     Ok(serde_json::json!({
         "insertSpaces": settings.insert_spaces,
         "tabSize": settings.tab_size,
@@ -2923,6 +2926,13 @@ mod tests {
         assert_eq!(ini["formatted"], false);
         assert_eq!(ini["trimTrailingWhitespace"], false);
         assert_eq!(ini["tabSize"], 2, "still inherits [*]: {ini}");
+
+        // Not a language poly formats either, but the drawio or excalidraw
+        // editor rewrites it whole on every save: a newline the save hook
+        // added would be churn in every diagram a repo commits.
+        for diagram in ["arch.drawio.svg", "sketch.excalidraw.json"] {
+            assert_eq!(ask(diagram)["formatted"], true, "{diagram}");
+        }
 
         // No uri is the caller's bug. An error, not an empty answer the
         // extension would go on to apply to the document.

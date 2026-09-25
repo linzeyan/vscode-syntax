@@ -2078,8 +2078,8 @@ function rendersMermaid(): boolean {
 const extendMarkdownIt = mermaidPlugin(rendersMermaid);
 
 /**
- * Hands Extract/Inline Variable's keys to an installed extension that binds
- * them too (see chords.ts). Re-checked when extensions come and go, so
+ * Hands poly's language-free keys to an installed extension that binds them
+ * too (see chords.ts). Re-checked when extensions come and go, so
  * uninstalling the other one gives the key back without a reload.
  */
 function yieldChords(context: vscode.ExtensionContext) {

@@ -294,22 +294,19 @@ pub fn builtin_languages() -> Vec<&'static str> {
     ids
 }
 
-/// Detect by built-in rules only (no config). Filename rules run before
-/// extension rules so `Dockerfile.dev` is dockerfile, not a "dev" extension.
-pub fn builtin_language(path: &Path) -> Option<&'static str> {
-    let name = path.file_name()?.to_str()?;
-    if name == "Dockerfile" || name.starts_with("Dockerfile.") || name.ends_with(".dockerfile") {
-        return Some("dockerfile");
-    }
-    // A diagram editor's save file, not a document: drawio and excalidraw write
-    // the whole file in their own layout on every save -- the SVG on one line,
-    // the JSON without a final newline. Formatting it is a diff the next save
-    // undoes, and a `--check` that cannot stay green in a repo that commits
-    // diagrams. The drawing survives poly's formatting (measured on the
-    // editors' own samples, 2026-09-25), so this is churn, not damage, and
-    // `[languages.map]` still reaches these for a project that wants them.
+/// A diagram editor's save file, not a document: drawio and excalidraw write
+/// the whole file in their own layout on every save -- the SVG on one line,
+/// the JSON without a final newline. Formatting it is a diff the next save
+/// undoes, and a `--check` that cannot stay green in a repo that commits
+/// diagrams. The drawing survives poly's formatting (measured on the editors'
+/// own samples, 2026-09-25), so this is churn, not damage, and
+/// `[languages.map]` still reaches these for a project that wants them.
+pub fn diagram_file(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
     let lower = name.to_ascii_lowercase();
-    if [
+    [
         ".drawio.svg",
         ".dio.svg",
         ".excalidraw.svg",
@@ -317,7 +314,16 @@ pub fn builtin_language(path: &Path) -> Option<&'static str> {
     ]
     .iter()
     .any(|diagram| lower.ends_with(diagram))
-    {
+}
+
+/// Detect by built-in rules only (no config). Filename rules run before
+/// extension rules so `Dockerfile.dev` is dockerfile, not a "dev" extension.
+pub fn builtin_language(path: &Path) -> Option<&'static str> {
+    let name = path.file_name()?.to_str()?;
+    if name == "Dockerfile" || name.starts_with("Dockerfile.") || name.ends_with(".dockerfile") {
+        return Some("dockerfile");
+    }
+    if diagram_file(path) {
         return None;
     }
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
