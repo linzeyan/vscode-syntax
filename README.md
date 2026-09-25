@@ -779,7 +779,9 @@ poly **不寫使用者的 `settings.json`**（A8），所以下面這些必須�
 
 drawio 與 excalidraw 的存檔（`.drawio.svg`、`.dio.svg`、`.excalidraw.svg`、
 `.excalidraw.json`）不歸任何語言：編輯器每次存檔都照自己的排版整份重寫，格式化它只會
-跟下一次存檔來回改。真的要格式化，在 `[languages.map]` 指定。
+跟下一次存檔來回改。拼字與 Unicode 也不檢查，抓到的多半是編輯器產生的 id 片段，在檔案
+裡改不掉。真的要 poly 管，在 `[languages.map]` 指定；map 比內建判斷優先而且分大小寫，
+所以 `"*.json" = "jsonc"` 這種寬的 pattern 也會把它們一起接回來。
 
 `--no-ignore` 關掉前一段的忽略檔，`--hidden` 讓走訪進入點開頭的路徑；`.git/` 兩者
 都進不去，物件庫不是原始碼。用在要檢查的正好是被藏起來的東西：generated code、

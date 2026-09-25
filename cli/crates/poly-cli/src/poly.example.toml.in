@@ -31,6 +31,13 @@
 # heard of. Patterns match the file name (`*.tpl`); one containing a `/` matches
 # the whole path. Order in the file is the order they are tried.
 #
+# Patterns are tried before built-in detection and, unlike it, match case
+# sensitively. That is how a project takes back the drawio and excalidraw save
+# files poly otherwise leaves alone (`*.drawio.svg`, `*.dio.svg`,
+# `*.excalidraw.svg`, `*.excalidraw.json`, spelled in the case the files use),
+# and also how a broad pattern such as `"*.json" = "jsonc"` takes them back
+# without meaning to.
+#
 # Default: empty. Built-in detection covers these ids, and they are the values
 # this table accepts:
 #
@@ -364,7 +371,8 @@ include-hidden = false
 # Python rules, and a _typos.toml still holds `[default.extend-words]` and
 # `[files] extend-exclude` -- poly reads the project's own file. Spelling is
 # also the one check with no language, so it reads exactly the files poly's walk
-# finds, which includes the ones poly has no language for; `--hidden` and
+# finds, which includes the ones poly has no language for (a drawio or
+# excalidraw save file aside, see [languages.map]); `--hidden` and
 # `--no-ignore` reach it too, and `[lint] exclude` and
 # `[lint.per-file-ignores]` silence it like any other.
 [tools]

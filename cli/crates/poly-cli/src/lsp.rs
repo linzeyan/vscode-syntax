@@ -2362,6 +2362,12 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     if config.excluded(path, poly_core::Scope::Lint) {
         return Vec::new();
     }
+    // Above the Unicode scan, which would otherwise reach it: `poly check`
+    // leaves a diagram's save file out of its walk (poly_core::diagram_file).
+    let lang = config.language(path);
+    if lang.is_none() && poly_core::diagram_file(path) {
+        return Vec::new();
+    }
     // Above the language gate, and above `lint_engine` below it, because this
     // is the one rule with no language: CSS has no linter here and a zero-width
     // space in a `.css` is exactly as broken as one in a `.py`. Run any lower
@@ -2375,7 +2381,7 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
     // character is underlined at the next save, not as it lands. `poly check`
     // calls the same function with what it read from disk.
     let unicode = poly_engines::unicode::check(text);
-    let Some(lang) = config.language(path) else {
+    let Some(lang) = lang else {
         // Rare from this client -- its document selector only sends languages
         // poly names -- and reachable from any other, plus from a file whose
         // extension poly does not map. No language means no comment syntax and
@@ -4170,6 +4176,37 @@ mod tests {
 
         assert!(lint_document(&root.join("vendor/a.sql"), sql).is_empty());
         assert!(!lint_document(&root.join("src/a.sql"), sql).is_empty());
+    }
+
+    /// The daemon's half of `tests/check.rs`'s diagram case. The client sends
+    /// an excalidraw file, which VSCode calls json, so the server is what keeps
+    /// Problems as quiet as `poly check`.
+    #[test]
+    fn a_diagram_is_silent_in_the_editor_until_mapped() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        // A typo in a label, and the no-break space drawio writes for `&nbsp;`:
+        // one finding for spelling, which reads the disk, and one for the
+        // Unicode scan, which reads the buffer.
+        let text = "{\"text\": \"teh\u{a0}label\"}\n"; // poly: ignore typos/typo
+        let (diagram, plain) = (root.join("sketch.excalidraw.json"), root.join("plain.json"));
+        std::fs::write(&diagram, text).expect("write diagram");
+        std::fs::write(&plain, text).expect("write plain");
+
+        let found = lint_document(&plain, text);
+        let sources: Vec<_> = found.iter().filter_map(|d| d.source.as_deref()).collect();
+        assert!(
+            sources.contains(&"typos") && sources.contains(&"poly"),
+            "{sources:?}"
+        );
+        assert!(lint_document(&diagram, text).is_empty());
+
+        std::fs::write(
+            root.join("poly.toml"),
+            "[languages.map]\n\"*.excalidraw.json\" = \"json\"\n",
+        )
+        .expect("write poly.toml");
+        assert_eq!(lint_document(&diagram, text).len(), found.len());
     }
 
     /// `[lint.severity]` colours the squiggle, and `[lint] ignore` removes it.

@@ -489,3 +489,49 @@ fn a_malformed_suppression_is_an_error_not_a_no_op() {
     assert!(stderr.contains("LT01"), "{stderr}");
     assert!(stderr.contains("tool/rule"), "{stderr}");
 }
+
+/// A diagram's save file is left to its editor, whether the walk finds it or a
+/// pre-commit hook names it, until `[languages.map]` claims it. The same text
+/// under a plain name still fails, or this would pass just as well with
+/// spelling switched off.
+///
+/// The editor's half is `lsp::tests::a_diagram_is_silent_in_the_editor_until_mapped`.
+#[test]
+fn a_diagram_is_left_to_its_editor_until_mapped() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    // A typo in a label, and the no-break space drawio writes for `&nbsp;`.
+    let svg = "<svg><text>teh\u{a0}label</text></svg>\n"; // poly: ignore typos/typo
+    let json = "{\"text\": \"teh\u{a0}label\"}\n"; // poly: ignore typos/typo
+    std::fs::write(root.join("arch.drawio.svg"), svg).unwrap();
+    std::fs::write(root.join("plain.svg"), svg).unwrap();
+    std::fs::write(root.join("sketch.excalidraw.json"), json).unwrap();
+    std::fs::write(root.join("plain.json"), json).unwrap();
+
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    assert!(stdout.contains("plain.svg"), "{stdout}");
+    assert!(stdout.contains("plain.json"), "{stdout}");
+    assert!(!stdout.contains("drawio"), "{stdout}");
+    assert!(!stdout.contains("excalidraw"), "{stdout}");
+    assert_eq!(code, 1, "{stderr}");
+
+    let (code, stdout, stderr) = poly(
+        root,
+        &[
+            "check",
+            "--compact",
+            "arch.drawio.svg",
+            "sketch.excalidraw.json",
+        ],
+    );
+    assert_eq!(code, 0, "{stdout}{stderr}");
+
+    std::fs::write(
+        root.join("poly.toml"),
+        "[languages.map]\n\"*.excalidraw.json\" = \"json\"\n",
+    )
+    .unwrap();
+    let (_, stdout, _) = poly(root, &["check", "--compact", "."]);
+    assert!(stdout.contains("sketch.excalidraw.json"), "{stdout}");
+    assert!(!stdout.contains("drawio"), "{stdout}");
+}

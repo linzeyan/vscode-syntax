@@ -301,6 +301,14 @@ pub fn builtin_languages() -> Vec<&'static str> {
 /// diagrams. The drawing survives poly's formatting (measured on the editors'
 /// own samples, 2026-09-25), so this is churn, not damage, and
 /// `[languages.map]` still reaches these for a project that wants them.
+///
+/// Spelling and the Unicode scan skip them too, and have to ask, because both
+/// run on files with no language. What typos finds in a diagram is mostly a
+/// fragment of an id the editor generated or a label drawio cut short in the
+/// SVG's fallback text, and drawio writes every `&nbsp;` as U+00A0: nothing
+/// anyone can fix in the file, so at the default `fail-on` a repo that commits
+/// a diagram could not go green. 39 of 160 real diagrams had such findings,
+/// and about one in six was a real typo in a label (2026-09-26).
 pub fn diagram_file(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
         return false;

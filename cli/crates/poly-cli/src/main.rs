@@ -604,8 +604,13 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
     };
     // Every file the walk kept, and then the subset poly can name a language
     // for. Spelling wants the first list -- a LICENSE is worth reading and has
-    // no language -- and every other linter wants the second.
-    let walked = crate::batch::resolve_files(&scope, Scope::Lint, inv.walk())?;
+    // no language -- and every other linter wants the second. A diagram's save
+    // file is in neither (poly_core::diagram_file), named on the command line
+    // or not: a pre-commit hook names every staged file.
+    let walked: Vec<_> = crate::batch::resolve_files(&scope, Scope::Lint, inv.walk())?
+        .into_iter()
+        .filter(|(path, config)| config.language(path).is_some() || !poly_core::diagram_file(path))
+        .collect();
     let files: Vec<(PathBuf, String, Arc<poly_core::Config>)> = walked
         .iter()
         .filter_map(|(path, config)| {
