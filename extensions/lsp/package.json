@@ -288,6 +288,7 @@
         "command": "poly.formatDocument",
         "key": "shift+alt+f",
         "linux": "ctrl+shift+i",
+        "win": "shift+alt+f",
         "when": "editorHasDocumentFormattingProvider && editorTextFocus && !editorReadonly && !inCompositeEditor"
       },
       {

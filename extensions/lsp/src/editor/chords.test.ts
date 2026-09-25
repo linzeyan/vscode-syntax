@@ -94,6 +94,30 @@ test("a removal is not a claim, and neither is another platform's key", () => {
   assert.deepEqual([...yieldsTo(own, others, "darwin").keys()], ["poly.extractVariable"]);
 });
 
+// Measured on Windows 11: `{key: ctrl+alt+f10, linux: ctrl+alt+f11}` answered
+// to f11 and not to f10. Reading `key` there yields to the wrong extension and
+// keeps the chord from the right one.
+test("on Windows a binding with no `win` takes its `linux` chord", () => {
+  const others = [
+    { id: "takes.it", bindings: [{ command: "a.go", key: "ctrl+alt+x", linux: "ctrl+alt+v" }] },
+    { id: "only.looks.like.it", bindings: [{ command: "b.go", key: "ctrl+alt+shift+v", linux: "ctrl+alt+y" }] },
+  ];
+  assert.deepEqual([...yieldsTo(own, others, "win32")], [["poly.extractVariable", "takes.it"]]);
+  assert.equal(
+    chordOf({ key: "ctrl+shift+f9", linux: "ctrl+shift+f10", win: "ctrl+shift+f11" }, "win32"),
+    chordOf({ key: "ctrl+shift+f11" }, "win32"),
+  );
+});
+
+// The chord poly documents for Windows is `key`. A `linux` added without a
+// `win` beside it moves the Windows chord too, silently: that is how Format
+// Document ended up on ctrl+shift+i there.
+test("each of poly's own bindings takes its `key` on Windows", () => {
+  for (const binding of own) {
+    assert.equal(chordOf(binding, "win32"), chordOf({ key: binding.key }, "win32"), binding.command);
+  }
+});
+
 test("modifier order does not make a different chord", () => {
   assert.equal(chordOf({ mac: "Alt+Cmd+V" }, "darwin"), chordOf({ mac: "cmd+alt+v" }, "darwin"));
   assert.equal(chordOf({ key: "ctrl+k  ctrl+s" }, "linux"), "ctrl+k ctrl+s");

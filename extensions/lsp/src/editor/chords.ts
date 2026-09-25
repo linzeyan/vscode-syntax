@@ -50,7 +50,16 @@ export function yieldKey(command: string): string {
  * `cmd+alt+v` and `alt+cmd+v` as the same keys, so the comparison has to.
  */
 export function chordOf(binding: Binding, platform: string): string | undefined {
-  const own = platform === "darwin" ? binding.mac : platform === "win32" ? binding.win : binding.linux;
+  // On Windows a missing `win` falls through to `linux` before `key`: VSCode
+  // tests `OS === Windows && win`, and the else it lands in is Linux's.
+  // Measured on Windows 11 (VSCode 1.134, 2026-09-26), and the reason
+  // poly.formatDocument spells out `win` -- without it Windows got
+  // ctrl+shift+i.
+  const own = platform === "darwin"
+    ? binding.mac
+    : platform === "win32"
+    ? binding.win || binding.linux
+    : binding.linux;
   // Truthiness, as VSCode picks: an empty or null platform key falls back to
   // `key`, and an empty `key` binds nothing.
   const raw = own || binding.key;
