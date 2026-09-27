@@ -155,7 +155,7 @@ shipped.
 - @types/yauzl 2.10.3 (MIT) — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yauzl
 - @upsetjs/venn.js 2.0.0 (MIT) — https://github.com/upsetjs/venn.js
 - @vscode/markdown-it-katex 1.1.2 (MIT) — https://github.com/microsoft/vscode-markdown-it-katex#readme
-- @xmldom/xmldom 0.9.10 (MIT) — https://github.com/xmldom/xmldom
+- @xmldom/xmldom 0.9.12 (MIT) — https://github.com/xmldom/xmldom
 - abort-controller 3.0.0 (MIT) — https://github.com/mysticatea/abort-controller#readme
 - accepts 1.3.8 (MIT) — https://github.com/jshttp/accepts#readme
 - accepts 2.0.0 (MIT) — https://github.com/jshttp/accepts#readme
@@ -391,7 +391,7 @@ shipped.
 - jquery 4.0.0 (MIT) — https://jquery.com
 - js-base64 3.7.7 (BSD-3-Clause) — https://github.com/dankogai/js-base64#readme
 - js-tokens 4.0.0 (MIT) — https://github.com/lydell/js-tokens#readme
-- js-yaml 4.1.1 (MIT) — https://github.com/nodeca/js-yaml#readme
+- js-yaml 4.3.2 (MIT) — https://github.com/nodeca/js-yaml#readme
 - js-yaml 5.4.2 (MIT) — https://github.com/nodeca/js-yaml#readme
 - json-parse-even-better-errors 2.3.1 (MIT) — https://github.com/npm/json-parse-even-better-errors#readme
 - json-stringify-pretty-compact 4.0.0 (MIT) — https://github.com/lydell/json-stringify-pretty-compact#readme
@@ -405,7 +405,6 @@ shipped.
 - lines-and-columns 1.2.4 (MIT) — https://github.com/eventualbuddha/lines-and-columns#readme
 - linkify-it 5.0.2 (MIT) — https://github.com/markdown-it/linkify-it#readme
 - lodash 4.18.1 (MIT) — https://lodash.com/
-- lodash-es 4.17.21 (MIT) — https://lodash.com/custom-builds
 - lodash-es 4.18.1 (MIT) — https://lodash.com/custom-builds
 - lodash.debounce 4.0.8 (MIT) — https://lodash.com/
 - lodash.get 4.4.2 (MIT) — https://lodash.com/
@@ -416,7 +415,6 @@ shipped.
 - loose-envify 1.4.0 (MIT) — https://github.com/zertosh/loose-envify
 - lru-cache 7.18.3 (ISC) — https://github.com/isaacs/node-lru-cache#readme
 - luxon 3.7.2 (MIT) — https://github.com/moment/luxon#readme
-- markdown-it 14.1.1 (MIT) — https://github.com/markdown-it/markdown-it#readme
 - markdown-it 14.3.2 (MIT) — https://github.com/markdown-it/markdown-it#readme
 - markdown-it-container 4.0.0 (MIT) — https://github.com/markdown-it/markdown-it-container#readme
 - markdown-it-emoji 3.0.0 (MIT) — https://github.com/markdown-it/markdown-it-emoji#readme
@@ -476,8 +474,7 @@ shipped.
 - ms 2.1.3 (MIT) — https://github.com/vercel/ms#readme
 - multimath 2.0.0 (MIT) — https://github.com/nodeca/multimath#readme
 - nanoid 3.3.19 (MIT) — https://github.com/ai/nanoid#readme
-- nanoid 3.3.3 (MIT) — https://github.com/ai/nanoid#readme
-- nanoid 4.0.2 (MIT) — https://github.com/ai/nanoid#readme
+- nanoid 5.1.16 (MIT) — https://github.com/ai/nanoid#readme
 - nanoid 6.0.1 (MIT) — https://github.com/ai/nanoid#readme
 - negotiator 0.6.3 (MIT) — https://github.com/jshttp/negotiator#readme
 - negotiator 1.1.0 (MIT) — https://github.com/jshttp/negotiator#readme

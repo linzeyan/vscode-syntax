@@ -21,5 +21,18 @@ allowBuilds:
 # serialize-javascript in lib/nodejs/worker.js and buffered-worker-pool.js,
 # which are parallel mode. These tests run mocha in-process inside the
 # extension host, so that code never loads at all.
+#
+# The rest carry advisories and are pinned exactly by the package that brings
+# them in, so no upgrade of ours reaches them: speech-rule-engine (MathJax, in
+# Marp) pins xmldom, excalidraw pins nanoid 3, mermaid-to-excalidraw nanoid 4,
+# chevrotain (mermaid's parser) lodash-es. js-yaml's dependents ask for ^4.1.0
+# and would move on their own, but only when something re-resolves them. Each
+# is the newest of its line except nanoid 4, which has no fixed 4.x;
+# mermaid-to-excalidraw calls nothing but `nanoid()`, which 5.x keeps.
 overrides:
   serialize-javascript: ^7.1.0
+  "@xmldom/xmldom@0.9": 0.9.12
+  js-yaml@4: 4.3.2
+  lodash-es@4: 4.18.1
+  nanoid@3: 3.3.19
+  nanoid@4: 5.1.16
