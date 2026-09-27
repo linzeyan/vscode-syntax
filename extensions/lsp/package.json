@@ -62,7 +62,8 @@
     "markdown.markdownItPlugins": true,
     "markdown.previewScripts": [
       "./dist/preview.js",
-      "./dist/diagrams.js"
+      "./dist/diagrams.js",
+      "./dist/marp/preview.js"
     ],
     "markdown.previewStyles": [
       "./media/diagrams.css",
@@ -77,7 +78,8 @@
       "./media/github-markdown/github-markdown-dark-colorblind.css",
       "./media/github-markdown/github-markdown-dark-tritanopia.css",
       "./media/github-markdown/github-markdown-dark-high-contrast.css",
-      "./media/github-markdown/highlight-js.css"
+      "./media/github-markdown/highlight-js.css",
+      "./dist/marp/marp-vscode.css"
     ],
     "languages": [
       {
@@ -454,6 +456,28 @@
         "command": "poly.swaggerPreviewFromUrl",
         "title": "%command.swaggerPreviewFromUrl.title%",
         "category": "%command.category%"
+      },
+      {
+        "command": "poly.marp.export",
+        "title": "%command.marp.export.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.marp.newMarpMarkdown",
+        "title": "%command.marp.newMarpMarkdown.title%",
+        "category": "%command.category%",
+        "shortTitle": "%command.marp.newMarpMarkdown.shortTitle%"
+      },
+      {
+        "command": "poly.marp.showQuickPick",
+        "title": "%command.marp.showQuickPick.title%",
+        "category": "%command.category%",
+        "icon": "$(poly-marp)"
+      },
+      {
+        "command": "poly.marp.toggleMarpFeature",
+        "title": "%command.marp.toggleMarpFeature.title%",
+        "category": "%command.category%"
       }
     ],
     "views": {
@@ -671,6 +695,22 @@
         {
           "command": "poly.markdownExportAll",
           "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+        },
+        {
+          "command": "poly.marp.export",
+          "when": "!poly.yield.marp"
+        },
+        {
+          "command": "poly.marp.newMarpMarkdown",
+          "when": "!poly.yield.marp"
+        },
+        {
+          "command": "poly.marp.showQuickPick",
+          "when": "!poly.yield.marp"
+        },
+        {
+          "command": "poly.marp.toggleMarpFeature",
+          "when": "!poly.yield.marp"
         }
       ],
       "editor/title": [
@@ -701,6 +741,11 @@
           "command": "poly.excalidrawTheme",
           "when": "activeCustomEditorId == 'poly.excalidraw'",
           "group": "navigation"
+        },
+        {
+          "command": "poly.marp.showQuickPick",
+          "when": "editorLangId == markdown && !poly.yield.marp",
+          "group": "navigation"
         }
       ],
       "file/newFile": [
@@ -709,6 +754,11 @@
         },
         {
           "command": "poly.drawioNewFile"
+        },
+        {
+          "command": "poly.marp.newMarpMarkdown",
+          "when": "!poly.yield.marp",
+          "group": "file"
         }
       ]
     },
@@ -1870,6 +1920,186 @@
           "maximum": 200,
           "description": "%config.swaggerViewer.zoomLevel.description%"
         },
+        "poly.marp.breaks": {
+          "type": "string",
+          "enum": [
+            "off",
+            "on",
+            "inherit"
+          ],
+          "markdownEnumDescriptions": [
+            "%config.marp.breaks.off%",
+            "%config.marp.breaks.on%",
+            "%config.marp.breaks.inherit%"
+          ],
+          "default": "on",
+          "description": "%config.marp.breaks.description%"
+        },
+        "poly.marp.browser": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "chrome",
+            "edge",
+            "firefox"
+          ],
+          "enumDescriptions": [
+            "%config.marp.browser.auto%",
+            "%config.marp.browser.chrome%",
+            "%config.marp.browser.edge%",
+            "%config.marp.browser.firefox%"
+          ],
+          "default": "auto",
+          "description": "%config.marp.browser.description%"
+        },
+        "poly.marp.browserPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.marp.browserPath.description%"
+        },
+        "poly.marp.diagnostics.slideContentOverflow": {
+          "type": "boolean",
+          "default": false,
+          "tags": [
+            "experimental"
+          ],
+          "description": "%config.marp.diagnostics.slideContentOverflow.description%"
+        },
+        "poly.marp.exportType": {
+          "type": "string",
+          "enum": [
+            "html",
+            "pdf",
+            "pptx",
+            "png",
+            "jpeg",
+            "txt"
+          ],
+          "enumDescriptions": [
+            "%config.marp.exportType.html%",
+            "%config.marp.exportType.pdf%",
+            "%config.marp.exportType.pptx%",
+            "%config.marp.exportType.png%",
+            "%config.marp.exportType.jpeg%",
+            "%config.marp.exportType.txt%"
+          ],
+          "default": "pdf",
+          "description": "%config.marp.exportType.description%"
+        },
+        "poly.marp.exportAutoOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.marp.exportAutoOpen.description%"
+        },
+        "poly.marp.html": {
+          "type": "string",
+          "enum": [
+            "off",
+            "default",
+            "all"
+          ],
+          "markdownEnumDescriptions": [
+            "%config.marp.html.off%",
+            "%config.marp.html.default%",
+            "%config.marp.html.all%"
+          ],
+          "default": "default",
+          "description": "%config.marp.html.description%"
+        },
+        "poly.marp.mathTypesetting": {
+          "type": "string",
+          "enum": [
+            "off",
+            "mathjax",
+            "katex"
+          ],
+          "markdownEnumDescriptions": [
+            "%config.marp.mathTypesetting.off%",
+            "%config.marp.mathTypesetting.mathjax%",
+            "%config.marp.mathTypesetting.katex%"
+          ],
+          "default": "mathjax",
+          "markdownDescription": "%config.marp.mathTypesetting.description%"
+        },
+        "poly.marp.openExportedHtmlInIntegratedBrowser": {
+          "type": "string",
+          "enum": [
+            "off",
+            "tab",
+            "window"
+          ],
+          "enumDescriptions": [
+            "%config.marp.openExportedHtmlInIntegratedBrowser.off%",
+            "%config.marp.openExportedHtmlInIntegratedBrowser.tab%",
+            "%config.marp.openExportedHtmlInIntegratedBrowser.window%"
+          ],
+          "default": "off",
+          "tags": [
+            "experimental"
+          ],
+          "markdownDescription": "%config.marp.openExportedHtmlInIntegratedBrowser.description%"
+        },
+        "poly.marp.outlineExtension": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.marp.outlineExtension.description%"
+        },
+        "poly.marp.pdf.noteAnnotations": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.marp.pdf.noteAnnotations.description%"
+        },
+        "poly.marp.pdf.outlines": {
+          "type": "string",
+          "enum": [
+            "off",
+            "pages",
+            "headings",
+            "both"
+          ],
+          "enumDescriptions": [
+            "%config.marp.pdf.outlines.off%",
+            "%config.marp.pdf.outlines.pages%",
+            "%config.marp.pdf.outlines.headings%",
+            "%config.marp.pdf.outlines.both%"
+          ],
+          "default": "off",
+          "description": "%config.marp.pdf.outlines.description%"
+        },
+        "poly.marp.pptx.editable": {
+          "type": "string",
+          "enum": [
+            "off",
+            "on",
+            "smart"
+          ],
+          "markdownEnumDescriptions": [
+            "%config.marp.pptx.editable.off%",
+            "%config.marp.pptx.editable.on%",
+            "%config.marp.pptx.editable.smart%"
+          ],
+          "default": "off",
+          "tags": [
+            "experimental"
+          ],
+          "markdownDescription": "%config.marp.pptx.editable.description%"
+        },
+        "poly.marp.strictPathResolutionDuringExport": {
+          "type": "boolean",
+          "default": false,
+          "tags": [
+            "experimental"
+          ],
+          "description": "%config.marp.strictPathResolutionDuringExport.description%"
+        },
+        "poly.marp.themes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%config.marp.themes.description%"
+        },
         "poly.plantuml.java": {
           "type": "string",
           "default": "java",
@@ -2501,6 +2731,55 @@
           "light": "#3C763DBF",
           "highContrast": "#3C763D"
         }
+      },
+      {
+        "id": "poly.marpDirectiveKeyForeground",
+        "description": "%color.marpDirectiveKeyForeground.description%",
+        "defaults": {
+          "dark": "#67b8e3ff",
+          "light": "#0288d1ff",
+          "highContrast": "#67b8e3ff"
+        }
+      }
+    ],
+    "icons": {
+      "poly-marp": {
+        "description": "%icon.polyMarp.description%",
+        "default": {
+          "fontPath": "./dist/marp/icon.woff",
+          "fontCharacter": "\\e000"
+        }
+      }
+    },
+    "languageModelTools": [
+      {
+        "name": "poly_export_marp",
+        "displayName": "%lm.marpExport.displayName%",
+        "icon": "$(poly-marp)",
+        "when": "isWorkspaceTrusted",
+        "modelDescription": "Export Marp slide deck from given Markdown file to specific path. Export command will be invoked in the current workspace.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "inputFilePath": {
+              "type": "string",
+              "description": "An absolute path to the input Markdown file."
+            },
+            "outputFilePath": {
+              "type": "string",
+              "description": "An absolute path to the output file. The file extension must be one of the supported formats: `.html`, `.pdf`, `.pptx`, `.png`, `.jpg` (`.jpeg`) and `.txt`. If given the image format, the output file will be a single image of the first slide only."
+            }
+          },
+          "required": [
+            "inputFilePath",
+            "outputFilePath"
+          ]
+        },
+        "tags": [
+          "marp"
+        ],
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "polyExportMarp"
       }
     ],
     "configurationDefaults": {
@@ -2687,8 +2966,8 @@
   },
   "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true})\" && node ../../tools/drawio-webapp.js",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true})\" && node ../../tools/drawio-webapp.js",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit && tsc -p tsconfig.marp.json --noEmit",
     "unit": "tsc -p tsconfig.test.json && node --test out/editor/*.test.js",
     "test:build": "pnpm run build && tsc -p tsconfig.test.json",
     "test": "pnpm run test:build && node out/test/runTest.js"
@@ -2698,16 +2977,24 @@
     "@dbml/core": "^10.2.0",
     "@excalidraw/excalidraw": "0.18.1",
     "@hackmd/js-sequence-diagrams": "0.0.1-alpha.3",
+    "@marp-team/marp-cli": "4.5.0",
+    "@marp-team/marp-core": "4.4.0",
     "@mermaid-js/layout-tidy-tree": "^1.0.0",
     "@puppeteer/browsers": "2.13.0",
     "@vscode/markdown-it-katex": "1.1.2",
+    "abort-controller": "3.0.0",
+    "color-string": "2.1.4",
+    "dedent": "1.7.2",
     "dompurify": "^3.4.16",
+    "express": "5.2.1",
+    "fetch-ponyfill": "7.1.0",
     "flowchart.js": "^1.18.0",
     "highlight.js": "11.11.1",
     "js-base64": "3.7.7",
     "js-yaml": "4.1.1",
     "katex": "0.16.45",
     "lodash-es": "4.17.21",
+    "lodash.debounce": "4.0.8",
     "markdown-it": "14.1.1",
     "markdown-it-container": "4.0.0",
     "markdown-it-emoji": "3.0.0",
@@ -2715,23 +3002,37 @@
     "markmap-lib": "^0.18.12",
     "markmap-view": "^0.18.12",
     "mermaid": "^11.17.2",
+    "nanoid": "6.0.1",
     "nomnoml": "^1.7.0",
+    "open": "11.0.0",
     "plantuml-encoder": "1.4.0",
+    "portfinder": "1.0.38",
     "puppeteer-core": "24.40.0",
     "raphael": "^2.3.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "rehype-parse": "9.0.1",
+    "remark-math": "6.0.0",
+    "remark-parse": "11.0.0",
     "swagger-ui-dist": "5.30.3",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.1.0",
     "vega": "^6.4.0",
     "vega-interpreter": "^2.3.2",
     "vega-lite": "^6.4.3",
     "vscode-languageclient": "^9.0.1",
-    "xml-formatter": "2.6.1"
+    "xml-formatter": "2.6.1",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@types/color-string": "1.5.5",
+    "@types/express": "5.0.6",
+    "@types/hast": "3.0.4",
     "@types/js-yaml": "4.0.9",
     "@types/lodash-es": "4.17.12",
+    "@types/lodash.debounce": "4.0.9",
     "@types/markdown-it": "14.1.2",
+    "@types/mdast": "4.0.4",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20",
     "@types/react": "18.3.12",
@@ -2741,6 +3042,7 @@
     "esbuild": "^0.28.1",
     "jszip": "3.10.1",
     "mocha": "^10.7.0",
+    "typed-emitter": "2.1.0",
     "typescript": "^5.4.0"
   }
 }

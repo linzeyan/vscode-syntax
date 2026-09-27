@@ -139,6 +139,12 @@
   標出錯誤，YAML 的要另裝 redhat.vscode-yaml。spec 引用別的檔（外部 `$ref`）時，被引用的檔會併進預覽、
   改了也跟著更新；它宣稱支援這點，實際上沒有作用。設定在 `poly.swaggerViewer.*`，名稱同它的。兩個都
   裝著時 poly 讓出快捷鍵、右鍵選單與清單。
+- **Marp 投影片**：取代 marp-team.marp-vscode。front matter 寫了 `marp: true` 的 Markdown，預覽就是 Marp
+  投影片（主題、分頁、數學式、背景圖）；directive 有上色、說明、補全與檢查，多半附快速修正。
+  `Export Marp Slide Deck...` 匯出 HTML、PDF、PPTX、PNG、JPEG 或講者備忘稿，Copilot Chat 裡是
+  `#polyExportMarp`。編輯器標題列的 Marp 按鈕開出命令清單，`File > New File` 有 Marp Markdown。設定在
+  `poly.marp.*`，名稱同它的（已棄用的 `enableHtml`、`chromePath` 除外）。PDF、PPTX 與圖片用已安裝的
+  Chrome、Edge 或 Firefox 匯出，和它一樣不另外下載。兩個都裝著時 poly 整個讓出。
 - **清單接續**：在清單項目上按 Enter 接出下一項，**有序清單號碼遞增**（整份寫成 `1.` 的
   清單維持 `1.`），任務項接出 `- [ ]`，**空的項目按 Enter 結束清單**（往外退一層，最外層
   就清掉 marker）。markdown 家族與 yaml 都有，yaml 只認 sequence 的破折號——`>` 在那裡是

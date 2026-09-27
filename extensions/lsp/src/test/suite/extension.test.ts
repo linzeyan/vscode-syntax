@@ -1143,6 +1143,47 @@ func main() {
     }
   });
 
+  // Marp is three bundles loaded on demand, and each link only shows in a
+  // running editor: the preview has to hand a `marp: true` document to Marp's
+  // markdown-it and every other one to the usual chain; the directive checks
+  // have to be registered once the Markdown arrives; and the export has to
+  // find marp-cli, and the template script marp-cli reads from beside itself.
+  // HTML is the export that needs no browser, so it is the one checked here.
+  test("Marp renders a marp: true deck as slides, checks its directives and exports it", async () => {
+    const deck = writeFile("deck.md", "---\nmarp: true\ntheme: nonexistent\n---\n\n# One\n\n---\n\n# Two\n");
+    const document = await vscode.workspace.openTextDocument(deck);
+    await vscode.window.showTextDocument(document);
+
+    const slides: string = await vscode.commands.executeCommand("markdown.api.render", document);
+    assert.match(slides, /<style id="__marp-vscode-style">/);
+    assert.strictEqual(slides.match(/data-marp-vscode-slide-wrapper/g)?.length, 2);
+    const plain: string = await vscode.commands.executeCommand(
+      "markdown.api.render",
+      await vscode.workspace.openTextDocument(writeFile("plain.md", "# One\n\n---\n\n# Two\n")),
+    );
+    assert.doesNotMatch(plain, /__marp-vscode/);
+
+    const unknown = await eventually(
+      "the unknown theme to be reported",
+      () => vscode.languages.getDiagnostics(deck).find((one) => one.code === "unknown-theme"),
+    );
+    assert.strictEqual(unknown.source, "marp-vscode");
+    assert.strictEqual(unknown.range.start.line, 2);
+
+    const exported = join(workspaceRoot(), "deck.html");
+    const result = await vscode.lm.invokeTool("poly_export_marp", {
+      input: { inputFilePath: deck.fsPath, outputFilePath: exported },
+      toolInvocationToken: undefined,
+    });
+    const said = result.content.map((part) => (part instanceof vscode.LanguageModelTextPart ? part.value : "")).join(
+      "",
+    );
+    assert.match(said, /successfully exported/);
+    const html = readFileSync(exported, "utf8");
+    assert.match(html, /<h1[^>]*>One<\/h1>/);
+    assert.match(html, /bespoke/);
+  });
+
   // poly claims the formatter slot and stops there. It used to also declare
   // `editor.formatOnSave: true` for all 39 activated languages, which outranks
   // the user's own global setting -- so a user who had deliberately turned

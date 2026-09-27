@@ -23,6 +23,7 @@
 #   editor/markdownPdf    yzane.markdown-pdf's converter, likewise
 #   editor/codeSnap       adpyke.codesnap's page, likewise
 #   editor/swaggerViewer  arjun.swagger-viewer's page and schemas, likewise
+#   editor/marp           marp-team.marp-vscode's source, likewise
 [format]
 exclude = [
   "grammars/fixtures/**",
@@ -39,6 +40,7 @@ exclude = [
   "extensions/lsp/src/editor/markdownPdf/**",
   "extensions/lsp/src/editor/codeSnap/**",
   "extensions/lsp/src/editor/swaggerViewer/**",
+  "extensions/lsp/src/editor/marp/**",
 ]
 
 [lint]
@@ -57,6 +59,7 @@ exclude = [
   "extensions/lsp/src/editor/markdownPdf/**",
   "extensions/lsp/src/editor/codeSnap/**",
   "extensions/lsp/src/editor/swaggerViewer/**",
+  "extensions/lsp/src/editor/marp/**",
 ]
 
 # No [lint.per-file-ignores] at all. Everything this repo silences is a line

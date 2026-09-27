@@ -11,5 +11,5 @@
     "types": ["node", "mocha"]
   },
   "include": ["src"],
-  "exclude": ["src/editor/preview"]
+  "exclude": ["src/editor/preview", "src/editor/marp"]
 }

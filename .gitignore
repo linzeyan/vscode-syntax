@@ -12,7 +12,8 @@ extensions/lsp/out/
 # of puppeteer and KaTeX, with the 580 styles and fonts it reads. None is
 # poly's code, and CI and release build all from source. CodeSnap's page is a
 # copy of src/editor/codeSnap, and the Swagger preview's of src/editor/swaggerViewer
-# with Swagger UI's files beside it.
+# with Swagger UI's files beside it. Marp is 18 MB of marp-core, MathJax,
+# marp-cli and puppeteer around src/editor/marp.
 extensions/lsp/dist/dbml.js
 extensions/lsp/dist/excalidraw/
 extensions/lsp/dist/drawio/
@@ -20,7 +21,9 @@ extensions/lsp/dist/markdownPdf.js
 extensions/lsp/dist/markdown-pdf/
 extensions/lsp/dist/codesnap/
 extensions/lsp/dist/swagger/
+extensions/lsp/dist/marp/
 extensions/lsp/.vscode-test/
 # tools/*.py are scripts, never imported -- except that engine-diff's own
 # self-test imports it to tamper with its EXPECTED table, and that writes here.
 __pycache__/
+.vscode-test/

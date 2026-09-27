@@ -85,7 +85,8 @@ def main() -> int:
     # preview's `dist/diagram/*.js`, the PlantUML preview page under
     # `media/plantuml/`, the Excalidraw page's styles and fonts, draw.io's web
     # app, markdown export's styles and template, CodeSnap's page, the Swagger
-    # preview's page, schemas and Swagger UI), which no
+    # preview's page, schemas and Swagger UI, Marp's bundles and the template
+    # script marp-cli reads beside itself), which no
     # manifest key names either: whatever the build wrote, or the page is made
     # of, has to ship.
     built = [
@@ -98,6 +99,7 @@ def main() -> int:
                 *root.glob("dist/markdown-pdf/**/*"),
                 *root.glob("dist/codesnap/**/*"),
                 *root.glob("dist/swagger/**/*"),
+                *root.glob("dist/marp/**/*"),
                 *root.glob("media/plantuml/**/*"),
                 *root.glob("media/excalidraw/**/*"),
                 *root.glob("media/drawio/**/*"),

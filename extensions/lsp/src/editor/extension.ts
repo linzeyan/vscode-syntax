@@ -32,6 +32,7 @@ import {
   mermaidPlugin,
   plantumlPlugin,
 } from "./markdownIt";
+import { registerMarp } from "./marp";
 import { methodLabel, methodsByType } from "./methods";
 import { registerPlantuml } from "./plantumlEditor";
 import { describe, EXPR_MARK, POSTFIX_LANGUAGES, postfixesFor, postfixTarget } from "./postfix";
@@ -2160,20 +2161,29 @@ function githubStyle(): GithubStyle | undefined {
 }
 
 /**
- * The preview's markdown-it instance, taught the diagram fences and the GitHub
- * wrapper.
+ * The preview's markdown-it instance, taught the diagram fences, the GitHub
+ * wrapper and Marp.
+ *
+ * Marp goes on last: a Marp document is parsed and rendered by Marp's own
+ * markdown-it, so the wrappers around the rest must not wrap its slides, and
+ * every other document still goes through them.
  *
  * Returned from `activate` because that is the only way in;
  * `contributes["markdown.markdownItPlugins"]` is what makes the preview ask.
  */
 function extendMarkdownIt(md: MarkdownIt): MarkdownIt {
-  return githubStylePlugin(githubStyle)(
-    plantumlPlugin(drawPlantuml)(diagramPlugin(rendersDiagrams)(mermaidPlugin(rendersMermaid)(md))),
+  return marpPlugin(
+    githubStylePlugin(githubStyle)(
+      plantumlPlugin(drawPlantuml)(diagramPlugin(rendersDiagrams)(mermaidPlugin(rendersMermaid)(md))),
+    ),
   );
 }
 
 /** Set in `activate`: the fences need the poly binary, which knows the jar. */
 let drawPlantuml: (source: string, env: unknown, line: number | undefined) => string | undefined = () => undefined;
+
+/** Set in `activate`, which is what knows whether marp-vscode is installed. */
+let marpPlugin: (md: MarkdownIt) => MarkdownIt = (md) => md;
 
 /**
  * Hands poly's language-free keys to an installed extension that binds them
@@ -2227,6 +2237,7 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   registerMarkdownExport(context, (id) => MARKDOWN_LANGUAGES.has(id));
   registerCodeSnap(context);
   registerSwaggerViewer(context);
+  marpPlugin = registerMarp(context);
 
   // The fence rule reads the setting on every render, so turning the diagrams
   // off only has to reach previews that are already open. Same command the

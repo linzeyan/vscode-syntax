@@ -1,0 +1,20 @@
+{
+  // marp-team/marp-vscode's sources, vendored in src/editor/marp, checked with
+  // the options upstream checks them with. They are written against bundler
+  // resolution, a DOM (the preview half runs in the webview) and implicit any,
+  // and loosening poly's own config to fit them would loosen it for poly too.
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noImplicitAny": false,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": ["src/editor/marp"]
+}

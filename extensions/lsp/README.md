@@ -230,6 +230,31 @@ arjun.swagger-viewer 的替代：Swagger 2.0 與 OpenAPI 3.0／3.1 的 JSON、YA
 schema 檢查，頁面一律是亮色。兩者都裝著時，poly 讓出 `shift+alt+p`，右鍵選單與清單只留它的；JSON 檔的
 schema 則兩邊都會套。
 
+### Marp 投影片
+
+marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 以 Marp 投影片預覽與匯出。原始碼
+取自它（3.6.1），Marp Core 與 Marp CLI 也是它鎖定的版本（4.4.0、4.5.0）；設定在 `poly.marp.*`，名稱同它的
+`markdown.marp.*`。
+
+- **預覽**：VSCode 內建的 Markdown 預覽直接畫成投影片：主題（default、gaia、uncover，以及 `themes` 設定的
+  自訂主題）、分頁、頁首頁尾、背景圖、MathJax 或 KaTeX 數學式。沒有 `marp: true` 的 Markdown 照常預覽。
+- **Directive**：front matter 與 HTML 註解裡的 directive 名稱加粗上色（global 的另加斜體，顏色是
+  `poly.marpDirectiveKeyForeground`），滑鼠停上去有說明，打字時補全名稱與值（主題、尺寸、`paginate`、
+  `math`、轉場）。
+- **檢查**：沒有的主題與尺寸、重複的 global directive、已失效的 `$` 前綴、用圖片語法設顏色、用了數學式卻
+  沒寫 `math` directive，多半附快速修正。
+- **`Export Marp Slide Deck...`**：匯出 HTML、PDF、PPTX、PNG、JPEG（圖片只有第一張）或講者備忘稿文字檔，
+  預設類型是 `exportType`。PDF 可加大綱與備忘稿註解，PPTX 可匯出成可編輯的（要另裝 LibreOffice）。
+  瀏覽器用已安裝的 Chrome、Edge 或 Firefox。Copilot Chat 裡是 `#polyExportMarp` 工具。
+- **`Toggle Marp for Current Markdown`**、**`New Untitled Marp Markdown`**（`File > New File` 裡的 Marp
+  Markdown），以及編輯器標題列 Marp 按鈕開出的 `Show Marp Commands...`。
+
+和 marp-team.marp-vscode 不同的地方：它舊版的 `enableHtml`、`chromePath` 不支援，改用 `html`、
+`browserPath`；命令與 Copilot Chat 工具的名稱都帶 poly。poly 在不信任的工作區整個停用，所以連預覽也沒有，
+它則只停用匯出，並忽略工作區裡的 `html` 與 `themes` 設定；也沒有網頁版（vscode.dev）。和它一樣的地方：
+投影片內容超出範圍的警告（`diagnostics.slideContentOverflow`）在目前的 VSCode 上兩者都不會出現，它借用的
+預覽內部通道已經不在了。兩者都裝著時，poly 整個讓出，預覽、檢查與命令都只有它的。
+
 ### 導航與 CodeLens
 
 - **`Copy Path with Line Numbers`**：複製 `路徑:行號`，多行選取是 `路徑:42-51`。就是 `rg`
@@ -348,6 +373,7 @@ schema 則兩邊都會套。
 | `poly.markdownPdf.*`               | 同 yzane  | 匯出的格式、位置、樣式、Chrome、PDF 版面與圖片範圍，43 項，見上面的 Markdown 匯出      |
 | `poly.codeSnap.*`                  | 同 adpyke | 截圖的背景、陰影、視窗樣式、行號與快門動作，11 項，見上面的 CodeSnap                   |
 | `poly.swaggerViewer.*`             | 同 arjun  | 預覽伺服器的主機與連接埠、在瀏覽器開、標題只列檔名與縮放，5 項，見上面的 Swagger 預覽  |
+| `poly.marp.*`                      | 同 marp   | 預覽的換行、HTML、數學式與主題，匯出的格式與瀏覽器，15 項，見上面的 Marp 投影片        |
 
 markdown 的 Enter／Tab／粗體斜體與 `Copy Path with Line Numbers`、重構命令沒有開關：它們
 只在你按下去時才做事。每一項的完整說明在 VSCode 的設定頁（英文與正體中文都有）。專案層的
