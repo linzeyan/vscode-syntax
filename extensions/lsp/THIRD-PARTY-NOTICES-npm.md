@@ -334,7 +334,6 @@ shipped.
 - forwarded 0.2.0 (MIT) — https://github.com/jshttp/forwarded#readme
 - fractional-indexing 3.2.0 (CC0-1.0) — https://github.com/rocicorp/fractional-indexing#readme
 - fresh 2.0.0 (MIT) — https://github.com/jshttp/fresh#readme
-- fsevents 2.3.3 (MIT) — https://github.com/fsevents/fsevents
 - function-bind 1.1.2 (MIT) — https://github.com/Raynos/function-bind
 - fuzzy 0.1.3 (MIT) — https://github.com/mattyork/fuzzy
 - get-caller-file 2.0.5 (ISC) — https://github.com/stefanpenner/get-caller-file#readme

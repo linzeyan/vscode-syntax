@@ -192,6 +192,20 @@ def bundled_externals() -> set[str]:
     return set(re.findall(r"--external:([@\w./-]+)", build)) - {"vscode"}
 
 
+def platform_only(pkg: dict) -> bool:
+    """A package whose manifest limits it to some `os` or `cpu`.
+
+    pnpm installs it only on those machines, so keeping it would make the
+    notices depend on where this runs: fsevents (macOS, under excalidraw's
+    sass) made the Linux CI call the file stale. They are native modules,
+    which esbuild cannot put in a bundle, so none of them is shipped.
+    """
+    return any(
+        {"os", "cpu"} & json.loads((Path(path) / "package.json").read_text()).keys()
+        for path in pkg.get("paths") or []
+    )
+
+
 def collect_npm() -> str:
     """The packages esbuild bundles into the extension's two scripts.
 
@@ -222,7 +236,7 @@ def collect_npm() -> str:
     for packages in listed.values():
         for pkg in packages:
             name = pkg["name"]
-            if name in external:
+            if name in external or platform_only(pkg):
                 continue
             # pnpm hands back some expressions already parenthesised
             # ("(MPL-2.0 OR Apache-2.0)"), and the line below adds its own.
