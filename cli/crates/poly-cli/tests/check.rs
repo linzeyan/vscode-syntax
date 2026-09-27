@@ -504,14 +504,18 @@ fn a_diagram_is_left_to_its_editor_until_mapped() {
     let svg = "<svg><text>teh\u{a0}label</text></svg>\n"; // poly: ignore typos/typo
     let json = "{\"text\": \"teh\u{a0}label\"}\n"; // poly: ignore typos/typo
     std::fs::write(root.join("arch.drawio.svg"), svg).unwrap();
+    std::fs::write(root.join("flow.drawio"), svg).unwrap();
+    std::fs::write(root.join("flow.dio"), svg).unwrap();
     std::fs::write(root.join("plain.svg"), svg).unwrap();
     std::fs::write(root.join("sketch.excalidraw.json"), json).unwrap();
+    std::fs::write(root.join("sketch.excalidraw"), json).unwrap();
     std::fs::write(root.join("plain.json"), json).unwrap();
 
     let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
     assert!(stdout.contains("plain.svg"), "{stdout}");
     assert!(stdout.contains("plain.json"), "{stdout}");
     assert!(!stdout.contains("drawio"), "{stdout}");
+    assert!(!stdout.contains("flow.dio"), "{stdout}");
     assert!(!stdout.contains("excalidraw"), "{stdout}");
     assert_eq!(code, 1, "{stderr}");
 
@@ -521,7 +525,10 @@ fn a_diagram_is_left_to_its_editor_until_mapped() {
             "check",
             "--compact",
             "arch.drawio.svg",
+            "flow.drawio",
+            "flow.dio",
             "sketch.excalidraw.json",
+            "sketch.excalidraw",
         ],
     );
     assert_eq!(code, 0, "{stdout}{stderr}");

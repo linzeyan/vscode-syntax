@@ -34,6 +34,13 @@
     },
     "languages": [
       {
+        "id": "xml",
+        "extensions": [
+          ".drawio",
+          ".dio"
+        ]
+      },
+      {
         "id": "markdown",
         "extensions": [
           ".mdx"
@@ -219,6 +226,13 @@
           "SSH Config"
         ],
         "configuration": "./language-configuration/ssh-config.json"
+      },
+      {
+        "id": "json",
+        "extensions": [
+          ".excalidraw",
+          ".excalidrawlib"
+        ]
       },
       {
         "id": "prompt",
@@ -682,6 +696,36 @@
           "Vyper"
         ],
         "configuration": "./language-configuration/vyper.json"
+      },
+      {
+        "id": "dbml",
+        "extensions": [
+          ".dbml"
+        ],
+        "aliases": [
+          "DBML",
+          "dbml",
+          "Database Markup Language"
+        ],
+        "configuration": "./language-configuration/dbml.json",
+        "icon": {
+          "light": "./icons/dbml.svg",
+          "dark": "./icons/dbml.svg"
+        }
+      },
+      {
+        "id": "plantuml",
+        "extensions": [
+          ".wsd",
+          ".pu",
+          ".puml",
+          ".plantuml",
+          ".iuml"
+        ],
+        "aliases": [
+          "PlantUML"
+        ],
+        "configuration": "./language-configuration/plantuml.json"
       }
     ],
     "grammars": [
@@ -1864,6 +1908,68 @@
         "language": "vyper",
         "scopeName": "source.vyper",
         "path": "./syntaxes/vyper.tmLanguage.json"
+      },
+      {
+        "language": "dbml",
+        "scopeName": "source.dbml",
+        "path": "./syntaxes/dbml.tmLanguage.json"
+      },
+      {
+        "language": "plantuml",
+        "scopeName": "source.wsd",
+        "path": "./syntaxes/plantuml.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.plantuml.codeblock",
+        "path": "./syntaxes/plantuml-markdown.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.plantuml": "plantuml"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "dbml",
+        "path": "./snippets/dbml.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-general.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-activity.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-usecase.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-sequence.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-class.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-state.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-component.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-salt.json"
+      },
+      {
+        "language": "plantuml",
+        "path": "./snippets/plantuml-eggs.json"
       }
     ]
   },

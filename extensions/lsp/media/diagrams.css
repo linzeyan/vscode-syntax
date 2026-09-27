@@ -1,0 +1,36 @@
+/* The drawn diagrams, as MarkNote lays them out: centred, scrolling sideways
+   rather than overflowing the preview. */
+.poly-diagram:not(pre) {
+  text-align: center;
+  padding: 12px 0;
+  overflow-x: auto;
+}
+
+/* The libraries that draw in fixed dark ink get a light card in dark themes;
+   see preview/diagrams.ts. */
+.vscode-dark .poly-diagram-paper,
+.vscode-high-contrast:not(.vscode-high-contrast-light) .poly-diagram-paper {
+  background: #fff;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+/* A draw.io diagram as hediet.vscode-drawio's viewer shows one: room around
+   it, and a shape left at its default fill filled with the page, which is
+   draw.io's own dark canvas and here the preview's. */
+.poly-diagram-drawio {
+  padding: 28px;
+  --ge-dark-color: var(--vscode-editor-background);
+}
+
+/* It shrinks to the preview's width, never past its own size. */
+.poly-diagram-drawio svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.poly-diagram-message {
+  color: var(--vscode-errorForeground);
+  white-space: pre-wrap;
+  margin-top: 8px;
+}

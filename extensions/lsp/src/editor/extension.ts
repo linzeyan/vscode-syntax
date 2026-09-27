@@ -4,6 +4,10 @@ import * as vscode from "vscode";
 
 import { nextChangedFile } from "./changes";
 import { Binding, YIELDING, yieldKey, yieldsTo } from "./chords";
+import { registerCodeSnap } from "./codeSnap";
+import type { FromSql, ToSql } from "./dbml";
+import { registerDrawio } from "./drawioEditor";
+import { registerExcalidraw } from "./excalidrawEditor";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import {
@@ -18,8 +22,18 @@ import {
   Rewrite,
 } from "./list";
 import { toc, TOC_END, TOC_START } from "./markdown";
-import { mermaidPlugin } from "./markdownIt";
+import { registerMarkdownExport } from "./markdownExport";
+import {
+  diagramPlugin,
+  GithubStyle,
+  githubStyleOf,
+  githubStylePlugin,
+  MarkdownIt,
+  mermaidPlugin,
+  plantumlPlugin,
+} from "./markdownIt";
 import { methodLabel, methodsByType } from "./methods";
+import { registerPlantuml } from "./plantumlEditor";
 import { describe, EXPR_MARK, POSTFIX_LANGUAGES, postfixesFor, postfixTarget } from "./postfix";
 import { generatedFiles, goLinksFor, goServerMethod, protoPackage } from "./protobuf";
 import { refactorChoices, Refactoring, REFACTORINGS } from "./refactors";
@@ -39,6 +53,7 @@ import { cacheDir, RefStore } from "./refStore";
 import { entryLine, entryPoints, findsEntryInText, runLine } from "./runnable";
 import { colorSheet, scopesIn } from "./scopes";
 import { offerMessage, serverToOffer } from "./servers";
+import { registerSwaggerViewer } from "./swaggerViewer";
 import { registerTodoTree } from "./todoTree";
 import { drawsNothing, explain, findSuspects, label, Level, levelOf, Suspect, SUSPECTS } from "./unicode";
 
@@ -461,6 +476,61 @@ async function insertToc(editor: vscode.TextEditor): Promise<void> {
       builder.insert(editor.selection.active, `${block}\n`);
     }
   });
+}
+
+/**
+ * DBML to SQL, or SQL to DBML, from the active editor.
+ *
+ * Converts the buffer rather than the file on disk -- the extension this stands
+ * in for read the file, so unsaved edits never reached the output -- and
+ * converts before asking where to save, so a parse error is reported before
+ * anyone has picked a path for a file that will not be written.
+ *
+ * `.dbml` is matched by extension as well as by id: the id comes from
+ * poly-syntax-highlight, and poly-lsp has to work installed on its own.
+ */
+async function convertDbml(editor: vscode.TextEditor, to: "sql" | "dbml"): Promise<void> {
+  const document = editor.document;
+  const isDbml = document.languageId === "dbml" || /\.dbml$/i.test(document.fileName);
+  const fits = to === "sql" ? isDbml : document.languageId === "sql";
+  if (!fits) {
+    const want = to === "sql" ? "a DBML" : "an SQL";
+    vscode.window.showWarningMessage(
+      `Poly: this needs ${want} file (this one is ${document.languageId})`,
+    );
+    return;
+  }
+  // Its own bundle, loaded on first use; see dbml.ts for why.
+  const dbml: typeof import("./dbml") = require(path.join(__dirname, "dbml.js"));
+  const dialect = await vscode.window.showQuickPick(
+    [...(to === "sql" ? dbml.TO_SQL : dbml.FROM_SQL)],
+    { placeHolder: to === "sql" ? "SQL dialect to write" : "SQL dialect to read" },
+  );
+  if (!dialect) {
+    return;
+  }
+  let output: string;
+  try {
+    output = to === "sql"
+      ? dbml.toSql(document.getText(), dialect as ToSql)
+      : dbml.toDbml(document.getText(), dialect as FromSql);
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Poly: ${path.basename(document.fileName)}: ${dbml.describe(error)}`,
+    );
+    return;
+  }
+  const target = await vscode.window.showSaveDialog({
+    defaultUri: document.isUntitled
+      ? undefined
+      : vscode.Uri.file(dbml.outputPath(document.uri.fsPath, to)),
+    filters: to === "sql" ? { SQL: ["sql"] } : { DBML: ["dbml"] },
+  });
+  if (!target) {
+    return;
+  }
+  await vscode.workspace.fs.writeFile(target, Buffer.from(output, "utf8"));
+  await vscode.window.showTextDocument(target);
 }
 
 /** Run `action` against the active editor, or say why it cannot run. */
@@ -2069,13 +2139,41 @@ function rendersMermaid(): boolean {
     && vscode.extensions.getExtension(BUILT_IN_MERMAID) === undefined;
 }
 
+/** Whether poly draws the other diagram fences; read per render like mermaid's. */
+function rendersDiagrams(): boolean {
+  return vscode.workspace.getConfiguration("poly").get<boolean>("markdownDiagrams.enabled", false);
+}
+
 /**
- * The preview's markdown-it instance, taught both diagram shapes.
+ * The extension poly's GitHub styling is taken from. Installed, it wraps every
+ * render itself, and a second wrapper would put the stylesheets' padding and
+ * width limits on the page twice.
+ */
+const GITHUB_STYLES = "bierner.markdown-preview-github-styles";
+
+function githubStyle(): GithubStyle | undefined {
+  const config = vscode.workspace.getConfiguration("poly.markdownGithubStyle");
+  if (!config.get<boolean>("enabled", false) || vscode.extensions.getExtension(GITHUB_STYLES)) {
+    return undefined;
+  }
+  return githubStyleOf(config.get("colorTheme"), config.get("lightTheme"), config.get("darkTheme"));
+}
+
+/**
+ * The preview's markdown-it instance, taught the diagram fences and the GitHub
+ * wrapper.
  *
  * Returned from `activate` because that is the only way in;
  * `contributes["markdown.markdownItPlugins"]` is what makes the preview ask.
  */
-const extendMarkdownIt = mermaidPlugin(rendersMermaid);
+function extendMarkdownIt(md: MarkdownIt): MarkdownIt {
+  return githubStylePlugin(githubStyle)(
+    plantumlPlugin(drawPlantuml)(diagramPlugin(rendersDiagrams)(mermaidPlugin(rendersMermaid)(md))),
+  );
+}
+
+/** Set in `activate`: the fences need the poly binary, which knows the jar. */
+let drawPlantuml: (source: string, env: unknown, line: number | undefined) => string | undefined = () => undefined;
 
 /**
  * Hands poly's language-free keys to an installed extension that binds them
@@ -2103,7 +2201,7 @@ function yieldChords(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.extensions.onDidChange(check));
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext, poly: string) {
   tintIndentation(context);
   highlightUnicode(context);
   previewImages(context);
@@ -2123,13 +2221,23 @@ export function activate(context: vscode.ExtensionContext) {
   completePostfixes(context);
   registerTodoTree(context);
   referenceTree = registerReferenceTree(context);
+  drawPlantuml = registerPlantuml(context, poly);
+  registerExcalidraw(context);
+  registerDrawio(context);
+  registerMarkdownExport(context, (id) => MARKDOWN_LANGUAGES.has(id));
+  registerCodeSnap(context);
+  registerSwaggerViewer(context);
 
   // The fence rule reads the setting on every render, so turning the diagrams
   // off only has to reach previews that are already open. Same command the
   // built-in uses for its own settings.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.markdownMermaid")) {
+      if (
+        ["poly.markdownMermaid", "poly.markdownDiagrams", "poly.markdownGithubStyle"].some((section) =>
+          event.affectsConfiguration(section)
+        )
+      ) {
         void vscode.commands.executeCommand("markdown.preview.refresh");
       }
     }),
@@ -2156,6 +2264,8 @@ export function activate(context: vscode.ExtensionContext) {
       "poly.toggleItalic",
       withEditor("Toggle Italic", (editor) => toggleEmphasis(editor, "_")),
     ],
+    ["poly.dbmlToSql", withEditor("DBML to SQL", (editor) => convertDbml(editor, "sql"))],
+    ["poly.sqlToDbml", withEditor("SQL to DBML", (editor) => convertDbml(editor, "dbml"))],
     // One entry per refactoring, so the command id and the table cannot drift:
     // `poly.changeSignature` is `REFACTORINGS.changeSignature` by construction.
     ...(Object.keys(REFACTORINGS) as Refactoring[]).map(

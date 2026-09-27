@@ -117,3 +117,25 @@ fn a_tools_path_that_does_not_exist_stops_the_run() {
     let (code, _, stderr) = poly(dir.path(), &["fmt", "--check", "."]);
     assert_eq!(code, 2, "{stderr}");
 }
+
+/// The editor asks `poly tools install` for a jar from wherever the file is and
+/// runs the path it prints, so that path has to be the project's pin, whole.
+#[test]
+fn a_pinned_tool_is_found_from_a_subdirectory_and_printed_absolute() {
+    let dir = project("[tools]\nplantuml = \"./vendor/plantuml.jar\"\n");
+    std::fs::create_dir_all(dir.path().join("vendor")).unwrap();
+    std::fs::write(dir.path().join("vendor/plantuml.jar"), "").unwrap();
+    let sub = dir.path().join("docs");
+    std::fs::create_dir_all(&sub).unwrap();
+    let (code, stdout, stderr) = poly(&sub, &["tools", "install", "plantuml"]);
+    assert_eq!(code, 0, "{stderr}");
+    let printed = stdout
+        .trim()
+        .strip_prefix("plantuml: pinned ")
+        .unwrap_or_else(|| panic!("{stdout}"));
+    assert!(Path::new(printed).is_absolute(), "{stdout}");
+    assert_eq!(
+        std::fs::canonicalize(printed).unwrap(),
+        std::fs::canonicalize(dir.path().join("vendor/plantuml.jar")).unwrap()
+    );
+}

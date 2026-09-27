@@ -5,7 +5,8 @@
   --update refreshes pins to upstream HEAD.
 - Converts .tmLanguage (plist) and .yaml sources to tmLanguage.json.
 - Generates the csv/tsv rainbow grammars locally (no upstream).
-- Regenerates package.json `contributes.languages/grammars` and
+- Copies the snippets an entry lists from the same pinned commit.
+- Regenerates package.json `contributes.languages/grammars/snippets` and
   THIRD-PARTY-NOTICES.md from sources.json, so sources.json is the single
   source of truth.
 
@@ -28,6 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "grammars" / "sources.json"
 LOCK = ROOT / "grammars" / "sources.lock.json"
 EXT = ROOT / "extensions" / "syntax"
+SNIPPETS = EXT / "snippets"
 SYNTAXES = EXT / "syntaxes"
 UA = {"User-Agent": "poly-grammar-sync"}
 # Grammar contribution keys copied verbatim from upstream (see contributesFrom).
@@ -82,8 +84,9 @@ def fetch_vsix(publisher: str, name: str, version: str) -> zipfile.ZipFile:
 def convert(raw: bytes, src_path: str) -> dict:
     # language-haskell authors in YAML and commits only the source; the .json
     # its package.json points at is build output that never lands in the repo.
-    if src_path.endswith((".yaml", ".yml", "YAML-tmLanguage")):
-        import yaml  # only needed for yaml-sourced grammars (svelte, haskell)
+    # jebbs.plantuml spells the same suffix in lower case.
+    if src_path.endswith((".yaml", ".yml", "YAML-tmLanguage", "yaml-tmLanguage")):
+        import yaml  # only needed for yaml-sourced grammars (svelte, haskell, plantuml)
 
         return yaml.safe_load(raw)
     if src_path.endswith(".json"):
@@ -231,10 +234,18 @@ def check_licenses(sources: dict) -> None:
         for lang in sources["languages"]
         if not lang.get("generated") and not lang.get("license")
     ]
-    disallowed = [
-        f"{lang['id']} ({lang['license']})"
+    # A snippet file can carry a license of its own: jebbs.plantuml's grammar is
+    # MIT and its snippets are Apache-2.0, and the notice has to say which.
+    licensed = [(lang["id"], lang.get("license")) for lang in sources["languages"]] + [
+        (f"{lang['id']} snippets", one["license"])
         for lang in sources["languages"]
-        if lang.get("license") and lang["license"] not in ALLOWED_LICENSES
+        for one in lang.get("snippets", [])
+        if one.get("license")
+    ]
+    disallowed = [
+        f"{name} ({license})"
+        for name, license in licensed
+        if license and license not in ALLOWED_LICENSES
     ]
     problems = []
     if missing:
@@ -288,6 +299,11 @@ def build_contributes(sources: dict, lock: dict) -> tuple[list, list]:
                 entry["configuration"] = (
                     f"./language-configuration/{cfg['configuration']}"
                 )
+            # One file for both themes: the only upstream carrying an icon
+            # (dbml) points both at the same svg.
+            if cfg.get("icon"):
+                icon = f"./icons/{cfg['icon']}"
+                entry["icon"] = {"light": icon, "dark": icon}
             languages.append(entry)
         elif cfg.get("configuration") or cfg.get("extensions"):
             # Built-in override that refines the language rather than replacing
@@ -339,6 +355,14 @@ def build_contributes(sources: dict, lock: dict) -> tuple[list, list]:
     return languages, grammars
 
 
+def build_snippets(sources: dict) -> list:
+    return [
+        {"language": lang["id"], "path": f"./snippets/{one['out']}"}
+        for lang in sources["languages"]
+        for one in lang.get("snippets", [])
+    ]
+
+
 def build_notices(sources: dict, lock: dict) -> str:
     lines = [
         "# Third-party notices — poly-syntax-highlight",
@@ -364,6 +388,14 @@ def build_notices(sources: dict, lock: dict) -> str:
         )
         lines.append(f"- https://github.com/{repo} ({lang['license']}) @ {sha}")
         lines.append(f"  files: {', '.join(files)}")
+        snippets: dict[str, list[str]] = {}
+        for l in sources["languages"]:
+            if l.get("repo") == repo:
+                for one in l.get("snippets", []):
+                    license = one.get("license", l["license"])
+                    snippets.setdefault(license, []).append(one["out"])
+        for license, outs in sorted(snippets.items()):
+            lines.append(f"  snippets ({license}): {', '.join(sorted(outs))}")
     # Derived, not spelled out: this line named csv/tsv only and went stale the
     # moment a third generated grammar landed.
     generated = sorted(
@@ -392,6 +424,7 @@ def prune_lock(sources: dict, lock: dict) -> None:
             key = lang["repo"]
         live_keys.add(key)
         live_files.setdefault(key, set()).update(f["src"] for f in lang["files"])
+        live_files[key].update(one["src"] for one in lang.get("snippets", []))
     for key in list(lock):
         if key not in live_keys:
             del lock[key]
@@ -424,6 +457,11 @@ def check_generated() -> int:
         for name, generated, committed in (
             ("contributes.languages", languages, pkg["contributes"]["languages"]),
             ("contributes.grammars", grammars, pkg["contributes"]["grammars"]),
+            (
+                "contributes.snippets",
+                build_snippets(sources),
+                pkg["contributes"].get("snippets", []),
+            ),
             (
                 "THIRD-PARTY-NOTICES.md",
                 build_notices(sources, lock),
@@ -555,6 +593,22 @@ def main() -> int:
                 digest = hashlib.sha256(raw).hexdigest()[:16]
                 lock[repo].setdefault("files", {})[f["src"]] = digest
                 print(f"  {lang['id']}: {f['out']} <- {repo}@{sha[:8]} ({digest})")
+            for one in lang.get("snippets", []):
+                raw = fetch(
+                    f"https://raw.githubusercontent.com/{repo}/{sha}/{urllib.parse.quote(one['src'])}"
+                )
+                json.loads(
+                    raw
+                )  # a snippet file VSCode cannot parse fails here, not at load
+                SNIPPETS.mkdir(parents=True, exist_ok=True)
+                # As upstream wrote it: a snippet file is read by VSCode alone, and
+                # reserializing would only make the digest harder to check by hand.
+                (SNIPPETS / one["out"]).write_bytes(raw)
+                digest = hashlib.sha256(raw).hexdigest()[:16]
+                lock[repo].setdefault("files", {})[one["src"]] = digest
+                print(
+                    f"  {lang['id']}: snippets/{one['out']} <- {repo}@{sha[:8]} ({digest})"
+                )
         # Blind on purpose: one bad upstream (404, moved path, invalid plist)
         # must not hide what the other 78 languages would have reported.
         except Exception as exc:  # noqa: BLE001
@@ -579,6 +633,7 @@ def main() -> int:
     pkg = json.loads(pkg_path.read_text())
     pkg["contributes"]["languages"] = languages
     pkg["contributes"]["grammars"] = grammars
+    pkg["contributes"]["snippets"] = build_snippets(sources)
     write_json(pkg_path, pkg)
     (EXT / "THIRD-PARTY-NOTICES.md").write_text(
         build_notices(sources, lock), encoding="utf-8"

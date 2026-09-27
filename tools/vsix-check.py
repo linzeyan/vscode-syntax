@@ -81,11 +81,36 @@ def main() -> int:
     # the English string, which reads like a translation nobody wrote yet.
     paths = manifest_paths(manifest)
     paths += [f"./{one.name}" for one in sorted(root.glob("package.nls*.json"))]
+    # And the files code loads by path at run time (`dist/dbml.js`, the
+    # preview's `dist/diagram/*.js`, the PlantUML preview page under
+    # `media/plantuml/`, the Excalidraw page's styles and fonts, draw.io's web
+    # app, markdown export's styles and template, CodeSnap's page, the Swagger
+    # preview's page, schemas and Swagger UI), which no
+    # manifest key names either: whatever the build wrote, or the page is made
+    # of, has to ship.
+    built = [
+        f"./{one.relative_to(root).as_posix()}"
+        for one in sorted(
+            [
+                *root.glob("dist/**/*.js"),
+                *root.glob("dist/excalidraw/**/*"),
+                *root.glob("dist/drawio/**/*"),
+                *root.glob("dist/markdown-pdf/**/*"),
+                *root.glob("dist/codesnap/**/*"),
+                *root.glob("dist/swagger/**/*"),
+                *root.glob("media/plantuml/**/*"),
+                *root.glob("media/excalidraw/**/*"),
+                *root.glob("media/drawio/**/*"),
+            ]
+        )
+        if one.is_file()
+    ]
+    paths += [path for path in built if path not in paths]
     problems = []
     for path in paths:
         entry = PREFIX + path.removeprefix("./")
         if entry not in sizes:
-            problems.append(f"{path} is in the manifest and not in the package")
+            problems.append(f"{path} is required and not in the package")
         elif sizes[entry] == 0:
             problems.append(f"{path} is in the package and empty")
 

@@ -68,8 +68,9 @@
     {
       "id": "xml",
       "override": true,
-      "rationale": "Same upstream as built-in; xsl is a separate language contributed by the same extension.",
+      "rationale": "Same upstream as built-in; xsl is a separate language contributed by the same extension. The two extensions are draw.io's diagram, which poly-lsp's editor saves as indented XML and whose source opens as text; the built-in claims neither, and hediet.vscode-drawio named them a language of its own with no grammar at all.",
       "repo": "microsoft/vscode",
+      "language": { "extensions": [".drawio", ".dio"] },
       "license": "MIT",
       "files": [
         { "src": "extensions/xml/syntaxes/xml.tmLanguage.json", "out": "xml.tmLanguage.json", "scopeName": "text.xml", "language": "xml" },
@@ -322,8 +323,9 @@
     {
       "id": "json",
       "override": true,
-      "rationale": "Same upstream as built-in, including JSONL and the snippets flavor so .code-snippets files keep their highlighting.",
+      "rationale": "Same upstream as built-in, including JSONL and the snippets flavor so .code-snippets files keep their highlighting. The two extensions are Excalidraw's scene and library, which poly-lsp's editor saves as JSON and whose source it opens beside the drawing; the built-in claims neither, and pomdtr.excalidraw-editor declared the same pair.",
       "repo": "microsoft/vscode",
+      "language": { "extensions": [".excalidraw", ".excalidrawlib"] },
       "license": "MIT",
       "files": [
         { "src": "extensions/json/syntaxes/JSON.tmLanguage.json", "out": "json.tmLanguage.json", "scopeName": "source.json", "language": "json" },
@@ -1064,6 +1066,43 @@
       "language": { "extensions": [".vy", ".vyi"], "aliases": ["Vyper"], "configuration": "vyper.json" },
       "files": [
         { "src": "syntaxes/vyper.tmLanguage.json", "out": "vyper.tmLanguage.json", "scopeName": "source.vyper", "language": "vyper" }
+      ]
+    },
+    {
+      "id": "dbml",
+      "override": false,
+      "rationale": "The grammar matt-meyers.vscode-dbml ships, which poly stands in for. The repo is archived; holistics/dbml, the language's own, ships a Monarch tokenizer rather than a TextMate grammar.",
+      "repo": "mattmeyers/vscode-dbml",
+      "license": "MIT",
+      "language": { "extensions": [".dbml"], "aliases": ["DBML", "dbml", "Database Markup Language"], "configuration": "dbml.json", "icon": "dbml.svg" },
+      "files": [
+        { "src": "syntaxes/dbml.tmLanguage.json", "out": "dbml.tmLanguage.json", "scopeName": "source.dbml", "language": "dbml" }
+      ],
+      "snippets": [
+        { "src": "snippets/dbml.json", "out": "dbml.json" }
+      ]
+    },
+    {
+      "id": "plantuml",
+      "override": false,
+      "rationale": "The grammar, markdown fence injection and snippets jebbs.plantuml ships, which poly stands in for. Upstream authors the grammar in YAML and builds the plist only when it packages, so the YAML source is what is read. The snippets carry their own license (Apache-2.0, snippets/license.snippets.txt upstream), not the MIT the rest of the repo is under.",
+      "repo": "qjebbs/vscode-plantuml",
+      "license": "MIT",
+      "language": { "extensions": [".wsd", ".pu", ".puml", ".plantuml", ".iuml"], "aliases": ["PlantUML"], "configuration": "plantuml.json" },
+      "files": [
+        { "src": "syntaxes/plantuml.yaml-tmLanguage", "out": "plantuml.tmLanguage.json", "scopeName": "source.wsd", "language": "plantuml" },
+        { "src": "syntaxes/codeblock.json", "out": "plantuml-markdown.tmLanguage.json", "scopeName": "markdown.plantuml.codeblock", "injectTo": ["text.html.markdown"], "contributesFrom": "package.json" }
+      ],
+      "snippets": [
+        { "src": "snippets/general.json", "out": "plantuml-general.json", "license": "Apache-2.0" },
+        { "src": "snippets/activity.json", "out": "plantuml-activity.json", "license": "Apache-2.0" },
+        { "src": "snippets/usecase.json", "out": "plantuml-usecase.json", "license": "Apache-2.0" },
+        { "src": "snippets/sequence.json", "out": "plantuml-sequence.json", "license": "Apache-2.0" },
+        { "src": "snippets/class.json", "out": "plantuml-class.json", "license": "Apache-2.0" },
+        { "src": "snippets/state.json", "out": "plantuml-state.json", "license": "Apache-2.0" },
+        { "src": "snippets/component.json", "out": "plantuml-component.json", "license": "Apache-2.0" },
+        { "src": "snippets/salt.json", "out": "plantuml-salt.json", "license": "Apache-2.0" },
+        { "src": "snippets/eggs.json", "out": "plantuml-eggs.json", "license": "Apache-2.0" }
       ]
     }
   ]

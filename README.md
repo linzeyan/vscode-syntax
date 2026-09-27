@@ -16,11 +16,12 @@
 
 ### poly-syntax-highlight — highlighting
 
-- **153 個文法**：接管 49 個 VSCode 內建語言，另加 47 個內建沒有的語言
+- **156 個文法**：接管 49 個 VSCode 內建語言，另加 49 個內建沒有的語言
   （HCL／Terraform、nginx、zig、dotenv、protobuf、mermaid、caddyfile、systemd
   unit、jsonnet、just、nix、cabal、dune、ssh_config、Solidity／Cairo／Vyper、
-  CSV/TSV rainbow…）。
-- 來源共 96 條、30 個 pinned 上游 repo；只有 CSV／TSV／ssh_config 三個是自產的
+  DBML、PlantUML、CSV/TSV rainbow…）。DBML 另附 snippets 與檔案圖示，PlantUML 另附
+  snippets。
+- 來源共 97 條、31 個 pinned 上游 repo；只有 CSV／TSV／ssh_config 三個是自產的
   （上游要嘛不存在，要嘛沒有授權檔）。
 - 輸出標準 TextMate scope，**任何現有 color theme 直接生效**，不自帶配色。
 - 部分語言改採比內建更好的社群文法（如 rust 用 dustypomerleau/rust-syntax）。
@@ -98,6 +99,46 @@
 - **`Poly: Toggle Bold` ／ `Toggle Italic`**：`cmd/ctrl+b`、`cmd/ctrl+i`，只在
   markdown 檔生效。產生 `**bold**` 與 `_italic_`——就是 `poly fmt` 正規化出來的那兩種，
   不會被下一次存檔改掉。
+- **`Poly: DBML to SQL` ／ `SQL to DBML`**：DBML 轉成 PostgreSQL／MySQL／SQL Server／
+  Oracle 的 SQL，或從 PostgreSQL／MySQL／SQL Server／Snowflake／Oracle 的 SQL 反推 DBML。
+  轉的是編輯器裡的內容，未存檔的修改也算；寫不進去的會指出第幾行第幾欄，存到哪裡用對話框選。
+  命令面板只在 `.dbml` 與 SQL 檔出現。
+- **PlantUML**：取代 jebbs.plantuml。`alt+d` 在旁邊預覽游標所在的那張圖（縮放、拖曳、分頁、
+  複製成圖片），匯出單張／整份檔案／整個 workspace（12 種格式，檔名與 `out/` 底下的路徑同
+  jebbs.plantuml，舊的匯出會被原地覆寫），產生 server URL，從匯出的 PNG 取回原始碼；另有
+  補全、`!define` 巨集的參數提示、大綱，以及同名圖（匯出會互相覆蓋）與未命名圖的檢查。
+  jar 由 poly 下載，`poly.toml` 的 `[tools] plantuml` 可改指向別的 jar；Java 自備，不在 PATH
+  上就設 `poly.plantuml.java`。MIT 版的 jar 畫不了 ditaa，需要就指向 GPL 版的 jar。
+  jebbs.plantuml 還裝著時 poly 讓開。
+- **Excalidraw**：取代 pomdtr.excalidraw-editor。`.excalidraw`、`.excalidraw.json`、
+  `.excalidraw.svg`、`.excalidraw.png` 用 Excalidraw 開，存出來的檔案與它的相同：SVG／PNG 存的是
+  圖片本身並嵌著 scene，放進文件直接能看、再開還能編輯。標題列可切換原始檔、圖片與編輯器，
+  元件庫可存在工作區裡跟著專案走，主題與語言可設。設定在 `poly.excalidraw.*`，名稱同它的。
+  介面與手寫字型打包在 extension 裡，中文字型要用時才從 esm.sh 下載。兩個都裝著時 VSCode 會請你
+  選預設的編輯器。
+- **draw.io**：取代 hediet.vscode-drawio。`.drawio`、`.dio`、`.drawio.svg`、`.drawio.png`（`.dio`
+  的也是）用 draw.io 開，draw.io 打包在 extension 裡、不必連網，存出來的檔案與它的相同：XML 以
+  四格縮排寫回，SVG／PNG 存的是圖片本身並嵌著圖。用文字編輯器改 XML，開著的圖跟著變。另有轉換
+  存法、匯出、主題、新增圖、自訂圖形庫與 plugin（執行前先問你），以及 code link：把節點連到一段
+  程式碼、檔案或符號，打開 status bar 的 Code Link 後雙擊節點就跳過去，連結格式同它的。設定在
+  `poly.drawio.*`，名稱同它的；`poly.drawio.offline` 關掉改用線上的 draw.io。兩個都裝著時
+  VSCode 會請你選預設的編輯器。
+- **Markdown 匯出**：取代 yzane.markdown-pdf。`Export Markdown (pdf)`／`(html)`／`(png)`／`(jpeg)`，
+  右鍵選單也有，也可以存檔時自動轉換；匯出的檔案與它的相同：語法上色、KaTeX 數學式、PlantUML 與
+  mermaid 圖、引入別的 markdown 檔，PDF 的紙張、邊界與頁首頁尾可設。設定在 `poly.markdownPdf.*`，
+  名稱同它的。PDF 與圖片由已安裝的 Chrome 或 Edge 印出；都沒有時第一次匯出才下載固定版本的
+  Chrome for Testing（macOS arm64 與 Windows x64），核對雜湊值後才使用。emoji 畫成字元，不是它的
+  Apple 圖片。兩個都裝著時 poly 的命令不放進右鍵選單。
+- **CodeSnap**：取代 adpyke.codesnap。選取程式碼後執行 `CodeSnap 📸`（右鍵選單也有），旁邊開出的
+  頁面照 VSCode 的顏色與字型把它畫成 macOS 風格的視窗，按快門存成 PNG 或複製到剪貼簿；拍出的圖與
+  它的相同。背景、陰影、視窗樣式與行號可設，設定在 `poly.codeSnap.*`，名稱同它的。頁面開著時，選取
+  會蓋掉剪貼簿，和它一樣。兩個都裝著時 poly 的命令不放進右鍵選單。
+- **Swagger 預覽**：取代 arjun.swagger-viewer。在 Swagger 2.0 或 OpenAPI 3 的 JSON／YAML 檔按
+  `shift+alt+p`（或 `Preview Swagger`，檔案總管右鍵也有），旁邊開出 Swagger UI，打字時跟著更新；也能
+  從網址預覽，檔案總管有工作區裡 spec 的清單。頁面與 Swagger UI 的版本同它的。JSON spec 照 schema
+  標出錯誤，YAML 的要另裝 redhat.vscode-yaml。spec 引用別的檔（外部 `$ref`）時，被引用的檔會併進預覽、
+  改了也跟著更新；它宣稱支援這點，實際上沒有作用。設定在 `poly.swaggerViewer.*`，名稱同它的。兩個都
+  裝著時 poly 讓出快捷鍵、右鍵選單與清單。
 - **清單接續**：在清單項目上按 Enter 接出下一項，**有序清單號碼遞增**（整份寫成 `1.` 的
   清單維持 `1.`），任務項接出 `- [ ]`，**空的項目按 Enter 結束清單**（往外退一層，最外層
   就清掉 marker）。markdown 家族與 yaml 都有，yaml 只認 sequence 的破折號——`>` 在那裡是
@@ -156,6 +197,15 @@
 - **markdown preview 的 mermaid 圖表**：```mermaid fence 在 preview 裡畫成圖，配色與字型
   跟著編輯器主題。**VSCode 1.135 起內建就有這個功能，那時候 poly 會自動讓開**——所以這一項
   實際生效的是 1.85 到 1.134。`poly.markdownMermaid.enabled` 可關。
+- **markdown preview 的其他圖表**：fence 語言為 `nomnoml`、`flowchart`（或 `flow`）、
+  `sequence`、`vega`、`vega-lite`、`markmap`、`excalidraw`（scene 的 JSON），範圍與畫法同
+  MarkNote。函式庫在文件第一次用到時才載入；
+  深色主題下，本身不吃配色的圖畫在淺色底卡上。`plantuml`（或 `puml`、`uml`）也在內：有設
+  `poly.plantuml.server` 就交給 server，否則在本機用 Java 畫。`drawio` 是 draw.io 圖的 XML，畫
+  第一頁。`poly.markdownDiagrams.enabled` 打開。
+- **GitHub 樣式的 preview**：取代 Markdown Preview Github Styling，九種 GitHub 配色（含
+  高對比與色盲友善）、跟隨編輯器或系統的深淺色。`poly.markdownGithubStyle.enabled` 打開；
+  那個 extension 還裝著的時候 poly 讓開。
 - **TODOs 檢視**：檔案總管多一個面板，列出整個 workspace 的 `TODO`／`FIXME`／`HACK`／
   `XXX`／`BUG`。只在面板顯示時才掃描，排除規則沿用 `files.exclude`／`search.exclude`，
   而且掃描上限會寫在標題上——「清單很短」跟「清單被截斷」不該長得一樣。
@@ -185,7 +235,9 @@
 - **外部工具**（受管下載）：shellcheck、shfmt、actionlint、
   tflint、gofumpt、golangci-lint、swiftlint、buf
   （Protobuf 的格式化，同一支 binary 也是上面那個 language server）、
-  arity（R 的格式化與 lint，同樣也是上面那個 language server）。版本釘死，
+  arity（R 的格式化與 lint，同樣也是上面那個 language server）、
+  jsonnetfmt（Jsonnet 的格式化，`.jsonnet`／`.libsonnet`，用它的預設值，不另設旗標）、
+  PlantUML（MIT 版的 jar，給編輯器的預覽與匯出用，不做 lint；Java 要自己裝）。版本釘死，
   每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
   信任第一次抓到的東西。
 - **zsh 只格式化，不 lint**（`.zsh`）。shfmt 讀得懂 zsh 文法，shellcheck 讀不懂——它只支
@@ -306,8 +358,8 @@
 
 1. `poly-syntax-highlight-<版本>.vsix` — 通用，不分平台。
 2. `poly-lsp-<平台>-<版本>.vsix` — **要挑對平台**，內含對應的 poly binary：
-   `darwin-arm64`、`darwin-x64`、`linux-arm64`、`linux-x64`、`win32-arm64`、
-   `win32-x64`。
+   `darwin-arm64`（Apple Silicon）、`win32-x64`。其他平台沒有 poly-lsp，CLI 請用下方的
+   獨立 binary。
 
 安裝方式：VSCode 側邊欄 Extensions → 右上角 `...` → **Install from VSIX...** →
 選檔案 → 重新載入視窗。或用命令列：
@@ -777,8 +829,8 @@ poly **不寫使用者的 `settings.json`**（A8），所以下面這些必須�
 檔只在 git repo 裡生效。點開頭的檔案與目錄預設跳過，`.github/` 例外（workflow 是原
 始碼，actionlint 就是為它接的）。
 
-drawio 與 excalidraw 的存檔（`.drawio.svg`、`.dio.svg`、`.excalidraw.svg`、
-`.excalidraw.json`）不歸任何語言：編輯器每次存檔都照自己的排版整份重寫，格式化它只會
+drawio 與 excalidraw 的存檔（`.drawio`、`.dio`、`.drawio.svg`、`.dio.svg`、
+`.excalidraw`、`.excalidraw.svg`、`.excalidraw.json`）不歸任何語言：編輯器每次存檔都照自己的排版整份重寫，格式化它只會
 跟下一次存檔來回改。拼字與 Unicode 也不檢查，抓到的多半是編輯器產生的 id 片段，在檔案
 裡改不掉。真的要 poly 管，在 `[languages.map]` 指定；map 比內建判斷優先而且分大小寫，
 所以 `"*.json" = "jsonc"` 這種寬的 pattern 也會把它們一起接回來。

@@ -5,8 +5,9 @@
  * the ones that collide everywhere: `cmd+alt+v` is also
  * mushan.vscode-paste-image's paste-an-image, `cmd+alt+shift+v` quicktype's
  * paste-JSON-as-types, `alt+q` stkb.rewrap's rewrap -- where Revert and Save
- * would throw the edit away instead -- and `cmd+alt+a` an auto-approve toggle
- * in several AI assistants. (Format Document is the other one, and keeps its
+ * would throw the edit away instead -- `cmd+alt+a` an auto-approve toggle
+ * in several AI assistants, and `shift+alt+p` arjun.swagger-viewer's Preview
+ * Swagger, which poly's copy of it would take. (Format Document is the other one, and keeps its
  * chord: it is the editor's own Format Document chord, which it stands in
  * for.) When two extensions bind one chord, VSCode ranks each binding by its
  * position in its own manifest, a later entry winning, and only then by
@@ -15,7 +16,9 @@
  * Matching by chord rather than by those ids covers the next extension that
  * picks the same keys. That extension is the more specific choice; poly's
  * command stays in the palette, and a `keybindings.json` entry takes the chord
- * back.
+ * back. PlantUML's preview key, `alt+d`, is the one exception with a language
+ * in its `when`: jebbs.plantuml binds it in every file, so in a PlantUML file
+ * the two still meet.
  *
  * Only extensions in poly's own extension host are visible to it: one that
  * ships only a web entry point runs in a separate worker host on the desktop,
@@ -37,7 +40,9 @@ export const YIELDING = [
   "poly.inlineVariable",
   "poly.nextChangedFile",
   "poly.previousChangedFile",
+  "poly.plantumlPreview",
   "poly.revertAndSave",
+  "poly.swaggerPreview",
 ] as const;
 
 /** The context key a yielding command's `when` reads. */

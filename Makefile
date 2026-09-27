@@ -341,6 +341,14 @@ lens-probe: build ## What gopls and buf still offer the lenses poly routes to
 mermaid-diff: ## poly's mermaid rendering against VSCode's built-in
 	node tools/mermaid-diff/run.js
 
+# The preview's other additions against what they replace: GitHub styling
+# against bierner.markdown-preview-github-styles installed in a second host,
+# the diagram fences against MarkNote's own library calls. Downloads bierner's
+# VSIX and reads a MarkNote checkout (MARKNOTE=, default ~/git/MarkNote), so it
+# is an audit and not a gate. Writes screenshots beside its report.
+preview-diff: ## poly's preview styling and diagram fences against what they replace
+	node tools/preview-diff/run.js
+
 # The third differential, and the only one where poly does not replace the
 # upstream so much as swallow it: `poly fmt` and `poly check` link their
 # engines in as libraries. Every test in this repo therefore asks the engine a

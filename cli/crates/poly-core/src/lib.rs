@@ -114,6 +114,8 @@ const EXTENSIONS: &[(&str, &str)] = &[
     ("tf", "terraform"),
     ("tfvars", "terraform"),
     ("hcl", "hcl"),
+    ("jsonnet", "jsonnet"),
+    ("libsonnet", "jsonnet"),
 ];
 
 /// Formatter knobs inherited from whatever `.editorconfig` covers `path`.
@@ -317,8 +319,16 @@ pub fn diagram_file(path: &Path) -> bool {
     [
         ".drawio.svg",
         ".dio.svg",
+        // The XML poly's draw.io editor opens, which it writes indented as
+        // hediet's does.
+        ".drawio",
+        ".dio",
         ".excalidraw.svg",
         ".excalidraw.json",
+        // The bare names poly's own Excalidraw editor opens and saves, and
+        // the library it keeps beside them.
+        ".excalidraw",
+        ".excalidrawlib",
     ]
     .iter()
     .any(|diagram| lower.ends_with(diagram))
@@ -650,6 +660,8 @@ const COMMENT_PREFIXES: &[(&str, &[&str])] = &[
     // legal. Writing one in strict JSON breaks the file loudly on the next
     // parse, which is not a failure mode poly has to protect anyone from.
     ("json", &["//"]),
+    // Both spellings are Jsonnet's own, like HCL's.
+    ("jsonnet", &["//", "#"]),
     ("less", &["//"]),
     ("lua", &["--"]),
     // Both spellings are PHP's own, like HCL's.
@@ -1684,6 +1696,8 @@ mod tests {
             ("a.dio.svg", None),
             ("A.Excalidraw.SVG", None),
             ("a.excalidraw.json", None),
+            ("a.excalidraw", None),
+            ("a.excalidrawlib", None),
             ("icon.svg", Some("xml")),
             ("drawio.svg", Some("xml")),
             ("a.json", Some("json")),

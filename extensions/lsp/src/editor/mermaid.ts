@@ -27,7 +27,7 @@ const ESCAPES: Readonly<Record<string, string>> = {
   "\"": "&quot;",
 };
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text.replace(/[&<>"]/g, (character) => ESCAPES[character]);
 }
 

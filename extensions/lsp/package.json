@@ -52,6 +52,7 @@
     "onLanguage:swift",
     "onLanguage:protobuf",
     "onLanguage:r",
+    "onLanguage:jsonnet",
     "onLanguage:handlebars",
     "onLanguage:dockercompose",
     "onLanguage:github-actions-workflow",
@@ -60,7 +61,23 @@
   "contributes": {
     "markdown.markdownItPlugins": true,
     "markdown.previewScripts": [
-      "./dist/preview.js"
+      "./dist/preview.js",
+      "./dist/diagrams.js"
+    ],
+    "markdown.previewStyles": [
+      "./media/diagrams.css",
+      "./media/github-markdown/base.css",
+      "./media/github-markdown/github-markdown-theme-base.css",
+      "./media/github-markdown/github-markdown-light.css",
+      "./media/github-markdown/github-markdown-light-colorblind.css",
+      "./media/github-markdown/github-markdown-light-tritanopia.css",
+      "./media/github-markdown/github-markdown-light-high-contrast.css",
+      "./media/github-markdown/github-markdown-dark.css",
+      "./media/github-markdown/github-markdown-dark-dimmed.css",
+      "./media/github-markdown/github-markdown-dark-colorblind.css",
+      "./media/github-markdown/github-markdown-dark-tritanopia.css",
+      "./media/github-markdown/github-markdown-dark-high-contrast.css",
+      "./media/github-markdown/highlight-js.css"
     ],
     "languages": [
       {
@@ -74,6 +91,20 @@
         "id": "markdown",
         "extensions": [
           ".mdx"
+        ]
+      },
+      {
+        "id": "json",
+        "extensions": [
+          ".excalidraw",
+          ".excalidrawlib"
+        ]
+      },
+      {
+        "id": "xml",
+        "extensions": [
+          ".drawio",
+          ".dio"
         ]
       }
     ],
@@ -155,6 +186,52 @@
         "category": "%command.category%"
       },
       {
+        "command": "poly.dbmlToSql",
+        "title": "%command.dbmlToSql.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.sqlToDbml",
+        "title": "%command.sqlToDbml.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.plantumlPreview",
+        "title": "%command.plantumlPreview.title%",
+        "category": "%command.category%",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "poly.plantumlExportCurrent",
+        "title": "%command.plantumlExportCurrent.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.plantumlExportDocument",
+        "title": "%command.plantumlExportDocument.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.plantumlExportWorkspace",
+        "title": "%command.plantumlExportWorkspace.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.plantumlUrlCurrent",
+        "title": "%command.plantumlUrlCurrent.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.plantumlUrlDocument",
+        "title": "%command.plantumlUrlDocument.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.plantumlExtractSource",
+        "title": "%command.plantumlExtractSource.title%",
+        "category": "%command.category%"
+      },
+      {
         "command": "poly.refreshTodos",
         "title": "%command.refreshTodos.title%",
         "category": "%command.category%",
@@ -224,6 +301,159 @@
         "command": "poly.outdentListItem",
         "title": "%command.outdentListItem.title%",
         "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioConvert",
+        "title": "%command.drawioConvert.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioExport",
+        "title": "%command.drawioExport.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioTheme",
+        "title": "%command.drawioTheme.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioNewFile",
+        "title": "%command.drawioNewFile.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioToggleCodeLink",
+        "title": "%command.drawioToggleCodeLink.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioLinkCode",
+        "title": "%command.drawioLinkCode.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioLinkFile",
+        "title": "%command.drawioLinkFile.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioLinkSymbol",
+        "title": "%command.drawioLinkSymbol.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.drawioLinkWorkspaceSymbol",
+        "title": "%command.drawioLinkWorkspaceSymbol.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.excalidrawNewFile",
+        "title": "%command.excalidrawNewFile.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.excalidrawTheme",
+        "title": "%command.excalidrawTheme.title%",
+        "category": "%command.category%",
+        "icon": "$(color-mode)"
+      },
+      {
+        "command": "poly.excalidrawShowSource",
+        "title": "%command.excalidrawShowSource.title%",
+        "category": "%command.category%",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "poly.excalidrawShowSourceToSide",
+        "title": "%command.excalidrawShowSourceToSide.title%",
+        "category": "%command.category%",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "poly.excalidrawShowEditor",
+        "title": "%command.excalidrawShowEditor.title%",
+        "category": "%command.category%",
+        "icon": {
+          "light": "./media/excalidraw/menu-icon-light.png",
+          "dark": "./media/excalidraw/menu-icon-dark.png"
+        }
+      },
+      {
+        "command": "poly.excalidrawShowEditorToSide",
+        "title": "%command.excalidrawShowEditorToSide.title%",
+        "category": "%command.category%",
+        "icon": {
+          "light": "./media/excalidraw/menu-icon-light.png",
+          "dark": "./media/excalidraw/menu-icon-dark.png"
+        }
+      },
+      {
+        "command": "poly.excalidrawShowImage",
+        "title": "%command.excalidrawShowImage.title%",
+        "category": "%command.category%",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "poly.excalidrawShowImageToSide",
+        "title": "%command.excalidrawShowImageToSide.title%",
+        "category": "%command.category%",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "poly.excalidrawPreventDefault",
+        "title": "%command.excalidrawPreventDefault.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.markdownExport",
+        "title": "%command.markdownExport.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.markdownExportPdf",
+        "title": "%command.markdownExportPdf.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.markdownExportHtml",
+        "title": "%command.markdownExportHtml.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.markdownExportPng",
+        "title": "%command.markdownExportPng.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.markdownExportJpeg",
+        "title": "%command.markdownExportJpeg.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.markdownExportAll",
+        "title": "%command.markdownExportAll.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.markdownExportDiagnostics",
+        "title": "%command.markdownExportDiagnostics.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.codeSnap",
+        "title": "%command.codeSnap.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.swaggerPreview",
+        "title": "%command.swaggerPreview.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.swaggerPreviewFromUrl",
+        "title": "%command.swaggerPreviewFromUrl.title%",
+        "category": "%command.category%"
       }
     ],
     "views": {
@@ -237,9 +467,20 @@
           "id": "polyReferences",
           "name": "%view.polyReferences.name%",
           "when": "poly.hasReferences"
+        },
+        {
+          "id": "polySwaggerFiles",
+          "name": "%view.polySwaggerFiles.name%",
+          "when": "!poly.yield.swaggerViewer"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "polySwaggerFiles",
+        "contents": "%viewsWelcome.polySwaggerFiles.contents%"
+      }
+    ],
     "menus": {
       "explorer/context": [
         {
@@ -249,12 +490,86 @@
         {
           "command": "poly.lintPath",
           "group": "7_modification@11"
+        },
+        {
+          "command": "poly.plantumlExportWorkspace",
+          "when": "explorerResourceIsFolder || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i",
+          "group": "7_modification@12"
+        },
+        {
+          "command": "poly.drawioLinkFile",
+          "when": "!explorerResourceIsFolder && (activeCustomEditorId == 'poly.drawio' || activeCustomEditorId == 'poly.drawio.png')",
+          "group": "7_modification@13"
+        },
+        {
+          "command": "poly.swaggerPreview",
+          "when": "(resourceLangId == json || resourceLangId == yaml) && !poly.yield.swaggerViewer",
+          "group": "SwaggerViewer"
         }
       ],
       "editor/context": [
         {
           "command": "poly.copyPathWithLine",
           "group": "9_cutcopypaste"
+        },
+        {
+          "command": "poly.plantumlPreview",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "group": "poly_plantuml@1"
+        },
+        {
+          "command": "poly.plantumlExportCurrent",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "group": "poly_plantuml@2"
+        },
+        {
+          "command": "poly.plantumlExportDocument",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "group": "poly_plantuml@3"
+        },
+        {
+          "command": "poly.plantumlUrlCurrent",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "group": "poly_plantuml@4"
+        },
+        {
+          "command": "poly.plantumlUrlDocument",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "group": "poly_plantuml@5"
+        },
+        {
+          "command": "poly.markdownExport",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "group": "poly_markdownExport@1"
+        },
+        {
+          "command": "poly.markdownExportPdf",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "group": "poly_markdownExport@2"
+        },
+        {
+          "command": "poly.markdownExportHtml",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "group": "poly_markdownExport@3"
+        },
+        {
+          "command": "poly.markdownExportPng",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "group": "poly_markdownExport@4"
+        },
+        {
+          "command": "poly.markdownExportJpeg",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "group": "poly_markdownExport@5"
+        },
+        {
+          "command": "poly.markdownExportAll",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "group": "poly_markdownExport@6"
+        },
+        {
+          "command": "poly.codeSnap",
+          "when": "!poly.yield.codeSnap"
         }
       ],
       "view/title": [
@@ -280,6 +595,120 @@
         {
           "command": "poly.outdentListItem",
           "when": "false"
+        },
+        {
+          "command": "poly.dbmlToSql",
+          "when": "editorLangId == dbml || resourceExtname == .dbml"
+        },
+        {
+          "command": "poly.sqlToDbml",
+          "when": "editorLangId == sql"
+        },
+        {
+          "command": "poly.excalidrawTheme",
+          "when": "activeCustomEditorId == 'poly.excalidraw'"
+        },
+        {
+          "command": "poly.excalidrawShowSource",
+          "when": "activeCustomEditorId == 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw(\\.svg)?$/"
+        },
+        {
+          "command": "poly.excalidrawShowSourceToSide",
+          "when": "activeCustomEditorId == 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw(\\.svg)?$/"
+        },
+        {
+          "command": "poly.excalidrawShowEditor",
+          "when": "activeCustomEditorId != 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw(\\.png|\\.svg)?$/"
+        },
+        {
+          "command": "poly.excalidrawShowEditorToSide",
+          "when": "activeCustomEditorId != 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw(\\.png|\\.svg)?$/"
+        },
+        {
+          "command": "poly.excalidrawShowImage",
+          "when": "activeCustomEditorId == 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw\\.png$/"
+        },
+        {
+          "command": "poly.excalidrawShowImageToSide",
+          "when": "activeCustomEditorId == 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw\\.png$/"
+        },
+        {
+          "command": "poly.excalidrawPreventDefault",
+          "when": "false"
+        },
+        {
+          "command": "poly.drawioConvert",
+          "when": "activeCustomEditorId == 'poly.drawio' || activeCustomEditorId == 'poly.drawio.png'"
+        },
+        {
+          "command": "poly.drawioExport",
+          "when": "activeCustomEditorId == 'poly.drawio' || activeCustomEditorId == 'poly.drawio.png'"
+        },
+        {
+          "command": "poly.drawioTheme",
+          "when": "activeCustomEditorId == 'poly.drawio' || activeCustomEditorId == 'poly.drawio.png'"
+        },
+        {
+          "command": "poly.markdownExport",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+        },
+        {
+          "command": "poly.markdownExportPdf",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+        },
+        {
+          "command": "poly.markdownExportHtml",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+        },
+        {
+          "command": "poly.markdownExportPng",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+        },
+        {
+          "command": "poly.markdownExportJpeg",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+        },
+        {
+          "command": "poly.markdownExportAll",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "poly.plantumlPreview",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "group": "navigation"
+        },
+        {
+          "command": "poly.excalidrawShowEditor",
+          "alt": "poly.excalidrawShowEditorToSide",
+          "when": "activeCustomEditorId != 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw(\\.png|\\.svg)?$/",
+          "group": "navigation"
+        },
+        {
+          "command": "poly.excalidrawShowSource",
+          "alt": "poly.excalidrawShowSourceToSide",
+          "when": "activeCustomEditorId == 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw(\\.svg)?$/",
+          "group": "navigation"
+        },
+        {
+          "command": "poly.excalidrawShowImage",
+          "alt": "poly.excalidrawShowImageToSide",
+          "when": "activeCustomEditorId == 'poly.excalidraw' && resourceFilename =~ /^.+\\.excalidraw\\.png$/",
+          "group": "navigation"
+        },
+        {
+          "command": "poly.excalidrawTheme",
+          "when": "activeCustomEditorId == 'poly.excalidraw'",
+          "group": "navigation"
+        }
+      ],
+      "file/newFile": [
+        {
+          "command": "poly.excalidrawNewFile"
+        },
+        {
+          "command": "poly.drawioNewFile"
         }
       ]
     },
@@ -352,6 +781,33 @@
         "key": "ctrl+alt+shift+v",
         "mac": "cmd+alt+shift+v",
         "when": "editorTextFocus && !editorReadonly && !poly.yield.inlineVariable"
+      },
+      {
+        "command": "poly.plantumlPreview",
+        "key": "alt+d",
+        "when": "editorTextFocus && (editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && !poly.yield.plantumlPreview"
+      },
+      {
+        "command": "poly.swaggerPreview",
+        "key": "shift+alt+p",
+        "when": "editorTextFocus && !poly.yield.swaggerPreview"
+      },
+      {
+        "command": "poly.excalidrawPreventDefault",
+        "key": "ctrl+z",
+        "mac": "cmd+z",
+        "when": "activeCustomEditorId == 'poly.excalidraw'"
+      },
+      {
+        "command": "poly.excalidrawPreventDefault",
+        "key": "ctrl+y",
+        "mac": "cmd+shift+z",
+        "when": "activeCustomEditorId == 'poly.excalidraw'"
+      },
+      {
+        "command": "poly.drawioLinkCode",
+        "key": "shift+f3",
+        "when": "!findWidgetVisible"
       }
     ],
     "configuration": {
@@ -438,6 +894,1141 @@
           "default": false,
           "description": "%config.markdownMermaid.enabled.description%"
         },
+        "poly.markdownDiagrams.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.markdownDiagrams.enabled.description%"
+        },
+        "poly.markdownGithubStyle.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.markdownGithubStyle.enabled.description%"
+        },
+        "poly.markdownGithubStyle.colorTheme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "system",
+            "light",
+            "dark"
+          ],
+          "enumDescriptions": [
+            "%config.markdownGithubStyle.colorTheme.auto%",
+            "%config.markdownGithubStyle.colorTheme.system%",
+            "%config.markdownGithubStyle.colorTheme.light%",
+            "%config.markdownGithubStyle.colorTheme.dark%"
+          ],
+          "default": "auto",
+          "description": "%config.markdownGithubStyle.colorTheme.description%"
+        },
+        "poly.markdownGithubStyle.lightTheme": {
+          "type": "string",
+          "enum": [
+            "light",
+            "light_high_contrast",
+            "light_colorblind",
+            "light_tritanopia",
+            "dark",
+            "dark_high_contrast",
+            "dark_colorblind",
+            "dark_tritanopia",
+            "dark_dimmed"
+          ],
+          "enumItemLabels": [
+            "%config.markdownGithubStyle.theme.light%",
+            "%config.markdownGithubStyle.theme.light_high_contrast%",
+            "%config.markdownGithubStyle.theme.light_colorblind%",
+            "%config.markdownGithubStyle.theme.light_tritanopia%",
+            "%config.markdownGithubStyle.theme.dark%",
+            "%config.markdownGithubStyle.theme.dark_high_contrast%",
+            "%config.markdownGithubStyle.theme.dark_colorblind%",
+            "%config.markdownGithubStyle.theme.dark_tritanopia%",
+            "%config.markdownGithubStyle.theme.dark_dimmed%"
+          ],
+          "default": "light",
+          "markdownDescription": "%config.markdownGithubStyle.lightTheme.description%"
+        },
+        "poly.markdownGithubStyle.darkTheme": {
+          "type": "string",
+          "enum": [
+            "light",
+            "light_high_contrast",
+            "light_colorblind",
+            "light_tritanopia",
+            "dark",
+            "dark_high_contrast",
+            "dark_colorblind",
+            "dark_tritanopia",
+            "dark_dimmed"
+          ],
+          "enumItemLabels": [
+            "%config.markdownGithubStyle.theme.light%",
+            "%config.markdownGithubStyle.theme.light_high_contrast%",
+            "%config.markdownGithubStyle.theme.light_colorblind%",
+            "%config.markdownGithubStyle.theme.light_tritanopia%",
+            "%config.markdownGithubStyle.theme.dark%",
+            "%config.markdownGithubStyle.theme.dark_high_contrast%",
+            "%config.markdownGithubStyle.theme.dark_colorblind%",
+            "%config.markdownGithubStyle.theme.dark_tritanopia%",
+            "%config.markdownGithubStyle.theme.dark_dimmed%"
+          ],
+          "default": "dark",
+          "markdownDescription": "%config.markdownGithubStyle.darkTheme.description%"
+        },
+        "poly.markdownPdf.type": {
+          "type": "array",
+          "default": [
+            "pdf"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "%config.markdownPdf.type.description%"
+        },
+        "poly.markdownPdf.convertOnSave": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.markdownPdf.convertOnSave.description%"
+        },
+        "poly.markdownPdf.convertOnSaveExclude": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "%config.markdownPdf.convertOnSaveExclude.description%"
+        },
+        "poly.markdownPdf.outputDirectory": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.markdownPdf.outputDirectory.description%"
+        },
+        "poly.markdownPdf.outputDirectoryRelativePathFile": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.markdownPdf.outputDirectoryRelativePathFile.description%"
+        },
+        "poly.markdownPdf.sanitize": {
+          "type": "string",
+          "enum": [
+            "gfm",
+            "gfm-allow-style",
+            "none"
+          ],
+          "default": "gfm",
+          "markdownDescription": "%config.markdownPdf.sanitize.description%"
+        },
+        "poly.markdownPdf.styles": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "%config.markdownPdf.styles.description%"
+        },
+        "poly.markdownPdf.stylesRelativePathFile": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.markdownPdf.stylesRelativePathFile.description%"
+        },
+        "poly.markdownPdf.includeDefaultStyles": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.markdownPdf.includeDefaultStyles.description%"
+        },
+        "poly.markdownPdf.highlight": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.markdownPdf.highlight.description%"
+        },
+        "poly.markdownPdf.highlightStyle": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "",
+            "1c-light.css",
+            "1c-light.min.css",
+            "a11y-dark.css",
+            "a11y-dark.min.css",
+            "a11y-light.css",
+            "a11y-light.min.css",
+            "agate.css",
+            "agate.min.css",
+            "an-old-hope.css",
+            "an-old-hope.min.css",
+            "androidstudio.css",
+            "androidstudio.min.css",
+            "arduino-light.css",
+            "arduino-light.min.css",
+            "arta.css",
+            "arta.min.css",
+            "ascetic.css",
+            "ascetic.min.css",
+            "atom-one-dark-reasonable.css",
+            "atom-one-dark-reasonable.min.css",
+            "atom-one-dark.css",
+            "atom-one-dark.min.css",
+            "atom-one-light.css",
+            "atom-one-light.min.css",
+            "brown-paper.css",
+            "brown-paper.min.css",
+            "codepen-embed.css",
+            "codepen-embed.min.css",
+            "color-brewer.css",
+            "color-brewer.min.css",
+            "cybertopia-cherry.css",
+            "cybertopia-cherry.min.css",
+            "cybertopia-dimmer.css",
+            "cybertopia-dimmer.min.css",
+            "cybertopia-icecap.css",
+            "cybertopia-icecap.min.css",
+            "cybertopia-saturated.css",
+            "cybertopia-saturated.min.css",
+            "dark.css",
+            "dark.min.css",
+            "default.css",
+            "default.min.css",
+            "devibeans.css",
+            "devibeans.min.css",
+            "docco.css",
+            "docco.min.css",
+            "far.css",
+            "far.min.css",
+            "felipec.css",
+            "felipec.min.css",
+            "foundation.css",
+            "foundation.min.css",
+            "github-dark-dimmed.css",
+            "github-dark-dimmed.min.css",
+            "github-dark.css",
+            "github-dark.min.css",
+            "github.css",
+            "github.min.css",
+            "gml.css",
+            "gml.min.css",
+            "googlecode.css",
+            "googlecode.min.css",
+            "gradient-dark.css",
+            "gradient-dark.min.css",
+            "gradient-light.css",
+            "gradient-light.min.css",
+            "grayscale.css",
+            "grayscale.min.css",
+            "hybrid.css",
+            "hybrid.min.css",
+            "idea.css",
+            "idea.min.css",
+            "intellij-light.css",
+            "intellij-light.min.css",
+            "ir-black.css",
+            "ir-black.min.css",
+            "isbl-editor-dark.css",
+            "isbl-editor-dark.min.css",
+            "isbl-editor-light.css",
+            "isbl-editor-light.min.css",
+            "kimbie-dark.css",
+            "kimbie-dark.min.css",
+            "kimbie-light.css",
+            "kimbie-light.min.css",
+            "lightfair.css",
+            "lightfair.min.css",
+            "lioshi.css",
+            "lioshi.min.css",
+            "magula.css",
+            "magula.min.css",
+            "mono-blue.css",
+            "mono-blue.min.css",
+            "monokai.css",
+            "monokai.min.css",
+            "monokai-sublime.css",
+            "monokai-sublime.min.css",
+            "night-owl.css",
+            "night-owl.min.css",
+            "nnfx-dark.css",
+            "nnfx-dark.min.css",
+            "nnfx-light.css",
+            "nnfx-light.min.css",
+            "nord.css",
+            "nord.min.css",
+            "obsidian.css",
+            "obsidian.min.css",
+            "panda-syntax-dark.css",
+            "panda-syntax-dark.min.css",
+            "panda-syntax-light.css",
+            "panda-syntax-light.min.css",
+            "paraiso-dark.css",
+            "paraiso-dark.min.css",
+            "paraiso-light.css",
+            "paraiso-light.min.css",
+            "pojoaque.css",
+            "pojoaque.min.css",
+            "purebasic.css",
+            "purebasic.min.css",
+            "qtcreator-dark.css",
+            "qtcreator-dark.min.css",
+            "qtcreator-light.css",
+            "qtcreator-light.min.css",
+            "rainbow.css",
+            "rainbow.min.css",
+            "rose-pine-dawn.css",
+            "rose-pine-dawn.min.css",
+            "rose-pine-moon.css",
+            "rose-pine-moon.min.css",
+            "rose-pine.css",
+            "rose-pine.min.css",
+            "routeros.css",
+            "routeros.min.css",
+            "school-book.css",
+            "school-book.min.css",
+            "shades-of-purple.css",
+            "shades-of-purple.min.css",
+            "srcery.css",
+            "srcery.min.css",
+            "stackoverflow-dark.css",
+            "stackoverflow-dark.min.css",
+            "stackoverflow-light.css",
+            "stackoverflow-light.min.css",
+            "sunburst.css",
+            "sunburst.min.css",
+            "tokyo-night-dark.css",
+            "tokyo-night-dark.min.css",
+            "tokyo-night-light.css",
+            "tokyo-night-light.min.css",
+            "tomorrow-night-blue.css",
+            "tomorrow-night-blue.min.css",
+            "tomorrow-night-bright.css",
+            "tomorrow-night-bright.min.css",
+            "vs.css",
+            "vs.min.css",
+            "vs2015.css",
+            "vs2015.min.css",
+            "xcode.css",
+            "xcode.min.css",
+            "xt256.css",
+            "xt256.min.css",
+            "base16/3024.css",
+            "base16/3024.min.css",
+            "base16/apathy.css",
+            "base16/apathy.min.css",
+            "base16/apprentice.css",
+            "base16/apprentice.min.css",
+            "base16/ashes.css",
+            "base16/ashes.min.css",
+            "base16/atelier-cave-light.css",
+            "base16/atelier-cave-light.min.css",
+            "base16/atelier-cave.css",
+            "base16/atelier-cave.min.css",
+            "base16/atelier-dune-light.css",
+            "base16/atelier-dune-light.min.css",
+            "base16/atelier-dune.css",
+            "base16/atelier-dune.min.css",
+            "base16/atelier-estuary-light.css",
+            "base16/atelier-estuary-light.min.css",
+            "base16/atelier-estuary.css",
+            "base16/atelier-estuary.min.css",
+            "base16/atelier-forest-light.css",
+            "base16/atelier-forest-light.min.css",
+            "base16/atelier-forest.css",
+            "base16/atelier-forest.min.css",
+            "base16/atelier-heath-light.css",
+            "base16/atelier-heath-light.min.css",
+            "base16/atelier-heath.css",
+            "base16/atelier-heath.min.css",
+            "base16/atelier-lakeside-light.css",
+            "base16/atelier-lakeside-light.min.css",
+            "base16/atelier-lakeside.css",
+            "base16/atelier-lakeside.min.css",
+            "base16/atelier-plateau-light.css",
+            "base16/atelier-plateau-light.min.css",
+            "base16/atelier-plateau.css",
+            "base16/atelier-plateau.min.css",
+            "base16/atelier-savanna-light.css",
+            "base16/atelier-savanna-light.min.css",
+            "base16/atelier-savanna.css",
+            "base16/atelier-savanna.min.css",
+            "base16/atelier-seaside-light.css",
+            "base16/atelier-seaside-light.min.css",
+            "base16/atelier-seaside.css",
+            "base16/atelier-seaside.min.css",
+            "base16/atelier-sulphurpool-light.css",
+            "base16/atelier-sulphurpool-light.min.css",
+            "base16/atelier-sulphurpool.css",
+            "base16/atelier-sulphurpool.min.css",
+            "base16/atlas.css",
+            "base16/atlas.min.css",
+            "base16/bespin.css",
+            "base16/bespin.min.css",
+            "base16/black-metal-bathory.css",
+            "base16/black-metal-bathory.min.css",
+            "base16/black-metal-burzum.css",
+            "base16/black-metal-burzum.min.css",
+            "base16/black-metal-dark-funeral.css",
+            "base16/black-metal-dark-funeral.min.css",
+            "base16/black-metal-gorgoroth.css",
+            "base16/black-metal-gorgoroth.min.css",
+            "base16/black-metal-immortal.css",
+            "base16/black-metal-immortal.min.css",
+            "base16/black-metal-khold.css",
+            "base16/black-metal-khold.min.css",
+            "base16/black-metal-marduk.css",
+            "base16/black-metal-marduk.min.css",
+            "base16/black-metal-mayhem.css",
+            "base16/black-metal-mayhem.min.css",
+            "base16/black-metal-nile.css",
+            "base16/black-metal-nile.min.css",
+            "base16/black-metal-venom.css",
+            "base16/black-metal-venom.min.css",
+            "base16/black-metal.css",
+            "base16/black-metal.min.css",
+            "base16/brewer.css",
+            "base16/brewer.min.css",
+            "base16/bright.css",
+            "base16/bright.min.css",
+            "base16/brogrammer.css",
+            "base16/brogrammer.min.css",
+            "base16/brush-trees-dark.css",
+            "base16/brush-trees-dark.min.css",
+            "base16/brush-trees.css",
+            "base16/brush-trees.min.css",
+            "base16/chalk.css",
+            "base16/chalk.min.css",
+            "base16/circus.css",
+            "base16/circus.min.css",
+            "base16/classic-dark.css",
+            "base16/classic-dark.min.css",
+            "base16/classic-light.css",
+            "base16/classic-light.min.css",
+            "base16/codeschool.css",
+            "base16/codeschool.min.css",
+            "base16/colors.css",
+            "base16/colors.min.css",
+            "base16/cupcake.css",
+            "base16/cupcake.min.css",
+            "base16/cupertino.css",
+            "base16/cupertino.min.css",
+            "base16/danqing.css",
+            "base16/danqing.min.css",
+            "base16/darcula.css",
+            "base16/darcula.min.css",
+            "base16/dark-violet.css",
+            "base16/dark-violet.min.css",
+            "base16/darkmoss.css",
+            "base16/darkmoss.min.css",
+            "base16/darktooth.css",
+            "base16/darktooth.min.css",
+            "base16/decaf.css",
+            "base16/decaf.min.css",
+            "base16/default-dark.css",
+            "base16/default-dark.min.css",
+            "base16/default-light.css",
+            "base16/default-light.min.css",
+            "base16/dirtysea.css",
+            "base16/dirtysea.min.css",
+            "base16/dracula.css",
+            "base16/dracula.min.css",
+            "base16/edge-dark.css",
+            "base16/edge-dark.min.css",
+            "base16/edge-light.css",
+            "base16/edge-light.min.css",
+            "base16/eighties.css",
+            "base16/eighties.min.css",
+            "base16/embers.css",
+            "base16/embers.min.css",
+            "base16/equilibrium-dark.css",
+            "base16/equilibrium-dark.min.css",
+            "base16/equilibrium-gray-dark.css",
+            "base16/equilibrium-gray-dark.min.css",
+            "base16/equilibrium-gray-light.css",
+            "base16/equilibrium-gray-light.min.css",
+            "base16/equilibrium-light.css",
+            "base16/equilibrium-light.min.css",
+            "base16/espresso.css",
+            "base16/espresso.min.css",
+            "base16/eva-dim.css",
+            "base16/eva-dim.min.css",
+            "base16/eva.css",
+            "base16/eva.min.css",
+            "base16/flat.css",
+            "base16/flat.min.css",
+            "base16/framer.css",
+            "base16/framer.min.css",
+            "base16/fruit-soda.css",
+            "base16/fruit-soda.min.css",
+            "base16/gigavolt.css",
+            "base16/gigavolt.min.css",
+            "base16/github.css",
+            "base16/github.min.css",
+            "base16/google-dark.css",
+            "base16/google-dark.min.css",
+            "base16/google-light.css",
+            "base16/google-light.min.css",
+            "base16/grayscale-dark.css",
+            "base16/grayscale-dark.min.css",
+            "base16/grayscale-light.css",
+            "base16/grayscale-light.min.css",
+            "base16/green-screen.css",
+            "base16/green-screen.min.css",
+            "base16/gruvbox-dark-hard.css",
+            "base16/gruvbox-dark-hard.min.css",
+            "base16/gruvbox-dark-medium.css",
+            "base16/gruvbox-dark-medium.min.css",
+            "base16/gruvbox-dark-pale.css",
+            "base16/gruvbox-dark-pale.min.css",
+            "base16/gruvbox-dark-soft.css",
+            "base16/gruvbox-dark-soft.min.css",
+            "base16/gruvbox-light-hard.css",
+            "base16/gruvbox-light-hard.min.css",
+            "base16/gruvbox-light-medium.css",
+            "base16/gruvbox-light-medium.min.css",
+            "base16/gruvbox-light-soft.css",
+            "base16/gruvbox-light-soft.min.css",
+            "base16/hardcore.css",
+            "base16/hardcore.min.css",
+            "base16/harmonic16-dark.css",
+            "base16/harmonic16-dark.min.css",
+            "base16/harmonic16-light.css",
+            "base16/harmonic16-light.min.css",
+            "base16/heetch-dark.css",
+            "base16/heetch-dark.min.css",
+            "base16/heetch-light.css",
+            "base16/heetch-light.min.css",
+            "base16/helios.css",
+            "base16/helios.min.css",
+            "base16/hopscotch.css",
+            "base16/hopscotch.min.css",
+            "base16/horizon-dark.css",
+            "base16/horizon-dark.min.css",
+            "base16/horizon-light.css",
+            "base16/horizon-light.min.css",
+            "base16/humanoid-dark.css",
+            "base16/humanoid-dark.min.css",
+            "base16/humanoid-light.css",
+            "base16/humanoid-light.min.css",
+            "base16/ia-dark.css",
+            "base16/ia-dark.min.css",
+            "base16/ia-light.css",
+            "base16/ia-light.min.css",
+            "base16/icy-dark.css",
+            "base16/icy-dark.min.css",
+            "base16/ir-black.css",
+            "base16/ir-black.min.css",
+            "base16/isotope.css",
+            "base16/isotope.min.css",
+            "base16/kimber.css",
+            "base16/kimber.min.css",
+            "base16/london-tube.css",
+            "base16/london-tube.min.css",
+            "base16/macintosh.css",
+            "base16/macintosh.min.css",
+            "base16/marrakesh.css",
+            "base16/marrakesh.min.css",
+            "base16/materia.css",
+            "base16/materia.min.css",
+            "base16/material-darker.css",
+            "base16/material-darker.min.css",
+            "base16/material-lighter.css",
+            "base16/material-lighter.min.css",
+            "base16/material-palenight.css",
+            "base16/material-palenight.min.css",
+            "base16/material-vivid.css",
+            "base16/material-vivid.min.css",
+            "base16/material.css",
+            "base16/material.min.css",
+            "base16/mellow-purple.css",
+            "base16/mellow-purple.min.css",
+            "base16/mexico-light.css",
+            "base16/mexico-light.min.css",
+            "base16/mocha.css",
+            "base16/mocha.min.css",
+            "base16/monokai.css",
+            "base16/monokai.min.css",
+            "base16/nebula.css",
+            "base16/nebula.min.css",
+            "base16/nord.css",
+            "base16/nord.min.css",
+            "base16/nova.css",
+            "base16/nova.min.css",
+            "base16/ocean.css",
+            "base16/ocean.min.css",
+            "base16/oceanicnext.css",
+            "base16/oceanicnext.min.css",
+            "base16/one-light.css",
+            "base16/one-light.min.css",
+            "base16/onedark.css",
+            "base16/onedark.min.css",
+            "base16/outrun-dark.css",
+            "base16/outrun-dark.min.css",
+            "base16/papercolor-dark.css",
+            "base16/papercolor-dark.min.css",
+            "base16/papercolor-light.css",
+            "base16/papercolor-light.min.css",
+            "base16/paraiso.css",
+            "base16/paraiso.min.css",
+            "base16/pasque.css",
+            "base16/pasque.min.css",
+            "base16/phd.css",
+            "base16/phd.min.css",
+            "base16/pico.css",
+            "base16/pico.min.css",
+            "base16/pop.css",
+            "base16/pop.min.css",
+            "base16/porple.css",
+            "base16/porple.min.css",
+            "base16/qualia.css",
+            "base16/qualia.min.css",
+            "base16/railscasts.css",
+            "base16/railscasts.min.css",
+            "base16/rebecca.css",
+            "base16/rebecca.min.css",
+            "base16/ros-pine-dawn.css",
+            "base16/ros-pine-dawn.min.css",
+            "base16/ros-pine-moon.css",
+            "base16/ros-pine-moon.min.css",
+            "base16/ros-pine.css",
+            "base16/ros-pine.min.css",
+            "base16/sagelight.css",
+            "base16/sagelight.min.css",
+            "base16/sandcastle.css",
+            "base16/sandcastle.min.css",
+            "base16/seti-ui.css",
+            "base16/seti-ui.min.css",
+            "base16/shapeshifter.css",
+            "base16/shapeshifter.min.css",
+            "base16/silk-dark.css",
+            "base16/silk-dark.min.css",
+            "base16/silk-light.css",
+            "base16/silk-light.min.css",
+            "base16/snazzy.css",
+            "base16/snazzy.min.css",
+            "base16/solar-flare-light.css",
+            "base16/solar-flare-light.min.css",
+            "base16/solar-flare.css",
+            "base16/solar-flare.min.css",
+            "base16/solarized-dark.css",
+            "base16/solarized-dark.min.css",
+            "base16/solarized-light.css",
+            "base16/solarized-light.min.css",
+            "base16/spacemacs.css",
+            "base16/spacemacs.min.css",
+            "base16/summercamp.css",
+            "base16/summercamp.min.css",
+            "base16/summerfruit-dark.css",
+            "base16/summerfruit-dark.min.css",
+            "base16/summerfruit-light.css",
+            "base16/summerfruit-light.min.css",
+            "base16/synth-midnight-terminal-dark.css",
+            "base16/synth-midnight-terminal-dark.min.css",
+            "base16/synth-midnight-terminal-light.css",
+            "base16/synth-midnight-terminal-light.min.css",
+            "base16/tango.css",
+            "base16/tango.min.css",
+            "base16/tender.css",
+            "base16/tender.min.css",
+            "base16/tomorrow-night.css",
+            "base16/tomorrow-night.min.css",
+            "base16/tomorrow.css",
+            "base16/tomorrow.min.css",
+            "base16/twilight.css",
+            "base16/twilight.min.css",
+            "base16/unikitty-dark.css",
+            "base16/unikitty-dark.min.css",
+            "base16/unikitty-light.css",
+            "base16/unikitty-light.min.css",
+            "base16/vulcan.css",
+            "base16/vulcan.min.css",
+            "base16/windows-10-light.css",
+            "base16/windows-10-light.min.css",
+            "base16/windows-10.css",
+            "base16/windows-10.min.css",
+            "base16/windows-95-light.css",
+            "base16/windows-95-light.min.css",
+            "base16/windows-95.css",
+            "base16/windows-95.min.css",
+            "base16/windows-high-contrast-light.css",
+            "base16/windows-high-contrast-light.min.css",
+            "base16/windows-high-contrast.css",
+            "base16/windows-high-contrast.min.css",
+            "base16/windows-nt-light.css",
+            "base16/windows-nt-light.min.css",
+            "base16/windows-nt.css",
+            "base16/windows-nt.min.css",
+            "base16/woodland.css",
+            "base16/woodland.min.css",
+            "base16/xcode-dusk.css",
+            "base16/xcode-dusk.min.css",
+            "base16/zenburn.css",
+            "base16/zenburn.min.css"
+          ],
+          "default": "",
+          "markdownDescription": "%config.markdownPdf.highlightStyle.description%"
+        },
+        "poly.markdownPdf.breaks": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.markdownPdf.breaks.description%"
+        },
+        "poly.markdownPdf.emoji": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.markdownPdf.emoji.description%"
+        },
+        "poly.markdownPdf.executablePath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.markdownPdf.executablePath.description%"
+        },
+        "poly.markdownPdf.chromium.autoDownload": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.markdownPdf.chromium.autoDownload.description%"
+        },
+        "poly.markdownPdf.scale": {
+          "type": "number",
+          "default": 1,
+          "markdownDescription": "%config.markdownPdf.scale.description%"
+        },
+        "poly.markdownPdf.displayHeaderFooter": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.displayHeaderFooter.description%"
+        },
+        "poly.markdownPdf.headerTemplate": {
+          "type": "string",
+          "default": "<div style=\"font-size: 9px; margin-left: 1cm;\"> <span class='title'></span></div> <div style=\"font-size: 9px; margin-left: auto; margin-right: 1cm; \">%%ISO-DATE%%</div>",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.headerTemplate.description%"
+        },
+        "poly.markdownPdf.footerTemplate": {
+          "type": "string",
+          "default": "<div style=\"font-size: 9px; margin: 0 auto;\"> <span class='pageNumber'></span> / <span class='totalPages'></span></div>",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.footerTemplate.description%"
+        },
+        "poly.markdownPdf.printBackground": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.printBackground.description%"
+        },
+        "poly.markdownPdf.orientation": {
+          "type": "string",
+          "enum": [
+            "portrait",
+            "landscape"
+          ],
+          "default": "portrait",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.orientation.description%"
+        },
+        "poly.markdownPdf.pageRanges": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.pageRanges.description%"
+        },
+        "poly.markdownPdf.format": {
+          "type": "string",
+          "enum": [
+            "Letter",
+            "Legal",
+            "Tabloid",
+            "Ledger",
+            "A0",
+            "A1",
+            "A2",
+            "A3",
+            "A4",
+            "A5",
+            "A6"
+          ],
+          "default": "A4",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.format.description%"
+        },
+        "poly.markdownPdf.width": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.width.description%"
+        },
+        "poly.markdownPdf.height": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.height.description%"
+        },
+        "poly.markdownPdf.margin.top": {
+          "type": "string",
+          "default": "1.5cm",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.margin.top.description%"
+        },
+        "poly.markdownPdf.margin.bottom": {
+          "type": "string",
+          "default": "1cm",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.margin.bottom.description%"
+        },
+        "poly.markdownPdf.margin.right": {
+          "type": "string",
+          "default": "1cm",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.margin.right.description%"
+        },
+        "poly.markdownPdf.margin.left": {
+          "type": "string",
+          "default": "1cm",
+          "scope": "resource",
+          "markdownDescription": "%config.markdownPdf.margin.left.description%"
+        },
+        "poly.markdownPdf.quality": {
+          "type": "number",
+          "default": 100,
+          "markdownDescription": "%config.markdownPdf.quality.description%"
+        },
+        "poly.markdownPdf.clip.x": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": "",
+          "markdownDescription": "%config.markdownPdf.clip.x.description%"
+        },
+        "poly.markdownPdf.clip.y": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": "",
+          "markdownDescription": "%config.markdownPdf.clip.y.description%"
+        },
+        "poly.markdownPdf.clip.width": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": "",
+          "markdownDescription": "%config.markdownPdf.clip.width.description%"
+        },
+        "poly.markdownPdf.clip.height": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": "",
+          "markdownDescription": "%config.markdownPdf.clip.height.description%"
+        },
+        "poly.markdownPdf.omitBackground": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.markdownPdf.omitBackground.description%"
+        },
+        "poly.markdownPdf.plantumlOpenMarker": {
+          "type": "string",
+          "default": "@startuml",
+          "markdownDescription": "%config.markdownPdf.plantumlOpenMarker.description%"
+        },
+        "poly.markdownPdf.plantumlCloseMarker": {
+          "type": "string",
+          "default": "@enduml",
+          "markdownDescription": "%config.markdownPdf.plantumlCloseMarker.description%"
+        },
+        "poly.markdownPdf.plantumlServer": {
+          "type": "string",
+          "default": "http://www.plantuml.com/plantuml",
+          "markdownDescription": "%config.markdownPdf.plantumlServer.description%"
+        },
+        "poly.markdownPdf.StatusbarMessageTimeout": {
+          "type": "number",
+          "default": 10000,
+          "markdownDescription": "%config.markdownPdf.StatusbarMessageTimeout.description%"
+        },
+        "poly.markdownPdf.markdown-it-include.enable": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.markdownPdf.markdown-it-include.enable.description%"
+        },
+        "poly.markdownPdf.mermaidServer": {
+          "type": "string",
+          "default": "https://unpkg.com/mermaid/dist/mermaid.min.js",
+          "markdownDescription": "%config.markdownPdf.mermaidServer.description%"
+        },
+        "poly.markdownPdf.math.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.markdownPdf.math.enabled.description%"
+        },
+        "poly.markdownPdf.math.katex.macros": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "%config.markdownPdf.math.katex.macros.description%"
+        },
+        "poly.codeSnap.backgroundColor": {
+          "scope": "resource",
+          "type": "string",
+          "default": "#abb8c3",
+          "markdownDescription": "%config.codeSnap.backgroundColor.description%"
+        },
+        "poly.codeSnap.boxShadow": {
+          "scope": "resource",
+          "type": "string",
+          "default": "rgba(0, 0, 0, 0.55) 0px 20px 68px",
+          "markdownDescription": "%config.codeSnap.boxShadow.description%"
+        },
+        "poly.codeSnap.containerPadding": {
+          "scope": "resource",
+          "type": "string",
+          "default": "3em",
+          "markdownDescription": "%config.codeSnap.containerPadding.description%"
+        },
+        "poly.codeSnap.roundedCorners": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.codeSnap.roundedCorners.description%"
+        },
+        "poly.codeSnap.showWindowControls": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.codeSnap.showWindowControls.description%"
+        },
+        "poly.codeSnap.showWindowTitle": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.codeSnap.showWindowTitle.description%"
+        },
+        "poly.codeSnap.showLineNumbers": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.codeSnap.showLineNumbers.description%"
+        },
+        "poly.codeSnap.realLineNumbers": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.codeSnap.realLineNumbers.description%"
+        },
+        "poly.codeSnap.transparentBackground": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.codeSnap.transparentBackground.description%"
+        },
+        "poly.codeSnap.target": {
+          "scope": "resource",
+          "type": "string",
+          "enum": [
+            "container",
+            "window"
+          ],
+          "default": "container",
+          "markdownDescription": "%config.codeSnap.target.description%"
+        },
+        "poly.codeSnap.shutterAction": {
+          "scope": "resource",
+          "type": "string",
+          "enum": [
+            "save",
+            "copy"
+          ],
+          "default": "save",
+          "markdownDescription": "%config.codeSnap.shutterAction.description%"
+        },
+        "poly.swaggerViewer.defaultHost": {
+          "type": "string",
+          "default": "localhost",
+          "description": "%config.swaggerViewer.defaultHost.description%"
+        },
+        "poly.swaggerViewer.defaultPort": {
+          "type": "integer",
+          "default": 18512,
+          "description": "%config.swaggerViewer.defaultPort.description%"
+        },
+        "poly.swaggerViewer.previewInBrowser": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.swaggerViewer.previewInBrowser.description%"
+        },
+        "poly.swaggerViewer.showOnlyFileName": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.swaggerViewer.showOnlyFileName.description%"
+        },
+        "poly.swaggerViewer.zoomLevel": {
+          "type": "number",
+          "default": 100,
+          "minimum": 50,
+          "maximum": 200,
+          "description": "%config.swaggerViewer.zoomLevel.description%"
+        },
+        "poly.plantuml.java": {
+          "type": "string",
+          "default": "java",
+          "scope": "machine-overridable",
+          "markdownDescription": "%config.plantuml.java.description%"
+        },
+        "poly.plantuml.commandArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.commandArgs.description%"
+        },
+        "poly.plantuml.jarArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.jarArgs.description%"
+        },
+        "poly.plantuml.includepaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.includepaths.description%"
+        },
+        "poly.plantuml.diagramsRoot": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.diagramsRoot.description%"
+        },
+        "poly.plantuml.fileExtensions": {
+          "type": "string",
+          "default": ".wsd,.pu,.puml,.plantuml,.iuml",
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.fileExtensions.description%"
+        },
+        "poly.plantuml.exportFormat": {
+          "type": "string",
+          "enum": [
+            "",
+            "png",
+            "svg",
+            "eps",
+            "pdf",
+            "vdx",
+            "xmi",
+            "scxml",
+            "html",
+            "txt",
+            "utxt",
+            "latex",
+            "latex:nopreamble"
+          ],
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.exportFormat.description%"
+        },
+        "poly.plantuml.exportOutDir": {
+          "type": "string",
+          "default": "out",
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.exportOutDir.description%"
+        },
+        "poly.plantuml.exportSubFolder": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.exportSubFolder.description%"
+        },
+        "poly.plantuml.exportIncludeFolderHierarchy": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.exportIncludeFolderHierarchy.description%"
+        },
+        "poly.plantuml.exportConcurrency": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "scope": "machine-overridable",
+          "markdownDescription": "%config.plantuml.exportConcurrency.description%"
+        },
+        "poly.plantuml.exportMapFile": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.exportMapFile.description%"
+        },
+        "poly.plantuml.previewAutoUpdate": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "markdownDescription": "%config.plantuml.previewAutoUpdate.description%"
+        },
+        "poly.plantuml.previewSnapIndicators": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "%config.plantuml.previewSnapIndicators.description%"
+        },
+        "poly.plantuml.previewSwapMouseButtons": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "%config.plantuml.previewSwapMouseButtons.description%"
+        },
+        "poly.plantuml.server": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "%config.plantuml.server.description%"
+        },
+        "poly.plantuml.urlFormat": {
+          "type": "string",
+          "enum": [
+            "",
+            "png",
+            "svg",
+            "txt"
+          ],
+          "default": "",
+          "scope": "application",
+          "markdownDescription": "%config.plantuml.urlFormat.description%"
+        },
+        "poly.plantuml.urlResult": {
+          "type": "string",
+          "enum": [
+            "MarkDown",
+            "SimpleURL"
+          ],
+          "default": "MarkDown",
+          "scope": "application",
+          "markdownDescription": "%config.plantuml.urlResult.description%"
+        },
+        "poly.plantuml.render": {
+          "type": "string",
+          "enum": [
+            "Local",
+            "PlantUMLServer"
+          ],
+          "default": "Local",
+          "scope": "machine-overridable",
+          "markdownDescription": "%config.plantuml.render.description%"
+        },
+        "poly.plantuml.lintDiagramNoName": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "%config.plantuml.lintDiagramNoName.description%"
+        },
         "poly.postfixCompletion.enabled": {
           "type": "boolean",
           "default": false,
@@ -461,6 +2052,380 @@
             "BUG"
           ],
           "description": "%config.todo.tags.description%"
+        },
+        "poly.excalidraw.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark"
+          ],
+          "default": "light",
+          "markdownDescription": "%config.excalidraw.theme.description%"
+        },
+        "poly.excalidraw.language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ar-SA",
+            "bg-BG",
+            "ca-ES",
+            "cs-CZ",
+            "de-DE",
+            "el-GR",
+            "es-ES",
+            "eu-ES",
+            "fa-IR",
+            "fi-FI",
+            "fr-FR",
+            "gl-ES",
+            "he-IL",
+            "hi-IN",
+            "hu-HU",
+            "id-ID",
+            "it-IT",
+            "ja-JP",
+            "kab-KAB",
+            "kk-KZ",
+            "ko-KR",
+            "ku-TR",
+            "lt-LT",
+            "lv-LV",
+            "mr-IN",
+            "my-MM",
+            "nb-NO",
+            "nl-NL",
+            "nn-NO",
+            "oc-FR",
+            "pa-IN",
+            "pl-PL",
+            "pt-BR",
+            "pt-PT",
+            "ro-RO",
+            "ru-RU",
+            "sk-SK",
+            "sl-SI",
+            "sv-SE",
+            "tr-TR",
+            "uk-UA",
+            "vi-VN",
+            "zh-CN",
+            "zh-TW"
+          ],
+          "enumDescriptions": [
+            "English",
+            "العربية",
+            "Български",
+            "Català",
+            "Česky",
+            "Deutsch",
+            "Ελληνικά",
+            "Español",
+            "Euskara",
+            "فارسی",
+            "Suomi",
+            "Français",
+            "Galego",
+            "עברית",
+            "हिन्दी",
+            "Magyar",
+            "Bahasa Indonesia",
+            "Italiano",
+            "日本語",
+            "Taqbaylit",
+            "Қазақ тілі",
+            "한국어",
+            "Kurdî",
+            "Lietuvių",
+            "Latviešu",
+            "मराठी",
+            "Burmese",
+            "Norsk bokmål",
+            "Nederlands",
+            "Norsk nynorsk",
+            "Occitan",
+            "ਪੰਜਾਬੀ",
+            "Polski",
+            "Português Brasileiro",
+            "Português",
+            "Română",
+            "Русский",
+            "Slovenčina",
+            "Slovenščina",
+            "Svenska",
+            "Türkçe",
+            "Українська",
+            "Tiếng Việt",
+            "简体中文",
+            "繁體中文"
+          ],
+          "markdownDescription": "%config.excalidraw.language.description%"
+        },
+        "poly.excalidraw.workspaceLibraryPath": {
+          "type": "string",
+          "scope": "window",
+          "markdownDescription": "%config.excalidraw.workspaceLibraryPath.description%"
+        },
+        "poly.excalidraw.image": {
+          "type": "object",
+          "properties": {
+            "exportScale": {
+              "type": "number",
+              "enum": [
+                1,
+                2,
+                3
+              ],
+              "default": 1,
+              "description": "%config.excalidraw.image.exportScale.description%"
+            },
+            "exportWithBackground": {
+              "type": "boolean",
+              "default": true,
+              "description": "%config.excalidraw.image.exportWithBackground.description%"
+            },
+            "exportWithDarkMode": {
+              "type": "boolean",
+              "default": false,
+              "description": "%config.excalidraw.image.exportWithDarkMode.description%"
+            }
+          },
+          "default": {
+            "exportScale": 1,
+            "exportWithBackground": true,
+            "exportWithDarkMode": false
+          },
+          "markdownDescription": "%config.excalidraw.image.description%"
+        },
+        "poly.drawio.offline": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.drawio.offline.description%"
+        },
+        "poly.drawio.online-url": {
+          "type": "string",
+          "default": "https://embed.diagrams.net/",
+          "markdownDescription": "%config.drawio.online-url.description%"
+        },
+        "poly.drawio.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "kennedy",
+            "min",
+            "simple",
+            "sketch"
+          ],
+          "default": "kennedy",
+          "markdownDescription": "%config.drawio.theme.description%"
+        },
+        "poly.drawio.appearance": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "light",
+            "dark",
+            "high-contrast-light",
+            "high-contrast"
+          ],
+          "default": "light",
+          "markdownDescription": "%config.drawio.appearance.description%"
+        },
+        "poly.drawio.simpleLabels": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.drawio.simpleLabels.description%"
+        },
+        "poly.drawio.zoomFactor": {
+          "type": "number",
+          "default": 1.2,
+          "markdownDescription": "%config.drawio.zoomFactor.description%"
+        },
+        "poly.drawio.globalVars": {
+          "type": "object",
+          "markdownDescription": "%config.drawio.globalVars.description%"
+        },
+        "poly.drawio.resizeImages": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "%config.drawio.resizeImages.description%"
+        },
+        "poly.drawio.showTooltipIcons": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.drawio.showTooltipIcons.description%"
+        },
+        "poly.drawio.showLinkIcons": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.drawio.showLinkIcons.description%"
+        },
+        "poly.drawio.showConnectHandle": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.drawio.showConnectHandle.description%"
+        },
+        "poly.drawio.styles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "commonStyle": {
+                "type": "object",
+                "properties": {
+                  "fontColor": {
+                    "type": "string"
+                  },
+                  "strokeColor": {
+                    "type": "string"
+                  },
+                  "fillColor": {
+                    "type": "string"
+                  }
+                }
+              },
+              "graph": {
+                "type": "object",
+                "properties": {
+                  "background": {
+                    "type": "string"
+                  },
+                  "gridColor": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "markdownDescription": "%config.drawio.styles.description%"
+        },
+        "poly.drawio.defaultVertexStyle": {
+          "type": "object",
+          "markdownDescription": "%config.drawio.defaultVertexStyle.description%"
+        },
+        "poly.drawio.defaultEdgeStyle": {
+          "type": "object",
+          "markdownDescription": "%config.drawio.defaultEdgeStyle.description%"
+        },
+        "poly.drawio.colorNames": {
+          "type": "object",
+          "markdownDescription": "%config.drawio.colorNames.description%"
+        },
+        "poly.drawio.presetColors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "%config.drawio.presetColors.description%"
+        },
+        "poly.drawio.customColorSchemes": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "fill": {
+                  "type": "string"
+                },
+                "stroke": {
+                  "type": "string"
+                },
+                "gradient": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "markdownDescription": "%config.drawio.customColorSchemes.description%"
+        },
+        "poly.drawio.customFonts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%config.drawio.customFonts.description%"
+        },
+        "poly.drawio.customLibraries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entryId": {
+                "type": "string"
+              },
+              "libName": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "xml": {
+                "type": "string"
+              },
+              "json": {},
+              "file": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "entryId",
+              "libName"
+            ]
+          },
+          "default": [],
+          "markdownDescription": "%config.drawio.customLibraries.description%"
+        },
+        "poly.drawio.plugins": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "file"
+            ]
+          },
+          "default": [],
+          "markdownDescription": "%config.drawio.plugins.description%"
+        },
+        "poly.drawio.knownPlugins": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pluginId": {
+                "type": "string"
+              },
+              "fingerprint": {
+                "type": "string"
+              },
+              "allowed": {
+                "type": "boolean"
+              }
+            }
+          },
+          "default": [],
+          "scope": "application",
+          "markdownDescription": "%config.drawio.knownPlugins.description%"
+        },
+        "poly.drawio.codeLinkActivated": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.drawio.codeLinkActivated.description%"
         }
       }
     },
@@ -539,66 +2504,242 @@
       }
     ],
     "configurationDefaults": {
-      "[typescript]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[typescriptreact]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[javascript]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[javascriptreact]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[json]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[jsonc]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[markdown]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[prompt]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[instructions]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[chatagent]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[skill]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[toml]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[css]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[scss]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[less]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[yaml]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[python]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[sql]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[xml]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[html]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[vue]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[svelte]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[astro]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[graphql]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[php]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[dockerfile]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[shellscript]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[lua]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[rust]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[go]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[c]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[cpp]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[swift]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[terraform]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[protobuf]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[r]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[handlebars]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[dockercompose]": { "editor.defaultFormatter": "ricky.poly-lsp" },
-      "[github-actions-workflow]": { "editor.defaultFormatter": "ricky.poly-lsp" }
-    }
+      "[typescript]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[typescriptreact]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[javascript]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[javascriptreact]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[json]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[jsonc]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[markdown]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[prompt]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[instructions]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[chatagent]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[skill]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[toml]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[css]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[scss]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[less]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[yaml]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[python]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[sql]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[xml]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[html]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[vue]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[svelte]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[astro]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[graphql]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[php]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[dockerfile]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[shellscript]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[lua]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[rust]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[go]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[c]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[cpp]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[swift]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[terraform]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[protobuf]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[r]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[jsonnet]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[handlebars]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[dockercompose]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      },
+      "[github-actions-workflow]": {
+        "editor.defaultFormatter": "ricky.poly-lsp"
+      }
+    },
+    "customEditors": [
+      {
+        "viewType": "poly.excalidraw",
+        "displayName": "%customEditor.excalidraw.displayName%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.excalidraw"
+          },
+          {
+            "filenamePattern": "*.excalidraw.json"
+          },
+          {
+            "filenamePattern": "*.excalidraw.svg"
+          },
+          {
+            "filenamePattern": "*.excalidraw.png"
+          }
+        ]
+      },
+      {
+        "viewType": "poly.drawio",
+        "displayName": "%customEditor.drawio.displayName%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.drawio"
+          },
+          {
+            "filenamePattern": "*.dio"
+          },
+          {
+            "filenamePattern": "*.drawio.svg"
+          },
+          {
+            "filenamePattern": "*.dio.svg"
+          }
+        ]
+      },
+      {
+        "viewType": "poly.drawio.png",
+        "displayName": "%customEditor.drawio.displayName%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.drawio.png"
+          },
+          {
+            "filenamePattern": "*.dio.png"
+          }
+        ]
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "*.json",
+        "url": "./dist/swagger/schema.json"
+      }
+    ]
   },
   "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true})\" && node ../../tools/drawio-webapp.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit",
     "unit": "tsc -p tsconfig.test.json && node --test out/editor/*.test.js",
     "test:build": "pnpm run build && tsc -p tsconfig.test.json",
     "test": "pnpm run test:build && node out/test/runTest.js"
   },
   "dependencies": {
+    "@apidevtools/swagger-parser": "10.0.3",
+    "@dbml/core": "^10.2.0",
+    "@excalidraw/excalidraw": "0.18.1",
+    "@hackmd/js-sequence-diagrams": "0.0.1-alpha.3",
     "@mermaid-js/layout-tidy-tree": "^1.0.0",
+    "@puppeteer/browsers": "2.13.0",
+    "@vscode/markdown-it-katex": "1.1.2",
+    "dompurify": "^3.4.16",
+    "flowchart.js": "^1.18.0",
+    "highlight.js": "11.11.1",
+    "js-base64": "3.7.7",
+    "js-yaml": "4.1.1",
+    "katex": "0.16.45",
+    "lodash-es": "4.17.21",
+    "markdown-it": "14.1.1",
+    "markdown-it-container": "4.0.0",
+    "markdown-it-emoji": "3.0.0",
+    "markdown-it-plantuml": "1.4.1",
+    "markmap-lib": "^0.18.12",
+    "markmap-view": "^0.18.12",
     "mermaid": "^11.17.2",
-    "vscode-languageclient": "^9.0.1"
+    "nomnoml": "^1.7.0",
+    "plantuml-encoder": "1.4.0",
+    "puppeteer-core": "24.40.0",
+    "raphael": "^2.3.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "swagger-ui-dist": "5.30.3",
+    "vega": "^6.4.0",
+    "vega-interpreter": "^2.3.2",
+    "vega-lite": "^6.4.3",
+    "vscode-languageclient": "^9.0.1",
+    "xml-formatter": "2.6.1"
   },
   "devDependencies": {
+    "@types/js-yaml": "4.0.9",
+    "@types/lodash-es": "4.17.12",
+    "@types/markdown-it": "14.1.2",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.1",
+    "jszip": "3.10.1",
     "mocha": "^10.7.0",
     "typescript": "^5.4.0"
   }

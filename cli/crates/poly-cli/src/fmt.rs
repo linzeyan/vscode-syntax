@@ -25,6 +25,7 @@ pub fn formattable(lang: &str) -> bool {
                 | "swift"
                 | "protobuf"
                 | "r"
+                | "jsonnet"
         )
 }
 
@@ -190,6 +191,9 @@ fn dispatch(
         "c" | "cpp" => ("clang-format", vec!["--assume-filename", &path_arg]),
         "terraform" => ("terraform", vec!["fmt", "-"]),
         "swift" => ("swift-format", vec![]),
+        // jsonnetfmt's defaults, which is also exactly what the
+        // xrc-inc.jsonnet-formatter extension spells out on its command line.
+        "jsonnet" => ("jsonnetfmt", vec!["-"]),
         _ => return Ok(None),
     };
     let Some(bin) = cached_tool(tool, config) else {

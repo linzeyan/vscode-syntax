@@ -354,6 +354,25 @@ fn strict_turns_an_unavailable_formatter_into_a_failure() {
     assert!(stderr.contains("gofumpt"), "{stderr}");
 }
 
+/// Both Jsonnet extensions route to jsonnetfmt. `off` stands in for the tool
+/// being absent, as above, which keeps this offline; what it pins is the
+/// routing. The assertion is on "formatters missing" rather than on the tool's
+/// name, because a poly that did not know the tool would also name it -- in the
+/// error rejecting the `[tools]` key.
+#[test]
+fn jsonnet_files_go_to_jsonnetfmt() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("poly.toml"), "[tools]\njsonnetfmt = \"off\"\n").unwrap();
+    std::fs::write(root.join("a.jsonnet"), "{a:1}\n").unwrap();
+    std::fs::write(root.join("b.libsonnet"), "{b:2}\n").unwrap();
+
+    let (code, _, stderr) = poly(root, &["fmt", "--check", "--strict", "."]);
+    assert_eq!(code, 2, "--strict must fail: {stderr}");
+    assert!(stderr.contains("1 formatters missing"), "{stderr}");
+    assert!(stderr.contains("jsonnetfmt"), "{stderr}");
+}
+
 /// rustfmt was the one formatter that skipped without saying so: it resolves
 /// straight off PATH instead of through `poly_tools::resolve`, so it never
 /// reached the code that records a missing formatter. An unformatted .rs file

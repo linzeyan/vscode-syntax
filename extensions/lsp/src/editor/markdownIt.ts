@@ -10,7 +10,9 @@
  * which is asked per render rather than once, so the setting and the presence
  * of the built-in can both change while a preview is open.
  */
+import { diagramBlock, diagramOf } from "./diagrams";
 import { isMermaidContainer, isMermaidFence, mermaidBlock } from "./mermaid";
+import { isPlantumlFence } from "./plantuml";
 
 /** As much of a markdown-it token as the rules below touch. */
 interface Token {
@@ -46,7 +48,10 @@ interface BlockState {
 }
 
 export interface MarkdownIt {
-  renderer: { rules: Record<string, Rule | undefined> };
+  renderer: {
+    rules: Record<string, Rule | undefined>;
+    render(tokens: readonly Token[], options: unknown, env: unknown): string;
+  };
   block: {
     ruler: {
       before(
@@ -185,6 +190,118 @@ export function mermaidPlugin(renders: () => boolean): (md: MarkdownIt) => Markd
       alt: ["paragraph", "reference", "blockquote", "list"],
     });
     md.renderer.rules[CONTAINER] = (tokens, index) => mermaidBlock(tokens[index].content);
+    return md;
+  };
+}
+
+/** The other diagram fences (see diagrams.ts), wrapped the same way as mermaid's. */
+export function diagramPlugin(renders: () => boolean): (md: MarkdownIt) => MarkdownIt {
+  return (md) => {
+    const previous = md.renderer.rules.fence;
+    md.renderer.rules.fence = (tokens, index, options, env, self) => {
+      const token = tokens[index];
+      const kind = renders() ? diagramOf(token.info) : undefined;
+      if (kind) {
+        return diagramBlock(kind, token.content);
+      }
+      return previous
+        ? previous(tokens, index, options, env, self)
+        : self.renderToken(tokens, index, options);
+    };
+    return md;
+  };
+}
+
+/**
+ * PlantUML fences (see plantuml.ts). Unlike the other diagrams they are drawn
+ * by the extension host, which runs Java or asks a server, so `draw` answers
+ * with the HTML itself; undefined leaves the fence a code block.
+ */
+export function plantumlPlugin(
+  draw: (source: string, env: unknown, line: number | undefined) => string | undefined,
+): (md: MarkdownIt) => MarkdownIt {
+  return (md) => {
+    const previous = md.renderer.rules.fence;
+    md.renderer.rules.fence = (tokens, index, options, env, self) => {
+      const token = tokens[index];
+      const html = isPlantumlFence(token.info) ? draw(token.content, env, token.map?.[0]) : undefined;
+      if (html !== undefined) {
+        return html;
+      }
+      return previous
+        ? previous(tokens, index, options, env, self)
+        : self.renderToken(tokens, index, options);
+    };
+    return md;
+  };
+}
+
+/** The palettes GitHub's stylesheets define, in the names the wrapper spells. */
+export const GITHUB_THEMES = [
+  "light",
+  "light_high_contrast",
+  "light_colorblind",
+  "light_tritanopia",
+  "dark",
+  "dark_high_contrast",
+  "dark_colorblind",
+  "dark_tritanopia",
+  "dark_dimmed",
+] as const;
+
+const COLOR_MODES = ["auto", "system", "light", "dark"] as const;
+
+/** What the wrapper carries: which mode picks the palette, and the two palettes. */
+export interface GithubStyle {
+  colorMode: (typeof COLOR_MODES)[number];
+  lightTheme: string;
+  darkTheme: string;
+}
+
+/**
+ * The settings as the wrapper can carry them.
+ *
+ * Each value goes into an HTML attribute, so anything that is not one of the
+ * names the stylesheets select on falls back to the default -- the same
+ * fallback bierner.markdown-preview-github-styles applies, and the reason a
+ * hand-edited settings.json cannot write markup into the preview.
+ */
+export function githubStyleOf(
+  colorTheme: unknown,
+  lightTheme: unknown,
+  darkTheme: unknown,
+): GithubStyle {
+  const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
+    allowed.includes(value as T) ? (value as T) : fallback;
+  return {
+    colorMode: pick(colorTheme, COLOR_MODES, "auto"),
+    lightTheme: pick(lightTheme, GITHUB_THEMES, "light"),
+    darkTheme: pick(darkTheme, GITHUB_THEMES, "dark"),
+  };
+}
+
+/**
+ * GitHub's look for the whole preview, the way
+ * bierner.markdown-preview-github-styles does it: every render is wrapped in
+ * the two elements its stylesheets select on, attribute for attribute, since
+ * those stylesheets are the ones poly ships. `style` answering undefined leaves
+ * the render untouched, which is what keeps the styles inert while it is off.
+ */
+export function githubStylePlugin(
+  style: () => GithubStyle | undefined,
+): (md: MarkdownIt) => MarkdownIt {
+  return (md) => {
+    const render = md.renderer.render;
+    md.renderer.render = (tokens, options, env) => {
+      const html = render.call(md.renderer, tokens, options, env);
+      const now = style();
+      if (!now) {
+        return html;
+      }
+      return `<div class="github-markdown-body" data-color-mode="${now.colorMode}"`
+        + ` data-light-theme="${now.lightTheme}" data-dark-theme="${now.darkTheme}">`
+        + `<div class="github-markdown-content">${html}</div></div>`;
+    };
     return md;
   };
 }

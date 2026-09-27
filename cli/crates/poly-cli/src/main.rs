@@ -1346,7 +1346,10 @@ fn installable(name: &str, explicit: bool) -> bool {
 
 fn cmd_tools(rest: &[String]) -> Result<i32> {
     let action = rest.first().map(String::as_str).unwrap_or("list");
-    let config = poly_core::Config::discover(Path::new("."))?;
+    // Absolute: from "." discovery stops at the working directory, so a pin in
+    // the repo's poly.toml went unseen from a subdirectory, and the path it
+    // printed ("././x.jar") meant nothing to the editor that asked.
+    let config = poly_core::Config::discover(&std::env::current_dir()?)?;
     match action {
         "list" => {
             for tool in poly_tools::TOOLS {

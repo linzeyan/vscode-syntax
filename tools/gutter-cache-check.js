@@ -58,6 +58,9 @@ class Uri {
   static file(fsPath) {
     return new Uri(fsPath);
   }
+  static joinPath(base, ...parts) {
+    return new Uri(join(base.fsPath, ...parts));
+  }
   toString() {
     return `file://${this.fsPath}`;
   }
@@ -195,6 +198,9 @@ const vscode = {
   },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
   OverviewRulerLane: { Right: 4 },
+  ViewColumn: { Active: -1, Beside: -2 },
+  ColorThemeKind: { Light: 1, Dark: 2, HighContrast: 3, HighContrastLight: 4 },
+  StatusBarAlignment: { Left: 1, Right: 2 },
   CompletionItemKind: { Snippet: 14 },
   CodeActionKind: { Refactor: "refactor", QuickFix: "quickfix" },
   SymbolKind: new Proxy({}, { get: () => 0 }),
@@ -212,9 +218,12 @@ const vscode = {
     onDidChangeTextEditorSelection: on("selection"),
     createTreeView: () => ({ ...nothing, onDidChangeVisibility: on("treeVisibility"), visible: false }),
     registerTreeDataProvider: () => nothing,
+    registerCustomEditorProvider: () => nothing,
+    registerUriHandler: () => nothing,
     showWarningMessage: () => Promise.resolve(undefined),
     showQuickPick: () => Promise.resolve(undefined),
     setStatusBarMessage: () => nothing,
+    createStatusBarItem: () => ({ ...nothing, show() {}, hide() {} }),
     // The "Poly Editor" log channel. Nothing here reads what it says.
     createOutputChannel: () => ({
       ...nothing,
@@ -228,6 +237,7 @@ const vscode = {
   },
   workspace: {
     workspaceFolders: [{ uri: Uri.file(WORKSPACE), name: "workspace", index: 0 }],
+    textDocuments: [],
     // The image gutter ships off, and this check is about what it does while
     // on. Naming the setting rather than returning the code's own fallback:
     // that fallback is `false` now, and a stub that inherited it would measure
@@ -250,6 +260,12 @@ const vscode = {
     onDidCreateFiles: on("createFiles"),
     onDidDeleteFiles: on("deleteFiles"),
     onDidRenameFiles: on("renameFiles"),
+    createFileSystemWatcher: () => ({
+      ...nothing,
+      onDidCreate: on("watchCreate"),
+      onDidChange: on("watchChange"),
+      onDidDelete: on("watchDelete"),
+    }),
   },
   commands: {
     registerCommand: () => nothing,
@@ -261,6 +277,9 @@ const vscode = {
     registerCompletionItemProvider: () => nothing,
     registerCodeActionsProvider: () => nothing,
     registerHoverProvider: () => nothing,
+    registerDocumentSymbolProvider: () => nothing,
+    registerSignatureHelpProvider: () => nothing,
+    createDiagnosticCollection: () => ({ ...nothing, set() {}, delete() {}, clear() {} }),
   },
   extensions: { all: [], getExtension: () => undefined, onDidChange: on("extensions") },
   env: { clipboard: { writeText: async () => {} } },

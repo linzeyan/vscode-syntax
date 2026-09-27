@@ -57,6 +57,19 @@ test("poly's git keys go to Rewrap and to Roo Code, which bind them too", () => 
   }
 });
 
+// jebbs.plantuml binds alt+d everywhere; poly's binding is for PlantUML files
+// only, but in one of those the two would still collide.
+test("poly's PlantUML preview key goes to jebbs.plantuml when both are installed", () => {
+  const JEBBS: Binding = { command: "plantuml.preview", key: "Alt+d" };
+  for (const platform of ["darwin", "linux", "win32"]) {
+    assert.deepEqual(
+      [...yieldsTo(own, [{ id: "jebbs.plantuml", bindings: [JEBBS] }], platform)],
+      [["poly.plantumlPreview", "jebbs.plantuml"]],
+      platform,
+    );
+  }
+});
+
 // One such manifest anywhere used to throw inside poly's activation, and
 // nothing of poly -- not even the language server -- started.
 test("an entry VSCode would reject is skipped, not thrown on", () => {

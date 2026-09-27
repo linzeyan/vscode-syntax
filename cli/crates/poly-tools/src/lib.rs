@@ -31,9 +31,9 @@ pub struct Asset {
 pub struct Tool {
     pub name: &'static str,
     pub version: &'static str,
-    /// The poly-core language id this linter covers. `None` would mean a tool
-    /// that reads every file regardless; typos was the only one, and it is
-    /// compiled in now (`poly_engines::lint::spell`).
+    /// The poly-core language id this linter covers. `None` is plantuml, which
+    /// lints nothing: the editor's preview and export run it, and it is here
+    /// for the download and the pin.
     pub language: Option<&'static str>,
     asset: fn(version: &str, platform: &str) -> Option<Asset>,
 }
@@ -209,6 +209,32 @@ pub const TOOLS: &[Tool] = &[
         },
     },
     Tool {
+        name: "jsonnetfmt",
+        version: "0.22.0",
+        language: Some("jsonnet"),
+        // go-jsonnet, not google/jsonnet: the C++ repo releases source only.
+        // The two formatters share the C++ repo's fmt golden tests, so this is
+        // the same output, and the tarball also carries jsonnet, jsonnet-lint
+        // and jsonnet-deps -- `unpack` takes the one named here.
+        asset: |v, p| {
+            let suffix = match p {
+                "darwin-arm64" => "darwin_arm64",
+                "darwin-x64" => "darwin_amd64",
+                "linux-arm64" => "linux_arm64",
+                "linux-x64" => "linux_amd64",
+                "win-x64" => "windows_amd64",
+                "win-arm64" => "windows_arm64",
+                _ => return None,
+            };
+            Some(Asset {
+                url: format!(
+                    "https://github.com/google/go-jsonnet/releases/download/v{v}/go-jsonnet_{v}_{suffix}.tar.gz"
+                ),
+                kind: Kind::TarGz,
+            })
+        },
+    },
+    Tool {
         name: "golangci-lint",
         version: "2.13.2",
         language: Some("go"),
@@ -313,6 +339,24 @@ pub const TOOLS: &[Tool] = &[
                     "https://github.com/jolars/arity/releases/download/v{v}/arity-{target}"
                 ),
                 kind,
+            })
+        },
+    },
+    // The MIT build, not the GPLv2 one jebbs.plantuml bundles: over 32 diagram
+    // types the only one it cannot draw is ditaa, and every export format
+    // behaves the same in both. A project that needs ditaa points
+    // `[tools] plantuml` at a GPL jar. poly does not ship the Java to run it.
+    Tool {
+        name: "plantuml",
+        version: "1.2026.8",
+        language: None,
+        // One jar for every platform: the JVM is the platform-specific part.
+        asset: |v, p| {
+            PLATFORMS.contains(&p).then(|| Asset {
+                url: format!(
+                    "https://github.com/plantuml/plantuml/releases/download/v{v}/plantuml-mit-{v}.jar"
+                ),
+                kind: Kind::Raw,
             })
         },
     },

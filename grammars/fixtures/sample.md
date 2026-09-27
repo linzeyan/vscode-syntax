@@ -17,6 +17,12 @@ graph TD
     C -->|yes| D[Package]
 ```
 
+```plantuml
+@startuml
+Alice -> Bob : hello
+@enduml
+```
+
 ```graphql
 query User($id: ID!) {
   user(id: $id) { name email }

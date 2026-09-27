@@ -42,8 +42,8 @@
 # this table accepts:
 #
 #   astro, c, cpp, css, dockerfile, go, graphql, handlebars, hcl, html,
-#   jinja, json, jupyter, less, lua, markdown, php, protobuf, python, r,
-#   rust, scss, shellscript, sql, svelte, swift, terraform, toml,
+#   jinja, json, jsonnet, jupyter, less, lua, markdown, php, protobuf,
+#   python, r, rust, scss, shellscript, sql, svelte, swift, terraform, toml,
 #   typescript, vue, xml, yaml, zsh
 #
 # Mapping to an id poly has no formatter or linter for is not an error -- the
@@ -78,7 +78,8 @@ fail-on = "hint"
 # These reach the embedded engines only. Languages that dispatch to an external
 # tool are configured by that tool -- rustfmt.toml, .editorconfig, and so on:
 #
-#   c, cpp, go, protobuf, r, rust, shellscript, swift, terraform, zsh
+#   c, cpp, go, jsonnet, protobuf, r, rust, shellscript, swift, terraform,
+#   zsh
 #
 # Setting a knob the engine does not have fails the run and names the key,
 # rather than applying two of three and leaving you to diff the output. A table
@@ -299,8 +300,10 @@ include-hidden = false
 #   golangci-lint        2.13.2   downloaded on first use
 #   gopls                -        language server, from PATH
 #   hadolint             2.15.1   off; set it to "on" and poly downloads it
+#   jsonnetfmt           0.22.0   downloaded on first use
 #   knip                 -        whole-program analysis (`poly deadcode`)
 #   lua-language-server  -        language server, from PATH
+#   plantuml             1.2026.8 downloaded on first use
 #   ruff                 -        compiled into poly; remove the entry
 #   rust-analyzer        -        language server, from PATH
 #   selene               -        compiled into poly; remove the entry

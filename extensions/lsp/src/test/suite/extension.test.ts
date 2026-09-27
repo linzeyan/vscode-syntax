@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import * as vscode from "vscode";
@@ -122,11 +122,12 @@ suite("poly-lsp in a real editor", () => {
     const bindings = pkg.contributes.keybindings as { command: string; key: string }[];
     // The one exception is a command that is a keystroke rather than an action:
     // continuing a list is what Enter does, and run from the palette it would
-    // act on whatever line the cursor was left on.
+    // act on whatever line the cursor was left on. Undo and redo in the
+    // Excalidraw editor are the same: a key kept from VSCode, not an action.
     const keystrokes = new Set(
-      bindings.filter((binding) => ["enter", "tab", "shift+tab"].includes(binding.key)).map((binding) =>
-        binding.command
-      ),
+      bindings.filter((binding) => ["enter", "tab", "shift+tab", "ctrl+z", "ctrl+y"].includes(binding.key)).map((
+        binding,
+      ) => binding.command),
     );
     const hidden = (pkg.contributes.menus?.commandPalette ?? [])
       .filter((entry: { when?: string }) => entry.when === "false")
@@ -782,6 +783,364 @@ func main() {
       vscode.Uri.file(folder),
     );
     assert.strictEqual(readFileSync(file, "utf8"), "{ \"b\": 1, \"a\": 2 }\n");
+  });
+
+  // The conversions are unit-tested; what only a real host shows is the wiring
+  // around them -- the lazy bundle found beside dist/extension.js, and the
+  // output landing where the save dialog said. The simple dialog turns the
+  // native one into a quick input, so both prompts accept the same way: the
+  // first dialect, then the proposed path. The file is plaintext here (the
+  // host has no poly-syntax-highlight), which is the extension check's case.
+  test("DBML to SQL writes the file the save dialog proposes", async () => {
+    await vscode.workspace
+      .getConfiguration("files")
+      .update("simpleDialog.enable", true, vscode.ConfigurationTarget.Global);
+    const target = join(workspaceRoot(), "schema.sql");
+    rmSync(target, { force: true });
+    const uri = writeFile("schema.dbml", "Table users {\n  id int [pk]\n}\n");
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    const running = vscode.commands.executeCommand("poly.dbmlToSql");
+    await eventually("the converted file", async () => {
+      await vscode.commands.executeCommand("workbench.action.acceptSelectedQuickOpenItem");
+      try {
+        return readFileSync(target, "utf8");
+      } catch {
+        return undefined;
+      }
+    });
+    await running;
+    assert.match(readFileSync(target, "utf8"), /CREATE TABLE "users"/);
+  });
+
+  // The PlantUML logic is unit-tested and measured against jebbs.plantuml
+  // (tools/plantuml-diff); what only a host shows is the wiring: that the jar
+  // poly.toml pins is the one run, by the configured Java, and that the export
+  // and the markdown fence both land. The "Java" is a script that records its
+  // arguments and answers with a fixed picture, so neither a JVM nor a
+  // download is part of the test.
+  test("PlantUML runs the jar poly.toml pins with the configured Java", async () => {
+    const root = workspaceRoot();
+    const log = join(root, "java-args.txt");
+    const java = join(root, "fake-java");
+    const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>poly-e2e</text></svg>";
+    writeFileSync(java, `#!/bin/sh\nprintf '%s\\n' "$@" >> '${log}'\ncat >/dev/null\nprintf '%s' '${svg}'\n`, {
+      mode: 0o755,
+    });
+    writeFileSync(join(root, "fake-plantuml.jar"), "not a jar");
+    writeFileSync(join(root, "poly.toml"), "[tools]\nplantuml = \"./fake-plantuml.jar\"\n");
+    const config = vscode.workspace.getConfiguration();
+    const settings: [string, unknown][] = [
+      ["poly.plantuml.java", java],
+      ["poly.plantuml.exportFormat", "svg"],
+      ["poly.markdownDiagrams.enabled", true],
+    ];
+    try {
+      for (const [key, value] of settings) {
+        await config.update(key, value, vscode.ConfigurationTarget.Workspace);
+      }
+      const uri = writeFile("flow.puml", "@startuml flow\nA -> B\n@enduml\n");
+      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+      // Not awaited: it resolves when its report message is dismissed.
+      void vscode.commands.executeCommand("poly.plantumlExportDocument");
+      const exported = join(root, "out", "flow", "flow.svg");
+      await eventually("the export", () => {
+        try {
+          return readFileSync(exported, "utf8");
+        } catch {
+          return undefined;
+        }
+      });
+      assert.strictEqual(readFileSync(exported, "utf8"), svg);
+      const args = readFileSync(log, "utf8").split("\n");
+      // Compared as files: poly reports the pin under the real temp directory
+      // (/private/var on macOS), the workspace URI names it by its symlink.
+      const jar = args[args.indexOf("-jar") + 1];
+      assert.ok(
+        args.includes("-jar") && realpathSync(jar) === realpathSync(join(root, "fake-plantuml.jar")),
+        `not the pinned jar: ${args.join(" ")}`,
+      );
+      assert.ok(args.includes("-pipeimageindex") && args.includes("-tsvg"), args.join(" "));
+
+      const notes = await vscode.workspace.openTextDocument(writeFile("notes-puml.md", "```plantuml\nA -> B\n```\n"));
+      // The first render shows the source while Java runs; the picture comes
+      // with the refresh after it.
+      await eventually("the fence's picture", async () => {
+        const html = await vscode.commands.executeCommand<string>("markdown.api.render", notes);
+        return html.includes(Buffer.from(svg).toString("base64")) ? html : undefined;
+      });
+    } finally {
+      for (const [key] of settings) {
+        await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
+      }
+      rmSync(join(root, "poly.toml"), { force: true });
+    }
+  });
+
+  // The page is pomdtr's, rebuilt and measured against it by
+  // tools/excalidraw-diff; what only a host shows is that it loads under its
+  // CSP and saves through the document. An empty file is the one the page
+  // writes to untouched, so a scene arriving on disk means the bundle ran.
+  test("an empty Excalidraw file opens in the editor and saves a scene", async () => {
+    const uri = writeFile("sketch.excalidraw", "");
+    await vscode.commands.executeCommand("vscode.open", uri);
+    const active = () => vscode.window.tabGroups.activeTabGroup.activeTab;
+    await eventually("the Excalidraw editor", () => {
+      const input = active()?.input;
+      return input instanceof vscode.TabInputCustom && input.viewType === "poly.excalidraw" ? input : undefined;
+    });
+    await eventually("the page's first change", () => active()?.isDirty || undefined);
+    await vscode.commands.executeCommand("workbench.action.files.save");
+    const scene = JSON.parse(readFileSync(uri.fsPath, "utf8"));
+    assert.strictEqual(scene.type, "excalidraw");
+    assert.strictEqual(scene.source, "https://github.com/linzeyan/vscode-syntax");
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+  });
+
+  // pomdtr's revert put back the file and left the page drawing what was
+  // thrown away; the next edit then saved all of it. The page reloads here,
+  // and an empty file shows that it did: reloaded, it writes to it again.
+  test("reverting an Excalidraw file reloads the page", async () => {
+    const uri = writeFile("reverted.excalidraw", "");
+    await vscode.commands.executeCommand("vscode.open", uri);
+    const dirty = () => vscode.window.tabGroups.activeTabGroup.activeTab?.isDirty;
+    await eventually("the page's first change", () => dirty() || undefined);
+    await vscode.commands.executeCommand("workbench.action.files.revert");
+    assert.strictEqual(dirty(), false, "revert left the document dirty");
+    await eventually("the reloaded page's change", () => dirty() || undefined, 15_000);
+    await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+  });
+
+  // The draw.io page is measured against hediet's by tools/drawio-diff; what
+  // only a host shows is that draw.io starts under the page's CSP and that
+  // both halves of the bridge carry. A file written on one line stays as it is
+  // when opened, so it comes back indented only by the round trip: the text
+  // edit merged into the drawing, and the drawing's autosave written back.
+  test("a text edit to a draw.io file goes through the drawing and back", async () => {
+    const uri = writeFile(
+      "flow.drawio",
+      "<mxfile><diagram id=\"d\" name=\"Page-1\"><mxGraphModel><root><mxCell id=\"0\"/><mxCell id=\"1\" parent=\"0\"/>"
+        + "<mxCell id=\"a\" value=\"label0\" vertex=\"1\" parent=\"1\"><mxGeometry x=\"40\" y=\"40\" width=\"120\" height=\"60\" "
+        + "as=\"geometry\"/></mxCell></root></mxGraphModel></diagram></mxfile>",
+    );
+    await vscode.commands.executeCommand("vscode.open", uri);
+    await eventually("the draw.io editor", () => {
+      const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+      return input instanceof vscode.TabInputCustom && input.viewType === "poly.drawio" ? input : undefined;
+    });
+    const document = await vscode.workspace.openTextDocument(uri);
+    // Nothing outside the page says when draw.io has loaded the file, and an
+    // edit made before that is in what it loads rather than merged. So the
+    // label is changed until one change comes back.
+    let label = 0;
+    const text = await eventually("the drawing's autosave", async () => {
+      if (document.getText().includes("\n    <diagram")) {
+        return document.getText();
+      }
+      const at = document.getText().indexOf(`value="label${label}"`);
+      const edit = new vscode.WorkspaceEdit();
+      const range = new vscode.Range(document.positionAt(at), document.positionAt(at + `value="label${label}"`.length));
+      edit.replace(uri, range, `value="label${++label}"`);
+      await vscode.workspace.applyEdit(edit);
+      await new Promise((done) => setTimeout(done, 2000));
+      return undefined;
+    });
+    assert.match(text, /^<mxfile>\n {4}<diagram id="d" name="Page-1">\n {8}<mxGraphModel/);
+    assert.ok(text.includes(`value="label${label}"`), text);
+    await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+  });
+
+  // The same round trip for an SVG, which comes back as draw.io's export: the
+  // picture, indented, with the diagram in its `content`.
+  test("a text edit to a draw.io SVG comes back as draw.io's picture of it", async () => {
+    const diagram = "<mxfile><diagram id=\"d\" name=\"Page-1\"><mxGraphModel><root><mxCell id=\"0\"/>"
+      + "<mxCell id=\"1\" parent=\"0\"/><mxCell id=\"a\" value=\"label0\" vertex=\"1\" parent=\"1\"><mxGeometry x=\"40\" "
+      + "y=\"40\" width=\"120\" height=\"60\" as=\"geometry\"/></mxCell></root></mxGraphModel></diagram></mxfile>";
+    const escaped = diagram.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const uri = writeFile("flow.drawio.svg", `<svg xmlns="http://www.w3.org/2000/svg" content="${escaped}"></svg>`);
+    await vscode.commands.executeCommand("vscode.open", uri);
+    await eventually("the draw.io editor", () => {
+      const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+      return input instanceof vscode.TabInputCustom && input.viewType === "poly.drawio" ? input : undefined;
+    });
+    const document = await vscode.workspace.openTextDocument(uri);
+    let label = 0;
+    const text = await eventually("the drawing's export", async () => {
+      if (document.getText().includes("\n    <g>")) {
+        return document.getText();
+      }
+      const at = document.getText().indexOf(`value=&quot;label${label}&quot;`);
+      if (at >= 0) {
+        const edit = new vscode.WorkspaceEdit();
+        const range = new vscode.Range(
+          document.positionAt(at),
+          document.positionAt(at + `value=&quot;label${label}&quot;`.length),
+        );
+        edit.replace(uri, range, `value=&quot;label${++label}&quot;`);
+        await vscode.workspace.applyEdit(edit);
+      }
+      await new Promise((done) => setTimeout(done, 2000));
+      return undefined;
+    });
+    assert.match(text, /^<svg [^>]*content="&lt;mxfile/);
+    // The label is drawn in the picture, as well as kept in the diagram; the
+    // indenting puts the text on a line of its own, as hediet's does.
+    assert.match(text, new RegExp(`>\\s*label${label}\\s*<`));
+    await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+  });
+
+  // The converter is yzane.markdown-pdf's, and everything it writes is measured
+  // against that extension by tools/markdown-pdf-diff. What only a host shows
+  // is the wiring: the lazy bundle found beside dist/extension.js, with the
+  // styles and KaTeX fonts the build lays out in dist/markdown-pdf. Also what
+  // poly does differently in the HTML: emoji as characters, and a folder named
+  // `*.md.d` kept in the path, where upstream's rename writes into a folder that
+  // does not exist.
+  test("markdown exports HTML beside the file, with its styles and emoji as characters", async () => {
+    const folder = join(workspaceRoot(), "notes.md.d");
+    mkdirSync(folder, { recursive: true });
+    const source = join(folder, "page.md");
+    writeFileSync(source, "# Page\n\n- [x] done\n\n:smile: and $x^2$\n\n```js\nlet a = 1;\n```\n");
+    const target = join(folder, "page.html");
+    rmSync(target, { force: true });
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(source));
+    await vscode.commands.executeCommand("poly.markdownExportHtml");
+    const html = readFileSync(target, "utf8");
+    assert.ok(html.includes("<p>😄 and <span class=\"katex\">"), "emoji or math not rendered");
+    assert.ok(
+      html.includes("<input type=\"checkbox\" id=\"checkbox0\" checked=\"true\"><label for=\"checkbox0\">done"),
+    );
+    assert.match(html, /\.hljs-keyword/, "no highlight.js theme: dist/markdown-pdf/styles is missing");
+    assert.match(html, /url\(data:font\/woff2;base64,/, "no KaTeX fonts: dist/markdown-pdf/styles/katex is missing");
+  });
+
+  // Upstream converts whichever editor is in front when anything is saved, so
+  // Save All or a save from the explorer exports the wrong file.
+  test("convert-on-save exports the file saved, not the one in front", async () => {
+    const config = vscode.workspace.getConfiguration();
+    const settings: [string, unknown][] = [
+      ["poly.markdownPdf.convertOnSave", true],
+      ["poly.markdownPdf.type", ["html"]],
+    ];
+    const saved = join(workspaceRoot(), "saved.md");
+    const front = join(workspaceRoot(), "front.md");
+    try {
+      for (const [key, value] of settings) {
+        await config.update(key, value, vscode.ConfigurationTarget.Workspace);
+      }
+      writeFileSync(saved, "# Saved\n");
+      writeFileSync(front, "# Front\n");
+      for (const file of [saved, front]) {
+        rmSync(file.replace(/\.md$/, ".html"), { force: true });
+      }
+      const document = await vscode.workspace.openTextDocument(saved);
+      await vscode.window.showTextDocument(document);
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(document.uri, new vscode.Position(1, 0), "\nMore.\n");
+      await vscode.workspace.applyEdit(edit);
+      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(front));
+      await document.save();
+      const html = await eventually("the saved file's export", () => {
+        try {
+          // Hundreds of KB with the styles and fonts inlined: read once it is
+          // whole, not while it is being written.
+          const text = readFileSync(saved.replace(/\.md$/, ".html"), "utf8");
+          return text.includes("</html>") ? text : undefined;
+        } catch {
+          return undefined;
+        }
+      });
+      assert.ok(html.includes("<p>More.</p>"), "exported before the save, or from the old text");
+      assert.throws(() => readFileSync(front.replace(/\.md$/, ".html")), "the editor in front was exported");
+    } finally {
+      for (const [key] of settings) {
+        await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
+      }
+    }
+  });
+
+  // The page and the picture it takes are adpyke.codesnap's, measured against
+  // it by tools/codesnap-diff. What only a host shows is the wiring: the page
+  // read from dist/codesnap, opened beside the code without taking the focus
+  // from it, and each selection handed over -- by way of the clipboard, which
+  // is where the page pastes the colored code from.
+  test("CodeSnap opens beside the code and follows the selection", async () => {
+    const document = await vscode.workspace.openTextDocument(
+      writeFile("snap.ts", "const a = 1;\nconst b = 2;\nconst c = 3;\n"),
+    );
+    const editor = await vscode.window.showTextDocument(document, vscode.ViewColumn.One);
+    const page = () =>
+      vscode.window.tabGroups.all.flatMap((group) => group.tabs).find((tab) =>
+        tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("poly.codeSnap")
+      );
+    await vscode.env.clipboard.writeText("before");
+    try {
+      editor.selection = new vscode.Selection(0, 0, 1, 12);
+      await vscode.commands.executeCommand("poly.codeSnap");
+      const tab = await eventually("the CodeSnap page", page);
+      assert.notStrictEqual(tab.group.viewColumn, vscode.ViewColumn.One, "the page did not open beside the code");
+      assert.strictEqual(vscode.window.activeTextEditor?.document, document, "the page took the focus");
+      await eventually(
+        "the selection handed over",
+        async () => await vscode.env.clipboard.readText() === "const a = 1;\nconst b = 2;" || undefined,
+      );
+      editor.selection = new vscode.Selection(2, 0, 2, 12);
+      await eventually(
+        "the new selection handed over",
+        async () => await vscode.env.clipboard.readText() === "const c = 3;" || undefined,
+      );
+    } finally {
+      const tab = page();
+      if (tab) await vscode.window.tabGroups.close(tab);
+    }
+  });
+
+  // The preview is a page served from localhost out of dist/swagger, framed in
+  // a webview; a JSON spec is validated by the schema `jsonValidation` names,
+  // which refers to the two beside it. A layout the build or the manifest gets
+  // wrong shows a blank frame or validates nothing, and fails nowhere else.
+  test("Swagger Preview serves the spec beside it, and a JSON spec is validated", async () => {
+    const uri = writeFile(
+      "api.json",
+      JSON.stringify({ swagger: "2.0", info: { title: "Pets", version: "1" }, paths: {}, bogus: 1 }, null, 2),
+    );
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, vscode.ViewColumn.One);
+    const page = () =>
+      vscode.window.tabGroups.all.flatMap((group) => group.tabs).find((tab) =>
+        tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("poly.swaggerPreview")
+      );
+    try {
+      await vscode.commands.executeCommand("poly.swaggerPreview");
+      const tab = await eventually("the Swagger preview", page);
+      assert.strictEqual(tab.label, `Swagger Preview - ${document.fileName}`);
+      assert.strictEqual(tab.group.viewColumn, vscode.ViewColumn.Two);
+
+      // The extension's own instance of the server: require shares it.
+      const root = vscode.extensions.getExtension(EXTENSION_ID)!.extensionPath;
+      const server: typeof import("../../editor/swaggerPreview") = require(
+        join(root, "dist", "swaggerPreview.js"),
+      );
+      const address = server.url(document.fileName);
+      const html = await (await fetch(address)).text();
+      assert.match(html, /EventSource\('events\/' \+ fileHash\)/);
+      const bundle = await fetch(new URL("node_modules/swagger-ui-dist/swagger-ui-bundle.js", address));
+      assert.strictEqual(bundle.status, 200);
+      const events = await fetch(address.replace(/\/([^/]+)$/, "/events/$1"));
+      const reader = events.body!.getReader();
+      const { value } = await reader.read();
+      await reader.cancel();
+      const spec = JSON.parse(new TextDecoder().decode(value).replace(/^data: /, ""));
+      assert.strictEqual(spec.info.title, "Pets");
+
+      await eventually(
+        "the schema's complaint about the stray property",
+        () => vscode.languages.getDiagnostics(uri).find((one) => one.message.includes("bogus")),
+      );
+    } finally {
+      const tab = page();
+      if (tab) await vscode.window.tabGroups.close(tab);
+      await vscode.commands.executeCommand("poly.swaggerStop");
+    }
   });
 
   // poly claims the formatter slot and stops there. It used to also declare

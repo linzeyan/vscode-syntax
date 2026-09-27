@@ -703,5 +703,35 @@
     "files": {
       "syntaxes/vyper.tmLanguage.json": "34a9d9e65de57655"
     }
+  },
+  "mattmeyers/vscode-dbml": {
+    "sha": "c4497752a4acc51aff53fe9fd688e4ca867e4bae",
+    "files": {
+      "syntaxes/dbml.tmLanguage.json": "be2e1411fb89d36c",
+      "snippets/dbml.json": "53071bf639fa26b3"
+    }
+  },
+  "qjebbs/vscode-plantuml": {
+    "sha": "7bc1758ed73dc269f5721d78c6c6c01f461d7cb0",
+    "files": {
+      "syntaxes/plantuml.yaml-tmLanguage": "907c75a42574c2f0",
+      "syntaxes/codeblock.json": "e2419b032d272860",
+      "snippets/general.json": "2e318264ead73897",
+      "snippets/activity.json": "26068a366b7e224a",
+      "snippets/usecase.json": "ffaeb5a21e983ada",
+      "snippets/sequence.json": "669274c23c684315",
+      "snippets/class.json": "c48ed60af0b0392d",
+      "snippets/state.json": "2d4c177536fa4a61",
+      "snippets/component.json": "c0173682b714c271",
+      "snippets/salt.json": "35c5d4bf16134058",
+      "snippets/eggs.json": "fb7fb3239fead862"
+    },
+    "contributes": {
+      "markdown.plantuml.codeblock": {
+        "embeddedLanguages": {
+          "meta.embedded.block.plantuml": "plantuml"
+        }
+      }
+    }
   }
 }

@@ -2876,6 +2876,12 @@ mod tests {
             // editor names a language the CLI would not have picked.
             for extension in &lsp {
                 let name = format!("a{extension}");
+                // A diagram is named for the editor, which shows its source,
+                // and left alone by poly on purpose: the drawing's editor
+                // rewrites the whole file on every save.
+                if poly_core::diagram_file(Path::new(&name)) {
+                    continue;
+                }
                 assert_eq!(
                     poly_core::builtin_language(Path::new(&name)),
                     Some(id.as_str()),
@@ -2936,7 +2942,14 @@ mod tests {
         // Not a language poly formats either, but the drawio or excalidraw
         // editor rewrites it whole on every save: a newline the save hook
         // added would be churn in every diagram a repo commits.
-        for diagram in ["arch.drawio.svg", "sketch.excalidraw.json"] {
+        for diagram in [
+            "arch.drawio.svg",
+            "flow.drawio",
+            "flow.dio",
+            "sketch.excalidraw.json",
+            "sketch.excalidraw",
+            "mine.excalidrawlib",
+        ] {
             assert_eq!(ask(diagram)["formatted"], true, "{diagram}");
         }
 

@@ -63,5 +63,11 @@ grammars/sources.lock.json.
   files: cairo.tmLanguage.json
 - https://github.com/vyperlang/vscode-vyper (MIT) @ 8cb5090a7ce5
   files: vyper.tmLanguage.json
+- https://github.com/mattmeyers/vscode-dbml (MIT) @ c4497752a4ac
+  files: dbml.tmLanguage.json
+  snippets (MIT): dbml.json
+- https://github.com/qjebbs/vscode-plantuml (MIT) @ 7bc1758ed73d
+  files: plantuml-markdown.tmLanguage.json, plantuml.tmLanguage.json
+  snippets (Apache-2.0): plantuml-activity.json, plantuml-class.json, plantuml-component.json, plantuml-eggs.json, plantuml-general.json, plantuml-salt.json, plantuml-sequence.json, plantuml-state.json, plantuml-usecase.json
 
 Generated locally, no upstream: csv, ssh_config, tsv.

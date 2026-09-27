@@ -29,3 +29,6 @@ advices = "advices"
 qouted = "qouted"
 # HashiCorp, in grammar source rationales.
 Hashi = "Hashi"
+# highlight.js's MikroTik RouterOS theme, one of the values
+# poly.markdownPdf.highlightStyle accepts; the enum is upstream's, verbatim.
+routeros = "routeros"

@@ -296,7 +296,7 @@ yaml_parser = "0.3"
 # relink on a one-line local change, so Makefile and ci.yml both override those
 # two -- build.yml and release.yml are where this file is read as written.
 [profile.release]
-# The binary ships inside all six platform VSIX, so size is worth real
+# The binary ships inside both platform VSIX, so size is worth real
 # latency: opt-level="s" halved it when this was measured (28.9MB -> 14.7MB on
 # darwin-arm64, before Lua was embedded) for ~8% on 1MB files, which stays far
 # inside the 200ms p95 budget.

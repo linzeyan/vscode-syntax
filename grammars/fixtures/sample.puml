@@ -1,0 +1,32 @@
+' A sequence and a class diagram in one file, the way jebbs.plantuml's
+' preview and export treat a document: one diagram per @start/@end pair.
+@startuml checkout
+!define SERVICE(name) participant name <<service>>
+skinparam monochrome true
+title Checkout
+actor Customer
+SERVICE(Cart)
+database Orders
+/' A block comment
+   spanning lines '/
+Customer -> Cart : add(item)
+Cart --> Orders : "insert order"
+note right of Orders
+  Persisted as JSON
+end note
+alt paid
+  Orders -> Customer : receipt
+else declined
+  Orders -> Customer : retry
+end
+@enduml
+
+@startuml model
+class Order {
+  +id : int
+  -items : List<Item>
+  +total() : Money
+}
+interface Payable
+Order ..|> Payable
+@enduml

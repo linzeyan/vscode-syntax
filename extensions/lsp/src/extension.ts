@@ -61,6 +61,8 @@ const LANGUAGES = [
   // arity, which formats, lints and serves R, so the file works the moment the
   // id exists and costs nothing while it does not.
   "r",
+  // poly-syntax-highlight's id; the formatter is jsonnetfmt.
+  "jsonnet",
   // Built-in id; poly only adds the formatter (markup_fmt's Mustache parser).
   "handlebars",
   // Neither id is poly's, and neither is guaranteed to exist -- they arrive
@@ -782,8 +784,10 @@ export async function activate(context: vscode.ExtensionContext) {
   // First, and returned on every path below: the editor features need no
   // daemon, and the markdown preview reads its plugin off this return value --
   // a binary that fails to start must not take the diagrams down with it.
-  const exports = activateEditor(context);
+  // They get the binary's path, not a running daemon (PlantUML asks it for the
+  // jar), and finding the path only reads settings.
   const serverPath = resolveServerPath(context);
+  const exports = activateEditor(context, serverPath);
   let yielded = yieldServers();
   client = new LanguageClient(
     "poly",

@@ -1,8 +1,13 @@
 name: Release
 
 # Tag vX.Y.Z (or vX.Y.Z-rc.N for a pre-release) -> 6-platform build ->
-# 7 VSIX (6 platform poly-lsp + universal poly-syntax-highlight) + 6 binaries
-# + SHA256SUMS + third-party notices, uploaded to a GitHub Release.
+# 3 VSIX (poly-lsp for darwin-arm64 and win32-x64 + universal
+# poly-syntax-highlight) + 6 binaries + SHA256SUMS + third-party notices,
+# uploaded to a GitHub Release.
+#
+# poly-lsp ships for those two platforms only: they are the machines it is used
+# on, and every VSIX carries the diagram editors' tens of MB. The binaries stay
+# on all six, because action.yml and the container image download them.
 #
 # Three dot-separated parts, not `v*`: the last step of this workflow force-
 # pushes the moving major tag (`v0`), which `v*` also matched. That published
@@ -36,13 +41,19 @@ jobs:
               os: ubuntu-24.04-arm,
               vsce: linux-arm64,
             }
-          - { target: aarch64-apple-darwin, os: macos-14, vsce: darwin-arm64 }
+          - {
+              target: aarch64-apple-darwin,
+              os: macos-14,
+              vsce: darwin-arm64,
+              vsix: true,
+            }
           # arm64 runner runs the x64 smoke test through Rosetta.
           - { target: x86_64-apple-darwin, os: macos-14, vsce: darwin-x64 }
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
               vsce: win32-x64,
+              vsix: true,
             }
           - {
               target: aarch64-pc-windows-msvc,
@@ -82,6 +93,7 @@ jobs:
           mb=$(( bytes / 1048576 ))
           echo "::notice title=binary size::${{ matrix.target }} ${mb}MB ($bytes bytes)"
       - name: Package platform VSIX
+        if: matrix.vsix
         shell: bash
         run: |
           BIN=cli/target/${{ matrix.target }}/release/poly
@@ -159,7 +171,7 @@ jobs:
           lsp=$(find dist -type f -name 'poly-lsp-*.vsix' | wc -l)
           bins=$(find dist -type f -name 'poly-*' ! -name '*.vsix' ! -name '*.md' | wc -l)
           universal=$(find dist -type f -name 'poly-syntax-highlight-*.vsix' | wc -l)
-          test "$lsp" -eq 6 || { echo "expected 6 poly-lsp VSIX, got $lsp" >&2; exit 1; }
+          test "$lsp" -eq 2 || { echo "expected 2 poly-lsp VSIX, got $lsp" >&2; exit 1; }
           test "$bins" -eq 6 || { echo "expected 6 binaries, got $bins" >&2; exit 1; }
           test "$universal" -eq 1 || { echo "expected 1 universal VSIX, got $universal" >&2; exit 1; }
       - name: Create GitHub Release

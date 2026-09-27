@@ -72,6 +72,7 @@ const CASES = {
     [
       "markup.heading",
       "meta.embedded.block.mermaid",
+      "meta.embedded.block.plantuml",
       "meta.embedded.block.graphql",
       "meta.embedded.math.markdown",
       "markup.math.inline",
@@ -101,6 +102,9 @@ const CASES = {
   "sample.env": ["source.env", ["variable", "string"]],
   "sample.proto": ["source.proto", ["keyword", "string"]],
   "sample.mmd": ["source.mermaid", ["keyword"]],
+  // No diagram-name scope to require: upstream hangs it on capture 5 of a
+  // pattern with four groups, so jebbs.plantuml never colours the name either.
+  "sample.puml": ["source.wsd", ["keyword.control.diagram", "comment", "string.quoted"]],
   "sample.graphql": ["source.graphql", ["keyword", "support.type.graphql"]],
   "sample.svelte": [
     "source.svelte",
@@ -446,6 +450,18 @@ const CASES = {
       "variable.language.special.msg.vyper",
       "entity.name.function.constructor.vyper",
       "support.function.builtin.lowlevel.vyper",
+    ],
+  ],
+  // The fixture is upstream's own test.dbml. Every required scope ends in
+  // `.dbml` except the comment one, which the grammar leaves unsuffixed.
+  "sample.dbml": [
+    "source.dbml",
+    [
+      "keyword.dbml",
+      "entity.name.type.dbml",
+      "support.type.dbml",
+      "string.quoted.single.dbml",
+      "comment.line.double-slash",
     ],
   ],
 };
