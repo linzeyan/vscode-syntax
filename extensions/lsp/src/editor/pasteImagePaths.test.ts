@@ -9,7 +9,8 @@ import { expand, imageFileName, imagePath, insertion, Settings } from "./pasteIm
 // changed here.
 const manifest = JSON.parse(readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8"));
 const DEFAULTS = Object.fromEntries(
-  Object.entries(manifest.contributes.configuration.properties as Record<string, { default: unknown }>)
+  (manifest.contributes.configuration as { properties: Record<string, { default: unknown }> }[])
+    .flatMap((category) => Object.entries(category.properties))
     .filter(([key]) => key.startsWith("poly.pasteImage."))
     .map(([key, { default: value }]) => [key.slice("poly.pasteImage.".length), value]),
 ) as unknown as Settings;

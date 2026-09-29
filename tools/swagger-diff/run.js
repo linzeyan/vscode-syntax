@@ -225,14 +225,15 @@ function manifestProblems(extensions) {
   const dir = readdirSync(extensions).find((one) => one.startsWith("arjun.swagger-viewer-"));
   const theirs = JSON.parse(readFileSync(join(extensions, dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
+  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
   const problems = [];
   const own = (id) => id.replace(/^swagger\.(\w)/, (_, c) => `poly.swagger${c.toUpperCase()}`);
-  const mine = Object.keys(ours.configuration.properties).filter((key) => key.startsWith("poly.swaggerViewer."));
+  const mine = Object.keys(polySettings).filter((key) => key.startsWith("poly.swaggerViewer."));
   if (mine.length !== Object.keys(theirs.configuration.properties).length) {
     problems.push(`settings: upstream ${Object.keys(theirs.configuration.properties).length} poly ${mine.length}`);
   }
   for (const [key, spec] of Object.entries(theirs.configuration.properties)) {
-    const setting = ours.configuration.properties[`poly.${key}`];
+    const setting = polySettings[`poly.${key}`];
     if (!setting) {
       problems.push(`setting ${key}: poly has none`);
       continue;

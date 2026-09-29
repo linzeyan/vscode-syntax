@@ -219,18 +219,19 @@ function manifestProblems(extensions) {
   const dir = join(extensions, readdirSync(extensions).find((one) => one.startsWith("marp-team.marp-vscode-")));
   const theirs = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
+  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
   const problems = [];
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const mine = Object.keys(ours.configuration.properties).filter((key) => key.startsWith("poly.marp."));
+  const mine = Object.keys(polySettings).filter((key) => key.startsWith("poly.marp."));
   const kept = Object.keys(theirs.configuration.properties).filter((key) => !DROPPED.includes(key));
   if (mine.length !== kept.length) problems.push(`settings: upstream ${kept.length} poly ${mine.length}`);
   for (const key of DROPPED) {
     if (!theirs.configuration.properties[key]) problems.push(`setting ${key}: upstream no longer has it`);
-    if (ours.configuration.properties[renamed(key)]) problems.push(`setting ${key}: poly has it`);
+    if (polySettings[renamed(key)]) problems.push(`setting ${key}: poly has it`);
   }
   for (const key of kept) {
     const spec = theirs.configuration.properties[key];
-    const setting = ours.configuration.properties[renamed(key)];
+    const setting = polySettings[renamed(key)];
     if (!setting) {
       problems.push(`setting ${key}: poly has none`);
       continue;

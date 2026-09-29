@@ -186,13 +186,14 @@ function manifestProblems(extensions) {
   const dir = readdirSync(extensions).find((one) => one.startsWith("adpyke.codesnap-"));
   const theirs = JSON.parse(readFileSync(join(extensions, dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
+  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
   const problems = [];
-  const mine = Object.keys(ours.configuration.properties).filter((key) => key.startsWith("poly.codeSnap."));
+  const mine = Object.keys(polySettings).filter((key) => key.startsWith("poly.codeSnap."));
   if (mine.length !== Object.keys(theirs.configuration.properties).length) {
     problems.push(`settings: upstream ${Object.keys(theirs.configuration.properties).length} poly ${mine.length}`);
   }
   for (const [key, spec] of Object.entries(theirs.configuration.properties)) {
-    const own = ours.configuration.properties[key.replace(/^codesnap\./, "poly.codeSnap.")];
+    const own = polySettings[key.replace(/^codesnap\./, "poly.codeSnap.")];
     if (!own) {
       problems.push(`setting ${key}: poly has none`);
       continue;

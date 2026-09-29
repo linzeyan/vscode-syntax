@@ -184,7 +184,11 @@ async function measure(side, executable, port) {
 /** A manifest's settings, command and chord, in names both sides share. */
 function manifestRecord(contributes, prefix, command) {
   const settings = {};
-  for (const [key, spec] of Object.entries(contributes.configuration.properties)) {
+  for (
+    const [key, spec] of Object.entries(
+      Object.assign({}, ...[contributes.configuration].flat().map((one) => one.properties)),
+    )
+  ) {
     if (!key.startsWith(prefix)) continue;
     settings[key.slice(prefix.length)] = Object.fromEntries(
       ["type", "default", "enum", "minimum", "maximum", "scope"].map((field) => [field, spec[field] ?? null]),

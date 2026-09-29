@@ -224,7 +224,11 @@ function manifestRecord(manifest, nls, prefix, commands, viewType) {
   const text = (value) => (typeof value === "string" ? value.replace(/^%(.+)%$/, (_, key) => nls[key]) : value);
   const { contributes } = manifest;
   const settings = {};
-  for (const [key, spec] of Object.entries(contributes.configuration.properties)) {
+  for (
+    const [key, spec] of Object.entries(
+      Object.assign({}, ...[contributes.configuration].flat().map((one) => one.properties)),
+    )
+  ) {
     if (!key.startsWith(prefix)) continue;
     settings[key.slice(prefix.length)] = Object.fromEntries(
       ["type", "default", "enum"].map((field) => [field, spec[field] ?? null]),

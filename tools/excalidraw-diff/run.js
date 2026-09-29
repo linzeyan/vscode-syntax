@@ -254,12 +254,13 @@ function manifestProblems(extensions) {
   const dir = readdirSync(extensions).find((one) => one.startsWith("pomdtr.excalidraw-editor-"));
   const theirs = JSON.parse(readFileSync(join(extensions, dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
+  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
   const problems = [];
   const show = (value) => JSON.stringify(value);
 
   const settings = Object.assign({}, ...[theirs.configuration].flat().map((one) => one.properties));
   for (const [key, spec] of Object.entries(settings)) {
-    const mine = ours.configuration.properties[`poly.${key}`];
+    const mine = polySettings[`poly.${key}`];
     if (!mine) {
       problems.push(`setting ${key}: poly has none`);
       continue;

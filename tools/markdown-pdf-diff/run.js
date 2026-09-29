@@ -295,9 +295,10 @@ function manifestProblems(extensions) {
   const dir = readdirSync(extensions).find((one) => one.startsWith("yzane.markdown-pdf-"));
   const theirs = JSON.parse(readFileSync(join(extensions, dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
+  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
   const problems = [];
   for (const [key, spec] of Object.entries(theirs.configuration.properties)) {
-    const mine = ours.configuration.properties[`poly.${key.replace(/^markdown-pdf\./, "markdownPdf.")}`];
+    const mine = polySettings[`poly.${key.replace(/^markdown-pdf\./, "markdownPdf.")}`];
     if (!mine) {
       problems.push(`setting ${key}: poly has none`);
       continue;
