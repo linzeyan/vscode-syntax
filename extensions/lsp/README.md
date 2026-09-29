@@ -56,7 +56,7 @@ toolchain 裡的** language server：gopls、rust-analyzer、clangd、sourcekit-
 lua-language-server、bash-language-server，以及 poly 代抓的 buf 與 arity。
 
 poly 不實作任何一行語意分析，只做路由，所以品質就是那支 server 的品質。server 一律從 PATH
-找，找不到就說一聲。改完要重新載入視窗。
+找，找不到就說一聲；WSL 裡不找 `/mnt/c` 這類 Windows 磁碟上的目錄。改完要重新載入視窗。
 
 **已經有官方 extension 的語言，poly 讓開**：裝了 Go（golang.go）、rust-analyzer、clangd 或
 C/C++、Swift、HashiCorp Terraform、Lua（sumneko）、Bash IDE、Buf 的那幾個語言，poly 不啟動

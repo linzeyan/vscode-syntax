@@ -573,11 +573,30 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
     } else {
         name.to_string()
     };
+    let wsl = std::env::var_os("WSL_DISTRO_NAME").is_some();
     std::env::var_os("PATH")?.to_str().map(|paths| {
         std::env::split_paths(paths)
+            .filter(|d| !(wsl && windows_drive(d)))
             .map(|d| d.join(&exe))
             .find(|p| p.is_file())
     })?
+}
+
+/// A Windows drive as WSL mounts it, `/mnt/c/...`. WSL appends Windows' PATH to
+/// its own, so a tool installed on both sides was found first on the Windows
+/// one whenever Linux's copy came later or was missing: bash-language-server
+/// was npm's Windows shim, which started a server over the drive mount that
+/// never answered `initialize`. A Windows program is not the Linux tool asked
+/// for, so the drives are not looked in at all.
+///
+/// ponytail: the default mount root only; one moved by `[automount] root` in
+/// wsl.conf is searched as before.
+fn windows_drive(dir: &Path) -> bool {
+    let Some(rest) = dir.to_str().and_then(|d| d.strip_prefix("/mnt/")) else {
+        return false;
+    };
+    let drive = rest.split('/').next().unwrap_or_default();
+    drive.len() == 1 && drive.as_bytes()[0].is_ascii_alphabetic()
 }
 
 // ── managed download ───────────────────────────────────────────────────────
@@ -873,6 +892,29 @@ fn unpack(body: &[u8], kind: Kind, name: &str, tmp: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Under WSL a Windows drive on PATH handed out npm's Windows shim for
+    /// bash-language-server; WSL's own mounts beside the drives are Linux and
+    /// stay searched.
+    #[test]
+    fn only_a_drive_letter_under_mnt_is_windows() {
+        for dir in [
+            "/mnt/c",
+            "/mnt/c/Users/me/AppData/Roaming/npm",
+            "/mnt/D/bin",
+        ] {
+            assert!(windows_drive(Path::new(dir)), "{dir} is a Windows drive");
+        }
+        for dir in [
+            "/mnt/wsl/bin",
+            "/mnt/wslg",
+            "/mnt",
+            "/usr/local/bin",
+            "/home/me/mnt/c/bin",
+        ] {
+            assert!(!windows_drive(Path::new(dir)), "{dir} is Linux");
+        }
+    }
 
     /// Two installers of the same tool must not share a scratch file.
     ///
