@@ -383,8 +383,10 @@ markdown 的 Enter／Tab／粗體斜體與 `Copy Path with Line Numbers`、重�
 
 兩個輸出面板：**Poly** 是 daemon 的（啟動、每次 lint／format、下游 server 的 stderr），
 **Poly Editor** 是編輯器功能的（lens 為什麼沒畫之類，細節在 debug 層級，用 `Developer: Set Log
-Level` 打開）。兩者都會寫到磁碟上，回報問題時附 `Developer: Open Extension Logs Folder` 打開的
-那個資料夾就夠了。
+Level` 打開）。兩者都寫到磁碟上，是 `Developer: Open Extension Logs Folder` 打開的資料夾裡
+`ricky.poly-lsp/` 底下的 `Poly.log` 與 `Poly Editor.log`，回報問題時附這兩個檔就夠了。WSL、SSH 的
+遠端視窗裡 poly-lsp 跑在遠端，這兩個檔也在遠端的 `~/.vscode-server/data/logs/` 底下，不在本機；拿不到
+時從輸出面板匯出。
 
 ## 設計理由
 

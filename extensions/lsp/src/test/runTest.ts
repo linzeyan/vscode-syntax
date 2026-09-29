@@ -83,6 +83,8 @@ async function main(): Promise<void> {
   // gopls refuses to resolve anything outside a module, so the throwaway
   // workspace needs to be one before it can answer a single question.
   writeFileSync(join(workspace, "go.mod"), "module polye2e\n\ngo 1.21\n");
+  // Its own, so that the log test finds this run's files and no other's.
+  const logs = mkdtempSync(join(tmpdir(), "poly-e2e-logs-"));
 
   await runTests({
     // The second one ships only a language default; see its description.
@@ -98,7 +100,9 @@ async function main(): Promise<void> {
     launchArgs: [
       `--folder-uri=${pathToFileURL(workspace).toString()}`,
       `--user-data-dir=${userDataDir(repo)}`,
+      `--logsPath=${logs}`,
     ],
+    extensionTestsEnv: { POLY_E2E_LOGS: logs },
   });
 }
 

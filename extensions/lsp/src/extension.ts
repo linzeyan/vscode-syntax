@@ -798,6 +798,7 @@ export async function activate(context: vscode.ExtensionContext) {
       transport: TransportKind.stdio,
     },
     {
+      outputChannel: daemonLog(context),
       documentSelector: LANGUAGES.map((language) => ({
         scheme: "file",
         language,
@@ -1089,6 +1090,60 @@ export async function activate(context: vscode.ExtensionContext) {
   applyIndentationToVisible();
   scheduleUpdateCheck(context, "poly", logLine);
   return exports;
+}
+
+const LEVELS = { Error: "error", Warn: "warn", Info: "info", Debug: "debug", Trace: "trace" } as const;
+
+/**
+ * The daemon's "Poly" channel, as a `LogOutputChannel`: that is a file named
+ * after it in the extension's own folder, the one "Developer: Open Extension
+ * Logs Folder" opens, where a plain channel is a numbered file under
+ * `output_logging_*` beside it that nobody finds -- and every line has a time.
+ *
+ * languageclient 9 writes to it as to a plain channel. The server's stderr
+ * comes in whatever chunks the pipe gives, and a log channel makes each chunk
+ * an entry, so lines are put back together here; the client's own messages
+ * carry a clock and a level in brackets, which become the entry's instead.
+ * Owning the channel also keeps the client from opening a second "Poly" to
+ * say the server exited after it disposed the first.
+ */
+function daemonLog(context: vscode.ExtensionContext): vscode.OutputChannel {
+  const log = vscode.window.createOutputChannel("Poly", { log: true });
+  context.subscriptions.push(log);
+  let partial = "";
+  return {
+    name: log.name,
+    append(chunk: string) {
+      const lines = (partial + chunk).split("\n");
+      partial = lines.pop() ?? "";
+      for (const line of lines) {
+        if (line.trim()) log.info(line.replace(/\r$/, ""));
+      }
+    },
+    appendLine(message: string) {
+      const stamped = /^\[(Error|Warn|Info|Debug|Trace) *- [^\]]*\] /.exec(message);
+      if (stamped) {
+        log[LEVELS[stamped[1] as keyof typeof LEVELS]](message.slice(stamped[0].length));
+      } else {
+        log.info(message);
+      }
+    },
+    replace(value: string) {
+      log.replace(value);
+    },
+    clear() {
+      log.clear();
+    },
+    show(column?: vscode.ViewColumn | boolean, preserveFocus?: boolean) {
+      log.show(typeof column === "boolean" ? column : preserveFocus);
+    },
+    hide() {
+      log.hide();
+    },
+    dispose() {
+      log.dispose();
+    },
+  };
 }
 
 /** A line in the "Poly" channel, from code that runs outside the client. */

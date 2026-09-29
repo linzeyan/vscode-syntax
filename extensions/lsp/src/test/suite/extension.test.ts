@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import * as vscode from "vscode";
@@ -1295,5 +1295,25 @@ func main() {
       [],
       "claims the formatter slot but never activates poly",
     );
+  });
+
+  // Last, so that the tests above have had the daemon write to stderr. The log
+  // someone attaches to a report is the file in the extension's logs folder;
+  // a plain channel put it in a numbered file elsewhere, and a log channel fed
+  // the pipe's chunks as they come stamps some lines and runs others on.
+  test("the daemon's log is Poly.log in the extension's logs folder, a line to an entry", async () => {
+    const logs = process.env.POLY_E2E_LOGS;
+    assert.ok(logs, "the test host was given no logs folder");
+    const name = readdirSync(logs, { recursive: true, encoding: "utf8" })
+      .find((one) => one.endsWith(join(EXTENSION_ID, "Poly.log")));
+    assert.ok(name, `no ${EXTENSION_ID}/Poly.log under ${logs}`);
+    // The daemon times every request it answers.
+    const stderr = /^\S+ \S+ \[info\] \[poly\] textDocument\/formatting [\d.]+ms$/m;
+    const text = await eventually("a line of the daemon's stderr", () => {
+      const read = readFileSync(join(logs, name), "utf8");
+      return stderr.test(read) ? read : undefined;
+    });
+    assert.match(text, /^\S+ \S+ \[info\] \[poly\] binary .* reports /m, "poly's own lines are not in it");
+    assert.doesNotMatch(text, /^\[poly\]/m, "a line of stderr ran on from the one before, without its own stamp");
   });
 });
