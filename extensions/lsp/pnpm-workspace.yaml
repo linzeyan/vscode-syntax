@@ -29,7 +29,14 @@ allowBuilds:
 # and would move on their own, but only when something re-resolves them. Each
 # is the newest of its line except nanoid 4, which has no fixed 4.x;
 # mermaid-to-excalidraw calls nothing but `nanoid()`, which 5.x keeps.
+#
+# thrift is the one that crosses minors: parquets, Data Preview's reader, asks
+# for ^0.12.0 and has no release past it, and every thrift to 0.22.0 carries
+# advisories. parquets uses only the compact protocol, the buffered and framed
+# transports and the Thrift.Type constants, which 0.24 keeps; Data Preview's
+# unit tests read a parquet file through it.
 overrides:
+  thrift: 0.24.0
   serialize-javascript: ^7.1.0
   "@xmldom/xmldom@0.9": 0.9.12
   js-yaml@4: 4.3.2

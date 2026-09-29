@@ -219,6 +219,7 @@ const vscode = {
     createTreeView: () => ({ ...nothing, onDidChangeVisibility: on("treeVisibility"), visible: false }),
     registerTreeDataProvider: () => nothing,
     registerCustomEditorProvider: () => nothing,
+    registerWebviewPanelSerializer: () => nothing,
     registerUriHandler: () => nothing,
     showWarningMessage: () => Promise.resolve(undefined),
     showQuickPick: () => Promise.resolve(undefined),

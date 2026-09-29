@@ -39,6 +39,7 @@ export const YIELDING = [
   "poly.extractVariable",
   "poly.inlineVariable",
   "poly.nextChangedFile",
+  "poly.pasteImage",
   "poly.previousChangedFile",
   "poly.plantumlPreview",
   "poly.revertAndSave",

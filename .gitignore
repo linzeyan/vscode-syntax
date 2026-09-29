@@ -11,15 +11,21 @@ extensions/lsp/out/
 # app, 115 MB unpacked from its release, and markdown export's converter, 4.5 MB
 # of puppeteer and KaTeX, with the 580 styles and fonts it reads. None is
 # poly's code, and CI and release build all from source. CodeSnap's page is a
-# copy of src/editor/codeSnap, and the Swagger preview's of src/editor/swaggerViewer
-# with Swagger UI's files beside it. Marp is 18 MB of marp-core, MathJax,
-# marp-cli and puppeteer around src/editor/marp.
+# copy of src/editor/codeSnap, Paste Image's scripts of src/editor/pasteImage,
+# and the Swagger preview's page of src/editor/swaggerViewer with Swagger UI's
+# files beside it. Data Preview's readers are 1.3 MB of Arrow, Avro, Parquet and
+# SheetJS, and its page a copy of src/editor/dataPreview with Perspective's
+# release beside it. Marp is 18 MB of marp-core, MathJax, marp-cli and puppeteer
+# around src/editor/marp.
 extensions/lsp/dist/dbml.js
 extensions/lsp/dist/excalidraw/
 extensions/lsp/dist/drawio/
 extensions/lsp/dist/markdownPdf.js
 extensions/lsp/dist/markdown-pdf/
 extensions/lsp/dist/codesnap/
+extensions/lsp/dist/paste-image/
+extensions/lsp/dist/dataPreview.js
+extensions/lsp/dist/data-preview/
 extensions/lsp/dist/swagger/
 extensions/lsp/dist/marp/
 extensions/lsp/.vscode-test/

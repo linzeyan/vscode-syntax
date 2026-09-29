@@ -1,5 +1,6 @@
 # The extension ships only the esbuild bundle; sources and deps stay out.
 node_modules/**
+vendor/**
 src/**
 # Glob rather than one line each: `tsconfig.preview.json` shipped inside the
 # VSIX the first time a third config appeared, and nothing failed -- a file that

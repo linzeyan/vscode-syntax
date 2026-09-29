@@ -210,6 +210,50 @@ adpyke.codesnap 的替代：選取的程式碼拍成一張 PNG，照 VSCode 的�
 蓋掉剪貼簿，和它一樣。和 adpyke.codesnap 不同的地方：取消存檔之後，下一次存檔仍從上一張圖的位置開始，
 它則忘了那個位置；存檔失敗會顯示錯誤。兩者都裝著時，poly 的命令不放進右鍵選單。
 
+### 貼上圖片
+
+mushan.vscode-paste-image 的替代：剪貼簿裡的圖片存成 PNG 放在正在編輯的檔案旁邊，並插入指向它的連結。
+讀剪貼簿的腳本取自它（1.0.4）；設定在 `poly.pasteImage.*`，名稱與預設值同它的 `pasteImage.*`。
+
+- **`Paste Image`**（`cmd+alt+shift+i`／`ctrl+alt+shift+i`）：有選取文字就拿它當檔名並取代它，否則照
+  `defaultName`（moment.js 的格式）以貼上的時間命名。markdown 家族插入 markdown 的圖片語法，AsciiDoc
+  插入 `image::路徑[]`，其他檔案只插入路徑。同名的圖已經存在時先問要不要蓋掉。
+- **位置與寫法**：`path` 是存放的資料夾，`basePath` 是插入的路徑從哪算起（留空插入絕對路徑），都可用
+  `${currentFileDir}`、`${projectRoot}`、`${currentFileName}`、`${currentFileNameWithoutExt}`。路徑可加前後綴、
+  編碼空格或整段 URL 編碼；`insertPattern` 自訂插入的整段文字；`showFilePathConfirmInputBox` 存檔前先問完整
+  路徑或只問檔名。
+- **讀剪貼簿**：macOS 用 osascript，Windows 用 PowerShell，Linux 要先裝 xclip。
+
+和 mushan.vscode-paste-image 不同的地方：鍵換成 `cmd+alt+shift+i`，因為它的 `cmd+alt+v` 就是 Extract Variable
+的鍵；唯讀的編輯器裡按了不作用；markdown 家族（prompt、instructions 等）也插入圖片語法，它只認 `markdown`；
+`${projectRoot}` 是檔案所在的工作區資料夾，沒開資料夾時是檔案所在的資料夾，它則一律用第一個資料夾，沒開
+資料夾時變成名為 `undefined` 的資料夾；檔名框裡填相對路徑時從檔案所在的資料夾算起；Windows 上蓋掉較大的
+舊圖時不會留下舊檔的尾巴；圖寫不出來時會說，它則什麼都不做；訊息的措辭不同，並寫出 poly 的設定名稱。
+兩者都裝著時各用各的鍵，都能用；別的擴充綁了 `cmd+alt+shift+i` 時 poly 讓出來。
+
+### 資料預覽
+
+RandomFractalsInc.vscode-data-preview 的替代：資料檔開成可排序、篩選、分組、樞紐的表格，也能換成圖表。頁面取自
+它（2.3.0），表格與圖表是 Perspective 0.4，同它的；設定在 `poly.dataPreview.*`，名稱同它的 `data.preview.*`。
+
+- **`Preview Data`**／**`Preview Data on Side`**：編輯器標題的按鈕、檔案總管與分頁的右鍵選單都有，命令面板也
+  叫得到。讀得懂的格式：JSON（可有註解與尾逗號）、JSON Lines、JSON5、HJSON、YAML、CSV／TSV、Markdown 表格、
+  properties／ini／env、Excel（xlsx、xlsb、xls、xlsm）、ODS、Arrow、Avro、Parquet。物件攤平成 key／value
+  兩欄；一個檔有多張工作表或多個 Markdown 表格時，工具列可切換。存檔後預覽跟著重讀。
+- **`Preview Remote Data`**：輸入 http(s) 網址預覽網路上的檔。
+- **工具列**：篩選後的資料另存成 CSV、Markdown、JSON 家族、YAML、properties、Excel 或 Arrow；表格的欄位、
+  排序與圖表存成 `.config`，之後再載入；也能開原始檔或另一個資料檔。
+- **設定**：`theme` 選表格的配色（`dark`、`light`、較緊湊的 `dense.*`、`vaporwave`）；`create.json.files` 與
+  `create.json.schema` 讓 Arrow、Avro、Parquet、Excel 檔預覽時在旁邊寫出 `.json` 與 `.schema.json`，已經存在的
+  不覆蓋；`openSavedFileEditor` 決定另存後要不要開那個檔。
+
+和 RandomFractalsInc.vscode-data-preview 不同的地方：不綁快捷鍵（它的 `ctrl+shift+r` 是 VSCode 的 Refactor）；
+頁面不從網路載入任何東西；每個視窗第一個預覽的表格不再是空白的；`light` 與 `dense.light` 真的套上亮色，它要
+的樣式表並不存在；改了主題，開著的預覽跟著換；物件裡的 `false`、`0` 與空字串照樣列出，它會漏掉；按鈕與選單只
+出現在副檔名讀得懂的檔，它的樣式會把 `vite.config.ts`、`x.mdx` 也算進去；圖表只有 d3fc，Highcharts 不能商用
+所以不附，`charts.plugin` 與 `log.level` 兩項設定沒有；頁面只能開預覽或檔案，不能叫任意命令；讀不了的二進位
+檔會說，它則一聲不吭；不在網址旁寫檔。兩者都裝著時，poly 的按鈕、選單與命令讓出來。
+
 ### Swagger 預覽
 
 arjun.swagger-viewer 的替代：Swagger 2.0 與 OpenAPI 3.0／3.1 的 JSON、YAML 檔以 Swagger UI 預覽，邊打邊更新。
@@ -330,7 +374,7 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 | `Revert Selected Changes and Save` | `alt+q`           | `alt+q`                             | 有 git、檔案        |
 
 `Extract Variable`、`Inline Variable`、上／下一個變更檔與 `Revert Selected Changes and Save`
-的鍵若已被你裝的別的擴充綁走（例如 Paste Image 的 `cmd+alt+v`、quicktype 的
+的鍵若已被你裝的別的擴充綁走（例如 mushan.vscode-paste-image 的 `cmd+alt+v`、quicktype 的
 `cmd+alt+shift+v`、Rewrap 的 `alt+q`），poly 會讓出來，Poly Editor 輸出面板記一行讓給了誰；
 命令面板照樣叫得到。要搶回來，在 `keybindings.json` 綁對應的 `poly.*` 命令。只有 web 版
 （沒有桌面版程式）的擴充 poly 看不到，照樣會被蓋過。
@@ -372,6 +416,8 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 | `poly.drawio.*`                    | 同 hediet | draw.io 的離線／線上、主題、樣式、圖形庫、plugin 與 code link，22 項，見上面的 draw.io |
 | `poly.markdownPdf.*`               | 同 yzane  | 匯出的格式、位置、樣式、Chrome、PDF 版面與圖片範圍，43 項，見上面的 Markdown 匯出      |
 | `poly.codeSnap.*`                  | 同 adpyke | 截圖的背景、陰影、視窗樣式、行號與快門動作，11 項，見上面的 CodeSnap                   |
+| `poly.pasteImage.*`                | 同 mushan | 圖片存放的資料夾與檔名、插入的路徑與寫法、存檔前的檔名框，12 項，見上面的貼上圖片      |
+| `poly.dataPreview.*`               | 同它的    | 表格的主題、二進位檔旁寫出 JSON 與 schema、存檔後開啟，4 項，見上面的資料預覽          |
 | `poly.swaggerViewer.*`             | 同 arjun  | 預覽伺服器的主機與連接埠、在瀏覽器開、標題只列檔名與縮放，5 項，見上面的 Swagger 預覽  |
 | `poly.marp.*`                      | 同 marp   | 預覽的換行、HTML、數學式與主題，匯出的格式與瀏覽器，15 項，見上面的 Marp 投影片        |
 

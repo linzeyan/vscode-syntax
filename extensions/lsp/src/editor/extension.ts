@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { nextChangedFile } from "./changes";
 import { Binding, YIELDING, yieldKey, yieldsTo } from "./chords";
 import { registerCodeSnap } from "./codeSnap";
+import { registerDataPreview } from "./dataPreview";
 import type { FromSql, ToSql } from "./dbml";
 import { registerDrawio } from "./drawioEditor";
 import { registerExcalidraw } from "./excalidrawEditor";
@@ -34,6 +35,7 @@ import {
 } from "./markdownIt";
 import { registerMarp } from "./marp";
 import { methodLabel, methodsByType } from "./methods";
+import { registerPasteImage } from "./pasteImage";
 import { registerPlantuml } from "./plantumlEditor";
 import { describe, EXPR_MARK, POSTFIX_LANGUAGES, postfixesFor, postfixTarget } from "./postfix";
 import { generatedFiles, goLinksFor, goServerMethod, protoPackage } from "./protobuf";
@@ -2236,6 +2238,8 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   registerDrawio(context);
   registerMarkdownExport(context, (id) => MARKDOWN_LANGUAGES.has(id));
   registerCodeSnap(context);
+  registerPasteImage(context, (id) => MARKDOWN_LANGUAGES.has(id));
+  registerDataPreview(context);
   registerSwaggerViewer(context);
   marpPlugin = registerMarp(context);
 

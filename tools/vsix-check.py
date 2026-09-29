@@ -84,7 +84,8 @@ def main() -> int:
     # And the files code loads by path at run time (`dist/dbml.js`, the
     # preview's `dist/diagram/*.js`, the PlantUML preview page under
     # `media/plantuml/`, the Excalidraw page's styles and fonts, draw.io's web
-    # app, markdown export's styles and template, CodeSnap's page, the Swagger
+    # app, markdown export's styles and template, CodeSnap's page, Paste Image's
+    # clipboard scripts, Data Preview's page and Perspective, the Swagger
     # preview's page, schemas and Swagger UI, Marp's bundles and the template
     # script marp-cli reads beside itself), which no
     # manifest key names either: whatever the build wrote, or the page is made
@@ -98,6 +99,8 @@ def main() -> int:
                 *root.glob("dist/drawio/**/*"),
                 *root.glob("dist/markdown-pdf/**/*"),
                 *root.glob("dist/codesnap/**/*"),
+                *root.glob("dist/paste-image/**/*"),
+                *root.glob("dist/data-preview/**/*"),
                 *root.glob("dist/swagger/**/*"),
                 *root.glob("dist/marp/**/*"),
                 *root.glob("media/plantuml/**/*"),

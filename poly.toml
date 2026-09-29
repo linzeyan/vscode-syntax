@@ -22,6 +22,8 @@
 #                         for line with upstream's so the two can be diffed
 #   editor/markdownPdf    yzane.markdown-pdf's converter, likewise
 #   editor/codeSnap       adpyke.codesnap's page, likewise
+#   editor/pasteImage     mushan.vscode-paste-image's clipboard scripts, likewise
+#   editor/dataPreview    RandomFractalsInc.vscode-data-preview's page, likewise
 #   editor/swaggerViewer  arjun.swagger-viewer's page and schemas, likewise
 #   editor/marp           marp-team.marp-vscode's source, likewise
 [format]
@@ -39,6 +41,8 @@ exclude = [
   "extensions/lsp/src/editor/preview/excalidraw/**",
   "extensions/lsp/src/editor/markdownPdf/**",
   "extensions/lsp/src/editor/codeSnap/**",
+  "extensions/lsp/src/editor/pasteImage/**",
+  "extensions/lsp/src/editor/dataPreview/**",
   "extensions/lsp/src/editor/swaggerViewer/**",
   "extensions/lsp/src/editor/marp/**",
 ]
@@ -58,6 +62,8 @@ exclude = [
   "extensions/lsp/src/editor/preview/excalidraw/**",
   "extensions/lsp/src/editor/markdownPdf/**",
   "extensions/lsp/src/editor/codeSnap/**",
+  "extensions/lsp/src/editor/pasteImage/**",
+  "extensions/lsp/src/editor/dataPreview/**",
   "extensions/lsp/src/editor/swaggerViewer/**",
   "extensions/lsp/src/editor/marp/**",
 ]

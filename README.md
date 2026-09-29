@@ -133,6 +133,17 @@
   頁面照 VSCode 的顏色與字型把它畫成 macOS 風格的視窗，按快門存成 PNG 或複製到剪貼簿；拍出的圖與
   它的相同。背景、陰影、視窗樣式與行號可設，設定在 `poly.codeSnap.*`，名稱同它的。頁面開著時，選取
   會蓋掉剪貼簿，和它一樣。兩個都裝著時 poly 的命令不放進右鍵選單。
+- **貼上圖片**：取代 mushan.vscode-paste-image。截圖或複製圖片後，在檔案裡按 `cmd/ctrl+alt+shift+i`（或
+  `Paste Image`），圖片存成 PNG 放在檔案旁邊，游標處插入連結：markdown 是 `![](路徑)`，AsciiDoc 是
+  `image::路徑[]`。有選取文字就拿它當檔名，否則以貼上的時間命名。存放的資料夾、連結的寫法與檔名都可設，
+  設定在 `poly.pasteImage.*`，名稱同它的。它的 `cmd/ctrl+alt+v` 在 poly 是 Extract Variable，所以換了鍵；
+  兩個都裝著時各用各的鍵。
+- **資料預覽**：取代 RandomFractalsInc.vscode-data-preview。JSON、JSON Lines、JSON5、HJSON、YAML、CSV／TSV、
+  Markdown 表格、properties／ini／env、Excel 與 ODS、Arrow、Avro、Parquet 檔按編輯器標題的按鈕（或
+  `Preview Data`，檔案總管與分頁右鍵也有），開出可排序、篩選、分組的表格，也能換成圖表；網址上的檔也能
+  預覽。篩選後的資料可另存成別的格式，表格的設定可存成 `.config` 再載入。頁面與表格元件（Perspective
+  0.4）同它的，但不從網路載入任何東西。設定在 `poly.dataPreview.*`，名稱同它的。不綁快捷鍵；兩個都裝著時
+  poly 的按鈕與選單讓出來。
 - **Swagger 預覽**：取代 arjun.swagger-viewer。在 Swagger 2.0 或 OpenAPI 3 的 JSON／YAML 檔按
   `shift+alt+p`（或 `Preview Swagger`，檔案總管右鍵也有），旁邊開出 Swagger UI，打字時跟著更新；也能
   從網址預覽，檔案總管有工作區裡 spec 的清單。頁面與 Swagger UI 的版本同它的。JSON spec 照 schema
@@ -163,7 +174,7 @@
   `Extract subexpression to variable`／`Extract to constant in enclosing scope`），快捷鍵
   綁不到任何一個。poly 問的是 LSP 標準的 `refactor.extract`／`refactor.inline` kind，
   過濾掉 `Extract function` 那種不是變數的，剛好一項就直接套用。做事的是語言自己的 server。
-  你裝的別的擴充綁了同一組鍵（Paste Image 的貼圖、quicktype 的 Paste JSON as Types）時
+  你裝的別的擴充綁了同一組鍵（mushan.vscode-paste-image 的貼圖、quicktype 的 Paste JSON as Types）時
   poly 讓出來，命令面板照樣叫得到。
 - **`Poly: Move to New File` ／ `Change Signature` ／ `Implement Interface`**：同一個形狀再
   三個，從命令面板叫。Move to New File 問 `refactor.extract` 挑 `toNewFile`；Change Signature
