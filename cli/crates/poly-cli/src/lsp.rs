@@ -33,7 +33,8 @@ const METHOD_NOT_FOUND: i32 = -32601;
 const FORMAT_PATHS: &str = "poly.formatPaths";
 const MINIFY: &str = "poly.minifyEdits";
 const EDITOR_CONFIG: &str = "poly.editorConfig";
-pub(crate) const EXECUTE_COMMANDS: &[&str] = &[FORMAT_PATHS, MINIFY, EDITOR_CONFIG];
+const FORMAT_TEXT: &str = "poly.formatText";
+pub(crate) const EXECUTE_COMMANDS: &[&str] = &[FORMAT_PATHS, MINIFY, EDITOR_CONFIG, FORMAT_TEXT];
 
 pub fn run() -> Result<()> {
     let (connection, io_threads) = Connection::stdio();
@@ -1265,17 +1266,14 @@ impl Server {
             // race with didClose degrades to a no-op save.
             return Response::new_ok(id, serde_json::json!([]));
         };
-        match formatted_text(&uri, &text) {
+        match formatted_text(&uri_path(&uri), &text) {
             Ok(formatted) => {
                 if self.lock().format.remove(&uri).is_some() {
                     let _ = self.publish_all(&uri);
                 }
                 let edits = match (formatted, range) {
                     (Some(new_text), Some(range)) => edits_within(&text, &new_text, range),
-                    (Some(new_text), None) => vec![TextEdit {
-                        range: full_range(&text),
-                        new_text,
-                    }],
+                    (Some(new_text), None) => line_edits(&text, &new_text, |_| true),
                     // Already formatted, or a language poly does not format.
                     (None, _) => vec![],
                 };
@@ -1329,6 +1327,10 @@ impl Server {
             MINIFY => self.run_minify(request.id, params.arguments.first()),
             EDITOR_CONFIG => match editor_config(params.arguments.first()) {
                 Ok(settings) => Response::new_ok(request.id, settings),
+                Err(e) => Response::new_err(request.id, INTERNAL_ERROR, format!("{e:#}")),
+            },
+            FORMAT_TEXT => match format_text_edits(params.arguments.first()) {
+                Ok(edits) => Response::new_ok(request.id, serde_json::json!(edits)),
                 Err(e) => Response::new_err(request.id, INTERNAL_ERROR, format!("{e:#}")),
             },
             other => Response::new_err(
@@ -1816,27 +1818,47 @@ fn format_diagnostic(message: &str, text: &str) -> lsp_types::Diagnostic {
 
 /// The document as poly would write it, or `None` if there is nothing to write
 /// — already formatted, or a file poly does not format at all.
-fn formatted_text(uri: &Url, text: &str) -> Result<Option<String>> {
-    let path = uri_path(uri);
+fn formatted_text(path: &Path, text: &str) -> Result<Option<String>> {
     // Rediscover per call: an upward stat chain is cheap (<1ms) and picks up
     // poly.toml edits without a watcher.
-    let config = poly_core::Config::discover(&path).unwrap_or_else(|_| poly_core::Config::empty());
+    let config = poly_core::Config::discover(path).unwrap_or_else(|_| poly_core::Config::empty());
     // `[format] exclude` is the project saying another program owns these
     // bytes — a lockfile, generated output, a byte-exact fixture. `poly fmt`
     // honours it and so does the lint side below, so format-on-save has to as
     // well: without this, opening one of those files and saving rewrites on the
     // spot exactly what CI is required never to touch, and `pnpm install
     // --frozen-lockfile` fails on a file nobody edited.
-    if config.excluded(&path, poly_core::Scope::Format) {
+    if config.excluded(path, poly_core::Scope::Format) {
         return Ok(None);
     }
-    let Some(lang) = config.language(&path) else {
+    let Some(lang) = config.language(path) else {
         return Ok(None);
     };
     if !crate::fmt::formattable(&lang) {
         return Ok(None);
     }
-    crate::fmt::format_text(&lang, &path, text, &config)
+    crate::fmt::format_text(&lang, path, text, &config)
+}
+
+/// Format a buffer that has no file behind it, as edits.
+///
+/// An untitled buffer never reaches `format_response`: the client's document
+/// selector is `file` only, because a didOpen also starts lint and the language
+/// server behind the language, and neither has anything to do with text that
+/// has no path. So the client sends the text itself, with a path to detect the
+/// language and discover poly.toml from -- a name carrying the extension VSCode
+/// gives that language, in the workspace folder -- and poly keeps nothing.
+fn format_text_edits(argument: Option<&serde_json::Value>) -> Result<Vec<TextEdit>> {
+    let field = |name: &str| {
+        argument
+            .and_then(|a| a.get(name))
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("{FORMAT_TEXT} needs a {name} argument"))
+    };
+    let text = field("text")?;
+    Ok(formatted_text(Path::new(field("path")?), text)?
+        .map(|formatted| line_edits(text, &formatted, |_| true))
+        .unwrap_or_default())
 }
 
 /// The parts of a whole-document reformat that fall inside `range`.
@@ -1854,8 +1876,6 @@ fn formatted_text(uri: &Url, text: &str) -> Result<Option<String>> {
 /// user nor `poly fmt` would ever write. Overshooting the selection is visible
 /// and one undo away; wrong text is neither.
 fn edits_within(text: &str, formatted: &str, range: Range) -> Vec<TextEdit> {
-    let old = lines(text);
-    let new = lines(formatted);
     let first = range.start.line as usize;
     // Selecting whole lines by dragging down the gutter ends the range at
     // column 0 of the line *after* the last highlighted one. That line is not
@@ -1867,22 +1887,45 @@ fn edits_within(text: &str, formatted: &str, range: Range) -> Vec<TextEdit> {
         range.end.line
     } as usize;
 
-    similar::capture_diff_slices(similar::Algorithm::Myers, &old, &new)
+    line_edits(text, formatted, |span| {
+        // A pure insertion replaces no lines, so it has no extent of its own
+        // to compare against the selection; it belongs to the line it goes
+        // in front of.
+        let extent = span.end.max(span.start + 1);
+        span.start <= last && extent > first
+    })
+}
+
+/// A reformat as one edit per changed run of lines, for the runs `keep`
+/// accepts by their line span in `text`.
+///
+/// Format Document goes through here too, rather than answering with one edit
+/// that replaces the document. The format shortcut applies edits as they come
+/// (`formatNow` in the extension), and one edit over the whole document took
+/// the cursor and the scroll position with it: every press made the view jump,
+/// even when the formatter changed one line. Lines the formatter left alone
+/// are now lines the editor never touches.
+fn line_edits(
+    text: &str,
+    formatted: &str,
+    keep: impl Fn(std::ops::Range<usize>) -> bool,
+) -> Vec<TextEdit> {
+    let old = lines(text);
+    let new = lines(formatted);
+    // A reformat that changes every line -- a file reindented -- is the diff's
+    // worst case, quadratic in its length, and format-on-save waits on this.
+    // Past the deadline the diff settles for fewer, larger runs, which are
+    // still exact: only how much of the file each edit spans changes.
+    let deadline = Instant::now() + std::time::Duration::from_millis(200);
+    similar::capture_diff_slices_deadline(similar::Algorithm::Myers, &old, &new, Some(deadline))
         .into_iter()
-        .filter(|op| op.tag() != similar::DiffTag::Equal)
-        .filter_map(|op| {
-            let span = op.old_range();
-            // A pure insertion replaces no lines, so it has no extent of its own
-            // to compare against the selection; it belongs to the line it goes
-            // in front of.
-            let extent = span.end.max(span.start + 1);
-            (span.start <= last && extent > first).then(|| TextEdit {
-                range: Range {
-                    start: line_start(&old, span.start),
-                    end: line_start(&old, span.end),
-                },
-                new_text: new[op.new_range()].concat(),
-            })
+        .filter(|op| op.tag() != similar::DiffTag::Equal && keep(op.old_range()))
+        .map(|op| TextEdit {
+            range: Range {
+                start: line_start(&old, op.old_range().start),
+                end: line_start(&old, op.old_range().end),
+            },
+            new_text: new[op.new_range()].concat(),
         })
         .collect()
 }
@@ -2664,7 +2707,7 @@ mod tests {
         std::fs::create_dir(root.join("vendor")).unwrap();
         let messy = "a:   1\n";
 
-        let excluded = Url::from_file_path(root.join("vendor").join("a.yaml")).unwrap();
+        let excluded = root.join("vendor").join("a.yaml");
         assert_eq!(
             formatted_text(&excluded, messy).unwrap(),
             None,
@@ -2673,7 +2716,7 @@ mod tests {
 
         // The control: without it this test would pass on a formatter that had
         // stopped working at all.
-        let ordinary = Url::from_file_path(root.join("a.yaml")).unwrap();
+        let ordinary = root.join("a.yaml");
         assert!(
             formatted_text(&ordinary, messy).unwrap().is_some(),
             "a file outside the list still formats"
@@ -4142,6 +4185,60 @@ mod tests {
         let edits = edits_within("a\nb", "a\nB", selection((1, 0), (1, 1)));
         assert_eq!(edits[0].range.end, Position::new(1, 1));
         assert_eq!(apply("a\nb", &edits), "a\nB");
+    }
+
+    /// Format Document answers with the lines that changed, not the document.
+    ///
+    /// It used to answer with one edit replacing everything, and the format
+    /// shortcut applies edits as they arrive: the cursor and the scroll
+    /// position went with the replaced text, so the view jumped on every press,
+    /// even for a one-line fix. `"b"`, between the two fixes, is the line that
+    /// shows it.
+    #[test]
+    fn format_document_leaves_the_lines_it_did_not_change_alone() {
+        let (_dir, root) = project("");
+        let (mut server, _editor) = session(serde_json::json!({}));
+        let uri = file_uri(&root, "a.json");
+        let text = "{\n  \"a\":  1,\n  \"b\": 2,\n  \"c\":  3\n}\n";
+        server
+            .on_notification(Notification::new(
+                "textDocument/didOpen".to_string(),
+                serde_json::json!({
+                    "textDocument": {"uri": uri, "languageId": "json", "version": 1, "text": text},
+                }),
+            ))
+            .unwrap();
+
+        let response = server.format_response(1.into(), uri, None);
+        let edits: Vec<TextEdit> = serde_json::from_value(response.result.unwrap()).unwrap();
+        let starts: Vec<u32> = edits.iter().map(|edit| edit.range.start.line).collect();
+        assert_eq!(starts, [1, 3], "{edits:?}");
+        assert_eq!(
+            apply(text, &edits),
+            "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3\n}\n"
+        );
+    }
+
+    /// An untitled buffer is formatted as whatever the path it arrives with
+    /// says it is. The path is the only thing that says: the same text under a
+    /// name with no extension is a language poly cannot name, and gets nothing.
+    #[test]
+    fn an_untitled_buffer_formats_as_the_path_it_is_given() {
+        let (_dir, root) = project("");
+        let text = "{\"a\":1,\n\n\"b\":2}\n";
+        let named = root.join("Untitled-1.json");
+        let edits =
+            format_text_edits(Some(&serde_json::json!({"path": named, "text": text}))).unwrap();
+        assert!(!edits.is_empty(), "nothing to format in {text:?}");
+        assert_eq!(
+            apply(text, &edits),
+            formatted_text(&named, text).unwrap().unwrap()
+        );
+
+        let bare = root.join("Untitled-1");
+        let edits =
+            format_text_edits(Some(&serde_json::json!({"path": bare, "text": text}))).unwrap();
+        assert!(edits.is_empty(), "{edits:?}");
     }
 
     /// `lines` has to be the exact inverse of concatenation, or every edit

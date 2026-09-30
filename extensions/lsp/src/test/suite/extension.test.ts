@@ -298,6 +298,18 @@ suite("poly-lsp in a real editor", () => {
     assert.strictEqual(text, "def f(a, b):\n    return a + b\n");
   });
 
+  // A buffer that was never saved is outside the client's selector, so the
+  // formatter for it is the extension's own and the text travels with the
+  // request. Before it, a new markdown note had no formatter at all -- the
+  // format shortcut and Format Document both did nothing.
+  test("formats a buffer that was never saved", async () => {
+    const document = await vscode.workspace.openTextDocument({
+      language: "markdown",
+      content: "#  Title\n\n\n\ntext\n",
+    });
+    assert.strictEqual(await formatted(document.uri), "# Title\n\ntext\n");
+  });
+
   // The suspend switch lives in the client's middleware, so nothing in the
   // protocol tests can see it: the daemon is asked the same question and gives
   // the same answer, and the whole feature is the client deciding not to ask.

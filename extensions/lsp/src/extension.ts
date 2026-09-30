@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import { DocumentFormattingRequest, LanguageClient, State, TransportKind } from "vscode-languageclient/node";
+import { DocumentFormattingRequest, LanguageClient, State, type TextEdit, TransportKind } from "vscode-languageclient/node";
 import { firstCodeLine } from "./anchor";
 import { activate as activateEditor } from "./editor/extension";
 import { commonRoot, useLines } from "./gowork";
@@ -350,7 +350,8 @@ async function formatNow(self: string): Promise<void> {
   }
   const { document } = editor;
   const chosen = vscode.workspace.getConfiguration("editor", document).get<string>("defaultFormatter");
-  const polys = document.uri.scheme === "file"
+  const untitled = document.uri.scheme === "untitled";
+  const polys = (document.uri.scheme === "file" || untitled)
     && LANGUAGES.includes(document.languageId)
     && (!chosen || chosen === self);
   if (!polys) {
@@ -362,13 +363,15 @@ async function formatNow(self: string): Promise<void> {
     return;
   }
   const version = document.version;
-  const edits = await client.sendRequest(DocumentFormattingRequest.type, {
-    textDocument: { uri: document.uri.toString() },
-    options: {
-      tabSize: Number(editor.options.tabSize),
-      insertSpaces: Boolean(editor.options.insertSpaces),
-    },
-  });
+  const edits = untitled
+    ? await untitledEdits(document)
+    : await client.sendRequest(DocumentFormattingRequest.type, {
+      textDocument: { uri: document.uri.toString() },
+      options: {
+        tabSize: Number(editor.options.tabSize),
+        insertSpaces: Boolean(editor.options.insertSpaces),
+      },
+    });
   // Typed into while the daemon was formatting: the edits describe a text
   // that no longer exists, and applying them would scramble the new one.
   if (!edits || edits.length === 0 || document.version !== version) {
@@ -379,6 +382,56 @@ async function formatNow(self: string): Promise<void> {
       builder.replace(client!.protocol2CodeConverter.asRange(edit.range), edit.newText);
     }
   });
+}
+
+/// The daemon's edits for a buffer that was never saved.
+///
+/// Such a buffer is outside the client's document selector -- `file` only,
+/// because a didOpen also starts lint and a language server, and neither has
+/// anything to do with text that has no path. So nothing reaches the daemon
+/// until it is asked, and the text travels with the question. A failure is
+/// said here: a saved file's parse error becomes a squiggle through lint, and
+/// this buffer has no lint to carry one.
+async function untitledEdits(document: vscode.TextDocument): Promise<TextEdit[]> {
+  const where = untitledPath(document);
+  if (!client || health !== "ready" || !where) {
+    return [];
+  }
+  try {
+    return (await client.sendRequest("workspace/executeCommand", {
+      command: "poly.formatText",
+      arguments: [{ path: where, text: document.getText() }],
+    })) as TextEdit[];
+  } catch (err) {
+    vscode.window.showWarningMessage(`Poly: could not format ${document.uri.path}: ${err}`);
+    return [];
+  }
+}
+
+/// The path an untitled buffer is formatted as, which is what decides its
+/// language to the daemon: its name with the first extension VSCode registers
+/// for its language, in the first workspace folder, so poly.toml is found
+/// where it would be once saved there.
+///
+/// Asked of the installed extensions rather than kept as a table, because the
+/// ids are theirs: `typescriptreact` means `.tsx` because the TypeScript
+/// extension says so, and a copy here would be one more list to drift.
+function untitledPath(document: vscode.TextDocument): string | undefined {
+  for (const extension of vscode.extensions.all) {
+    const languages = extension.packageJSON?.contributes?.languages;
+    if (!Array.isArray(languages)) {
+      continue;
+    }
+    for (const language of languages) {
+      const suffix = language?.id === document.languageId ? language.extensions?.[0] : undefined;
+      if (typeof suffix === "string") {
+        const name = `${path.basename(document.uri.path)}${suffix}`;
+        const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+        return folder?.scheme === "file" ? path.join(folder.fsPath, name) : name;
+      }
+    }
+  }
+  return undefined;
 }
 
 function workspacePaths(): string[] {
@@ -935,6 +988,15 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("poly.toggleLint", toggler("lint", context.globalState, logLine)),
     vscode.commands.registerCommand("poly.createGoWork", createGoWork),
     vscode.commands.registerCommand("poly.formatDocument", () => formatNow(context.extension.id)),
+    // Format Document on a buffer that was never saved; see `untitledEdits`.
+    // Behind the same switch as the client's own provider.
+    vscode.languages.registerDocumentFormattingEditProvider(
+      LANGUAGES.map((language) => ({ scheme: "untitled", language })),
+      {
+        provideDocumentFormattingEdits: async (document) =>
+          mayFormat() ? await client!.protocol2CodeConverter.asTextEdits(await untitledEdits(document)) : [],
+      },
+    ),
     vscode.commands.registerCommand("poly.formatFile", async () => {
       const doc = vscode.window.activeTextEditor?.document;
       if (doc?.uri.scheme === "file") {

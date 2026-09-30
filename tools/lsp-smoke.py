@@ -407,8 +407,10 @@ assert len(edits) == 1, f"only the selected line: {edits}"
 assert edits[0]["newText"] == '  "c": 3\n', edits[0]["newText"]
 assert edits[0]["range"]["start"] == {"line": 3, "character": 0}, edits[0]["range"]
 
-# Same document, no range: the whole file in one edit. Without this the
-# assertion above passes just as well for a server that formats nothing.
+# Same document, no range: both changed lines, and only those. Without this the
+# assertion above passes just as well for a server that formats nothing. Not one
+# edit over the file, which is what this used to be: the format shortcut applies
+# edits as they arrive, and replacing every line moved the cursor and the view.
 send(
     {
         "jsonrpc": "2.0",
@@ -421,8 +423,9 @@ send(
     }
 )
 whole = recv_response(13).get("result")
-assert whole and len(whole) == 1, f"expected one whole-file edit: {whole}"
-assert '"a": 1' in whole[0]["newText"], whole[0]["newText"]
+assert whole, f"expected edits: {whole}"
+assert [e["range"]["start"]["line"] for e in whole] == [1, 3], whole
+assert whole[0]["newText"] == '  "a": 1,\n', whole[0]["newText"]
 
 # Every request gets an answer, including the ones poly does not implement.
 # Silence is not a polite decline: the editor keeps waiting on that id, so the
