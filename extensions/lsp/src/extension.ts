@@ -2,7 +2,13 @@ import { execFile } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import { DocumentFormattingRequest, LanguageClient, State, type TextEdit, TransportKind } from "vscode-languageclient/node";
+import {
+  DocumentFormattingRequest,
+  LanguageClient,
+  State,
+  type TextEdit,
+  TransportKind,
+} from "vscode-languageclient/node";
 import { firstCodeLine } from "./anchor";
 import { activate as activateEditor } from "./editor/extension";
 import { commonRoot, useLines } from "./gowork";
