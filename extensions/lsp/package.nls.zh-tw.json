@@ -48,6 +48,7 @@
   "command.nextChangedFile.title": "跳到下一個有變更的檔案",
   "command.previousChangedFile.title": "跳到上一個有變更的檔案",
   "command.syntaxColors.title": "這個語言的語法配色",
+  "command.setSyntaxColor.title": "設定語法顏色",
   "command.revertAndSave.title": "還原選取的變更並存檔",
   "command.continueList.title": "接續清單項目",
   "command.indentListItem.title": "清單項目縮排",

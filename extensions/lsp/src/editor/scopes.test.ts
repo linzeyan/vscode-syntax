@@ -1,7 +1,7 @@
 import * as assert from "node:assert";
 import { test } from "node:test";
 
-import { colorSheet, scopesIn } from "./scopes";
+import { colorSheet, parseStyle, recoloured, scopesIn, styleOf } from "./scopes";
 
 /** A grammar shaped like a real one: nested patterns, a repository, captures. */
 const GRAMMAR = {
@@ -119,4 +119,73 @@ test("the sheet is a settings fragment, not prose about one", () => {
     ) => rule.scope),
     ["keyword.control.go", "string.quoted.double.go"],
   );
+});
+
+test("a typed style is a colour, some font styles, or both", () => {
+  assert.deepStrictEqual(parseStyle("#C586C0"), { foreground: "#C586C0" });
+  assert.deepStrictEqual(parseStyle(" #c586c0  Italic bold "), {
+    foreground: "#c586c0",
+    fontStyle: "italic bold",
+  });
+  assert.deepStrictEqual(parseStyle("underline"), { fontStyle: "underline" });
+  // The short and alpha forms are colours the editor accepts too.
+  assert.deepStrictEqual(parseStyle("#fff"), { foreground: "#fff" });
+  assert.deepStrictEqual(parseStyle("#C586C080"), { foreground: "#C586C080" });
+});
+
+test("an empty answer takes the rule away, and a wrong one says what is wrong", () => {
+  assert.strictEqual(parseStyle("   "), null);
+  // Not written, not guessed at: a colour name or a typo in the hex would be
+  // a rule the editor ignores, so the input box has to refuse it instead.
+  for (const wrong of ["red", "#C586C", "C586C0", "#C586C0 #FFFFFF", "#C586C0 italics"]) {
+    assert.strictEqual(typeof parseStyle(wrong), "string", wrong);
+  }
+});
+
+test("recolouring one scope leaves the rest of the setting as it was", () => {
+  // The user's own rules, shorthands and per-theme blocks are theirs; the
+  // command owns one rule and nothing else.
+  const before = {
+    comments: "#888888",
+    "[Dark+]": { textMateRules: [{ scope: "keyword.control.go", settings: { foreground: "#111111" } }] },
+    textMateRules: [
+      { scope: "string.quoted.double.go", settings: { foreground: "#CE9178" } },
+      { scope: "keyword.control.go", settings: { foreground: "#000000" } },
+      { scope: ["keyword.control.go", "keyword.other.go"], settings: { fontStyle: "bold" } },
+    ],
+  };
+  const after = recoloured(before, "keyword.control.go", { foreground: "#C586C0" });
+  assert.deepStrictEqual(after, {
+    comments: "#888888",
+    "[Dark+]": before["[Dark+]"],
+    textMateRules: [
+      before.textMateRules[0],
+      // Hand-written for several scopes at once: kept, and outranked by the
+      // new rule for this one because the new rule comes last.
+      before.textMateRules[2],
+      { scope: "keyword.control.go", settings: { foreground: "#C586C0" } },
+    ],
+  });
+  assert.strictEqual(styleOf(after, "keyword.control.go"), "#C586C0");
+});
+
+test("taking a rule away removes it and nothing else", () => {
+  const before = {
+    textMateRules: [
+      { scope: "comment.line.go", settings: { foreground: "#6A9955", fontStyle: "italic" } },
+      { scope: "string.quoted.double.go", settings: { foreground: "#CE9178" } },
+    ],
+  };
+  assert.strictEqual(styleOf(before, "comment.line.go"), "#6A9955 italic");
+  const after = recoloured(before, "comment.line.go", null);
+  assert.deepStrictEqual(after, { textMateRules: [before.textMateRules[1]] });
+  assert.strictEqual(styleOf(after, "comment.line.go"), "");
+});
+
+test("a setting that is missing or malformed is a fresh start, not a throw", () => {
+  const rule = { scope: "comment", settings: { foreground: "#6A9955" } };
+  for (const nothing of [undefined, null, "oops", [], { textMateRules: "oops" }]) {
+    assert.deepStrictEqual(recoloured(nothing, "comment", { foreground: "#6A9955" }).textMateRules, [rule]);
+    assert.strictEqual(styleOf(nothing, "comment"), "");
+  }
 });

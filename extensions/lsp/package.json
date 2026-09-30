@@ -286,6 +286,11 @@
         "category": "%command.category%"
       },
       {
+        "command": "poly.setSyntaxColor",
+        "title": "%command.setSyntaxColor.title%",
+        "category": "%command.category%"
+      },
+      {
         "command": "poly.revertAndSave",
         "title": "%command.revertAndSave.title%",
         "category": "%command.category%"

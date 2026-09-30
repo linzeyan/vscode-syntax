@@ -231,6 +231,12 @@
   改配色這件事 VSCode 一直都做得到，卡住的是沒人知道 scope 叫什麼——內建的
   `Inspect Editor Tokens and Scopes` 一次只給游標下的那一個。顏色欄位是
   `#RRGGBB` 佔位字串而不是某個預設色：整份貼上去不會改變任何顏色，你只會改你改過的那幾條。
+- **`Poly: Set Syntax Color`**：只改一條就不必複製貼上。從同一份 scope 清單挑一個（可打字過濾，
+  已改過的會顯示目前的值），輸入顏色與樣式，例如 `#C586C0` 或 `#C586C0 italic`，直接寫進使用者
+  settings.json 的 `editor.tokenColorCustomizations`，畫面當場重新上色。留空就刪掉那一條、回到
+  theme 的顏色；你其他的規則與各 theme 專屬的設定不會被動到。Go、TypeScript、Python 這類有
+  semantic tokens 的語言，language server 的顏色會蓋在上面，那部分要改
+  `editor.semanticTokenColorCustomizations`。
 
 ### poly — CLI
 

@@ -355,6 +355,10 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 - **`Syntax Colors for This Language`**：列出目前這個檔的文法能產生的全部 TextMate scope，
   做成一份可以直接複製的 `editor.tokenColorCustomizations.textMateRules`。顏色欄位是
   `#RRGGBB` 佔位字串，所以整份貼上去不會改變任何顏色。
+- **`Set Syntax Color`**：從同一份 scope 清單挑一個，輸入 `#C586C0` 或 `#C586C0 italic`，
+  直接寫進使用者設定的 `editor.tokenColorCustomizations.textMateRules`；留空刪掉那一條。
+  其他規則與各 theme 專屬的設定原樣保留。有 semantic tokens 的語言要另改
+  `editor.semanticTokenColorCustomizations`。
 
 ## 快捷鍵
 
@@ -384,7 +388,7 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 `poly.lintPath`、`poly.analyzeDeadCode`、`poly.toggleFormat`、`poly.toggleLint`、`poly.createGoWork`、
 `poly.checkForUpdates`、`poly.showOutput`、`poly.copyPathWithLine`、`poly.insertTableOfContents`、
 `poly.runFile`、`poly.moveToNewFile`、`poly.changeSignature`、`poly.implementInterface`、
-`poly.syntaxColors`、`poly.refreshTodos`。
+`poly.syntaxColors`、`poly.setSyntaxColor`、`poly.refreshTodos`。
 
 ## 設定
 

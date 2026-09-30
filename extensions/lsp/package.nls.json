@@ -48,6 +48,7 @@
   "command.nextChangedFile.title": "Go to Next Changed File",
   "command.previousChangedFile.title": "Go to Previous Changed File",
   "command.syntaxColors.title": "Syntax Colors for This Language",
+  "command.setSyntaxColor.title": "Set Syntax Color",
   "command.revertAndSave.title": "Revert Selected Changes and Save",
   "command.continueList.title": "Continue List",
   "command.indentListItem.title": "Indent List Item",

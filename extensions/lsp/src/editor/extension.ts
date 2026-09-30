@@ -54,7 +54,7 @@ import {
 import { ReferenceTree, registerReferenceTree } from "./referenceTree";
 import { cacheDir, RefStore } from "./refStore";
 import { entryLine, entryPoints, findsEntryInText, runLine } from "./runnable";
-import { colorSheet, scopesIn } from "./scopes";
+import { colorSheet, parseStyle, recoloured, scopesIn, styleOf } from "./scopes";
 import { offerMessage, serverToOffer } from "./servers";
 import { registerSwaggerViewer } from "./swaggerViewer";
 import { registerTodoTree } from "./todoTree";
@@ -1145,29 +1145,88 @@ function grammarFor(languageId: string): { path: string; from: string } | undefi
  */
 async function showSyntaxColors(editor: vscode.TextEditor): Promise<void> {
   const languageId = editor.document.languageId;
+  const found = grammarScopes(languageId);
+  if (!found) {
+    return;
+  }
+  const sheet = await vscode.workspace.openTextDocument({
+    language: "jsonc",
+    content: colorSheet(languageId, `${found.grammar.from} — ${found.grammar.path}`, found.scopes),
+  });
+  await vscode.window.showTextDocument(sheet);
+}
+
+/**
+ * Recolour one scope of the current file's grammar, in the user's settings.
+ *
+ * The sheet above refuses to write settings.json because it would be hundreds
+ * of rules at once. This writes one, chosen by name, so what lands in the file
+ * is exactly what was asked for -- and the editor recolours on the spot, which
+ * is the preview. User scope, because a colour is a matter of taste rather than
+ * of the project, and a workspace write would hand it to everybody who clones.
+ */
+async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
+  const languageId = editor.document.languageId;
+  const found = grammarScopes(languageId);
+  if (!found) {
+    return;
+  }
+  const config = vscode.workspace.getConfiguration("editor");
+  const current = config.inspect("tokenColorCustomizations")?.globalValue;
+  const picked = await vscode.window.showQuickPick(
+    found.scopes.map((scope) => ({ label: scope, description: styleOf(current, scope) })),
+    { placeHolder: `The ${languageId} scope to colour -- type to filter, e.g. comment or keyword` },
+  );
+  if (!picked) {
+    return;
+  }
+  const typed = await vscode.window.showInputBox({
+    title: picked.label,
+    prompt: "A colour and optional styles, e.g. #C586C0 or #C586C0 italic. Empty goes back to the theme's.",
+    value: picked.description,
+    validateInput: (text) => {
+      const style = parseStyle(text);
+      return typeof style === "string" ? style : undefined;
+    },
+  });
+  if (typed === undefined) {
+    return;
+  }
+  const style = parseStyle(typed);
+  if (typeof style === "string") {
+    return;
+  }
+  await config.update(
+    "tokenColorCustomizations",
+    recoloured(current, picked.label, style),
+    vscode.ConfigurationTarget.Global,
+  );
+}
+
+/**
+ * The grammar that paints `languageId` and every scope it can produce, or
+ * nothing -- having said why.
+ */
+function grammarScopes(
+  languageId: string,
+): { grammar: { path: string; from: string }; scopes: string[] } | undefined {
   const grammar = grammarFor(languageId);
   if (!grammar) {
     vscode.window.showWarningMessage(
       `Poly: no grammar is registered for ${languageId}, so it has no scopes to colour`,
     );
-    return;
+    return undefined;
   }
-  let scopes: string[];
   try {
-    scopes = scopesIn(JSON.parse(fs.readFileSync(grammar.path, "utf8")));
+    return { grammar, scopes: scopesIn(JSON.parse(fs.readFileSync(grammar.path, "utf8"))) };
   } catch (error) {
     // A grammar can be a plist rather than JSON -- poly converts those at sync
     // time, but another extension may ship one as it came.
     vscode.window.showWarningMessage(
       `Poly: could not read the ${languageId} grammar at ${grammar.path}: ${error}`,
     );
-    return;
+    return undefined;
   }
-  const sheet = await vscode.workspace.openTextDocument({
-    language: "jsonc",
-    content: colorSheet(languageId, `${grammar.from} — ${grammar.path}`, scopes),
-  });
-  await vscode.window.showTextDocument(sheet);
 }
 
 /**
@@ -2319,6 +2378,10 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
     [
       "poly.syntaxColors",
       withEditor("Syntax Colors", showSyntaxColors),
+    ],
+    [
+      "poly.setSyntaxColor",
+      withEditor("Set Syntax Color", setSyntaxColor),
     ],
     ["poly.nextChangedFile", () => stepChangedFile(1)],
     ["poly.previousChangedFile", () => stepChangedFile(-1)],

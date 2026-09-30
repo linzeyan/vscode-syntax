@@ -111,3 +111,82 @@ ${rules}
 }
 `;
 }
+
+/** What one `textMateRules` entry sets. */
+export interface TokenStyle {
+  foreground?: string;
+  fontStyle?: string;
+}
+
+const COLOR = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const FONT_STYLES = new Set(["bold", "italic", "underline", "strikethrough"]);
+
+/**
+ * A style as typed into `Set Syntax Color`: `#C586C0`, `#C586C0 italic`,
+ * `bold underline`.
+ *
+ * One line rather than a colour prompt and then a style prompt, because most
+ * answers are a colour alone and a second prompt would be a question asked
+ * every time for the sake of the occasional italic. `null` is an empty answer,
+ * which takes the rule away. A string is what was wrong with the input, for the
+ * input box to show while it is being typed.
+ */
+export function parseStyle(text: string): TokenStyle | null | string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return null;
+  }
+  const style: TokenStyle = {};
+  const fonts: string[] = [];
+  for (const word of words) {
+    if (COLOR.test(word) && !style.foreground) {
+      style.foreground = word;
+    } else if (FONT_STYLES.has(word.toLowerCase())) {
+      fonts.push(word.toLowerCase());
+    } else {
+      return `"${word}" is not a colour like #C586C0, nor bold, italic, underline or strikethrough`;
+    }
+  }
+  if (fonts.length > 0) {
+    style.fontStyle = fonts.join(" ");
+  }
+  return style;
+}
+
+/** The rules in a `tokenColorCustomizations` value, whatever shape it came in. */
+function rulesIn(customizations: unknown): { scope?: unknown; settings?: TokenStyle }[] {
+  const rules = (customizations as { textMateRules?: unknown } | undefined)?.textMateRules;
+  return Array.isArray(rules) ? rules : [];
+}
+
+/**
+ * The style already set for `scope`, as `parseStyle` would read it back, or
+ * `""`. The last rule wins, as it does when the editor applies them.
+ */
+export function styleOf(customizations: unknown, scope: string): string {
+  const rule = rulesIn(customizations).filter((one) => one?.scope === scope).pop();
+  return [rule?.settings?.foreground, rule?.settings?.fontStyle].filter(Boolean).join(" ");
+}
+
+/**
+ * `customizations` with the rule for `scope` set to `style`, or taken out when
+ * `style` is null.
+ *
+ * Everything else is carried over untouched: the other rules, the shorthand
+ * keys (`comments`, `keywords`), and the per-theme blocks (`"[Dark+]"`), which
+ * are somebody's own settings and not this command's to rearrange. Only a rule
+ * naming exactly this scope on its own is replaced -- one that lists it among
+ * others was written by hand for all of them, and the new rule, coming last,
+ * wins over it for this scope anyway.
+ */
+export function recoloured(
+  customizations: unknown,
+  scope: string,
+  style: TokenStyle | null,
+): Record<string, unknown> {
+  const base = customizations && typeof customizations === "object" && !Array.isArray(customizations)
+    ? customizations as Record<string, unknown>
+    : {};
+  const kept = rulesIn(base).filter((one) => one?.scope !== scope);
+  return { ...base, textMateRules: style ? [...kept, { scope, settings: style }] : kept };
+}
