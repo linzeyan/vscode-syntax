@@ -8,7 +8,12 @@ import * as vscode from "vscode";
 // check on its own schedule, from its own settings section: either can be
 // installed alone, and someone with only the grammars still has to hear about a
 // release. Whichever finds a release first updates every poly extension that is
-// installed, so two extensions still mean one prompt and one reload.
+// installed, so two extensions still mean one download and one reload.
+//
+// Installed without asking. Through 0.18.10 a release was offered with an Install
+// button, which is a question the update switch had already answered: someone
+// with `updateCheck.enabled` on still had to click, and a machine nobody
+// clicked on stayed behind. The reload is still theirs to choose.
 const REPO = "linzeyan/vscode-syntax";
 
 /**
@@ -27,7 +32,6 @@ const PACKAGES: readonly [asset: (version: string) => string, id: string][] = [
 const LAST_CHECK = "updateCheck.lastCheck";
 const ETAG = "updateCheck.etag";
 const CACHED_TAG = "updateCheck.cachedTag";
-const SKIPPED = "updateCheck.skippedVersion";
 
 interface Release {
   tag: string;
@@ -50,10 +54,10 @@ function vsceTarget(): string {
  * Is the release GitHub last named newer than what is installed?
  *
  * The cached tag is not "already seen" in any sense that matters: seeing a
- * release is not installing it. A prompt that was dismissed, or that faded into
- * the notification centre unread, leaves exactly this state behind -- and until
- * 0.18.1 the check below treated it as "nothing to do", so a 304 kept a machine
- * on 0.11.0 through seven releases.
+ * release is not installing it. A download that failed, or a prompt dismissed
+ * back when there was one, leaves exactly this state behind -- and until 0.18.1
+ * the check below treated it as "nothing to do", so a 304 kept a machine on
+ * 0.11.0 through seven releases.
  */
 export function knownNewer(cachedTag: string | undefined, current: string): boolean {
   return cachedTag !== undefined && isNewer(cachedTag, current);
@@ -204,9 +208,12 @@ async function installUpdate(release: Release): Promise<void> {
   const pick = await vscode.window.showInformationMessage(
     `Poly ${release.tag} installed. Reload to activate.`,
     "Reload Window",
+    "Release Notes",
   );
   if (pick === "Reload Window") {
     await vscode.commands.executeCommand("workbench.action.reloadWindow");
+  } else if (pick === "Release Notes") {
+    await vscode.env.openExternal(vscode.Uri.parse(release.htmlUrl));
   }
 }
 
@@ -217,45 +224,15 @@ export async function checkForUpdates(
 ): Promise<void> {
   const state = context.globalState;
   const current = context.extension.packageJSON.version as string;
+  let release: Release | undefined;
   try {
-    const release = await fetchLatest(state, current);
+    release = await fetchLatest(state, current);
     // Recorded only once GitHub has answered. Written before the fetch, a
     // check that never got there -- offline, or the unauthenticated 60/hr API
     // budget exhausted -- still spent the whole interval, and the background
     // path only console.warns, so the next check moved a week out with nothing
     // on screen to say why. A 304 and a 404 both count: those reached GitHub.
     await state.update(LAST_CHECK, Date.now());
-    if (!release) {
-      if (!quiet) {
-        vscode.window.setStatusBarMessage("Poly: no new release", 5000);
-      }
-      return;
-    }
-    if (!isNewer(release.tag, current)) {
-      if (!quiet) {
-        vscode.window.setStatusBarMessage(
-          `Poly: up to date (${current})`,
-          5000,
-        );
-      }
-      return;
-    }
-    if (quiet && (state.get<string>(SKIPPED) === release.tag || !firstToAsk(release.tag))) {
-      return;
-    }
-    const pick = await vscode.window.showInformationMessage(
-      `Poly ${release.tag} is available (installed: ${current}).`,
-      "Install",
-      "Release Notes",
-      "Skip This Version",
-    );
-    if (pick === "Install") {
-      await installUpdate(release);
-    } else if (pick === "Release Notes") {
-      await vscode.env.openExternal(vscode.Uri.parse(release.htmlUrl));
-    } else if (pick === "Skip This Version") {
-      await state.update(SKIPPED, release.tag);
-    }
   } catch (err) {
     // Network failures are routine (offline, rate limit): never toast on the
     // background path. Into poly's own log rather than console.warn, which
@@ -265,33 +242,60 @@ export async function checkForUpdates(
     } else {
       vscode.window.showWarningMessage(`Poly: update check failed: ${err}`);
     }
+    return;
+  }
+  if (!release) {
+    if (!quiet) {
+      vscode.window.setStatusBarMessage("Poly: no new release", 5000);
+    }
+    return;
+  }
+  if (!isNewer(release.tag, current)) {
+    if (!quiet) {
+      vscode.window.setStatusBarMessage(
+        `Poly: up to date (${current})`,
+        5000,
+      );
+    }
+    return;
+  }
+  if (quiet && !firstToInstall(release.tag)) {
+    return;
+  }
+  try {
+    await installUpdate(release);
+  } catch (err) {
+    // Said out loud on either path, unlike a failed check: GitHub answered,
+    // a release is waiting, and poly could not put it on this machine. Only
+    // logged, a missing VSIX kept a WSL install behind with nothing on screen.
+    log(`[update] installing ${release.tag} failed: ${err}`);
+    vscode.window.showWarningMessage(`Poly: could not install ${release.tag}: ${err}`);
   }
 }
 
 /**
- * The release a background check in this extension host already asked about,
- * whichever poly extension asked. Both run in one host, so a global is the one
- * thing they share without either depending on the other being installed.
+ * The release a background check in this extension host already took on,
+ * whichever poly extension found it. Both run in one host, so a global is the
+ * one thing they share without either depending on the other being installed.
  */
-const ASKED = Symbol.for("poly.updateCheck.asked");
+const INSTALLING = Symbol.for("poly.updateCheck.installing");
 
-function firstToAsk(tag: string): boolean {
-  const host = globalThis as { [ASKED]?: string };
-  if (host[ASKED] === tag) {
+function firstToInstall(tag: string): boolean {
+  const host = globalThis as { [INSTALLING]?: string };
+  if (host[INSTALLING] === tag) {
     return false;
   }
-  host[ASKED] = tag;
+  host[INSTALLING] = tag;
   return true;
 }
 
 /**
  * Is a background check due: at most once per `days` (02 §8), unless a newer
- * release is already known and was neither installed nor skipped.
+ * release is already known and not yet installed.
  *
- * The interval is there to spare GitHub's API, not to ration prompts. Once a
- * newer tag is on record, waiting out the week just means a missed prompt costs
- * a week, and the only way to stop hearing about a release is "Skip This
- * Version", which is still honoured.
+ * The interval is there to spare GitHub's API, not to ration updates. Once a
+ * newer tag is on record, waiting out the week just means an install that
+ * failed -- offline half-way through a download -- is retried a week late.
  */
 export function updateDue(
   state: vscode.Memento,
@@ -299,9 +303,8 @@ export function updateDue(
   days: number,
   now = Date.now(),
 ): boolean {
-  const cachedTag = state.get<string>(CACHED_TAG);
-  const pending = knownNewer(cachedTag, current) && state.get<string>(SKIPPED) !== cachedTag;
-  return pending || now - state.get<number>(LAST_CHECK, 0) >= days * 86_400_000;
+  return knownNewer(state.get<string>(CACHED_TAG), current)
+    || now - state.get<number>(LAST_CHECK, 0) >= days * 86_400_000;
 }
 
 /**

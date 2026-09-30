@@ -46,7 +46,7 @@ CI 跑的是同一個 binary、同一份設定，所以本機存檔跟 pipeline 
   否則會大聲跳過。
 - **Jupyter notebook**（`.ipynb`）由內嵌的 ruff 整份處理，outputs 與 markdown cell 原樣保留。
   VSCode 的 notebook editor 不走 LSP 文字文件，所以要用批次命令或 `poly fmt`。
-- 背景檢查 GitHub Releases，一鍵更新。
+- 背景檢查 GitHub Releases，有新版就自己下載安裝，只問要不要重新載入視窗。
 
 ## 語言功能（預設關閉）
 
@@ -397,7 +397,7 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 | `poly.languageServers`             | `false`   | 把語言功能路由給下游 server（見上），改完要重新載入視窗                                |
 | `poly.languageServerLogs`          | `true`    | 下游 server 的 stderr 轉進 Poly 輸出面板                                               |
 | `poly.memoryLog`                   | `false`   | 每開關一個檔寫一行 daemon 握著什麼（RSS、文件數、各快取）                              |
-| `poly.updateCheck.enabled`         | `true`    | 背景檢查新版                                                                           |
+| `poly.updateCheck.enabled`         | `true`    | 背景檢查新版，有就直接安裝                                                             |
 | `poly.updateCheck.intervalDays`    | `7`       | 檢查間隔，`0` 是每次啟動都查                                                           |
 | `poly.indentTint.enabled`          | `false`   | 縮排上色                                                                               |
 | `poly.imagePreview.enabled`        | `false`   | gutter 圖片縮圖                                                                        |

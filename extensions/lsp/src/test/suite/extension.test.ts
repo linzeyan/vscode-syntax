@@ -262,11 +262,12 @@ suite("poly-lsp in a real editor", () => {
   });
 
   // What an interval setting promises -- a check at most every N days, 0 being
-  // every start -- and the two things allowed to override it: a newer release
-  // already on record that nobody acted on, and "Skip This Version". Both
-  // extensions ask this with their own section's numbers, so it is the whole
-  // of what poly.syntax.updateCheck.intervalDays means.
-  test("an update check is due by its own interval, sooner for a release nobody acted on", () => {
+  // every start -- and the one thing allowed to override it: a newer release
+  // already on record that is not installed yet, which is an install that
+  // failed and has to be retried at the next start rather than a week later.
+  // Both extensions ask this with their own section's numbers, so it is the
+  // whole of what poly.syntax.updateCheck.intervalDays means.
+  test("an update check is due by its own interval, sooner for a release not yet installed", () => {
     const day = 86_400_000;
     const now = 100 * day;
     const memento = (values: Record<string, unknown>) =>
@@ -282,8 +283,6 @@ suite("poly-lsp in a real editor", () => {
     const unacted = { "updateCheck.lastCheck": now - day, "updateCheck.cachedTag": "v0.18.4" };
     assert.strictEqual(updateDue(memento(unacted), "0.18.3", 7, now), true);
     assert.strictEqual(updateDue(memento(unacted), "0.18.4", 7, now), false, "installed since");
-    const skipped = memento({ ...unacted, "updateCheck.skippedVersion": "v0.18.4" });
-    assert.strictEqual(updateDue(skipped, "0.18.3", 7, now), false);
   });
 
   test("registers a formatter for sql", async () => {

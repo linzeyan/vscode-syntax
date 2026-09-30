@@ -375,8 +375,8 @@
 
 1. `poly-syntax-highlight-<版本>.vsix` — 通用，不分平台。
 2. `poly-lsp-<平台>-<版本>.vsix` — **要挑對平台**，內含對應的 poly binary：
-   `darwin-arm64`（Apple Silicon）、`win32-x64`。其他平台沒有 poly-lsp，CLI 請用下方的
-   獨立 binary。
+   `darwin-arm64`（Apple Silicon）、`win32-x64`、`linux-x64`（WSL 也用這個）。其他平台沒有
+   poly-lsp，CLI 請用下方的獨立 binary。
 
 安裝方式：VSCode 側邊欄 Extensions → 右上角 `...` → **Install from VSIX...** →
 選檔案 → 重新載入視窗。或用命令列：
@@ -386,8 +386,12 @@ code --install-extension poly-syntax-highlight-0.18.10.vsix
 code --install-extension poly-lsp-darwin-arm64-0.18.10.vsix
 ```
 
-之後的版本由 extension 自己提示更新，不必再手動抓——兩個各自照自己的間隔檢查，哪個先發現
-就一起更新你已經裝了的那幾個。
+之後的版本由 extension 自己下載安裝，裝好只問要不要重新載入視窗——兩個各自照自己的間隔檢查，
+哪個先發現就一起更新你已經裝了的那幾個。不想自動更新就關掉 `poly.updateCheck.enabled`
+（只裝 poly-syntax-highlight 的話是 `poly.syntax.updateCheck.enabled`）。
+
+Extensions 面板齒輪選單裡的「自動更新」勾選框管不到 poly：那是 VSCode 從 Marketplace 更新用的，
+poly 不在 Marketplace 上，勾了也沒有東西可以更新，而且每次從 VSIX 安裝都會被 VSCode 重設。
 
 ### 從 0.18.2 以前升上來
 
