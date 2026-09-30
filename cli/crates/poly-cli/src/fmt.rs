@@ -199,6 +199,20 @@ fn dispatch(
     let Some(bin) = cached_tool(tool, config) else {
         return Ok(None);
     };
+    if lang == "go" {
+        // gofumpt reads the module's go.mod for its path and Go version, and
+        // reading stdin it looks from its working directory -- which was
+        // wherever poly ran, and for the daemon, wherever the editor started
+        // it. Outside the module a dotless module path (`forecast-service/...`)
+        // reads as the standard library, so gofumpt merged the project's own
+        // imports into the std group: lines golangci-lint fmt and gofumpt on
+        // the file both leave alone.
+        let dir = path
+            .parent()
+            .filter(|dir| dir.is_dir())
+            .unwrap_or(Path::new("."));
+        return poly_tools::run::format_stdin_in(&bin, dir, &args, text);
+    }
     poly_tools::run::format_stdin(&bin, &args, text)
 }
 

@@ -126,6 +126,46 @@ def gofumpt_not_gofmt():
     shutil.rmtree(root, ignore_errors=True)
 
 
+# A module path with no dot looks like the standard library to gofumpt unless
+# it has read go.mod, and then it moves the project's own import into the std
+# group. Already gofumpt-clean when go.mod is read, which is what golangci-lint
+# fmt and gofumpt on the file both do.
+OWN_IMPORT_GROUP = """package x
+
+import (
+\t"fmt"
+
+\t"forecast-service/internal/y"
+)
+
+func F() { fmt.Println(y.Z) }
+"""
+
+
+def gofumpt_reads_the_files_go_mod():
+    """poly formats a file by its own module wherever poly was started.
+
+    gofumpt reading stdin looks for go.mod from its working directory. That was
+    poly's, and the daemon's is wherever the editor started it -- never the
+    module -- so the editor merged `forecast-service/...` into the std imports
+    on every format, and `poly fmt` did the same from outside the module.
+    """
+    root = fixture(
+        "poly-go-mod-",
+        {
+            "svc/go.mod": GO_MOD.format(name="forecast-service"),
+            "svc/internal/x/x.go": OWN_IMPORT_GROUP,
+        },
+    )
+    code, output = poly("fmt", "--check", "svc", cwd=root)
+    shutil.rmtree(root, ignore_errors=True)
+    assert code == 0, (
+        f"formatted from outside the module, gofumpt did not read its go.mod "
+        f"(exit {code}): {output}"
+    )
+    print("  from outside the module, the module's own import group is left alone")
+
+
 def golangci_reaches_check():
     """`poly check` runs golangci-lint, and reports it as golangci-lint."""
     root = fixture(
@@ -436,6 +476,7 @@ if not shutil.which("go"):
 print(f"go acceptance against {BIN}")
 print("gofumpt:")
 gofumpt_not_gofmt()
+gofumpt_reads_the_files_go_mod()
 print("golangci-lint:")
 golangci_reaches_check()
 golangci_groups_by_module()
