@@ -6,15 +6,15 @@
     }
   },
   "microsoft/vscode": {
-    "sha": "301db872fa496be9c7fea1fb5cfb68f24946a069",
+    "sha": "64e91bc28bed22fb021da2cbb776de8f37e3463d",
     "files": {
       "extensions/swift/syntaxes/swift.tmLanguage.json": "acd12f33c06092e1",
       "extensions/csharp/syntaxes/csharp.tmLanguage.json": "152d4586a2ddf518",
       "extensions/lua/syntaxes/lua.tmLanguage.json": "df7f02454e0a284b",
       "extensions/go/syntaxes/go.tmLanguage.json": "de8f2fa64ff273ec",
       "extensions/cpp/syntaxes/c.tmLanguage.json": "9d0a305bc6595526",
-      "extensions/cpp/syntaxes/cpp.tmLanguage.json": "595766a3721e2ab8",
       "extensions/cpp/syntaxes/cpp.embedded.macro.tmLanguage.json": "a99612957109efeb",
+      "extensions/cpp/syntaxes/cpp.tmLanguage.json": "595766a3721e2ab8",
       "extensions/cpp/syntaxes/platform.tmLanguage.json": "9e73e3ecf009c624",
       "extensions/cpp/syntaxes/cuda-cpp.tmLanguage.json": "4dae61eeef3cebd9",
       "extensions/xml/syntaxes/xml.tmLanguage.json": "bb51c7b202f20254",
@@ -427,13 +427,13 @@
     }
   },
   "sveltejs/language-tools": {
-    "sha": "f03e56672ed174e7042334a3237fe8569cfbf8f1",
+    "sha": "bf2993e192ab210e6691695b648be178b9ae4765",
     "files": {
       "packages/svelte-vscode/syntaxes/svelte.tmLanguage.src.yaml": "222e3b63e1c78996"
     }
   },
   "graphql/graphiql": {
-    "sha": "d7093c3676541cac7e4085dab372bf8f00bc73fb",
+    "sha": "accb4c7902c2771f2e991916ca8d67fe0a2605c6",
     "files": {
       "packages/vscode-graphql-syntax/grammars/graphql.json": "163350abd98686f1",
       "packages/vscode-graphql-syntax/grammars/graphql.js.json": "4269c1a350282898",
@@ -449,7 +449,7 @@
     }
   },
   "vuejs/language-tools": {
-    "sha": "88e8500c1e5f1b29d80f42c8ca065cc9cbd56899",
+    "sha": "4e379f8d07561d9a8307ce66716aea033e4d1cb6",
     "contributes": {
       "text.html.vue": {
         "embeddedLanguages": {
@@ -544,7 +544,7 @@
     }
   },
   "microsoft/vscode-cmake-tools": {
-    "sha": "22fc2be32445170c9bd6f1e3d5e31468817d7eca",
+    "sha": "27ad50e2dd2737a38c14567240f85a2a36c9cabe",
     "files": {
       "syntaxes/CMake.tmLanguage.json": "97a1a711279fdabe",
       "syntaxes/CMakeCache.tmLanguage.json": "fbbfecaf5ba5584b"
@@ -627,9 +627,9 @@
     }
   },
   "erlang-ls/grammar": {
-    "sha": "8e92d1c3bfe1d84b80c200edb65f4f504f3ba7d5",
+    "sha": "49f7a9ab6a69a11e097482a1e885e2321cbb1dd7",
     "files": {
-      "Erlang.plist": "5ba59e62f299e858"
+      "Erlang.plist": "10d6757077d01eef"
     }
   },
   "justusadam/language-haskell": {
@@ -654,7 +654,7 @@
     }
   },
   "ocamllabs/vscode-ocaml-platform": {
-    "sha": "a05e0ec76a3bd3d7f7053fadfc5b8d08733af08f",
+    "sha": "067093773efa0add0a5a4bc4ba3d57b8680bb6bf",
     "files": {
       "syntaxes/ocaml.json": "6ce207aebaaf677f",
       "syntaxes/ocaml-markdown-codeblock.json": "d39e8739966911d3",
@@ -693,7 +693,7 @@
     }
   },
   "software-mansion/vscode-cairo": {
-    "sha": "70b12b2e624a7380062a39499216eebdbdb4323d",
+    "sha": "4c5c81c099986c9f1beed89d6f09ef9c2f5d9ad7",
     "files": {
       "syntaxes/cairo.tmLanguage.json": "3d4491dbaa543907"
     }

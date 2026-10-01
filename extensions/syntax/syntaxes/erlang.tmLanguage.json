@@ -7,6 +7,15 @@
     "xrl",
     "yrl"
   ],
+  "injections": {
+    "L:source.erlang meta.type.erlang - comment - string": {
+      "patterns": [
+        {
+          "include": "#function-type"
+        }
+      ]
+    }
+  },
   "keyEquivalent": "^~E",
   "name": "Erlang",
   "patterns": [
@@ -30,6 +39,9 @@
     },
     {
       "include": "#doc-directive"
+    },
+    {
+      "include": "#type-directive"
     },
     {
       "include": "#directive"
@@ -383,10 +395,16 @@
         }
       },
       "name": "meta.directive.doc.erlang",
-      "contentName": "meta.embedded.block.markdown",
       "patterns": [
         {
-          "include": "text.html.markdown"
+          "begin": "(\\s*|$)",
+          "while": "^(?!\\s*[\"]{3,})",
+          "contentName": "meta.embedded.block.markdown",
+          "patterns": [
+            {
+              "include": "text.html.markdown"
+            }
+          ]
         }
       ]
     },
@@ -620,7 +638,54 @@
           ]
         },
         {
-          "begin": "\\b(fun)\\s+(?!\\()",
+          "begin": "\\b(fun)\\s+(_[a-zA-Z\\d@_]*+|[A-Z][a-zA-Z\\d@_]*+)\\s*+(?=\\()",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.fun.erlang"
+            },
+            "2": {
+              "name": "entity.name.function.erlang"
+            }
+          },
+          "comment": "Named function expression",
+          "end": "\\b(end)\\b",
+          "endCaptures": {
+            "1": {
+              "name": "keyword.control.end.erlang"
+            }
+          },
+          "name": "meta.expression.fun.erlang",
+          "patterns": [
+            {
+              "captures": {
+                "1": {
+                  "name": "entity.name.function.erlang"
+                }
+              },
+              "comment": "Name of a named function expression clause",
+              "match": "(_[a-zA-Z\\d@_]*+|[A-Z][a-zA-Z\\d@_]*+)\\s*+(?=\\()"
+            },
+            {
+              "begin": "(?=\\()",
+              "end": "(;)|(?=\\bend\\b)",
+              "endCaptures": {
+                "1": {
+                  "name": "punctuation.separator.clauses.erlang"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#internal-function-parts"
+                }
+              ]
+            },
+            {
+              "include": "#everything-else"
+            }
+          ]
+        },
+        {
+          "begin": "\\b(fun)\\s+(?!\\()(?=[^\\n]*/)",
           "beginCaptures": {
             "1": {
               "name": "keyword.control.fun.erlang"
@@ -641,23 +706,47 @@
           ]
         },
         {
-          "begin": "\\b(fun)\\s*+(\\()(?=(\\s*+\\()|(\\)))",
+          "begin": "\\b(fun)\\s+(?!\\()(?![^\\n]*/)",
           "beginCaptures": {
             "1": {
-              "name": "entity.name.function.erlang"
-            },
-            "2": {
-              "name": "punctuation.definition.parameters.begin.erlang"
+              "name": "keyword.control.fun.erlang"
             }
           },
-          "comment": "Function type in type specification",
-          "end": "(\\))",
+          "comment": "Function expression whose form is still unknown on the line it starts: an implicit one with the arity on a later line, or an explicit or named one with the first clause on a later line",
+          "end": "(/)|\\b(end)\\b",
           "endCaptures": {
             "1": {
-              "name": "punctuation.definition.parameters.end.erlang"
+              "name": "punctuation.separator.function-arity.erlang"
+            },
+            "2": {
+              "name": "keyword.control.end.erlang"
             }
           },
+          "name": "meta.expression.fun.erlang",
           "patterns": [
+            {
+              "captures": {
+                "1": {
+                  "name": "entity.name.function.erlang"
+                }
+              },
+              "comment": "Name of a named function expression clause",
+              "match": "(_[a-zA-Z\\d@_]*+|[A-Z][a-zA-Z\\d@_]*+)\\s*+(?=\\()"
+            },
+            {
+              "begin": "(?=\\()",
+              "end": "(;)|(?=\\bend\\b)",
+              "endCaptures": {
+                "1": {
+                  "name": "punctuation.separator.clauses.erlang"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#internal-function-parts"
+                }
+              ]
+            },
             {
               "include": "#everything-else"
             }
@@ -679,6 +768,15 @@
           },
           "name": "meta.expression.fun.erlang",
           "patterns": [
+            {
+              "captures": {
+                "1": {
+                  "name": "entity.name.function.erlang"
+                }
+              },
+              "comment": "Name of a named function expression clause",
+              "match": "(_[a-zA-Z\\d@_]*+|[A-Z][a-zA-Z\\d@_]*+)\\s*+(?=\\()"
+            },
             {
               "begin": "(?=\\()",
               "end": "(;)|(?=\\bend\\b)",
@@ -883,6 +981,29 @@
               "include": "#everything-else"
             }
           ]
+        }
+      ]
+    },
+    "function-type": {
+      "begin": "\\b(fun)\\s*+(\\()(?=(\\s*+\\()|(\\)))",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.name.function.erlang"
+        },
+        "2": {
+          "name": "punctuation.definition.parameters.begin.erlang"
+        }
+      },
+      "comment": "Function type in type specification",
+      "end": "(\\))",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.parameters.end.erlang"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#everything-else"
         }
       ]
     },
@@ -1094,6 +1215,22 @@
             }
           },
           "patterns": [
+            {
+              "begin": "(::)",
+              "beginCaptures": {
+                "1": {
+                  "name": "keyword.operator.symbolic.erlang"
+                }
+              },
+              "comment": "Type of a record field; meta.type.erlang marks the region where the function type rule is injected",
+              "end": "(?=,|\\})",
+              "name": "meta.type.erlang",
+              "patterns": [
+                {
+                  "include": "#everything-else"
+                }
+              ]
+            },
             {
               "include": "#everything-else"
             }
@@ -2263,6 +2400,36 @@
           "match": ",",
           "name": "punctuation.separator.tuple.erlang"
         },
+        {
+          "include": "#everything-else"
+        }
+      ]
+    },
+    "type-directive": {
+      "begin": "^\\s*+(-)\\s*+(type|opaque|nominal|spec|callback)(?![a-zA-Z\\d@_])\\s*+(\\(?)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.section.directive.begin.erlang"
+        },
+        "2": {
+          "name": "keyword.control.directive.erlang"
+        },
+        "3": {
+          "name": "punctuation.definition.parameters.begin.erlang"
+        }
+      },
+      "comment": "Directive carrying types; meta.type.erlang marks the region where the function type rule is injected",
+      "end": "(\\)?)\\s*+(\\.)(?=\\s|%|$)",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.parameters.end.erlang"
+        },
+        "2": {
+          "name": "punctuation.section.directive.end.erlang"
+        }
+      },
+      "name": "meta.directive.erlang meta.type.erlang",
+      "patterns": [
         {
           "include": "#everything-else"
         }
