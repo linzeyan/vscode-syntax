@@ -29,6 +29,9 @@ importers:
       '@hackmd/js-sequence-diagrams':
         specifier: 0.0.1-alpha.3
         version: 0.0.1-alpha.3(jquery@4.0.0)(raphael@2.3.0)
+      '@huacnlee/autocorrect':
+        specifier: 2.16.2
+        version: 2.16.2
       '@marp-team/marp-cli':
         specifier: 4.5.0
         version: 4.5.0(supports-color@8.1.1)(typescript@5.9.3)
@@ -77,6 +80,9 @@ importers:
       hjson:
         specifier: 3.2.1
         version: 3.2.1
+      ignore:
+        specifier: ^7.0.10
+        version: 7.0.10
       js-base64:
         specifier: 3.7.7
         version: 3.7.7
@@ -134,6 +140,9 @@ importers:
       open:
         specifier: 11.0.0
         version: 11.0.0
+      opencc-js:
+        specifier: 1.4.2
+        version: 1.4.2
       parquets:
         specifier: 0.10.10
         version: 0.10.10
@@ -536,6 +545,9 @@ packages:
     peerDependencies:
       jquery: '>=2.0.0'
       raphael: '>=2.0.0'
+
+  '@huacnlee/autocorrect@2.16.2':
+    resolution: {integrity: sha512-biXuVuT5rUN8zm1FZzdiTPIOCpXfNrJitx6fk8monhkr0dpcwWh3GKTW9oTdqFu6mUOekY2HQbCJWIg4qE7Amg==}
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -2085,6 +2097,10 @@ packages:
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
+  ignore@7.0.10:
+    resolution: {integrity: sha512-HpbUakT7xp5miBUywCHf36ZEuAJNklBJDDsGpUIjMzOSmM8ELSfA9Sa/QDPeNeqeoN31u+UTCkL4klCOVvRm4Q==}
+    engines: {node: '>= 4'}
+
   image-blob-reduce@3.0.1:
     resolution: {integrity: sha512-/VmmWgIryG/wcn4TVrV7cC4mlfUC/oyiKIfSg5eVM3Ten/c1c34RJhMYKCWTnoSMHSqXLt3tsrBR4Q2HInvN+Q==}
 
@@ -2650,6 +2666,9 @@ packages:
 
   openapi-types@12.1.3:
     resolution: {integrity: sha512-N4YtSYJqghVu4iek2ZUvcN/0aqH1kRDuNqzcycDxhOUpg7GdvLa2F3DgS6yBNhInhv2r/6I0Flkn7CqL8+nIcw==}
+
+  opencc-js@1.4.2:
+    resolution: {integrity: sha512-EdcspgdROiCCZDM+jZR6Pa670xW+EW2QhctPBQ8gRjg6lrx4IHEl+2s+kt5izk/TkxVRgdWuFgaGkaEdIUfdaw==}
 
   ora@8.2.0:
     resolution: {integrity: sha512-weP+BZ8MVNnlCm8c0Qdc1WSWq4Qn7I+9CJGm7Qali6g44e/PUzbjNqJX5NJ9ljlNMosfJvg1fKEGILklK9cwnw==}
@@ -3818,6 +3837,8 @@ snapshots:
     dependencies:
       jquery: 4.0.0
       raphael: 2.3.0
+
+  '@huacnlee/autocorrect@2.16.2': {}
 
   '@iconify/types@2.0.0': {}
 
@@ -5508,6 +5529,8 @@ snapshots:
 
   ieee754@1.2.1: {}
 
+  ignore@7.0.10: {}
+
   image-blob-reduce@3.0.1:
     dependencies:
       pica: 7.1.1
@@ -6138,6 +6161,8 @@ snapshots:
       wsl-utils: 0.3.1
 
   openapi-types@12.1.3: {}
+
+  opencc-js@1.4.2: {}
 
   ora@8.2.0:
     dependencies:

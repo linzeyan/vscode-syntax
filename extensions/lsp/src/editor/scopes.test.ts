@@ -1,7 +1,7 @@
 import * as assert from "node:assert";
 import { test } from "node:test";
 
-import { colorSheet, parseStyle, recoloured, scopesIn, styleOf } from "./scopes";
+import { colorSheet, parseStyle, scopesIn, styleText, SYNTAX_COLORS_RULE, withSyntaxColors } from "./scopes";
 
 /** A grammar shaped like a real one: nested patterns, a repository, captures. */
 const GRAMMAR = {
@@ -95,30 +95,29 @@ test("nothing recognisable is an empty sheet rather than a throw", () => {
 });
 
 test("the sheet's placeholder is not a colour", () => {
-  // Pasted unedited, every rule is ignored. That is the failure mode worth
+  // Pasted unedited, every entry is ignored. That is the failure mode worth
   // having: the alternative is a default that quietly recolours something.
   const sheet = colorSheet("solidity", "ricky.poly-syntax-highlight", [
     "comment.block.solidity",
   ]);
-  assert.ok(sheet.includes(`"foreground": "#RRGGBB"`));
+  assert.ok(sheet.includes(`"comment.block.solidity": "#RRGGBB"`));
   assert.ok(!/#[0-9a-fA-F]{6}/.test(sheet));
+  assert.strictEqual(withSyntaxColors(undefined, { "comment.block.solidity": "#RRGGBB" }), undefined);
 });
 
 test("the sheet is a settings fragment, not prose about one", () => {
   // It is meant to be copied from. A JSON parse of the body is the only way to
-  // find out that the rules were written wrong, since nothing else reads it.
+  // find out that the entries were written wrong, since nothing else reads it.
   const sheet = colorSheet("go", "ricky.poly-syntax-highlight", [
     "keyword.control.go",
     "string.quoted.double.go",
   ]);
   const body = sheet.split("\n").filter((line) => !line.startsWith("//")).join("\n");
   const parsed = JSON.parse(body);
-  assert.deepStrictEqual(
-    parsed["editor.tokenColorCustomizations"].textMateRules.map((
-      rule: { scope: string },
-    ) => rule.scope),
-    ["keyword.control.go", "string.quoted.double.go"],
-  );
+  assert.deepStrictEqual(Object.keys(parsed["poly.syntaxColors"]), [
+    "keyword.control.go",
+    "string.quoted.double.go",
+  ]);
 });
 
 test("a typed style is a colour, some font styles, or both", () => {
@@ -131,6 +130,8 @@ test("a typed style is a colour, some font styles, or both", () => {
   // The short and alpha forms are colours the editor accepts too.
   assert.deepStrictEqual(parseStyle("#fff"), { foreground: "#fff" });
   assert.deepStrictEqual(parseStyle("#C586C080"), { foreground: "#C586C080" });
+  // What the command writes back reads back as the same style.
+  assert.strictEqual(styleText({ foreground: "#c586c0", fontStyle: "italic bold" }), "#c586c0 italic bold");
 });
 
 test("an empty answer takes the rule away, and a wrong one says what is wrong", () => {
@@ -142,50 +143,62 @@ test("an empty answer takes the rule away, and a wrong one says what is wrong", 
   }
 });
 
-test("recolouring one scope leaves the rest of the setting as it was", () => {
+test("the setting becomes rules named after it, after everything that was already there", () => {
   // The user's own rules, shorthands and per-theme blocks are theirs; the
-  // command owns one rule and nothing else.
+  // mirror owns the rules carrying its name and nothing else. Last, so that
+  // for the same scope the setting wins over a rule written by hand.
   const before = {
     comments: "#888888",
     "[Dark+]": { textMateRules: [{ scope: "keyword.control.go", settings: { foreground: "#111111" } }] },
     textMateRules: [
-      { scope: "string.quoted.double.go", settings: { foreground: "#CE9178" } },
       { scope: "keyword.control.go", settings: { foreground: "#000000" } },
-      { scope: ["keyword.control.go", "keyword.other.go"], settings: { fontStyle: "bold" } },
+      { name: SYNTAX_COLORS_RULE, scope: "comment", settings: { foreground: "#6A9955" } },
     ],
   };
-  const after = recoloured(before, "keyword.control.go", { foreground: "#C586C0" });
+  const after = withSyntaxColors(before, { "keyword.control.go": "#C586C0 bold", comment: "italic" });
   assert.deepStrictEqual(after, {
     comments: "#888888",
     "[Dark+]": before["[Dark+]"],
     textMateRules: [
       before.textMateRules[0],
-      // Hand-written for several scopes at once: kept, and outranked by the
-      // new rule for this one because the new rule comes last.
-      before.textMateRules[2],
-      { scope: "keyword.control.go", settings: { foreground: "#C586C0" } },
+      { name: SYNTAX_COLORS_RULE, scope: "keyword.control.go", settings: { foreground: "#C586C0", fontStyle: "bold" } },
+      { name: SYNTAX_COLORS_RULE, scope: "comment", settings: { fontStyle: "italic" } },
     ],
   });
-  assert.strictEqual(styleOf(after, "keyword.control.go"), "#C586C0");
 });
 
-test("taking a rule away removes it and nothing else", () => {
+test("an entry taken out of the setting takes its rule with it, and nothing else", () => {
+  // Removing a key is the only way the Settings editor has to say "back to
+  // the theme's", so the rule it made has to go -- by name, because the scope
+  // alone cannot tell it from the user's own rule for the same scope.
+  const mine = { scope: "comment", settings: { foreground: "#FF0000" } };
   const before = {
-    textMateRules: [
-      { scope: "comment.line.go", settings: { foreground: "#6A9955", fontStyle: "italic" } },
-      { scope: "string.quoted.double.go", settings: { foreground: "#CE9178" } },
-    ],
+    textMateRules: [mine, { name: SYNTAX_COLORS_RULE, scope: "comment", settings: { foreground: "#6A9955" } }],
   };
-  assert.strictEqual(styleOf(before, "comment.line.go"), "#6A9955 italic");
-  const after = recoloured(before, "comment.line.go", null);
-  assert.deepStrictEqual(after, { textMateRules: [before.textMateRules[1]] });
-  assert.strictEqual(styleOf(after, "comment.line.go"), "");
+  assert.deepStrictEqual(withSyntaxColors(before, {}), { textMateRules: [mine] });
 });
 
-test("a setting that is missing or malformed is a fresh start, not a throw", () => {
-  const rule = { scope: "comment", settings: { foreground: "#6A9955" } };
+test("a setting already mirrored writes nothing", () => {
+  // Every window mirrors on activation and on every change. Without this,
+  // each would rewrite settings.json for nothing, and each write is another
+  // change event in every other window.
+  const colors = { comment: "#6A9955 italic" };
+  const once = withSyntaxColors(undefined, colors);
+  assert.ok(once);
+  assert.strictEqual(withSyntaxColors(once, colors), undefined);
+  assert.strictEqual(withSyntaxColors(undefined, {}), undefined);
+});
+
+test("a value that is not a style is left out rather than guessed at", () => {
+  const after = withSyntaxColors(undefined, { comment: "red", string: "#CE9178", keyword: 42 });
+  assert.deepStrictEqual(after?.textMateRules, [
+    { name: SYNTAX_COLORS_RULE, scope: "string", settings: { foreground: "#CE9178" } },
+  ]);
+});
+
+test("a customization that is missing or malformed is a fresh start, not a throw", () => {
+  const rule = { name: SYNTAX_COLORS_RULE, scope: "comment", settings: { foreground: "#6A9955" } };
   for (const nothing of [undefined, null, "oops", [], { textMateRules: "oops" }]) {
-    assert.deepStrictEqual(recoloured(nothing, "comment", { foreground: "#6A9955" }).textMateRules, [rule]);
-    assert.strictEqual(styleOf(nothing, "comment"), "");
+    assert.deepStrictEqual(withSyntaxColors(nothing, { comment: "#6A9955" })?.textMateRules, [rule]);
   }
 });

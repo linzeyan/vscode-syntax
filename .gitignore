@@ -16,8 +16,12 @@ extensions/lsp/out/
 # files beside it. Data Preview's readers are 1.3 MB of Arrow, Avro, Parquet and
 # SheetJS, and its page a copy of src/editor/dataPreview with Perspective's
 # release beside it. Marp is 18 MB of marp-core, MathJax, marp-cli and puppeteer
-# around src/editor/marp.
+# around src/editor/marp. Chinese conversion is 1 MB of OpenCC's dictionaries,
+# and AutoCorrect a 3 MB wasm with its glue.
 extensions/lsp/dist/dbml.js
+extensions/lsp/dist/chinese.js
+extensions/lsp/dist/autocorrect.js
+extensions/lsp/dist/autocorrect_bg.wasm
 extensions/lsp/dist/excalidraw/
 extensions/lsp/dist/drawio/
 extensions/lsp/dist/markdownPdf.js

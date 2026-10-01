@@ -109,6 +109,18 @@
           ".drawio",
           ".dio"
         ]
+      },
+      {
+        "id": "yaml",
+        "filenames": [
+          ".autocorrectrc"
+        ]
+      },
+      {
+        "id": "ignore",
+        "filenames": [
+          ".autocorrectignore"
+        ]
       }
     ],
     "commands": [
@@ -196,6 +208,31 @@
       {
         "command": "poly.sqlToDbml",
         "title": "%command.sqlToDbml.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.toTraditionalChinese",
+        "title": "%command.toTraditionalChinese.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.toSimplifiedChinese",
+        "title": "%command.toSimplifiedChinese.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.toTraditionalChineseTaiwan",
+        "title": "%command.toTraditionalChineseTaiwan.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.toSimplifiedChineseTaiwan",
+        "title": "%command.toSimplifiedChineseTaiwan.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.autocorrectDocument",
+        "title": "%command.autocorrectDocument.title%",
         "category": "%command.category%"
       },
       {
@@ -2916,6 +2953,38 @@
               "BUG"
             ],
             "description": "%config.todo.tags.description%"
+          },
+          "poly.syntaxColors": {
+            "type": "object",
+            "scope": "application",
+            "default": {},
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^\\s*((#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|bold|italic|underline|strikethrough)(\\s+|$))+$",
+              "patternErrorMessage": "%config.syntaxColors.pattern%"
+            },
+            "markdownDescription": "%config.syntaxColors.description%"
+          }
+        }
+      },
+      {
+        "title": "AutoCorrect",
+        "order": 15,
+        "properties": {
+          "poly.autocorrect.enabled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.autocorrect.enabled.description%"
+          },
+          "poly.autocorrect.enableLint": {
+            "type": "boolean",
+            "default": true,
+            "description": "%config.autocorrect.enableLint.description%"
+          },
+          "poly.autocorrect.formatOnSave": {
+            "type": "boolean",
+            "default": true,
+            "description": "%config.autocorrect.formatOnSave.description%"
           }
         }
       }
@@ -3227,7 +3296,7 @@
   },
   "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true})\" && node ../../tools/drawio-webapp.js",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true})\" && node ../../tools/drawio-webapp.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit && tsc -p tsconfig.marp.json --noEmit",
     "unit": "tsc -p tsconfig.test.json && node --test out/editor/*.test.js",
     "test:build": "pnpm run build && tsc -p tsconfig.test.json",
@@ -3238,6 +3307,7 @@
     "@dbml/core": "^10.2.0",
     "@excalidraw/excalidraw": "0.18.1",
     "@hackmd/js-sequence-diagrams": "0.0.1-alpha.3",
+    "@huacnlee/autocorrect": "2.16.2",
     "@marp-team/marp-cli": "4.5.0",
     "@marp-team/marp-core": "4.4.0",
     "@mermaid-js/layout-tidy-tree": "^1.0.0",
@@ -3254,6 +3324,7 @@
     "flowchart.js": "^1.18.0",
     "highlight.js": "11.11.1",
     "hjson": "3.2.1",
+    "ignore": "^7.0.10",
     "js-base64": "3.7.7",
     "js-yaml": "4.3.2",
     "json-spread": "0.3.2",
@@ -3273,6 +3344,7 @@
     "nanoid": "6.0.1",
     "nomnoml": "^1.7.0",
     "open": "11.0.0",
+    "opencc-js": "1.4.2",
     "parquets": "0.10.10",
     "plantuml-encoder": "1.4.0",
     "portfinder": "1.0.38",

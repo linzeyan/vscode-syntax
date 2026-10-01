@@ -34,6 +34,10 @@ NPM_LICENSE_FILES = {
     # has none, and its LICENSE.md is the Unlicense.
     "flatbuffers": ("Apache-2.0", "LICENSE.txt"),
     "text-encoding-utf-8": ("Unlicense", "LICENSE.md"),
+    # AutoCorrect's wasm build publishes the wasm and its glue and nothing else.
+    # The licence is the MIT file in huacnlee/autocorrect at the same tag,
+    # shipped beside the extension since the package does not carry it.
+    "@huacnlee/autocorrect": ("MIT", "media/autocorrect/LICENSE"),
 }
 
 # A9/N5 allowlist for everything the binary statically links. Ordered by
@@ -286,7 +290,9 @@ def collect_npm() -> str:
         "The extension's own scripts bundle the packages below: the language client",
         "in `dist/extension.js`, mermaid in the markdown preview's `dist/preview.js`,",
         "the other diagram libraries in `dist/diagrams.js` and `dist/diagram/*.js`,",
-        "@dbml/core in the DBML commands' `dist/dbml.js`, puppeteer, KaTeX and",
+        "@dbml/core in the DBML commands' `dist/dbml.js`, opencc-js with OpenCC's",
+        "dictionaries in the Chinese conversion commands' `dist/chinese.js`, AutoCorrect's",
+        "wasm build in `dist/autocorrect.js` with `dist/autocorrect_bg.wasm`, puppeteer, KaTeX and",
         "markdown-it in markdown export's `dist/markdownPdf.js`, swagger-parser",
         "in the Swagger preview's `dist/swaggerPreview.js`, apache-arrow, avsc,",
         "parquets, SheetJS and the text formats' parsers in Data Preview's",

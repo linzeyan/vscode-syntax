@@ -70,43 +70,38 @@ export function scopesIn(grammar: unknown): string[] {
 const PLACEHOLDER = "#RRGGBB";
 
 /**
- * A `textMateRules` array covering `scopes`, as a document to copy out of.
+ * A `poly.syntaxColors` object covering `scopes`, as a document to copy out of.
  *
  * A document rather than a write into settings.json. Writing would mean putting
- * several hundred rules into somebody's settings on one keystroke and leaving
+ * several hundred entries into somebody's settings on one keystroke and leaving
  * them to delete the ones they did not want, and a file that big is no longer
  * reviewable -- the point of the sheet is to pick a handful of scopes off it.
  *
  * The placeholder is not a colour. Pasted unedited it is ignored, which is the
- * right way for this to fail: no rule can quietly recolour something because
+ * right way for this to fail: no entry can quietly recolour something because
  * the default got left in.
  */
 export function colorSheet(language: string, source: string, scopes: string[]): string {
-  const rules = scopes
-    .map(
-      (scope) =>
-        `    { "scope": ${JSON.stringify(scope)}, `
-        + `"settings": { "foreground": "${PLACEHOLDER}" } }`,
-    )
+  const entries = scopes
+    .map((scope) => `    ${JSON.stringify(scope)}: "${PLACEHOLDER}"`)
     .join(",\n");
   return `// Every TextMate scope the \`${language}\` grammar can produce.
 // Grammar: ${source}
 //
-// Copy the rules you want into your settings, replacing ${PLACEHOLDER} with the
-// colour you want. Anything left as ${PLACEHOLDER} is not a colour and is
-// ignored, so nothing changes until you edit it.
+// Copy the scopes you want into "poly.syntaxColors" in your user settings,
+// replacing ${PLACEHOLDER} with a colour, optionally followed by bold, italic,
+// underline or strikethrough. Anything left as ${PLACEHOLDER} is not a colour
+// and is ignored, so nothing changes until you edit it.
 //
-// A rule with a longer scope wins over a shorter one, so
-// "comment.line.double-slash" beats "comment". Your rules win over the theme's.
+// A longer scope wins over a shorter one, so "comment.line.double-slash" beats
+// "comment". Your colours win over the theme's.
 //
 // poly does not paint anything itself: the grammar names the tokens and the
 // theme colours them. There is also no way to switch one grammar off -- VSCode
 // registers them statically, so the only off switch is disabling the extension.
 {
-  "editor.tokenColorCustomizations": {
-    "textMateRules": [
-${rules}
-    ]
+  "poly.syntaxColors": {
+${entries}
   }
 }
 `;
@@ -153,40 +148,53 @@ export function parseStyle(text: string): TokenStyle | null | string {
   return style;
 }
 
-/** The rules in a `tokenColorCustomizations` value, whatever shape it came in. */
-function rulesIn(customizations: unknown): { scope?: unknown; settings?: TokenStyle }[] {
-  const rules = (customizations as { textMateRules?: unknown } | undefined)?.textMateRules;
-  return Array.isArray(rules) ? rules : [];
+/** A style written back the way `parseStyle` reads it. */
+export function styleText(style: TokenStyle): string {
+  return [style.foreground, style.fontStyle].filter(Boolean).join(" ");
 }
 
 /**
- * The style already set for `scope`, as `parseStyle` would read it back, or
- * `""`. The last rule wins, as it does when the editor applies them.
- */
-export function styleOf(customizations: unknown, scope: string): string {
-  const rule = rulesIn(customizations).filter((one) => one?.scope === scope).pop();
-  return [rule?.settings?.foreground, rule?.settings?.fontStyle].filter(Boolean).join(" ");
-}
-
-/**
- * `customizations` with the rule for `scope` set to `style`, or taken out when
- * `style` is null.
+ * The `name` on every `textMateRules` entry made from `poly.syntaxColors`.
  *
- * Everything else is carried over untouched: the other rules, the shorthand
- * keys (`comments`, `keywords`), and the per-theme blocks (`"[Dark+]"`), which
- * are somebody's own settings and not this command's to rearrange. Only a rule
- * naming exactly this scope on its own is replaced -- one that lists it among
- * others was written by hand for all of them, and the new rule, coming last,
- * wins over it for this scope anyway.
+ * It is how the next sync tells its own rules from the user's: everything
+ * carrying it is rebuilt from the setting, everything else is somebody's own
+ * and left where it is. Named after the setting so that whoever reads it in
+ * settings.json knows where to make the change instead.
  */
-export function recoloured(
+export const SYNTAX_COLORS_RULE = "poly.syntaxColors";
+
+/**
+ * `customizations` with poly's rules rebuilt from `colors`, or `undefined`
+ * when they already match and nothing needs writing.
+ *
+ * `poly.syntaxColors` exists because a colour has to be settable from the
+ * Settings editor, and `editor.tokenColorCustomizations` can only be edited as
+ * JSON. But the theme only reads the latter, and no API colours a token any
+ * other way, so the setting is mirrored into it.
+ *
+ * Everything not carrying `SYNTAX_COLORS_RULE` is carried over untouched: the
+ * user's own rules, the shorthand keys (`comments`, `keywords`) and the
+ * per-theme blocks (`"[Dark+]"`). poly's rules go last, so for the same scope
+ * they win over a hand-written one, as the setting being the newer word on it
+ * says they should. A value that does not parse is left out rather than
+ * guessed at -- the setting's schema already marks it in the editor.
+ */
+export function withSyntaxColors(
   customizations: unknown,
-  scope: string,
-  style: TokenStyle | null,
-): Record<string, unknown> {
+  colors: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   const base = customizations && typeof customizations === "object" && !Array.isArray(customizations)
     ? customizations as Record<string, unknown>
     : {};
-  const kept = rulesIn(base).filter((one) => one?.scope !== scope);
-  return { ...base, textMateRules: style ? [...kept, { scope, settings: style }] : kept };
+  const rules = Array.isArray(base.textMateRules) ? base.textMateRules : [];
+  const kept = rules.filter((one) => one?.name !== SYNTAX_COLORS_RULE);
+  const ours = Object.entries(colors).flatMap(([scope, text]) => {
+    const style = typeof text === "string" ? parseStyle(text) : null;
+    return style && typeof style === "object" ? [{ name: SYNTAX_COLORS_RULE, scope, settings: style }] : [];
+  });
+  const next = [...kept, ...ours];
+  if (JSON.stringify(next) === JSON.stringify(rules)) {
+    return undefined;
+  }
+  return { ...base, textMateRules: next };
 }

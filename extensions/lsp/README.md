@@ -91,6 +91,23 @@ C/C++、Swift、HashiCorp Terraform、Lua（sumneko）、Bash IDE、Buf 的那�
   SQL，或從 PostgreSQL／MySQL／SQL Server／Snowflake／Oracle 的 SQL 反推 DBML。轉的是
   編輯器裡的內容，未存檔的修改也算；語法錯誤會指出行與欄。
 
+### 簡繁轉換
+
+- **`簡體轉繁體`／`繁體轉簡體`**，以及各一個「含台灣用詞」的版本：有選取轉選取（每一段），沒有
+  就轉整份，一次 undo 復原。OpenCC 的詞組字典；含台灣用詞的那一對會換用語（软件 ↔ 軟體），
+  另一對只換字；繁體是台灣字形（裡、著）。取代 cipchk.zh-hans-tt-hant-vscode。
+
+### AutoCorrect
+
+取代 huacnlee.autocorrect，`poly.autocorrect.enabled` 打開才有，用的是它自己的 wasm 引擎：
+
+- 中日韓文字與英數之間補空白、全半形標點、`.autocorrectrc` 裡的詞彙拼寫，開檔與打字時就標出來，
+  每條一個 quick fix。
+- 手動存檔時整份修正；自動存檔與「儲存但不格式化」不會。`AutoCorrect: Format Document` 手動跑。
+- 讀 workspace 資料夾的 `.autocorrectrc` 與 `.autocorrectignore`（加上 `.gitignore`），改了立即
+  生效，拿掉一條規則也是；multi-root 每個資料夾各自一份。
+- 狀態列的 Lint／Format 開關連它一起關。那個 extension 還裝著時 poly 讓開，不重複報、不重複改。
+
 ### PlantUML
 
 jebbs.plantuml 的替代，命令、設定與匯出路徑都照它的（設定在 `poly.plantuml.*`，名稱同它的
@@ -352,13 +369,15 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
     `poly.toml` 管那邊，管不到高亮。
 - **TODOs 檢視**（設定）：檔案總管多一個面板，列出整個 workspace 的 `TODO`／`FIXME`／
   `HACK`／`XXX`／`BUG`。只在面板顯示時才掃描，排除規則沿用 `files.exclude`／`search.exclude`。
-- **`Syntax Colors for This Language`**：列出目前這個檔的文法能產生的全部 TextMate scope，
-  做成一份可以直接複製的 `editor.tokenColorCustomizations.textMateRules`。顏色欄位是
-  `#RRGGBB` 佔位字串，所以整份貼上去不會改變任何顏色。
-- **`Set Syntax Color`**：從同一份 scope 清單挑一個，輸入 `#C586C0` 或 `#C586C0 italic`，
-  直接寫進使用者設定的 `editor.tokenColorCustomizations.textMateRules`；留空刪掉那一條。
-  其他規則與各 theme 專屬的設定原樣保留。有 semantic tokens 的語言要另改
+- **語法顏色**（設定 `poly.syntaxColors`）：設定畫面裡一張 scope → 顏色的表，例如 `comment` →
+  `#6A9955 italic`；刪掉一項就回到 theme 的顏色。poly 把它複製進
+  `editor.tokenColorCustomizations`（主題只讀那裡），成為名為 `poly.syntaxColors` 的 rule，
+  你自己寫的 rule 與各 theme 專屬的設定原樣保留。有 semantic tokens 的語言要另改
   `editor.semanticTokenColorCustomizations`。
+- **`Set Syntax Color`**：從目前這個檔的文法的全部 scope 挑一個，輸入 `#C586C0` 或
+  `#C586C0 italic`，寫進 `poly.syntaxColors`；留空刪掉那一項。
+- **`Syntax Colors for This Language`**：同一份 scope 清單整份列出，做成可以直接複製的
+  `poly.syntaxColors` 片段。顏色欄位是 `#RRGGBB` 佔位字串，所以整份貼上去不會改變任何顏色。
 
 ## 快捷鍵
 
@@ -388,7 +407,8 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 `poly.lintPath`、`poly.analyzeDeadCode`、`poly.toggleFormat`、`poly.toggleLint`、`poly.createGoWork`、
 `poly.checkForUpdates`、`poly.showOutput`、`poly.copyPathWithLine`、`poly.insertTableOfContents`、
 `poly.runFile`、`poly.moveToNewFile`、`poly.changeSignature`、`poly.implementInterface`、
-`poly.syntaxColors`、`poly.setSyntaxColor`、`poly.refreshTodos`。
+`poly.syntaxColors`、`poly.setSyntaxColor`、`poly.refreshTodos`、`poly.toTraditionalChinese`／
+`toSimplifiedChinese`／`toTraditionalChineseTaiwan`／`toSimplifiedChineseTaiwan`、`poly.autocorrectDocument`。
 
 ## 設定
 
@@ -415,6 +435,10 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 | `poly.postfixCompletion.enabled`   | `false`   | `.if`／`.for` 之類的展開                                                               |
 | `poly.todo.enabled`                | `false`   | 檔案總管的 TODOs 面板                                                                  |
 | `poly.todo.tags`                   | 五個標籤  | TODOs 面板找哪些字                                                                     |
+| `poly.syntaxColors`                | `{}`      | scope → 顏色與樣式，蓋過 theme；只能設在使用者層級                                     |
+| `poly.autocorrect.enabled`         | `false`   | AutoCorrect（huacnlee.autocorrect 的替代）                                             |
+| `poly.autocorrect.enableLint`      | `true`    | AutoCorrect 的問題列進 Problems                                                        |
+| `poly.autocorrect.formatOnSave`    | `true`    | 手動存檔時 AutoCorrect 整份修正                                                        |
 | `poly.plantuml.*`                  | 同 jebbs  | PlantUML 的 Java、匯出、預覽、server 與檢查，20 項，見上面的 PlantUML                  |
 | `poly.excalidraw.*`                | 同 pomdtr | Excalidraw 的主題、語言、元件庫與圖片，4 項，見上面的 Excalidraw                       |
 | `poly.drawio.*`                    | 同 hediet | draw.io 的離線／線上、主題、樣式、圖形庫、plugin 與 code link，22 項，見上面的 draw.io |

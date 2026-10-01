@@ -28,10 +28,11 @@ Poly（poly-lsp）的話 Enter 由它接管**，兩者都有。
 
 poly 不帶配色：文法只替 token 取名（scope），顏色是主題給的。
 
-要改某個 scope 的顏色，用 VSCode 本來就有的 `editor.tokenColorCustomizations.textMateRules`。
-scope 名稱哪裡查：裝了 Poly 就用 `Poly: Syntax Colors for This Language`（一次列出
-這個語言的全部 scope），沒裝就用內建的 `Developer: Inspect Editor Tokens and Scopes`
-（一次一個，游標下的那個）。
+要改某個 scope 的顏色：裝了 Poly（poly-lsp）的話，設定畫面的 `poly.syntaxColors` 是一張
+scope → 顏色的表，`Poly: Set Syntax Color` 從目前這個檔的全部 scope 挑一個寫進去。這個
+extension 本身不帶設定——它沒有執行期程式碼能把設定套到主題上——所以只裝它的話，用 VSCode
+本來就有的 `editor.tokenColorCustomizations.textMateRules`，scope 名稱用內建的
+`Developer: Inspect Editor Tokens and Scopes` 查（一次一個，游標下的那個）。
 
 **沒有「只關掉某一份文法」的開關**：VSCode 的文法是靜態註冊的，沒有任何 contribution point
 能在執行期停用其中一份。唯一的關法是停用整個 extension；poly 不做按了沒作用的假開關。

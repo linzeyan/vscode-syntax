@@ -823,6 +823,98 @@ func main() {
     assert.match(readFileSync(target, "utf8"), /CREATE TABLE "users"/);
   });
 
+  // What only a host shows: that a colour set from the Settings editor reaches
+  // the one setting a theme reads. The merge is unit-tested; this is the write
+  // from an application-scoped setting into the user's settings.json, which
+  // fails silently if either half has the wrong scope or target.
+  test("a syntax colour set in poly.syntaxColors reaches the theme, and goes when the entry does", async () => {
+    const poly = () => vscode.workspace.getConfiguration("poly");
+    const rules = () =>
+      (vscode.workspace.getConfiguration("editor").inspect<{ textMateRules?: unknown[] }>(
+        "tokenColorCustomizations",
+      )?.globalValue?.textMateRules ?? []) as { name?: string; scope?: string; settings?: object }[];
+    try {
+      await poly().update("syntaxColors", { comment: "#6A9955 italic" }, vscode.ConfigurationTarget.Global);
+      const rule = await eventually("the mirrored rule", () => rules().find((one) => one.name === "poly.syntaxColors"));
+      assert.deepStrictEqual(rule, {
+        name: "poly.syntaxColors",
+        scope: "comment",
+        settings: { foreground: "#6A9955", fontStyle: "italic" },
+      });
+      await poly().update("syntaxColors", undefined, vscode.ConfigurationTarget.Global);
+      await eventually("the rule to go", () => rules().length === 0 ? true : undefined);
+    } finally {
+      await poly().update("syntaxColors", undefined, vscode.ConfigurationTarget.Global);
+      await vscode.workspace
+        .getConfiguration("editor")
+        .update("tokenColorCustomizations", undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // The conversion is unit-tested against OpenCC; this is the bundle found
+  // beside dist/extension.js and the edit landing in every selection.
+  test("Chinese conversion rewrites each selection, and the whole file when there is none", async () => {
+    const editor = await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument({ content: "鼠标\n软件\n里面\n" }),
+    );
+    editor.selections = [
+      new vscode.Selection(0, 0, 0, 2),
+      new vscode.Selection(1, 0, 1, 2),
+    ];
+    await vscode.commands.executeCommand("poly.toTraditionalChineseTaiwan");
+    assert.strictEqual(editor.document.getText(), "滑鼠\n軟體\n里面\n");
+    editor.selection = new vscode.Selection(0, 0, 0, 0);
+    await vscode.commands.executeCommand("poly.toSimplifiedChineseTaiwan");
+    assert.strictEqual(editor.document.getText(), "鼠标\n软件\n里面\n");
+    await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+  });
+
+  // The engine and the ranges are unit-tested; this is what only a host shows:
+  // the switch, the bundle and its wasm found beside dist/extension.js, a
+  // quick fix, a manual save, and `.autocorrectrc` followed both ways. The
+  // second way is the one the extension got wrong -- its engine only merges a
+  // configuration in, so a rule taken back out stayed off until a reload.
+  test("AutoCorrect reports, fixes, corrects on save, and follows .autocorrectrc both ways", async () => {
+    const poly = () => vscode.workspace.getConfiguration("poly");
+    const rc = join(workspaceRoot(), ".autocorrectrc");
+    const uri = writeFile("autocorrect.md", "测试test文本\n第二行hello世界\n");
+    const findings = () => vscode.languages.getDiagnostics(uri).filter((one) => one.source === "AutoCorrect");
+    const said = (message: string) => () => findings().some((one) => one.message === message) ? true : undefined;
+    try {
+      await poly().update("autocorrect.enabled", true, vscode.ConfigurationTarget.Global);
+      const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+      await eventually("a finding on each line", () => findings().length === 2 ? true : undefined);
+
+      const first = findings().find((one) => one.range.start.line === 0);
+      assert.ok(first);
+      const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+        "vscode.executeCodeActionProvider",
+        uri,
+        first.range,
+      );
+      const fix = actions.find((action) => action.title === "AutoCorrect: 测试 test 文本");
+      assert.ok(fix?.edit, `no quick fix among ${actions.map((action) => action.title)}`);
+      await vscode.workspace.applyEdit(fix.edit);
+      assert.strictEqual(editor.document.lineAt(0).text, "测试 test 文本");
+
+      await vscode.commands.executeCommand("workbench.action.files.save");
+      assert.strictEqual(readFileSync(uri.fsPath, "utf8"), "测试 test 文本\n第二行 hello 世界\n");
+
+      // Comma between CJK is a second rule, so each answer is a finding that
+      // says which rules were in force -- never just an absence of findings.
+      writeFileSync(rc, "rules:\n  space-word: 0\n");
+      await editor.edit((edit) => edit.replace(editor.document.lineAt(0).range, "测试test文本,中文"));
+      await eventually("space-word off", said("测试test文本，中文"));
+      rmSync(rc);
+      await editor.edit((edit) => edit.insert(editor.document.lineAt(1).range.end, " "));
+      await eventually("space-word back on", said("测试 test 文本，中文"));
+    } finally {
+      rmSync(rc, { force: true });
+      await poly().update("autocorrect.enabled", undefined, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    }
+  });
+
   // The PlantUML logic is unit-tested and measured against jebbs.plantuml
   // (tools/plantuml-diff); what only a host shows is the wiring: that the jar
   // poly.toml pins is the one run, by the configured Java, and that the export

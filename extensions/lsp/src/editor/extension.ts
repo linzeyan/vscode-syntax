@@ -2,7 +2,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { registerAutocorrect } from "./autocorrectEditor";
 import { nextChangedFile } from "./changes";
+import type { Conversion } from "./chinese";
 import { Binding, YIELDING, yieldKey, yieldsTo } from "./chords";
 import { registerCodeSnap } from "./codeSnap";
 import { registerDataPreview } from "./dataPreview";
@@ -54,7 +56,7 @@ import {
 import { ReferenceTree, registerReferenceTree } from "./referenceTree";
 import { cacheDir, RefStore } from "./refStore";
 import { entryLine, entryPoints, findsEntryInText, runLine } from "./runnable";
-import { colorSheet, parseStyle, recoloured, scopesIn, styleOf } from "./scopes";
+import { colorSheet, parseStyle, scopesIn, styleText, withSyntaxColors } from "./scopes";
 import { offerMessage, serverToOffer } from "./servers";
 import { registerSwaggerViewer } from "./swaggerViewer";
 import { registerTodoTree } from "./todoTree";
@@ -534,6 +536,42 @@ async function convertDbml(editor: vscode.TextEditor, to: "sql" | "dbml"): Promi
   }
   await vscode.workspace.fs.writeFile(target, Buffer.from(output, "utf8"));
   await vscode.window.showTextDocument(target);
+}
+
+/**
+ * The four Simplified/Traditional commands, by the name each is registered
+ * under (`poly.<conversion>`). Spelled out rather than read off `CONVERSIONS`,
+ * because that is a value, and importing it would pull the dictionaries into
+ * this bundle -- the type still holds every name here to one that exists.
+ */
+const CHINESE: Conversion[] = [
+  "toTraditionalChinese",
+  "toSimplifiedChinese",
+  "toTraditionalChineseTaiwan",
+  "toSimplifiedChineseTaiwan",
+];
+
+/**
+ * Convert what is selected between Simplified and Traditional Chinese, or the
+ * whole document when nothing is.
+ *
+ * Every selection rather than only the first, which is all the extension this
+ * replaces looked at: with several cursors, converting one of them and leaving
+ * the rest as they were reads as a bug. One edit, so one undo puts it back.
+ */
+async function convertChinese(editor: vscode.TextEditor, conversion: Conversion): Promise<void> {
+  // Its own bundle, loaded on first use; see chinese.ts for why.
+  const chinese: typeof import("./chinese") = require(path.join(__dirname, "chinese.js"));
+  const document = editor.document;
+  const selected = editor.selections.filter((selection) => !selection.isEmpty);
+  const ranges = selected.length > 0
+    ? selected
+    : [new vscode.Range(new vscode.Position(0, 0), document.lineAt(document.lineCount - 1).range.end)];
+  await editor.edit((edit) => {
+    for (const range of ranges) {
+      edit.replace(range, chinese.convert(conversion, document.getText(range)));
+    }
+  });
 }
 
 /** Run `action` against the active editor, or say why it cannot run. */
@@ -1157,13 +1195,14 @@ async function showSyntaxColors(editor: vscode.TextEditor): Promise<void> {
 }
 
 /**
- * Recolour one scope of the current file's grammar, in the user's settings.
+ * Recolour one scope of the current file's grammar, in `poly.syntaxColors`.
  *
  * The sheet above refuses to write settings.json because it would be hundreds
- * of rules at once. This writes one, chosen by name, so what lands in the file
- * is exactly what was asked for -- and the editor recolours on the spot, which
- * is the preview. User scope, because a colour is a matter of taste rather than
- * of the project, and a workspace write would hand it to everybody who clones.
+ * of entries at once. This writes one, chosen by name, so what lands in the
+ * file is exactly what was asked for -- and the editor recolours on the spot,
+ * which is the preview. Into the setting rather than straight into
+ * `editor.tokenColorCustomizations`, so that every colour poly set is in the
+ * one list the Settings editor shows and can take back out.
  */
 async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
   const languageId = editor.document.languageId;
@@ -1171,10 +1210,10 @@ async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
   if (!found) {
     return;
   }
-  const config = vscode.workspace.getConfiguration("editor");
-  const current = config.inspect("tokenColorCustomizations")?.globalValue;
+  const config = vscode.workspace.getConfiguration("poly");
+  const colors = { ...config.get<Record<string, string>>("syntaxColors", {}) };
   const picked = await vscode.window.showQuickPick(
-    found.scopes.map((scope) => ({ label: scope, description: styleOf(current, scope) })),
+    found.scopes.map((scope) => ({ label: scope, description: colors[scope] ?? "" })),
     { placeHolder: `The ${languageId} scope to colour -- type to filter, e.g. comment or keyword` },
   );
   if (!picked) {
@@ -1196,10 +1235,39 @@ async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
   if (typeof style === "string") {
     return;
   }
-  await config.update(
-    "tokenColorCustomizations",
-    recoloured(current, picked.label, style),
-    vscode.ConfigurationTarget.Global,
+  if (style) {
+    colors[picked.label] = styleText(style);
+  } else {
+    delete colors[picked.label];
+  }
+  await config.update("syntaxColors", colors, vscode.ConfigurationTarget.Global);
+}
+
+/**
+ * Keep `editor.tokenColorCustomizations` in step with `poly.syntaxColors`.
+ *
+ * On activation as well as on change, because settings.json can be edited, or
+ * synced in, while no window is open to see it happen. Every window does this
+ * and they agree: the setting is application-scoped, so all of them read the
+ * same value, and `withSyntaxColors` says there is nothing to write once one
+ * of them has.
+ */
+function mirrorSyntaxColors(context: vscode.ExtensionContext): void {
+  const mirror = async () => {
+    const colors = vscode.workspace.getConfiguration("poly").get<Record<string, unknown>>("syntaxColors", {});
+    const editor = vscode.workspace.getConfiguration("editor");
+    const next = withSyntaxColors(editor.inspect("tokenColorCustomizations")?.globalValue, colors);
+    if (next) {
+      await editor.update("tokenColorCustomizations", next, vscode.ConfigurationTarget.Global);
+    }
+  };
+  void mirror();
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("poly.syntaxColors")) {
+        void mirror();
+      }
+    }),
   );
 }
 
@@ -2301,6 +2369,8 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   registerDataPreview(context);
   registerSwaggerViewer(context);
   marpPlugin = registerMarp(context);
+  mirrorSyntaxColors(context);
+  registerAutocorrect(context, log);
 
   // The fence rule reads the setting on every render, so turning the diagrams
   // off only has to reach previews that are already open. Same command the
@@ -2340,6 +2410,10 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
     ],
     ["poly.dbmlToSql", withEditor("DBML to SQL", (editor) => convertDbml(editor, "sql"))],
     ["poly.sqlToDbml", withEditor("SQL to DBML", (editor) => convertDbml(editor, "dbml"))],
+    ...CHINESE.map((conversion): [string, () => Promise<void>] => [
+      `poly.${conversion}`,
+      withEditor("Chinese conversion", (editor) => convertChinese(editor, conversion)),
+    ]),
     // One entry per refactoring, so the command id and the table cannot drift:
     // `poly.changeSignature` is `REFACTORINGS.changeSignature` by construction.
     ...(Object.keys(REFACTORINGS) as Refactoring[]).map(

@@ -103,6 +103,16 @@
   Oracle 的 SQL，或從 PostgreSQL／MySQL／SQL Server／Snowflake／Oracle 的 SQL 反推 DBML。
   轉的是編輯器裡的內容，未存檔的修改也算；寫不進去的會指出第幾行第幾欄，存到哪裡用對話框選。
   命令面板只在 `.dbml` 與 SQL 檔出現。
+- **簡繁轉換**：`Poly: 簡體轉繁體`、`繁體轉簡體`，以及各一個「含台灣用詞」的版本，取代
+  cipchk.zh-hans-tt-hant-vscode。有選取就轉選取（多重選取每一段都轉），沒有就轉整份。用 OpenCC
+  的詞組字典：含台灣用詞的那一對會換用語（软件 ↔ 軟體、鼠标 ↔ 滑鼠），另一對只換字；繁體一律是
+  台灣字形（裡、著）。一次 undo 復原。
+- **AutoCorrect**（`poly.autocorrect.enabled` 打開）：取代 huacnlee.autocorrect，用的是它自己的
+  引擎。中日韓文字與英數之間補空白、全半形標點、`.autocorrectrc` 裡的詞彙拼寫：開檔與打字時就
+  標出來，每條一個 quick fix，手動存檔時整份修正（自動存檔與「儲存但不格式化」不會），
+  `Poly: AutoCorrect: Format Document` 手動跑。讀 workspace 資料夾的 `.autocorrectrc` 與
+  `.autocorrectignore`（加上 `.gitignore`），改了立即生效——拿掉一條規則也是。狀態列的 Lint／Format
+  開關連它一起關；那個 extension 還裝著時 poly 讓開。
 - **PlantUML**：取代 jebbs.plantuml。`alt+d` 在旁邊預覽游標所在的那張圖（縮放、拖曳、分頁、
   複製成圖片），匯出單張／整份檔案／整個 workspace（12 種格式，檔名與 `out/` 底下的路徑同
   jebbs.plantuml，舊的匯出會被原地覆寫），產生 server URL，從匯出的 PNG 取回原始碼；另有
@@ -226,17 +236,20 @@
 - **TODOs 檢視**：檔案總管多一個面板，列出整個 workspace 的 `TODO`／`FIXME`／`HACK`／
   `XXX`／`BUG`。只在面板顯示時才掃描，排除規則沿用 `files.exclude`／`search.exclude`，
   而且掃描上限會寫在標題上——「清單很短」跟「清單被截斷」不該長得一樣。
-- **`Poly: Syntax Colors for This Language`**：列出目前這個檔的文法能產生的**全部**
-  TextMate scope，做成一份可以直接複製的 `editor.tokenColorCustomizations.textMateRules`。
-  改配色這件事 VSCode 一直都做得到，卡住的是沒人知道 scope 叫什麼——內建的
-  `Inspect Editor Tokens and Scopes` 一次只給游標下的那一個。顏色欄位是
-  `#RRGGBB` 佔位字串而不是某個預設色：整份貼上去不會改變任何顏色，你只會改你改過的那幾條。
-- **`Poly: Set Syntax Color`**：只改一條就不必複製貼上。從同一份 scope 清單挑一個（可打字過濾，
-  已改過的會顯示目前的值），輸入顏色與樣式，例如 `#C586C0` 或 `#C586C0 italic`，直接寫進使用者
-  settings.json 的 `editor.tokenColorCustomizations`，畫面當場重新上色。留空就刪掉那一條、回到
-  theme 的顏色；你其他的規則與各 theme 專屬的設定不會被動到。Go、TypeScript、Python 這類有
-  semantic tokens 的語言，language server 的顏色會蓋在上面，那部分要改
-  `editor.semanticTokenColorCustomizations`。
+- **語法顏色設定 `poly.syntaxColors`**：設定畫面（Poly › 編輯與檢視）裡一張表，項目是
+  TextMate scope、值是顏色加選用樣式，例如 `comment` → `#6A9955 italic`。改完畫面當場重新上色，
+  刪掉那一項就回到 theme 的顏色。一個 scope 也套到它底下更長的 scope，`comment` 涵蓋每一種註解。
+  主題只讀 `editor.tokenColorCustomizations`，所以 poly 把這張表複製進去，成為名為
+  `poly.syntaxColors` 的 rule；你自己在那裡寫的 rule 與各 theme 專屬的設定不會被動到。
+  Go、TypeScript、Python 這類有 semantic tokens 的語言，language server 的顏色會蓋在上面，
+  那部分要改 `editor.semanticTokenColorCustomizations`。
+- **`Poly: Set Syntax Color`**：不知道 scope 叫什麼就用這個。從目前這個檔的文法的 scope 清單挑一個
+  （可打字過濾，已設定的會顯示目前的值），輸入 `#C586C0` 或 `#C586C0 italic`，寫進
+  `poly.syntaxColors`；留空就刪掉那一項。
+- **`Poly: Syntax Colors for This Language`**：同一份清單整份列出，做成可以直接複製的
+  `poly.syntaxColors` 片段。改配色這件事 VSCode 一直都做得到，卡住的是沒人知道 scope 叫什麼——
+  內建的 `Inspect Editor Tokens and Scopes` 一次只給游標下的那一個。顏色欄位是 `#RRGGBB`
+  佔位字串而不是某個預設色：整份貼上去不會改變任何顏色，你只會改你改過的那幾條。
 
 ### poly — CLI
 

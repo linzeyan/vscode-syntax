@@ -3,7 +3,9 @@
 The extension's own scripts bundle the packages below: the language client
 in `dist/extension.js`, mermaid in the markdown preview's `dist/preview.js`,
 the other diagram libraries in `dist/diagrams.js` and `dist/diagram/*.js`,
-@dbml/core in the DBML commands' `dist/dbml.js`, puppeteer, KaTeX and
+@dbml/core in the DBML commands' `dist/dbml.js`, opencc-js with OpenCC's
+dictionaries in the Chinese conversion commands' `dist/chinese.js`, AutoCorrect's
+wasm build in `dist/autocorrect.js` with `dist/autocorrect_bg.wasm`, puppeteer, KaTeX and
 markdown-it in markdown export's `dist/markdownPdf.js`, swagger-parser
 in the Swagger preview's `dist/swaggerPreview.js`, apache-arrow, avsc,
 parquets, SheetJS and the text formats' parsers in Data Preview's
@@ -63,6 +65,7 @@ shipped.
 - @floating-ui/utils 0.2.12 (MIT) — https://floating-ui.com
 - @gera2ld/jsx-dom 2.2.2 (ISC) — https://github.com/gera2ld/jsx-dom#readme
 - @hackmd/js-sequence-diagrams 0.0.1-alpha.3 (BSD-2-Clause) — https://github.com/hackmdio/js-sequence-diagrams#readme
+- @huacnlee/autocorrect 2.16.2 (MIT; from its media/autocorrect/LICENSE file)
 - @iconify/types 2.0.0 (MIT) — https://github.com/iconify/iconify
 - @iconify/utils 3.1.7 (MIT) — https://iconify.design/docs/libraries/utils/
 - @jsdevtools/ono 7.1.3 (MIT) — https://jstools.dev/ono
@@ -396,6 +399,7 @@ shipped.
 - iconv-lite 0.6.3 (MIT) — https://github.com/pillarjs/iconv-lite
 - iconv-lite 0.7.3 (MIT) — https://github.com/pillarjs/iconv-lite
 - ieee754 1.2.1 (BSD-3-Clause) — https://github.com/feross/ieee754#readme
+- ignore 7.0.10 (MIT) — https://github.com/kaelzhang/node-ignore#readme
 - image-blob-reduce 3.0.1 (MIT) — https://github.com/nodeca/image-blob-reduce#readme
 - immutable 4.3.9 (MIT) — https://immutable-js.com
 - import-fresh 3.3.1 (MIT) — https://github.com/sindresorhus/import-fresh#readme
@@ -536,6 +540,7 @@ shipped.
 - open 11.0.0 (MIT) — https://github.com/sindresorhus/open#readme
 - open-color 1.9.1 (MIT) — https://github.com/yeun/open-color
 - openapi-types 12.1.3 (MIT) — https://github.com/kogosoftwarellc/open-api/tree/master/packages/openapi-types#readme
+- opencc-js 1.4.2 (MIT AND Apache-2.0) — https://github.com/nk2028/opencc-js#readme
 - pac-proxy-agent 7.2.0 (MIT) — https://github.com/TooTallNate/proxy-agents#readme
 - pac-resolver 7.0.1 (MIT) — https://github.com/TooTallNate/proxy-agents#readme
 - package-manager-detector 1.8.0 (MIT) — https://github.com/antfu-collective/package-manager-detector#readme
