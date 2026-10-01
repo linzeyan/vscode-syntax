@@ -245,6 +245,7 @@ const vscode = {
     // a feature doing nothing and report a flawless cache.
     getConfiguration: () => ({
       get: (setting, fallback) => (setting === "imagePreview.enabled" ? true : fallback),
+      inspect: () => undefined,
     }),
     getWorkspaceFolder: () => ({ uri: Uri.file(WORKSPACE), name: "workspace", index: 0 }),
     asRelativePath: (uri) => String(uri.fsPath ?? uri),
@@ -256,6 +257,7 @@ const vscode = {
     onDidChangeTextDocument: on("changeDocument"),
     onDidChangeConfiguration: on("changeConfiguration"),
     onDidSaveTextDocument: on("saveDocument"),
+    onWillSaveTextDocument: on("willSaveDocument"),
     onDidOpenTextDocument: on("openDocument"),
     onDidCloseTextDocument: on("closeDocument"),
     onDidCreateFiles: on("createFiles"),
