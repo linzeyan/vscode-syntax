@@ -87,7 +87,8 @@ def main() -> int:
     # app, markdown export's styles and template, CodeSnap's page, Paste Image's
     # clipboard scripts, Data Preview's page and Perspective, the Swagger
     # preview's page, schemas and Swagger UI, Marp's bundles and the template
-    # script marp-cli reads beside itself), which no
+    # script marp-cli reads beside itself, Git Graph's page with its icon font
+    # and the icons its panel's tab shows), which no
     # manifest key names either: whatever the build wrote, or the page is made
     # of, has to ship.
     built = [
@@ -103,6 +104,8 @@ def main() -> int:
                 *root.glob("dist/data-preview/**/*"),
                 *root.glob("dist/swagger/**/*"),
                 *root.glob("dist/marp/**/*"),
+                *root.glob("dist/git-graph/**/*"),
+                *root.glob("media/git-graph-*.svg"),
                 *root.glob("media/plantuml/**/*"),
                 *root.glob("media/excalidraw/**/*"),
                 *root.glob("media/drawio/**/*"),

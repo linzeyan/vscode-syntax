@@ -11,7 +11,9 @@ in the Swagger preview's `dist/swaggerPreview.js`, apache-arrow, avsc,
 parquets, SheetJS and the text formats' parsers in Data Preview's
 `dist/dataPreview.js`, marp-core and the
 directive parsers in Marp's `dist/marp/extension.js`, and marp-cli with
-puppeteer in its `dist/marp/cli.js`; swagger-ui-dist's files are copied to
+puppeteer in its `dist/marp/cli.js`, markdown-it and its emoji plugin in Git
+Graph's `dist/gitGraph.js`, and the codicon font and its stylesheet in Git
+Graph's page, `dist/git-graph`; swagger-ui-dist's files are copied to
 `dist/swagger/swagger-ui-dist`, and marp-cli's `bespoke.js` to `dist/marp`,
 as they are. The GitHub preview styles, the PlantUML preview page, draw.io's
 web app in `dist/drawio`, yzane.markdown-pdf's converter, CodeSnap's page
@@ -165,6 +167,7 @@ shipped.
 - @types/unist 3.0.3 (MIT) — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/unist
 - @types/yauzl 2.10.3 (MIT) — https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yauzl
 - @upsetjs/venn.js 2.0.0 (MIT) — https://github.com/upsetjs/venn.js
+- @vscode/codicons 0.0.45 (CC-BY-4.0) — https://github.com/microsoft/vscode-codicons#readme
 - @vscode/markdown-it-katex 1.1.2 (MIT) — https://github.com/microsoft/vscode-markdown-it-katex#readme
 - @xmldom/xmldom 0.9.12 (MIT) — https://github.com/xmldom/xmldom
 - abort-controller 3.0.0 (MIT) — https://github.com/mysticatea/abort-controller#readme

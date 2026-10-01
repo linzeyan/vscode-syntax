@@ -263,6 +263,7 @@ const vscode = {
     onDidCreateFiles: on("createFiles"),
     onDidDeleteFiles: on("deleteFiles"),
     onDidRenameFiles: on("renameFiles"),
+    registerTextDocumentContentProvider: () => nothing,
     createFileSystemWatcher: () => ({
       ...nothing,
       onDidCreate: on("watchCreate"),
@@ -350,7 +351,7 @@ async function main() {
   extension.activate({
     subscriptions: [],
     extensionUri: Uri.file(LSP),
-    extension: { id: "ricky.poly-lsp", packageJSON: {} },
+    extension: { id: "ricky.poly-lsp", packageJSON: { contributes: { commands: [] } } },
   });
 
   const steps = [];

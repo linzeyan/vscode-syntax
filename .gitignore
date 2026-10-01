@@ -17,7 +17,8 @@ extensions/lsp/out/
 # SheetJS, and its page a copy of src/editor/dataPreview with Perspective's
 # release beside it. Marp is 18 MB of marp-core, MathJax, marp-cli and puppeteer
 # around src/editor/marp. Chinese conversion is 1 MB of OpenCC's dictionaries,
-# and AutoCorrect a 3 MB wasm with its glue.
+# and AutoCorrect a 3 MB wasm with its glue. Git Graph's commands are 230 KB,
+# most of it markdown-it, and its page carries the codicon font.
 extensions/lsp/dist/dbml.js
 extensions/lsp/dist/chinese.js
 extensions/lsp/dist/autocorrect.js
@@ -32,6 +33,8 @@ extensions/lsp/dist/dataPreview.js
 extensions/lsp/dist/data-preview/
 extensions/lsp/dist/swagger/
 extensions/lsp/dist/marp/
+extensions/lsp/dist/gitGraph.js
+extensions/lsp/dist/git-graph/
 extensions/lsp/.vscode-test/
 # tools/*.py are scripts, never imported -- except that engine-diff's own
 # self-test imports it to tamper with its EXPECTED table, and that writes here.

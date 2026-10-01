@@ -316,6 +316,31 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 投影片內容超出範圍的警告（`diagnostics.slideContentOverflow`）在目前的 VSCode 上兩者都不會出現，它借用的
 預覽內部通道已經不在了。兩者都裝著時，poly 整個讓出，預覽、檢查與命令都只有它的。
 
+### Git Graph
+
+mhutchie.git-graph 的替代：所有分支、tag 與 stash 畫成一張圖，未提交的變更在最上面，在圖上看 commit、比較兩個
+commit，並對分支、commit、tag、stash 與 remote 做 git 操作。它的授權不允許衍生作品，所以 poly 沒有取用它任何
+程式碼，是照它（1.30.0）的行為重寫的；同一個 repository 在兩邊畫出的圖，每個 commit 的欄位與每條線的走向、
+顏色都相同。
+
+- **`View Git Graph (git log)`**：status bar 左邊的 Git Graph、原始檔控制的標題列按鈕，或命令面板。開了多個
+  repository 時，工具列可切換。
+- **圖**：點一下 commit 在它下面展開作者、日期、父 commit、訊息與變更的檔案（樹狀或清單），點檔案開 diff；
+  上下鍵換到相鄰的 commit，`Esc` 收起。按住 `cmd`／`ctrl` 再點另一個 commit 是比較兩者。分支標籤雙擊即簽出。
+- **工具列**：只看某些分支、要不要顯示 remote 分支、搜尋（大小寫、正規表示式，`cmd+f`／`ctrl+f`）、擷取、
+  管理 remote（新增、編輯、刪除、擷取並 prune），以及選項：tag、stash、未提交的變更要不要顯示，只沿第一個
+  父 commit，排序照 commit 日期、作者日期或拓撲。選項按 repository 記住。`cmd+r` 重新整理，`cmd+h` 捲到
+  HEAD，`cmd+s` 依序捲到每個 stash（Windows、Linux 是 `ctrl`）。
+- **右鍵選單**：commit、分支、remote 分支、tag、stash、未提交的變更、變更的檔案各有自己的選單——簽出、建立
+  分支或 tag、merge、rebase、cherry-pick、revert、reset、push、刪除、封存、套用或捨棄 stash、複製名稱與雜湊
+  等；欄位標題的右鍵選單切換日期、作者、commit 三欄。會改動 repository 的操作先問選項（例如 merge 要不要
+  `--no-ff`、push 要不要 force with lease）。Create Pull Request 支援 GitHub、GitLab 與 Bitbucket。
+
+和 mhutchie.git-graph 不同的地方：對話框是 VSCode 的輸入框與清單，右鍵選單是 VSCode 的選單，顏色跟著佈景
+主題；沒有它的 `git-graph.*` 設定，看法都在工具列上改。沒有的功能：頭像、code review 模式、issue 連結、自訂
+pull request 網站、編輯使用者資訊、匯出 repository 設定；重新載入視窗後 Git Graph 分頁不會留著。兩者都裝著
+時，poly 讓出 status bar 與原始檔控制的按鈕，命令面板裡兩邊的命令各用各的名稱。
+
 ### 導航與 CodeLens
 
 - **`Copy Path with Line Numbers`**：複製 `路徑:行號`，多行選取是 `路徑:42-51`。就是 `rg`

@@ -73,6 +73,9 @@ ALLOWED = (
     # condition beyond attribution, that the font is not sold on its own,
     # does not reach a package that only ships it.
     "OFL-1.1",
+    # Icons: Git Graph's page draws its icons with the editor's own codicon
+    # font. CC-BY's one condition is attribution, which is what this file is.
+    "CC-BY-4.0",
 )
 
 
@@ -298,7 +301,9 @@ def collect_npm() -> str:
         "parquets, SheetJS and the text formats' parsers in Data Preview's",
         "`dist/dataPreview.js`, marp-core and the",
         "directive parsers in Marp's `dist/marp/extension.js`, and marp-cli with",
-        "puppeteer in its `dist/marp/cli.js`; swagger-ui-dist's files are copied to",
+        "puppeteer in its `dist/marp/cli.js`, markdown-it and its emoji plugin in Git",
+        "Graph's `dist/gitGraph.js`, and the codicon font and its stylesheet in Git",
+        "Graph's page, `dist/git-graph`; swagger-ui-dist's files are copied to",
         "`dist/swagger/swagger-ui-dist`, and marp-cli's `bespoke.js` to `dist/marp`,",
         "as they are. The GitHub preview styles, the PlantUML preview page, draw.io's",
         "web app in `dist/drawio`, yzane.markdown-pdf's converter, CodeSnap's page",

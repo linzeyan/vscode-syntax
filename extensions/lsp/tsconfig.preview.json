@@ -6,7 +6,7 @@
     // at run time -- so it gets the DOM, and it resolves mermaid the way the
     // bundler does. mermaid 12 is ESM-only with an `exports` map, which
     // `Node16` would refuse to import from a CommonJS-emitting file.
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     // The Excalidraw editor's page is React, as pomdtr wrote it.

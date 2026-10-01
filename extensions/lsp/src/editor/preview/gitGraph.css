@@ -1,0 +1,898 @@
+/* The Git Graph page, in the editor's own colours: every value here is a theme
+   variable, so it reads as part of VSCode in any theme, high contrast included. */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  margin: 0;
+  accent-color: var(--vscode-focusBorder);
+}
+
+.codicon[class*="codicon-"] {
+  font-size: 14px;
+}
+
+.codicon-loading {
+  animation: spin 1.2s steps(30) infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------------------------------------ toolbar */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-group.end {
+  margin-left: auto;
+  gap: 2px;
+}
+
+select,
+.dropdown {
+  height: 24px;
+  max-width: 240px;
+  padding: 0 6px;
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  cursor: pointer;
+}
+
+.dropdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dropdown .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--vscode-icon-foreground);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.icon-button[aria-expanded="true"],
+.icon-button.on {
+  border-color: var(--vscode-inputOption-activeBorder, transparent);
+  background: var(--vscode-inputOption-activeBackground);
+  color: var(--vscode-inputOption-activeForeground);
+}
+
+.icon-button[hidden] {
+  display: none;
+}
+
+.find {
+  display: flex;
+  align-items: center;
+  flex: 0 1 380px;
+  min-width: 200px;
+  height: 24px;
+  gap: 1px;
+  padding: 0 2px 0 6px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+
+.find:focus-within {
+  border-color: var(--vscode-focusBorder);
+}
+
+.find > .codicon-search {
+  color: var(--vscode-descriptionForeground);
+}
+
+.find input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  border: none;
+  outline: none;
+  background: none;
+}
+
+.find input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.find input.invalid {
+  color: var(--vscode-errorForeground);
+}
+
+.find-count {
+  padding: 0 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.find-count.none {
+  color: var(--vscode-errorForeground);
+}
+
+.find .icon-button {
+  width: 20px;
+  height: 18px;
+  border-radius: 3px;
+}
+
+.progress {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  margin-top: -2px;
+  z-index: 5;
+}
+
+.progress::before {
+  content: "";
+  position: absolute;
+  width: 20%;
+  height: 100%;
+  background: var(--vscode-progressBar-background);
+  animation: progress 1.4s linear infinite;
+}
+
+.progress[hidden] {
+  display: none;
+}
+
+@keyframes progress {
+  from {
+    left: -20%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+/* ------------------------------------------------------------ popovers */
+
+.popover {
+  position: fixed;
+  z-index: 10;
+  min-width: 220px;
+  max-width: 360px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid
+    var(--vscode-menu-border, var(--vscode-widget-border, transparent));
+  border-radius: 6px;
+  background: var(
+    --vscode-menu-background,
+    var(--vscode-editorWidget-background)
+  );
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+}
+
+.popover[hidden] {
+  display: none;
+}
+
+.popover-filter {
+  box-sizing: border-box;
+  width: 100%;
+  height: 24px;
+  margin-bottom: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+
+.popover-title {
+  padding: 6px 8px 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.choices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.choices label,
+.option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.choices label:hover,
+.option:hover {
+  background: var(
+    --vscode-menu-selectionBackground,
+    var(--vscode-list-hoverBackground)
+  );
+  color: var(--vscode-menu-selectionForeground, inherit);
+}
+
+.choices li[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------ table */
+
+#scroller {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+}
+
+#scroller[hidden] {
+  display: none;
+}
+
+.commits {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.commits th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 26px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+  background: var(--vscode-editor-background);
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.commits th .grip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.commits th .grip:hover,
+body.resizing .commits th .grip:active {
+  background: var(--vscode-sash-hoverBorder);
+}
+
+col.date {
+  width: 150px;
+}
+
+col.author {
+  width: 140px;
+}
+
+col.commit {
+  width: 80px;
+}
+
+.commits td {
+  height: 24px;
+  padding: 0 8px;
+  overflow: hidden;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commits td.graph {
+  padding: 0;
+}
+
+td.date,
+td.author,
+td.commit-hash {
+  color: var(--vscode-descriptionForeground);
+}
+
+td.commit-hash {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+}
+
+tr.commit {
+  cursor: pointer;
+}
+
+/* Backgrounds on the row, not its cells: a muted row's cells are
+   translucent, and would take the highlight down with them. */
+tr.commit:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+tr.commit.match {
+  background: var(--vscode-editor-findMatchHighlightBackground);
+}
+
+tr.commit.current-match {
+  background: var(--vscode-editor-findMatchBackground);
+}
+
+tr.commit.compared {
+  background: var(--vscode-list-inactiveSelectionBackground);
+  color: var(--vscode-list-inactiveSelectionForeground, inherit);
+}
+
+tr.commit.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground, inherit);
+}
+
+tr.commit.selected td.date,
+tr.commit.selected td.author,
+tr.commit.selected td.commit-hash {
+  color: inherit;
+}
+
+tr.commit:focus {
+  outline: none;
+}
+
+tr.commit:focus-visible td {
+  box-shadow:
+    inset 0 1px var(--vscode-focusBorder),
+    inset 0 -1px var(--vscode-focusBorder);
+}
+
+/* Git Graph mutes merge commits, which say little a reader is looking for. */
+tr.commit.muted:not(.selected) td.description,
+tr.commit.muted:not(.selected) td.date,
+tr.commit.muted:not(.selected) td.author,
+tr.commit.muted:not(.selected) td.commit-hash {
+  opacity: 0.5;
+}
+
+tr.uncommitted .subject {
+  font-style: italic;
+}
+
+.subject code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--vscode-textCodeBlock-background);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.92em;
+}
+
+.subject a {
+  color: var(--vscode-textLink-foreground);
+}
+
+.subject img.emoji {
+  height: 1em;
+}
+
+/* ------------------------------------------------------------ graph */
+
+svg.graph {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  overflow: visible;
+}
+
+svg.graph .line {
+  fill: none;
+  stroke-width: 2;
+}
+
+svg.graph .node {
+  stroke-width: 1.5;
+}
+
+svg.graph .node.hollow {
+  fill: var(--vscode-editor-background);
+  stroke-width: 2;
+}
+
+/* ------------------------------------------------------------ references */
+
+.ref {
+  --lane: var(--vscode-descriptionForeground);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 220px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--lane);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--lane) 16%, transparent);
+  font-size: 11px;
+  line-height: 18px;
+  vertical-align: middle;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.ref .codicon[class*="codicon-"] {
+  font-size: 12px;
+}
+
+.ref .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ref.branch {
+  cursor: pointer;
+}
+
+.ref.branch.current {
+  background: color-mix(in srgb, var(--lane) 38%, transparent);
+  font-weight: 600;
+}
+
+.ref .remote-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 3px;
+  padding-left: 5px;
+  border-left: 1px solid var(--lane);
+  font-weight: normal;
+  opacity: 0.85;
+}
+
+.ref.remote-branch {
+  background: none;
+  font-style: italic;
+}
+
+.ref.remote-head {
+  border-style: dashed;
+}
+
+.ref.detached {
+  font-weight: 600;
+}
+
+.ref.tag {
+  border-color: var(--vscode-descriptionForeground);
+  border-radius: 3px;
+  background: none;
+}
+
+.ref.stash {
+  border-style: dashed;
+  border-color: var(--vscode-descriptionForeground);
+  background: none;
+}
+
+/* ------------------------------------------------------------ details */
+
+.details-row > td {
+  /* The graph carries on to the left of the details, so the lines through
+     this row still read as the history they are. */
+  height: auto;
+  padding: 2px 8px 8px var(--graph-width, 0px);
+  white-space: normal;
+  line-height: normal;
+  cursor: default;
+}
+
+.details {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  max-height: 40vh;
+  min-height: 120px;
+  overflow: hidden;
+  border: 1px solid
+    var(--vscode-panel-border, var(--vscode-widget-border, transparent));
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 1px 6px var(--vscode-widget-shadow);
+}
+
+.details-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 4px 0 12px;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+  font-weight: 600;
+}
+
+.details-header code,
+.meta code {
+  font-family: var(--vscode-editor-font-family);
+  font-weight: normal;
+}
+
+.details-header .hint {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.details-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.details-body.loading,
+.details-body.error {
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.details-body.error {
+  color: var(--vscode-errorForeground);
+}
+
+.summary-pane {
+  flex: 1 1 55%;
+  min-width: 0;
+  overflow: auto;
+  padding: 10px 14px;
+  border-right: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.message {
+  margin-bottom: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.message > :first-child {
+  margin-top: 0;
+  font-weight: 600;
+}
+
+.message > :last-child {
+  margin-bottom: 0;
+}
+
+.message p {
+  margin: 0 0 0.6em;
+}
+
+.message a {
+  color: var(--vscode-textLink-foreground);
+}
+
+.message code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--vscode-textCodeBlock-background);
+  font-family: var(--vscode-editor-font-family);
+}
+
+.message pre {
+  padding: 6px 8px;
+  overflow: auto;
+  border-radius: 3px;
+  background: var(--vscode-textCodeBlock-background);
+}
+
+.message pre code {
+  padding: 0;
+  background: none;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.meta dt {
+  color: var(--vscode-descriptionForeground);
+}
+
+.meta dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.selectable {
+  user-select: all;
+}
+
+.email,
+.when {
+  color: var(--vscode-descriptionForeground);
+}
+
+.hash-link {
+  color: var(--vscode-textLink-foreground);
+  font-family: var(--vscode-editor-font-family);
+  text-decoration: none;
+}
+
+.hash-link:hover {
+  text-decoration: underline;
+}
+
+.files-pane {
+  display: flex;
+  flex: 1 1 45%;
+  flex-direction: column;
+  min-width: 0;
+  overflow: auto;
+}
+
+.pane-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 4px 0 12px;
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.files,
+.files ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.files {
+  padding-bottom: 4px;
+}
+
+.files ul[hidden] {
+  display: none;
+}
+
+.files li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding-right: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.files li:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.files li:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  flex: none;
+  width: 12px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.type-A .badge,
+.type-A .file-name {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.type-M .badge,
+.type-M .file-name {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+
+.type-D .badge,
+.type-D .file-name {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.type-D .file-name {
+  text-decoration: line-through;
+}
+
+.type-R .badge,
+.type-R .file-name {
+  color: var(--vscode-gitDecoration-renamedResourceForeground);
+}
+
+.type-U .badge,
+.type-U .file-name {
+  color: var(--vscode-gitDecoration-untrackedResourceForeground);
+}
+
+.renamed-from {
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.stats {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+}
+
+.pane-header .stats {
+  margin-left: 0;
+}
+
+.stats.binary {
+  color: var(--vscode-descriptionForeground);
+}
+
+.added {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.deleted {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.empty {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ------------------------------------------------------------ footer and notices */
+
+.footer {
+  padding: 12px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+}
+
+.footer:empty {
+  padding: 0;
+}
+
+.text-button {
+  border: none;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+}
+
+.text-button:hover {
+  text-decoration: underline;
+}
+
+.loading-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.notice[hidden] {
+  display: none;
+}
+
+.notice.error {
+  color: var(--vscode-errorForeground);
+}

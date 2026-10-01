@@ -549,6 +549,225 @@
         "command": "poly.marp.toggleMarpFeature",
         "title": "%command.marp.toggleMarpFeature.title%",
         "category": "%command.category%"
+      },
+      {
+        "command": "poly.gitGraph.view",
+        "title": "%command.gitGraph.view.title%",
+        "category": "%command.category%",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "poly.gitGraph.fetch",
+        "title": "%command.gitGraph.fetch.title%",
+        "category": "%command.category%",
+        "icon": "$(repo-fetch)"
+      },
+      {
+        "command": "poly.gitGraph.addTag",
+        "title": "%command.gitGraph.addTag.title%"
+      },
+      {
+        "command": "poly.gitGraph.createBranch",
+        "title": "%command.gitGraph.createBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.checkoutCommit",
+        "title": "%command.gitGraph.checkoutCommit.title%"
+      },
+      {
+        "command": "poly.gitGraph.cherryPick",
+        "title": "%command.gitGraph.cherryPick.title%"
+      },
+      {
+        "command": "poly.gitGraph.revert",
+        "title": "%command.gitGraph.revert.title%"
+      },
+      {
+        "command": "poly.gitGraph.drop",
+        "title": "%command.gitGraph.drop.title%"
+      },
+      {
+        "command": "poly.gitGraph.mergeCommit",
+        "title": "%command.gitGraph.mergeCommit.title%"
+      },
+      {
+        "command": "poly.gitGraph.rebaseOnCommit",
+        "title": "%command.gitGraph.rebaseOnCommit.title%"
+      },
+      {
+        "command": "poly.gitGraph.resetToCommit",
+        "title": "%command.gitGraph.resetToCommit.title%"
+      },
+      {
+        "command": "poly.gitGraph.archiveCommit",
+        "title": "%command.gitGraph.archiveCommit.title%"
+      },
+      {
+        "command": "poly.gitGraph.directoryDiff",
+        "title": "%command.gitGraph.directoryDiff.title%"
+      },
+      {
+        "command": "poly.gitGraph.copyHash",
+        "title": "%command.gitGraph.copyHash.title%"
+      },
+      {
+        "command": "poly.gitGraph.copySubject",
+        "title": "%command.gitGraph.copySubject.title%"
+      },
+      {
+        "command": "poly.gitGraph.checkoutBranch",
+        "title": "%command.gitGraph.checkoutBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.renameBranch",
+        "title": "%command.gitGraph.renameBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.deleteBranch",
+        "title": "%command.gitGraph.deleteBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.mergeBranch",
+        "title": "%command.gitGraph.mergeBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.rebaseOnBranch",
+        "title": "%command.gitGraph.rebaseOnBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.pushBranch",
+        "title": "%command.gitGraph.pushBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.createPullRequest",
+        "title": "%command.gitGraph.createPullRequest.title%"
+      },
+      {
+        "command": "poly.gitGraph.archiveBranch",
+        "title": "%command.gitGraph.archiveBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.filterToBranch",
+        "title": "%command.gitGraph.filterToBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.copyBranchName",
+        "title": "%command.gitGraph.copyBranchName.title%"
+      },
+      {
+        "command": "poly.gitGraph.checkoutRemoteBranch",
+        "title": "%command.gitGraph.checkoutRemoteBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.deleteRemoteBranch",
+        "title": "%command.gitGraph.deleteRemoteBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.fetchIntoLocalBranch",
+        "title": "%command.gitGraph.fetchIntoLocalBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.mergeRemoteBranch",
+        "title": "%command.gitGraph.mergeRemoteBranch.title%"
+      },
+      {
+        "command": "poly.gitGraph.pullIntoCurrent",
+        "title": "%command.gitGraph.pullIntoCurrent.title%"
+      },
+      {
+        "command": "poly.gitGraph.viewTag",
+        "title": "%command.gitGraph.viewTag.title%"
+      },
+      {
+        "command": "poly.gitGraph.deleteTag",
+        "title": "%command.gitGraph.deleteTag.title%"
+      },
+      {
+        "command": "poly.gitGraph.pushTag",
+        "title": "%command.gitGraph.pushTag.title%"
+      },
+      {
+        "command": "poly.gitGraph.archiveTag",
+        "title": "%command.gitGraph.archiveTag.title%"
+      },
+      {
+        "command": "poly.gitGraph.copyTagName",
+        "title": "%command.gitGraph.copyTagName.title%"
+      },
+      {
+        "command": "poly.gitGraph.applyStash",
+        "title": "%command.gitGraph.applyStash.title%"
+      },
+      {
+        "command": "poly.gitGraph.popStash",
+        "title": "%command.gitGraph.popStash.title%"
+      },
+      {
+        "command": "poly.gitGraph.dropStash",
+        "title": "%command.gitGraph.dropStash.title%"
+      },
+      {
+        "command": "poly.gitGraph.branchFromStash",
+        "title": "%command.gitGraph.branchFromStash.title%"
+      },
+      {
+        "command": "poly.gitGraph.copyStashName",
+        "title": "%command.gitGraph.copyStashName.title%"
+      },
+      {
+        "command": "poly.gitGraph.stashChanges",
+        "title": "%command.gitGraph.stashChanges.title%"
+      },
+      {
+        "command": "poly.gitGraph.resetChanges",
+        "title": "%command.gitGraph.resetChanges.title%"
+      },
+      {
+        "command": "poly.gitGraph.cleanUntracked",
+        "title": "%command.gitGraph.cleanUntracked.title%"
+      },
+      {
+        "command": "poly.gitGraph.openSourceControl",
+        "title": "%command.gitGraph.openSourceControl.title%"
+      },
+      {
+        "command": "poly.gitGraph.viewDiff",
+        "title": "%command.gitGraph.viewDiff.title%"
+      },
+      {
+        "command": "poly.gitGraph.viewDiffWithWorkingFile",
+        "title": "%command.gitGraph.viewDiffWithWorkingFile.title%"
+      },
+      {
+        "command": "poly.gitGraph.viewFileAtRevision",
+        "title": "%command.gitGraph.viewFileAtRevision.title%"
+      },
+      {
+        "command": "poly.gitGraph.openFile",
+        "title": "%command.gitGraph.openFile.title%"
+      },
+      {
+        "command": "poly.gitGraph.copyFilePath",
+        "title": "%command.gitGraph.copyFilePath.title%"
+      },
+      {
+        "command": "poly.gitGraph.copyRelativeFilePath",
+        "title": "%command.gitGraph.copyRelativeFilePath.title%"
+      },
+      {
+        "command": "poly.gitGraph.toggleDate",
+        "title": "%command.gitGraph.toggleDate.title%",
+        "toggled": "polyDate"
+      },
+      {
+        "command": "poly.gitGraph.toggleAuthor",
+        "title": "%command.gitGraph.toggleAuthor.title%",
+        "toggled": "polyAuthor"
+      },
+      {
+        "command": "poly.gitGraph.toggleCommit",
+        "title": "%command.gitGraph.toggleCommit.title%",
+        "toggled": "polyCommit"
       }
     ],
     "views": {
@@ -804,6 +1023,218 @@
         {
           "command": "poly.dataPreviewRemote",
           "when": "!poly.yield.dataPreview"
+        },
+        {
+          "command": "poly.gitGraph.view",
+          "when": "!poly.yield.gitGraph"
+        },
+        {
+          "command": "poly.gitGraph.fetch",
+          "when": "!poly.yield.gitGraph"
+        },
+        {
+          "command": "poly.gitGraph.addTag",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.createBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.checkoutCommit",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.cherryPick",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.revert",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.drop",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.mergeCommit",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.rebaseOnCommit",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.resetToCommit",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.archiveCommit",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.directoryDiff",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.copyHash",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.copySubject",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.checkoutBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.renameBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.deleteBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.mergeBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.rebaseOnBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.pushBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.createPullRequest",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.archiveBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.filterToBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.copyBranchName",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.checkoutRemoteBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.deleteRemoteBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.fetchIntoLocalBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.mergeRemoteBranch",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.pullIntoCurrent",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.viewTag",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.deleteTag",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.pushTag",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.archiveTag",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.copyTagName",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.applyStash",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.popStash",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.dropStash",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.branchFromStash",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.copyStashName",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.stashChanges",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.resetChanges",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.cleanUntracked",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.openSourceControl",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.viewDiff",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.viewDiffWithWorkingFile",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.viewFileAtRevision",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.openFile",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.copyFilePath",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.copyRelativeFilePath",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.toggleDate",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.toggleAuthor",
+          "when": "false"
+        },
+        {
+          "command": "poly.gitGraph.toggleCommit",
+          "when": "false"
         }
       ],
       "editor/title": [
@@ -874,6 +1305,295 @@
           "command": "poly.marp.newMarpMarkdown",
           "when": "!poly.yield.marp",
           "group": "file"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "poly.gitGraph.addTag",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "group": "1_create@1"
+        },
+        {
+          "command": "poly.gitGraph.createBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "group": "1_create@2"
+        },
+        {
+          "command": "poly.gitGraph.checkoutCommit",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "group": "2_checkout@1"
+        },
+        {
+          "command": "poly.gitGraph.cherryPick",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "group": "2_checkout@2"
+        },
+        {
+          "command": "poly.gitGraph.revert",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "group": "2_checkout@3"
+        },
+        {
+          "command": "poly.gitGraph.drop",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyAncestor && !polyMerge && !polyRoot",
+          "group": "2_checkout@4"
+        },
+        {
+          "command": "poly.gitGraph.mergeCommit",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead",
+          "group": "3_merge@1"
+        },
+        {
+          "command": "poly.gitGraph.rebaseOnCommit",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead",
+          "group": "3_merge@2"
+        },
+        {
+          "command": "poly.gitGraph.resetToCommit",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead",
+          "group": "3_merge@3"
+        },
+        {
+          "command": "poly.gitGraph.archiveCommit",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "group": "4_archive@1"
+        },
+        {
+          "command": "poly.gitGraph.directoryDiff",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyDiffTool",
+          "group": "4_archive@2"
+        },
+        {
+          "command": "poly.gitGraph.copyHash",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "poly.gitGraph.copySubject",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "group": "9_copy@2"
+        },
+        {
+          "command": "poly.gitGraph.checkoutBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent",
+          "group": "1_checkout@1"
+        },
+        {
+          "command": "poly.gitGraph.renameBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch'",
+          "group": "1_checkout@2"
+        },
+        {
+          "command": "poly.gitGraph.deleteBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent",
+          "group": "1_checkout@3"
+        },
+        {
+          "command": "poly.gitGraph.mergeBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent",
+          "group": "2_merge@1"
+        },
+        {
+          "command": "poly.gitGraph.rebaseOnBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent",
+          "group": "2_merge@2"
+        },
+        {
+          "command": "poly.gitGraph.pushBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && polyRemotes",
+          "group": "3_push@1"
+        },
+        {
+          "command": "poly.gitGraph.createPullRequest",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && polyPr",
+          "group": "3_push@2"
+        },
+        {
+          "command": "poly.gitGraph.archiveBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch'",
+          "group": "4_archive@1"
+        },
+        {
+          "command": "poly.gitGraph.filterToBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch'",
+          "group": "4_archive@2"
+        },
+        {
+          "command": "poly.gitGraph.copyBranchName",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch'",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "poly.gitGraph.checkoutRemoteBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "group": "1_checkout@1"
+        },
+        {
+          "command": "poly.gitGraph.deleteRemoteBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "group": "1_checkout@2"
+        },
+        {
+          "command": "poly.gitGraph.fetchIntoLocalBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "group": "1_checkout@3"
+        },
+        {
+          "command": "poly.gitGraph.mergeRemoteBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "group": "2_merge@1"
+        },
+        {
+          "command": "poly.gitGraph.pullIntoCurrent",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "group": "2_merge@2"
+        },
+        {
+          "command": "poly.gitGraph.createPullRequest",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch' && polyPr",
+          "group": "3_push@1"
+        },
+        {
+          "command": "poly.gitGraph.archiveBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "group": "4_archive@1"
+        },
+        {
+          "command": "poly.gitGraph.filterToBranch",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "group": "4_archive@2"
+        },
+        {
+          "command": "poly.gitGraph.copyBranchName",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "poly.gitGraph.viewTag",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag' && polyAnnotated",
+          "group": "1_view@1"
+        },
+        {
+          "command": "poly.gitGraph.deleteTag",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag'",
+          "group": "2_tag@1"
+        },
+        {
+          "command": "poly.gitGraph.pushTag",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag' && polyRemotes",
+          "group": "2_tag@2"
+        },
+        {
+          "command": "poly.gitGraph.archiveTag",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag'",
+          "group": "4_archive@1"
+        },
+        {
+          "command": "poly.gitGraph.copyTagName",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag'",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "poly.gitGraph.applyStash",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "group": "1_apply@1"
+        },
+        {
+          "command": "poly.gitGraph.popStash",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "group": "1_apply@2"
+        },
+        {
+          "command": "poly.gitGraph.dropStash",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "group": "1_apply@3"
+        },
+        {
+          "command": "poly.gitGraph.branchFromStash",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "group": "2_branch@1"
+        },
+        {
+          "command": "poly.gitGraph.copyStashName",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "poly.gitGraph.copyHash",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "group": "9_copy@2"
+        },
+        {
+          "command": "poly.gitGraph.stashChanges",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted'",
+          "group": "1_stash@1"
+        },
+        {
+          "command": "poly.gitGraph.resetChanges",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted'",
+          "group": "1_stash@2"
+        },
+        {
+          "command": "poly.gitGraph.cleanUntracked",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted'",
+          "group": "1_stash@3"
+        },
+        {
+          "command": "poly.gitGraph.openSourceControl",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted'",
+          "group": "2_scm@1"
+        },
+        {
+          "command": "poly.gitGraph.viewDiff",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'file'",
+          "group": "1_diff@1"
+        },
+        {
+          "command": "poly.gitGraph.viewDiffWithWorkingFile",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'file' && !polyDeleted",
+          "group": "1_diff@2"
+        },
+        {
+          "command": "poly.gitGraph.viewFileAtRevision",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'file'",
+          "group": "1_diff@3"
+        },
+        {
+          "command": "poly.gitGraph.openFile",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'file' && !polyDeleted",
+          "group": "2_open@1"
+        },
+        {
+          "command": "poly.gitGraph.copyFilePath",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'file'",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "poly.gitGraph.copyRelativeFilePath",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'file'",
+          "group": "9_copy@2"
+        },
+        {
+          "command": "poly.gitGraph.toggleDate",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'header'",
+          "group": "1_columns@1"
+        },
+        {
+          "command": "poly.gitGraph.toggleAuthor",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'header'",
+          "group": "1_columns@2"
+        },
+        {
+          "command": "poly.gitGraph.toggleCommit",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'header'",
+          "group": "1_columns@3"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "poly.gitGraph.view",
+          "when": "scmProvider == git && !poly.yield.gitGraph",
+          "group": "navigation"
         }
       ]
     },
@@ -3296,7 +4016,7 @@
   },
   "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true})\" && node ../../tools/drawio-webapp.js",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && esbuild src/editor/gitGraphPanel.ts --bundle --outfile=dist/gitGraph.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/gitGraph.ts --bundle --outdir=dist/git-graph --format=iife --platform=browser --minify --loader:.ttf=file --asset-names=\"[name]\" && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true})\" && node ../../tools/drawio-webapp.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit && tsc -p tsconfig.marp.json --noEmit",
     "unit": "tsc -p tsconfig.test.json && node --test out/editor/*.test.js",
     "test:build": "pnpm run build && tsc -p tsconfig.test.json",
@@ -3312,6 +4032,7 @@
     "@marp-team/marp-core": "4.4.0",
     "@mermaid-js/layout-tidy-tree": "^1.0.0",
     "@puppeteer/browsers": "2.13.0",
+    "@vscode/codicons": "0.0.45",
     "@vscode/markdown-it-katex": "1.1.2",
     "abort-controller": "3.0.0",
     "apache-arrow": "0.15.1",

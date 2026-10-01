@@ -11,6 +11,7 @@ import { registerDataPreview } from "./dataPreview";
 import type { FromSql, ToSql } from "./dbml";
 import { registerDrawio } from "./drawioEditor";
 import { registerExcalidraw } from "./excalidrawEditor";
+import { registerGitGraph } from "./gitGraph";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import {
@@ -2371,6 +2372,7 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   marpPlugin = registerMarp(context);
   mirrorSyntaxColors(context);
   registerAutocorrect(context, log);
+  registerGitGraph(context, log);
 
   // The fence rule reads the setting on every render, so turning the diagrams
   // off only has to reach previews that are already open. Same command the

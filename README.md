@@ -166,6 +166,12 @@
   `#polyExportMarp`。編輯器標題列的 Marp 按鈕開出命令清單，`File > New File` 有 Marp Markdown。設定在
   `poly.marp.*`，名稱同它的（已棄用的 `enableHtml`、`chromePath` 除外）。PDF、PPTX 與圖片用已安裝的
   Chrome、Edge 或 Firefox 匯出，和它一樣不另外下載。兩個都裝著時 poly 整個讓出。
+- **Git Graph**：取代 mhutchie.git-graph。按 status bar 的 Git Graph、原始檔控制標題列的按鈕（或
+  `View Git Graph (git log)`），所有分支、tag 與 stash 畫成一張圖，未提交的變更在最上面；同一個
+  repository 畫出的圖與它的相同。點 commit 在下面展開它的訊息與變更的檔案，`cmd/ctrl` 加點另一個是比較
+  兩者；可搜尋、只看某些分支。commit、分支、tag、stash 與檔案的右鍵選單做簽出、merge、rebase、
+  cherry-pick、reset、push、刪除等操作，remote 在工具列管理。它的授權不允許衍生作品，所以是照行為重寫的，
+  沒有它的程式碼，也沒有它的 `git-graph.*` 設定。兩個都裝著時 poly 讓出 status bar 與原始檔控制的按鈕。
 - **清單接續**：在清單項目上按 Enter 接出下一項，**有序清單號碼遞增**（整份寫成 `1.` 的
   清單維持 `1.`），任務項接出 `- [ ]`，**空的項目按 Enter 結束清單**（往外退一層，最外層
   就清掉 marker）。markdown 家族與 yaml 都有，yaml 只認 sequence 的破折號——`>` 在那裡是

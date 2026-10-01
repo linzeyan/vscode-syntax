@@ -129,10 +129,16 @@ suite("poly-lsp in a real editor", () => {
         binding,
       ) => binding.command),
     );
+    // So is a command on a webview's context menu: it acts on the commit,
+    // branch or file right-clicked, and from the palette it would have nothing
+    // to act on. It is found where it applies, which is what the rule is for.
+    const onAThing = new Set(
+      (pkg.contributes.menus?.["webview/context"] ?? []).map((entry: { command: string }) => entry.command),
+    );
     const hidden = (pkg.contributes.menus?.commandPalette ?? [])
       .filter((entry: { when?: string }) => entry.when === "false")
       .map((entry: { command: string }) => entry.command)
-      .filter((id: string) => !keystrokes.has(id));
+      .filter((id: string) => !keystrokes.has(id) && !onAThing.has(id));
     assert.deepStrictEqual(hidden, [], "declared but kept out of the palette");
 
     for (const command of ["poly.minify", "poly.formatDocument"]) {
@@ -1285,6 +1291,81 @@ func main() {
     const html = readFileSync(exported, "utf8");
     assert.match(html, /<h1[^>]*>One<\/h1>/);
     assert.match(html, /bespoke/);
+  });
+
+  // The data, the graph and what each action does to a repository are held to
+  // mhutchie.git-graph's own by tools/git-graph-diff. What only a host shows
+  // is the wiring: every command the manifest declares reaching a handler in
+  // the half loaded on first use, the panel opening on the repository it was
+  // asked for, a menu command acting on the context the page puts on what was
+  // right-clicked, and a diff side read out of a revision by the poly-git:
+  // scheme, which has to be registered before any of that has loaded.
+  test("Git Graph opens on a repository, and its commands act on what was right-clicked", async () => {
+    const repo = join(workspaceRoot(), "graph-repo");
+    rmSync(repo, { recursive: true, force: true });
+    mkdirSync(repo);
+    const git = (...args: string[]) =>
+      execFileSync("git", [
+        "-c",
+        "user.name=Ada",
+        "-c",
+        "user.email=ada@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ], {
+        cwd: repo,
+        encoding: "utf8",
+      }).trim();
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(repo, "a.txt"), "first\n");
+    git("add", "a.txt");
+    git("commit", "-q", "-m", "First");
+    const hash = git("rev-parse", "HEAD");
+    writeFileSync(join(repo, "a.txt"), "changed\n");
+
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const host: typeof import("../../editor/gitGraphPanel") = require(
+      join(extension.extensionPath, "dist", "gitGraph.js"),
+    );
+    const declared = (extension.packageJSON.contributes.commands as { command: string }[])
+      .map((entry) => entry.command)
+      .filter((id) => id.startsWith("poly.gitGraph."))
+      .map((id) => id.slice("poly.gitGraph.".length));
+    assert.deepStrictEqual([...host.handled].sort(), declared.sort(), "declared commands and handlers differ");
+
+    const gitExtension = vscode.extensions.getExtension<
+      { getAPI(version: 1): { openRepository(root: vscode.Uri): Promise<unknown> } }
+    >(
+      "vscode.git",
+    )!;
+    await (await gitExtension.activate()).getAPI(1).openRepository(vscode.Uri.file(repo));
+    const page = () =>
+      vscode.window.tabGroups.all.flatMap((group) => group.tabs).find((tab) =>
+        tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("poly.gitGraph")
+      );
+    try {
+      // From the Source Control title the argument is the repository itself.
+      await vscode.commands.executeCommand("poly.gitGraph.view", { rootUri: vscode.Uri.file(repo) });
+      assert.strictEqual((await eventually("the Git Graph panel", page)).label, "Git Graph");
+
+      await vscode.env.clipboard.writeText("before");
+      await vscode.commands.executeCommand("poly.gitGraph.copyHash", { repo, hash });
+      assert.strictEqual(await vscode.env.clipboard.readText(), hash);
+
+      const side = vscode.Uri.file(join(repo, "a.txt")).with({
+        scheme: "poly-git",
+        query: JSON.stringify({ repo, ref: hash, path: "a.txt" }),
+      });
+      assert.strictEqual(
+        (await vscode.workspace.openTextDocument(side)).getText(),
+        "first\n",
+        "not the file as committed",
+      );
+    } finally {
+      const tab = page();
+      if (tab) await vscode.window.tabGroups.close(tab);
+    }
   });
 
   // poly claims the formatter slot and stops there. It used to also declare
