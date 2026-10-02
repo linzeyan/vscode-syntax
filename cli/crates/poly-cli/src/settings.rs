@@ -102,7 +102,8 @@ fn known_tools() -> Vec<Known> {
 
 // ── validation ─────────────────────────────────────────────────────────────
 
-/// What this poly.toml asks for that poly cannot do.
+/// What this poly.toml, and the editor's poly.tools setting, ask for that poly
+/// cannot do.
 ///
 /// Warnings come back in the `Ok`; the run continues. That is the rule poly
 /// already applies to `[lint.per-file-ignores]`: an unknown rule code is left
@@ -123,19 +124,25 @@ pub fn check(config: &Config) -> Result<Vec<String>> {
     let mut warnings = Vec::new();
 
     for (name, value) in &config.tools {
+        // Each message opens with where its line is written, which is the file
+        // the reader is about to open.
+        let section = match config.tool_source(name) {
+            "poly.toml" => "poly.toml [tools]",
+            setting => setting,
+        };
         match known.iter().find(|k| k.name == name) {
-            None => warnings.push(unknown("[tools]", "tool", name, &names)),
+            None => warnings.push(unknown(section, "tool", name, &names)),
             Some(Known {
                 source: Source::Embedded(instead),
                 ..
             }) => warnings.push(format!(
-                "[tools] `{name}`: there is no {name} binary to configure — {instead}"
+                "{section} `{name}`: there is no {name} binary to configure — {instead}"
             )),
             Some(_) => {
                 if let Some(path) = poly_tools::explicit_path(value, config) {
                     if !path.is_file() {
                         bail!(
-                            "[tools] `{name}` = {value:?}: no such file ({}) — poly would skip \
+                            "{section} `{name}` = {value:?}: no such file ({}) — poly would skip \
                              {name} and report a clean run over the files it never checked",
                             path.display()
                         );
@@ -148,13 +155,13 @@ pub fn check(config: &Config) -> Result<Vec<String>> {
     let languages = poly_core::builtin_languages();
     for lang in config.format_languages() {
         if !languages.contains(&lang) {
-            warnings.push(unknown("[format]", "language", lang, &languages));
+            warnings.push(unknown("poly.toml [format]", "language", lang, &languages));
         }
     }
     for (pattern, lang) in config.language_map() {
         if !languages.contains(&lang) {
             warnings.push(unknown(
-                &format!("[languages.map] {pattern:?}"),
+                &format!("poly.toml [languages.map] {pattern:?}"),
                 "language",
                 lang,
                 &languages,
@@ -221,7 +228,7 @@ fn distance(a: &str, b: &str) -> usize {
 /// fatal case propagated.
 pub fn enforce(config: &Config) -> Result<()> {
     for warning in check(config)? {
-        eprintln!("warning: poly.toml {warning}");
+        eprintln!("warning: {warning}");
     }
     Ok(())
 }
@@ -247,7 +254,7 @@ pub fn report(config: &Config) {
     let said = said.get_or_insert_with(HashSet::new);
     for line in lines {
         if said.insert(line.clone()) {
-            eprintln!("[poly] poly.toml {line}");
+            eprintln!("[poly] {line}");
         }
     }
 }

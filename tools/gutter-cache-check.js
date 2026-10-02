@@ -216,6 +216,7 @@ const vscode = {
     onDidChangeTextEditorOptions: on("editorOptions"),
     onDidChangeActiveTextEditor: on("activeEditor"),
     onDidChangeTextEditorSelection: on("selection"),
+    onDidCloseTerminal: on("closeTerminal"),
     createTreeView: () => ({ ...nothing, onDidChangeVisibility: on("treeVisibility"), visible: false }),
     registerTreeDataProvider: () => nothing,
     registerCustomEditorProvider: () => nothing,

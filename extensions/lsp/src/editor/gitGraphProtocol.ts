@@ -1,5 +1,5 @@
 /**
- * What the Git Graph host and its page say to each other. Types only, so the
+ * What the Git History host and its page say to each other. Types only, so the
  * page's bundle can import it without pulling in anything from node.
  */
 

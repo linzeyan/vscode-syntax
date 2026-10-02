@@ -1,5 +1,5 @@
 /**
- * The Git Graph panel and what its menus do, loaded the first time any of it
+ * The Git History panel and what its menus do, loaded the first time any of it
  * is used (gitGraph.ts registers the commands and hands them here).
  *
  * The page asks and draws; everything that touches git happens here. Menus
@@ -58,9 +58,21 @@ interface GitApi {
 async function gitApi(): Promise<GitApi> {
   const extension = vscode.extensions.getExtension<{ getAPI(version: 1): GitApi }>("vscode.git");
   if (!extension) {
-    throw new Error("Git Graph needs VSCode's built-in Git extension, which is disabled");
+    throw new Error("Git History needs VSCode's built-in Git extension, which is disabled");
   }
-  const api = (extension.isActive ? extension.exports : await extension.activate()).getAPI(1);
+  const exports = extension.isActive ? extension.exports : await extension.activate();
+  let api: GitApi;
+  try {
+    api = exports.getAPI(1);
+  } catch {
+    // The built-in extension starts without git and only says "Git model not
+    // found" when asked, which names its internals rather than the fix.
+    throw new Error(
+      vscode.workspace.getConfiguration("git").get<boolean>("enabled", true)
+        ? "git was not found. Install git, or point git.path at it, then reload the window."
+        : "VSCode's Git support is off (git.enabled).",
+    );
+  }
   if (api.state !== "initialized") {
     await new Promise<void>((resolve) => {
       const listening = api.onDidChangeState((state) => {
@@ -364,7 +376,7 @@ class GraphPanel {
 async function show(context: vscode.ExtensionContext, repo?: string): Promise<void> {
   api ??= await gitApi();
   if (!GraphPanel.current) {
-    const panel = vscode.window.createWebviewPanel(VIEW_TYPE, "Git Graph", vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel(VIEW_TYPE, "Git History", vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "dist", "git-graph")],
@@ -401,7 +413,7 @@ async function attempt(
     return true;
   } catch (error) {
     const text = String(error instanceof Error ? error.message : error);
-    log.warn(`Git Graph: ${title}: ${text}`);
+    log.warn(`Git History: ${title}: ${text}`);
     void vscode.window.showErrorMessage(`${title} failed: ${text}`);
     return false;
   } finally {
@@ -1182,7 +1194,7 @@ export async function run(
     api ??= await gitApi();
     return await handler((args[0] ?? {}) as Context, context);
   } catch (error) {
-    void vscode.window.showErrorMessage(`Git Graph: ${error instanceof Error ? error.message : error}`);
+    void vscode.window.showErrorMessage(`Git History: ${error instanceof Error ? error.message : error}`);
   }
 }
 

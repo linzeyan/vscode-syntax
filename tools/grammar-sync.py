@@ -6,6 +6,7 @@
 - Converts .tmLanguage (plist) and .yaml sources to tmLanguage.json.
 - Generates the csv/tsv rainbow grammars locally (no upstream).
 - Copies the snippets an entry lists from the same pinned commit.
+- Copies each source's license files at the same commit into licenses/.
 - Regenerates package.json `contributes.languages/grammars/snippets` and
   THIRD-PARTY-NOTICES.md from sources.json, so sources.json is the single
   source of truth.
@@ -19,6 +20,8 @@ import io
 import json
 import os
 import plistlib
+import re
+import shutil
 import sys
 import urllib.parse
 import urllib.request
@@ -32,6 +35,16 @@ EXT = ROOT / "extensions" / "syntax"
 SNIPPETS = EXT / "snippets"
 SYNTAXES = EXT / "syntaxes"
 UA = {"User-Agent": "poly-grammar-sync"}
+# Each source's license files as they were at the pinned commit (or in the
+# pinned VSIX), one directory per source with a SOURCE line per file. The
+# notices carry these texts: an MIT grammar's copyright line and permission
+# notice are what has to travel with the copy, not the word "MIT".
+LICENSES = ROOT / "licenses"
+# The same rule as tools/third-party-notices.py: files at the top of the source
+# whose name says they are its license or notice.
+NOTICE_FILE = re.compile(
+    r"(?i)^(licen[cs]e|copying|notice|copyright|unlicense|third[-_]?party|authors)"
+)
 # Grammar contribution keys copied verbatim from upstream (see contributesFrom).
 GRAMMAR_META = (
     "embeddedLanguages",
@@ -208,9 +221,11 @@ GENERATORS = {
 # M0 near-miss -- a GPL-3.0 nginx grammar -- was caught by reading the upstream
 # repo by hand, and nothing in this pipeline would have stopped it from
 # shipping. MPL-2.0 is in because N5 ratified it: it is file-level copyleft and
-# the vendored file we redistribute *is* its source form, sitting in a public
-# repo, which satisfies §3.1 even though convert() reserializes it. Widening
-# this set is a spec change, not a sources.json edit.
+# we never modify the files. convert() does reserialize them, so what ships may
+# not be the Source Code Form, and §3.2(a) asks that its recipients be told
+# where that is: the notices name the pinned commit and the license's URL for
+# every MPL source (`build_notices`). Widening this set is a spec change, not a
+# sources.json edit.
 ALLOWED_LICENSES = {
     "0BSD",
     "Apache-2.0",
@@ -363,12 +378,139 @@ def build_snippets(sources: dict) -> list:
     ]
 
 
+def license_key(lang: dict) -> str:
+    """The directory under licenses/ that holds a source's license files."""
+    if lang.get("vsix"):
+        return f"marketplace.visualstudio.com/{lang['vsix']['publisher']}/{lang['vsix']['name']}"
+    return f"github.com/{lang['repo']}"
+
+
+def license_ref(lang: dict, lock: dict) -> str | None:
+    """What the license files must have been taken at: the commit, or the VSIX version."""
+    if lang.get("vsix"):
+        key = f"vsix:{lang['vsix']['publisher']}.{lang['vsix']['name']}"
+        return lock.get(key, {}).get("version")
+    return lock.get(lang["repo"], {}).get("sha")
+
+
+def license_current(key: str, ref: str | None) -> bool:
+    """Do licenses/<key> hold texts, all taken at `ref`?
+
+    A `#` line in SOURCE records a text vendored by hand from elsewhere because
+    upstream has none at the pin; it is current by declaration.
+    """
+    source = LICENSES / key / "SOURCE"
+    if not source.exists():
+        return False
+    lines = [line for line in source.read_text().splitlines() if line]
+    if any(line.startswith("#") for line in lines):
+        return True
+    return (
+        bool(lines)
+        and bool(ref)
+        and all(f"/{ref}/" in line or f"/{ref}#" in line for line in lines)
+    )
+
+
+def write_licenses(key: str, files: dict[str, bytes], urls: dict[str, str]) -> None:
+    directory = LICENSES / key
+    shutil.rmtree(directory, ignore_errors=True)
+    for path, raw in files.items():
+        (directory / path).parent.mkdir(parents=True, exist_ok=True)
+        (directory / path).write_bytes(raw)
+    (directory / "SOURCE").write_text(
+        "".join(f"{urls[path]}\n" for path in sorted(files))
+    )
+
+
+def git_licenses(sources: dict, repo: str, sha: str) -> None:
+    """Copy a repository's license files at `sha` into licenses/github.com/<repo>.
+
+    The top of the repository, plus the directory of every snippet file that
+    names a license of its own -- jebbs.plantuml keeps the Apache-2.0 terms of
+    its snippets in snippets/license.snippets.txt, beside them.
+    """
+    dirs = {
+        os.path.dirname(one["src"])
+        for lang in sources["languages"]
+        if lang.get("repo") == repo and not lang.get("vsix")
+        for one in lang.get("snippets", [])
+        if one.get("license")
+    }
+    found = []
+    for directory in ["", *sorted(dirs)]:
+        listing = json.loads(
+            fetch(
+                f"https://api.github.com/repos/{repo}/contents/{urllib.parse.quote(directory)}?ref={sha}"
+            )
+        )
+        found += [
+            item["path"]
+            for item in listing
+            if item["type"] == "file" and NOTICE_FILE.match(item["name"])
+        ]
+    if not found:
+        raise ValueError(
+            f"no license file in {repo} at {sha[:12]}; vendor one into "
+            f"licenses/github.com/{repo}/ by hand, with a `#` line in SOURCE saying where it is from"
+        )
+    write_licenses(
+        f"github.com/{repo}",
+        {
+            path: fetch(
+                f"https://raw.githubusercontent.com/{repo}/{sha}/{urllib.parse.quote(path)}"
+            )
+            for path in found
+        },
+        {path: f"https://github.com/{repo}/blob/{sha}/{path}" for path in found},
+    )
+
+
+def license_texts(sources: dict, lock: dict) -> list[str]:
+    lines = ["", "## License texts"]
+    seen = set()
+    for lang in sources["languages"]:
+        if lang.get("generated") or license_key(lang) in seen:
+            continue
+        key = license_key(lang)
+        seen.add(key)
+        directory = LICENSES / key
+        if not directory.is_dir():
+            continue  # check_generated names it; the notices only render what is there
+        source = (directory / "SOURCE").read_text().splitlines()
+        urls = [line for line in source if line and not line.startswith("#")]
+        lines += ["", f"### {lang.get('repo') or key}"]
+        notes = [line[1:].strip() for line in source if line.startswith("#")]
+        if notes:
+            lines += ["", *notes]
+        for one in sorted(
+            p for p in directory.rglob("*") if p.is_file() and p.name != "SOURCE"
+        ):
+            rel = one.relative_to(directory).as_posix()
+            text = one.read_bytes().decode("utf-8", errors="replace").lstrip("\ufeff")
+            text = "\n".join(line.rstrip() for line in text.splitlines()).strip("\n")
+            # Longer than any run of backticks inside, so a license written in
+            # markdown cannot close the block early.
+            fence = "`" * max(
+                3, max((len(r) for r in re.findall(r"`+", text)), default=0) + 1
+            )
+            lines += [
+                "",
+                *(f"From {url}" for url in urls if url.endswith(f"/{rel}")),
+                "",
+            ]
+            lines += [f"{fence}text", text, fence]
+    return lines
+
+
 def build_notices(sources: dict, lock: dict) -> str:
     lines = [
         "# Third-party notices — poly-syntax-highlight",
         "",
         "Bundled grammars retain their upstream licenses. Sources are pinned in",
-        "grammars/sources.lock.json.",
+        "grammars/sources.lock.json. Each source's license texts, taken at the",
+        "pinned commit, follow the list. A grammar under MPL-2.0 is used",
+        "unmodified, and its line names the commit that is its Source Code Form.",
         "",
     ]
     seen = set()
@@ -377,7 +519,8 @@ def build_notices(sources: dict, lock: dict) -> str:
         if not repo or repo in seen:
             continue
         seen.add(repo)
-        sha = lock.get(repo, {}).get("sha", "unpinned")[:12]
+        full = lock.get(repo, {}).get("sha", "unpinned")
+        sha = full[:12]
         files = sorted(
             {
                 f["out"]
@@ -386,7 +529,12 @@ def build_notices(sources: dict, lock: dict) -> str:
                 for f in l["files"]
             }
         )
-        lines.append(f"- https://github.com/{repo} ({lang['license']}) @ {sha}")
+        mpl = (
+            f" — source https://github.com/{repo}/tree/{full} (https://mozilla.org/MPL/2.0/)"
+            if lang["license"] == "MPL-2.0"
+            else ""
+        )
+        lines.append(f"- https://github.com/{repo} ({lang['license']}) @ {sha}{mpl}")
         lines.append(f"  files: {', '.join(files)}")
         snippets: dict[str, list[str]] = {}
         for l in sources["languages"]:
@@ -403,6 +551,7 @@ def build_notices(sources: dict, lock: dict) -> str:
     )
     lines.append("")
     lines.append(f"Generated locally, no upstream: {', '.join(generated)}.")
+    lines += license_texts(sources, lock)
     return "\n".join(lines) + "\n"
 
 
@@ -470,6 +619,16 @@ def check_generated() -> int:
         )
         if generated != committed
     ]
+    # A license text taken at another commit than the pin is the attribution
+    # of a file we no longer ship; a missing one is a notice with no text.
+    stale += sorted(
+        {
+            f"licenses/{license_key(lang)} (missing, or not taken at the pinned commit)"
+            for lang in sources["languages"]
+            if not lang.get("generated")
+            and not license_current(license_key(lang), license_ref(lang, lock))
+        }
+    )
     if stale:
         print(
             "generated files do not match grammars/sources.json:\n  "
@@ -531,6 +690,29 @@ def main() -> int:
                 if key not in refreshed:
                     lock[key] = {"version": actual_version}
                     refreshed.add(key)
+                if not license_current(license_key(lang), actual_version):
+                    # The packaged extension's own license, which is the one
+                    # that came with the files taken from it.
+                    members = [
+                        n
+                        for n in zf.namelist()
+                        if n.count("/") == 1
+                        and n.startswith("extension/")
+                        and NOTICE_FILE.match(n.split("/")[1])
+                    ]
+                    if not members:
+                        raise ValueError(
+                            f"no license file in {pub}.{name}@{actual_version}"
+                        )
+                    url = (
+                        "https://marketplace.visualstudio.com/_apis/public/gallery/"
+                        f"publishers/{pub}/vsextensions/{name}/{actual_version}/vspackage"
+                    )
+                    write_licenses(
+                        license_key(lang),
+                        {n.split("/")[1]: zf.read(n) for n in members},
+                        {n.split("/")[1]: f"{url}#{n}" for n in members},
+                    )
                 for f in lang["files"]:
                     raw = zf.read(f["src"])
                     grammar = json.loads(raw)
@@ -550,6 +732,8 @@ def main() -> int:
                 lock[repo] = {"sha": head_sha(repo)}
                 refreshed.add(repo)
             sha = lock[repo]["sha"]
+            if not license_current(license_key(lang), sha):
+                git_licenses(sources, repo, sha)
             for f in lang["files"]:
                 # Upstream paths may contain spaces ("Regular Expressions
                 # (JavaScript).tmLanguage"), which urllib rejects raw.

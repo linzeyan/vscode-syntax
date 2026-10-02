@@ -49,8 +49,8 @@ export function registerMarkdownExport(
     // The setting is read on every save, not at activation, so turning it on
     // takes effect without the restart that upstream asks for.
     vscode.workspace.onDidSaveTextDocument((document) => {
-      const convertOnSave = vscode.workspace.getConfiguration("poly.markdownPdf", document.uri).get("convertOnSave");
-      if (convertOnSave && isMarkdown(document.languageId)) {
+      const settings = vscode.workspace.getConfiguration("poly.markdownPdf", document.uri);
+      if (settings.get("enabled", true) && settings.get("convertOnSave") && isMarkdown(document.languageId)) {
         void converter().exportMarkdown(context, "settings", document, isMarkdown, true);
       }
     }),

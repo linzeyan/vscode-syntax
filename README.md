@@ -113,11 +113,15 @@
   `Poly: AutoCorrect: Format Document` 手動跑。讀 workspace 資料夾的 `.autocorrectrc` 與
   `.autocorrectignore`（加上 `.gitignore`），改了立即生效——拿掉一條規則也是。狀態列的 Lint／Format
   開關連它一起關；那個 extension 還裝著時 poly 讓開。
+- **Error Lens**（`poly.errorLens.enabled` 打開）：取代 usernamehw.errorlens。每個問題的訊息寫在那一行的
+  行尾，整行依嚴重度上色；gutter 圖示、狀態列的計數與訊息、CodeLens、hover 裡的按鈕可另外打開。命令面板的
+  `Error Lens: …`（切換各嚴重度、選取／複製／排除問題、上網搜尋、加上停用此行規則的註解等）關著時也能用。
+  設定在 `poly.errorLens.*`，名稱同它的。那個 extension 還裝著時 poly 讓開。
 - **PlantUML**：取代 jebbs.plantuml。`alt+d` 在旁邊預覽游標所在的那張圖（縮放、拖曳、分頁、
   複製成圖片），匯出單張／整份檔案／整個 workspace（12 種格式，檔名與 `out/` 底下的路徑同
   jebbs.plantuml，舊的匯出會被原地覆寫），產生 server URL，從匯出的 PNG 取回原始碼；另有
   補全、`!define` 巨集的參數提示、大綱，以及同名圖（匯出會互相覆蓋）與未命名圖的檢查。
-  jar 由 poly 下載，`poly.toml` 的 `[tools] plantuml` 可改指向別的 jar；Java 自備，不在 PATH
+  jar 由 poly 下載，settings 的 `poly.tools` 寫 `"plantuml": "<jar 路徑>"` 可改指向別的 jar；Java 自備，不在 PATH
   上就設 `poly.plantuml.java`。MIT 版的 jar 畫不了 ditaa，需要就指向 GPL 版的 jar。
   jebbs.plantuml 還裝著時 poly 讓開。
 - **Excalidraw**：取代 pomdtr.excalidraw-editor。`.excalidraw`、`.excalidraw.json`、
@@ -166,12 +170,18 @@
   `#polyExportMarp`。編輯器標題列的 Marp 按鈕開出命令清單，`File > New File` 有 Marp Markdown。設定在
   `poly.marp.*`，名稱同它的（已棄用的 `enableHtml`、`chromePath` 除外）。PDF、PPTX 與圖片用已安裝的
   Chrome、Edge 或 Firefox 匯出，和它一樣不另外下載。兩個都裝著時 poly 整個讓出。
-- **Git Graph**：取代 mhutchie.git-graph。按 status bar 的 Git Graph、原始檔控制標題列的按鈕（或
-  `View Git Graph (git log)`），所有分支、tag 與 stash 畫成一張圖，未提交的變更在最上面；同一個
-  repository 畫出的圖與它的相同。點 commit 在下面展開它的訊息與變更的檔案，`cmd/ctrl` 加點另一個是比較
-  兩者；可搜尋、只看某些分支。commit、分支、tag、stash 與檔案的右鍵選單做簽出、merge、rebase、
-  cherry-pick、reset、push、刪除等操作，remote 在工具列管理。它的授權不允許衍生作品，所以是照行為重寫的，
-  沒有它的程式碼，也沒有它的 `git-graph.*` 設定。兩個都裝著時 poly 讓出 status bar 與原始檔控制的按鈕。
+- **Git History**：取代 mhutchie.git-graph。按 status bar 的 Git History、原始檔控制標題列的按鈕（或
+  `View Git History`），所有分支、tag 與 stash 畫成一張圖，未提交的變更在最上面。點 commit 在下面展開它的
+  訊息與變更的檔案，`cmd/ctrl` 加點另一個是比較兩者；可搜尋、只看某些分支。commit、分支、tag、stash 與
+  檔案的右鍵選單做簽出、merge、rebase、cherry-pick、reset、push、刪除等操作，remote 在工具列管理。功能
+  照它的行為做；圖的畫法移植自 VSCode 的原始檔控制圖（Source Control Graph，MIT），顏色是它的
+  `scmGraph.*` 佈景主題色。沒有它的 `git-graph.*` 設定。兩個都裝著時 poly 讓出 status bar 與原始檔控制的按鈕。
+- **Code Runner**（`poly.codeRunner.enabled` 打開）：取代 formulahendry.code-runner。`ctrl+alt+n`（或
+  `Run Code`，編輯器標題的 ▶ 按鈕與右鍵選單也有）執行目前的檔案或選取的程式碼，結果在輸出面板的 Code Runner，
+  `runInTerminal` 改在終端機；`ctrl+alt+k` 執行自訂命令，`ctrl+alt+j` 先挑語言再執行，`ctrl+alt+m` 停止。
+  各語言用什麼命令執行照它的表，設定在 `poly.codeRunner.*`，名稱同它的；Go、Rust、Python 的預設改成
+  `go run .`、`cargo run` 與選定的 Python 直譯器（沒有時 `python3`）。formulahendry.code-runner 還裝著時
+  poly 讓開。
 - **清單接續**：在清單項目上按 Enter 接出下一項，**有序清單號碼遞增**（整份寫成 `1.` 的
   清單維持 `1.`），任務項接出 `- [ ]`，**空的項目按 Enter 結束清單**（往外退一層，最外層
   就清掉 marker）。markdown 家族與 yaml 都有，yaml 只認 sequence 的破折號——`>` 在那裡是
@@ -205,10 +215,11 @@
   數字存在 `$XDG_CACHE_HOME/poly/refs/`（預設 `~/.cache/poly/refs/`），重開視窗時先畫上次的
   數字、背景重新問過再更新。`poly.referencesCodeLens.enabled` 可關。
 - **`run | debug` CodeLens**：程式進入點（Go／Rust／C／C++／Java 的 `main`、C# 的 `Main`、
-  Python 的 `if __name__ == "__main__"`、shell 的 shebang）上方一行。`run` 存檔後在一個
-  叫 `Poly Run` 的終端機裡下命令（`go run .`／`cargo run`／`python3 檔名`／shebang 指定的
-  直譯器），不經過 debugger；要先編譯的 C／C++／Java／C# 只有 `debug`。poly 沒有
-  debugger，`debug` 是交給你已經裝的 debug extension。
+  Python 的 `if __name__ == "__main__"`、shell 的 shebang）上方一行。`run` 存檔後像 Code Runner
+  的 `Run Code` 那樣執行整個檔案，命令來自 `poly.codeRunner.*`（`go run .`／`cargo run`／選定的
+  Python 直譯器／shebang 指定的直譯器），結果在輸出面板的 Code Runner，不經過 debugger；那些設定
+  有這個檔的命令就有 `run`，Code Runner 關著也一樣。poly 沒有 debugger，`debug` 是交給你已經裝的
+  debug extension。
   `poly.runCodeLens.enabled` 可關。
 - **protobuf → 生成的 Go**：`.proto` 的 `message`／`enum` 上方 `go type`，`service` 上方
   `go server`／`go client`，跳到 protoc 生出來的宣告；`rpc` 上方 `N impls`，跳到寫在 Go 裡的
@@ -223,8 +234,8 @@
   「縮排改到一半」的樣子。內建的 indent guides 畫線回答「block 從哪開始」，上色回答的
   是「我在第幾層」。只畫可見範圍，顏色走 theme color。
 - **Unicode 高亮**：gremlins 的替代。不可見字元、雙向控制字元、怪空白、冒充 ASCII 的字元
-  （en dash、彎引號），所有檔案、邊打邊標：gutter 記號、捲軸刻度、行尾寫出字元名稱，
-  等級與顏色照 gremlins。`poly.unicodeHighlight.enabled` 打開。
+  （en dash、彎引號），所有檔案、邊打邊標：gutter 記號（error 😡、warning 🤔、info ℹ️）、
+  捲軸刻度、行尾寫出字元名稱，等級與顏色照 gremlins。`poly.unicodeHighlight.enabled` 打開。
 - **Gutter 圖片預覽**：某行提到的圖檔存在就在 gutter 放縮圖。不寫語法解析器——
   markdown／HTML／CSS 各有寫法，而檔案存不存在才是真正的過濾器。
 - **markdown preview 的 mermaid 圖表**：```mermaid fence 在 preview 裡畫成圖，配色與字型
@@ -391,7 +402,7 @@
   獨立命令而不是 `poly fmt` 的旗標——兩者契約相反，`fmt` 是「符合專案風格」，而沒有
   人的風格是一行 40KB。不支援 `--strict`／`--format`／`--fail-on`（沒有 findings 可
   塑形，也沒有外部工具會缺席），拼對了卻無效的旗標一律拒絕。
-- 工具解析順序：`poly.toml` 指定 → 專案內工具 → 內嵌引擎 → 受管下載 → PATH。
+- 工具解析順序：指定（VSCode 的 `poly.tools`，其次 `poly.toml` 的 `[tools]`）→ 專案內工具 → 內嵌引擎 → 受管下載 → PATH。
 
 ## 安裝
 
@@ -927,7 +938,7 @@ unpinned-dependency = "info"
 [walk]
 include-hidden = false # 預設；true 會連點開頭的路徑一起走（.git/ 仍然跳過）
 
-[tools] # 指定路徑、釘版本，或設 "off" 關掉
+[tools] # 指定路徑、釘版本，或設 "off" 關掉；VSCode 裡改用 settings 的 poly.tools，見下
 shellcheck = "C:/tools/shellcheck.exe"
 tflint = "off"
 ```
@@ -992,10 +1003,26 @@ per-file-ignores 一條路。註釋裡寫了 poly 讀不懂的代碼會以 `poly
 其他語言，`rust-analyzer = "/opt/rust-glancer"` 換成別的實作。版本號不是這裡的合法值
 ——這些跟著專案 toolchain 走，poly 不下載。
 
+**用 VSCode 的話，`[tools]` 這張表改寫在 settings.json 的 `poly.tools`**，鍵與值都一樣
+（`"off"`、`"on"`、版本號、路徑；路徑請寫絕對路徑），不必為了釘一個版本在 repo 裡多放一個
+`poly.toml`：
+
+```jsonc
+"poly.tools": {
+  "shellcheck": "off",
+  "tflint": "0.53.0"
+}
+```
+
+extension 啟動的每個 poly 都會套用：語言伺服器、PlantUML 的 jar、終端機裡的 `poly check`
+與 dead code 分析；改了會自動重啟語言伺服器。同一個工具兩邊都有寫時以 settings 為準，其他
+工具照 `poly.toml`。純命令列（包括 CI）不讀 settings，只讀 `poly.toml`——要讓 CI 也用同一個
+版本，就寫在 `poly.toml`。
+
 `[format.<lang>]` 只認 `line-width`（1-1000）／`indent-width`（1-16）／`use-tabs`
 三個鍵，拼錯或超出範圍都會直接讓解析失敗而不是靜默忽略；只作用於內嵌引擎，走外部
-工具的語言請用該工具自己的設定檔。VSCode settings 只放個人偏好
-（`poly.serverPath`、`poly.lintOnSave`、`poly.updateCheck.*`）。
+工具的語言請用該工具自己的設定檔。VSCode settings 放個人偏好
+（`poly.serverPath`、`poly.lintOnSave`、`poly.updateCheck.*`）與上面的 `poly.tools`。
 
 專案已經有 `.editorconfig` 的話什麼都不用做：內嵌引擎會沿用它的 `indent_style`／
 `indent_size`／`max_line_length`，這三個鍵剛好就是上面那三個 knob，不是另一套要維護

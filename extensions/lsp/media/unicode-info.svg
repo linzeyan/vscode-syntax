@@ -1,12 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <rect x="3"
-    y="3"
-    width="10"
-    height="10"
-    rx="2"
-    fill="#3C763D"
-    fill-opacity=".25"
-    stroke="#3C763D"
-    stroke-width="1.5"
-    stroke-dasharray="2.5 1.5" />
+  <text x="8"
+    y="8.5"
+    font-size="14"
+    font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif"
+    text-anchor="middle"
+    dominant-baseline="central">
+    ℹ️
+  </text>
 </svg>

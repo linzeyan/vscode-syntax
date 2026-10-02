@@ -5,8 +5,9 @@
  *
  * plantuml.ts decides what a document means; this file runs Java, talks to a
  * server and draws. The jar is poly's managed download, or whatever
- * `[tools] plantuml` in poly.toml points at, so a project pins it the way it
- * pins every other tool. Java is the user's: poly does not ship a JVM.
+ * `plantuml` in the poly.tools setting or poly.toml's `[tools]` points at, so
+ * it is pinned the way every other tool is. Java is the user's: poly does not
+ * ship a JVM.
  */
 import * as cp from "child_process";
 import { randomBytes } from "crypto";
@@ -50,6 +51,7 @@ import {
   Word,
   WordKind,
 } from "./plantuml";
+import { toolsEnv } from "./toolsEnv";
 
 /** The extension this stands in for. Installed, it does all of this itself. */
 const JEBBS = "jebbs.plantuml";
@@ -67,9 +69,14 @@ export function isPlantumlDocument(document: vscode.TextDocument): boolean {
   return document.languageId === "plantuml" || EXTENSIONS.test(document.fileName);
 }
 
-/** Two sets of completions, outlines and warnings are not better than one. */
+/**
+ * Two sets of completions, outlines and warnings are not better than one. The
+ * switch goes through here too, so everything that already steps aside for
+ * jebbs steps aside for it without a second check at each site.
+ */
 function standsDown(): boolean {
-  return vscode.extensions.getExtension(JEBBS) !== undefined;
+  return vscode.extensions.getExtension(JEBBS) !== undefined
+    || !vscode.workspace.getConfiguration("poly.plantuml").get<boolean>("enabled", true);
 }
 
 function settings(uri: vscode.Uri | undefined): vscode.WorkspaceConfiguration {
@@ -262,7 +269,8 @@ class Renderer {
         { location: vscode.ProgressLocation.Window, title: "Poly: preparing PlantUML…" },
         () =>
           new Promise<string>((resolve, reject) => {
-            cp.execFile(this.poly, ["tools", "install", "plantuml"], { cwd }, (error, stdout, stderr) => {
+            const env = { ...process.env, ...toolsEnv() };
+            cp.execFile(this.poly, ["tools", "install", "plantuml"], { cwd, env }, (error, stdout, stderr) => {
               const found = jarOf(stdout);
               if (found) {
                 resolve(found);
@@ -1187,7 +1195,7 @@ export function registerPlantuml(
     vscode.commands.registerCommand("poly.plantumlUrlDocument", withEditor((editor) => exporter.url(editor, true))),
     vscode.commands.registerCommand("poly.plantumlExtractSource", () => exporter.extractSource()),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.plantuml")) {
+      if (event.affectsConfiguration("poly.plantuml") || event.affectsConfiguration("poly.tools")) {
         renderer.forget();
         fences.forget();
         void vscode.commands.executeCommand("markdown.preview.refresh");

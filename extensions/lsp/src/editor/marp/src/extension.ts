@@ -22,6 +22,7 @@ import themes, { Themes } from './themes'
 import { detectMarpFromMarkdown, marpConfiguration } from './utils'
 
 const shouldRefreshConfs = [
+  'poly.marp.enabled',
   'poly.marp.breaks',
   'poly.marp.diagnostics.slideContentOverflow',
   'poly.marp.html',

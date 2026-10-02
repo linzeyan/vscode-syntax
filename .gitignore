@@ -18,9 +18,12 @@ extensions/lsp/out/
 # release beside it. Marp is 18 MB of marp-core, MathJax, marp-cli and puppeteer
 # around src/editor/marp. Chinese conversion is 1 MB of OpenCC's dictionaries,
 # and AutoCorrect a 3 MB wasm with its glue. Git Graph's commands are 230 KB,
-# most of it markdown-it, and its page carries the codicon font.
+# most of it markdown-it, and its page carries the codicon font. Code Runner's
+# output grammar and licence are copies from src/editor/codeRunner. Error Lens
+# is usernamehw.errorlens's source in src/editor/errorLens, bundled.
 extensions/lsp/dist/dbml.js
 extensions/lsp/dist/chinese.js
+extensions/lsp/dist/opencc-js/
 extensions/lsp/dist/autocorrect.js
 extensions/lsp/dist/autocorrect_bg.wasm
 extensions/lsp/dist/excalidraw/
@@ -35,6 +38,8 @@ extensions/lsp/dist/swagger/
 extensions/lsp/dist/marp/
 extensions/lsp/dist/gitGraph.js
 extensions/lsp/dist/git-graph/
+extensions/lsp/dist/code-runner/
+extensions/lsp/dist/errorLens/
 extensions/lsp/.vscode-test/
 # tools/*.py are scripts, never imported -- except that engine-diff's own
 # self-test imports it to tamper with its EXPECTED table, and that writes here.

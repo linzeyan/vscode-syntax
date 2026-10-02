@@ -138,7 +138,7 @@
     {
       "id": "hcl",
       "override": false,
-      "rationale": "Authoritative HashiCorp grammar. MPL-2.0, ratified by N5: the vendored file is itself the source form and lives in a public repo, which is what MPL-2.0 §3.1 asks for even though sync reserializes it. Keep it unpatched -- a local fix would make us the one owing a source release.",
+      "rationale": "Authoritative HashiCorp grammar. MPL-2.0, ratified by N5: poly never modifies the file, but sync reserializes it, so the notices name the pinned commit as its Source Code Form and link the license, which is what §3.2(a) asks of the copy that ships. Keep it unpatched -- a local fix would make us the one owing a source release.",
       "repo": "hashicorp/syntax",
       "license": "MPL-2.0",
       "language": { "extensions": [".hcl"], "aliases": ["HCL"], "configuration": "hcl.json" },
@@ -149,7 +149,7 @@
     {
       "id": "terraform",
       "override": false,
-      "rationale": "Authoritative HashiCorp grammar. MPL-2.0, ratified by N5: the vendored file is itself the source form and lives in a public repo, which is what MPL-2.0 §3.1 asks for even though sync reserializes it. Keep it unpatched -- a local fix would make us the one owing a source release.",
+      "rationale": "Authoritative HashiCorp grammar. MPL-2.0, ratified by N5: poly never modifies the file, but sync reserializes it, so the notices name the pinned commit as its Source Code Form and link the license, which is what §3.2(a) asks of the copy that ships. Keep it unpatched -- a local fix would make us the one owing a source release.",
       "repo": "hashicorp/syntax",
       "license": "MPL-2.0",
       "language": { "extensions": [".tf", ".tfvars"], "aliases": ["Terraform"], "configuration": "hcl.json" },

@@ -221,7 +221,10 @@ function contributeSchemas(context: vscode.ExtensionContext) {
     try {
       api.registerContributor(
         "swaggerviewer",
+        // Asked per document, so the switch is read here rather than when
+        // registering: redhat offers no way to take a contributor back.
         (uri: string) => {
+          if (!vscode.workspace.getConfiguration("poly.swaggerViewer").get("enabled", true)) return null;
           const document = vscode.workspace.textDocuments.find((document) => document.uri.toString() === uri);
           return document ? load().schemaOf(document.getText()) : null;
         },

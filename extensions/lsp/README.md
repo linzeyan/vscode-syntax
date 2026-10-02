@@ -108,6 +108,23 @@ C/C++、Swift、HashiCorp Terraform、Lua（sumneko）、Bash IDE、Buf 的那�
   生效，拿掉一條規則也是；multi-root 每個資料夾各自一份。
 - 狀態列的 Lint／Format 開關連它一起關。那個 extension 還裝著時 poly 讓開，不重複報、不重複改。
 
+### Error Lens
+
+usernamehw.errorlens 的替代，`poly.errorLens.enabled` 打開才有。原始碼取自它（3.29.0），設定在
+`poly.errorLens.*`，名稱同它的 `errorLens.*`。
+
+- **行尾訊息**：每個問題的訊息寫在那一行的行尾，整行依嚴重度上色。訊息的範本、字型、對齊、外框，
+  上色的範圍（整行、只有訊息、不上色），以及只標游標所在的那一行或最近的問題，都可設。
+- **另外打開的**：gutter 圖示（多種樣式，可換成自己的圖）、狀態列的錯誤與警告計數、狀態列顯示最近的
+  問題、問題上方的 CodeLens、hover 裡的複製與操作按鈕。
+- **排除與改寫**：依來源、代碼、訊息或檔案排除問題，改寫訊息，改變特定問題的嚴重度或外觀；可延遲
+  顯示，或只在存檔時更新。
+- **`Error Lens: …` 命令**：切換全部或各嚴重度、切換行內訊息、選取／複製／排除問題、上網搜尋、找出
+  linter 規則的設定處、加上停用此行規則的註解、把工作區加入／移出停用清單。關著時也能用。
+
+和 usernamehw.errorlens 不同的地方：預設關閉；它的 `errorLens.experimental` 沒有作用，所以沒有搬過來。
+兩者都裝著時，poly 整個讓出，命令也不放進命令面板；把它停用，poly 的就接手。
+
 ### PlantUML
 
 jebbs.plantuml 的替代，命令、設定與匯出路徑都照它的（設定在 `poly.plantuml.*`，名稱同它的
@@ -129,9 +146,9 @@ jebbs.plantuml 的替代，命令、設定與匯出路徑都照它的（設定�
 - **markdown preview**（`poly.markdownDiagrams.enabled`）：fence 語言為 `plantuml`／`puml`／`uml`。有設
   `poly.plantuml.server` 時交給 server，否則在本機用 Java 畫——後者是 jebbs.plantuml 做不到的。
 
-jar 由 poly 下載（MIT 版 PlantUML，版本釘在 poly 裡；`poly.toml` 的 `[tools] plantuml` 可改指向
-別的 jar）。Java 要自己裝，不在 PATH 上就設 `poly.plantuml.java`；`poly.plantuml.render` 設成
-`PlantUMLServer` 則完全不需要 Java。MIT 版不含 ditaa，要畫 ditaa 就把 `[tools] plantuml` 指向
+jar 由 poly 下載（MIT 版 PlantUML，版本釘在 poly 裡；`poly.tools` 寫 `"plantuml": "<jar 路徑>"`
+可改指向別的 jar）。Java 要自己裝，不在 PATH 上就設 `poly.plantuml.java`；`poly.plantuml.render` 設成
+`PlantUMLServer` 則完全不需要 Java。MIT 版不含 ditaa，要畫 ditaa 就把 `plantuml` 指向
 GPL 版的 jar。jebbs.plantuml 還裝著時，補全、大綱、檢查與 markdown fence 交給它，`alt+d` 也讓給它。
 
 ### Excalidraw
@@ -316,14 +333,14 @@ marp-team.marp-vscode 的替代：front matter 寫了 `marp: true` 的 Markdown 
 投影片內容超出範圍的警告（`diagnostics.slideContentOverflow`）在目前的 VSCode 上兩者都不會出現，它借用的
 預覽內部通道已經不在了。兩者都裝著時，poly 整個讓出，預覽、檢查與命令都只有它的。
 
-### Git Graph
+### Git History
 
 mhutchie.git-graph 的替代：所有分支、tag 與 stash 畫成一張圖，未提交的變更在最上面，在圖上看 commit、比較兩個
-commit，並對分支、commit、tag、stash 與 remote 做 git 操作。它的授權不允許衍生作品，所以 poly 沒有取用它任何
-程式碼，是照它（1.30.0）的行為重寫的；同一個 repository 在兩邊畫出的圖，每個 commit 的欄位與每條線的走向、
-顏色都相同。
+commit，並對分支、commit、tag、stash 與 remote 做 git 操作。功能照它（1.30.0）的行為做；圖的排列與畫法移植自
+VSCode 自己的原始檔控制圖（Source Control Graph，MIT），顏色是它的 `scmGraph.*` 佈景主題色，可在
+`workbench.colorCustomizations` 改。
 
-- **`View Git Graph (git log)`**：status bar 左邊的 Git Graph、原始檔控制的標題列按鈕，或命令面板。開了多個
+- **`View Git History`**：status bar 左邊的 Git History、原始檔控制的標題列按鈕，或命令面板。開了多個
   repository 時，工具列可切換。
 - **圖**：點一下 commit 在它下面展開作者、日期、父 commit、訊息與變更的檔案（樹狀或清單），點檔案開 diff；
   上下鍵換到相鄰的 commit，`Esc` 收起。按住 `cmd`／`ctrl` 再點另一個 commit 是比較兩者。分支標籤雙擊即簽出。
@@ -338,8 +355,37 @@ commit，並對分支、commit、tag、stash 與 remote 做 git 操作。它的�
 
 和 mhutchie.git-graph 不同的地方：對話框是 VSCode 的輸入框與清單，右鍵選單是 VSCode 的選單，顏色跟著佈景
 主題；沒有它的 `git-graph.*` 設定，看法都在工具列上改。沒有的功能：頭像、code review 模式、issue 連結、自訂
-pull request 網站、編輯使用者資訊、匯出 repository 設定；重新載入視窗後 Git Graph 分頁不會留著。兩者都裝著
+pull request 網站、編輯使用者資訊、匯出 repository 設定；重新載入視窗後 Git History 分頁不會留著。兩者都裝著
 時，poly 讓出 status bar 與原始檔控制的按鈕，命令面板裡兩邊的命令各用各的名稱。
+
+### Code Runner
+
+formulahendry.code-runner 的替代：一鍵執行目前的檔案或選取的程式碼，結果在輸出面板的 Code Runner。原始碼取自
+它（0.12.2）；`poly.codeRunner.enabled` 打開，其餘設定在 `poly.codeRunner.*`，名稱與預設值同它的 `code-runner.*`
+（三個語言的命令除外，見下）。
+
+- **`Run Code`**（`ctrl+alt+n`）：有選取就只執行選取的部分（寫進檔案旁的暫存檔再執行），否則執行整個檔案。
+  編輯器標題的 ▶ 按鈕、編輯器與檔案總管的右鍵選單都有。
+- **`Run Custom Command`**（`ctrl+alt+k`）：執行 `customCommand`。
+- **`Run By Language`**（`ctrl+alt+j`）：先挑語言，把目前的內容當成那個語言執行。
+- **`Stop Code Run`**（`ctrl+alt+m`）：停止執行中的程式；執行中時編輯器標題與輸出面板的右鍵選單也有。
+- **用什麼命令執行**：依序看檔案第一行的 shebang（`respectShebang`）、`executorMapByGlob`（比對檔名）、
+  `executorMap`（語言）、`executorMapByFileExtension`（副檔名），都沒有就用 `defaultLanguage` 那一項。命令裡可寫
+  `$dir`、`$fileName`、`$fileNameWithoutExt`、`$fullFileName`、`$workspaceRoot`、`$pythonPath` 等代換；一個都沒
+  寫時，檔案路徑接在最後。
+- **在哪執行**：預設在輸出面板；`runInTerminal` 改在名為 Code Runner 的終端機，程式要讀鍵盤輸入時需要它。
+  `cwd`、`fileDirectoryAsCwd` 決定工作目錄，`saveFileBeforeRun`、`saveAllFilesBeforeRun` 決定執行前要不要存檔，
+  `clearPreviousOutput`、`showExecutionMessage`、`preserveFocus` 調整輸出面板。
+
+和 formulahendry.code-runner 不同的地方：預設關著，打開後命令、選單與鍵才出現；三個語言的預設命令不同——Go 是
+`cd $dir && go run .`，執行整個 package 而不是單一檔案；Rust 是 `cd $dir && cargo run`，看得到 crate 的依賴，
+沒有 `Cargo.toml` 的單一 `.rs` 檔要在 `executorMap` 改回它的 `rustc` 那一行；Python 是 `$pythonPath -u
+$fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`（Windows 是 `python`），它用的 `python`
+在 macOS 上沒有。Go 與 Rust 這樣改了之後不能只執行選取的部分，要的話在 `executorMapByGlob` 給
+`tempCodeRunnerFile.go`、`tempCodeRunnerFile.rs` 設它原本的命令。輸出面板與終端機叫 Code Runner，不是 Code；Windows、Linux 上 `ctrl+alt+m` 也是 Minify 的鍵，
+只在有程式執行時才是停止；關掉別的終端機不會讓下一次執行另開一個 Code Runner 終端機；不送使用統計，沒有
+`enableAppInsights`。formulahendry.code-runner 還裝著時 poly 讓開，命令、選單與鍵都只有它的；`run` CodeLens
+照常可用。
 
 ### 導航與 CodeLens
 
@@ -356,10 +402,12 @@ pull request 網站、編輯使用者資訊、匯出 repository 設定；重新�
     一個專案一個小 JSON 檔。重開視窗時先畫上次的數字，同時在背景重新問 language server，
     數字變了就更新，所以專案在視窗關著時改過也會被更正。已刪除的檔案與宣告會順手清掉，
     一個月沒開的專案整個檔案刪除。
-- **`run | debug` CodeLens**（設定）：程式進入點上方一行。`run` 存檔後在一個叫 `Poly Run`
-  的終端機裡下命令（go → `go run .`、rust → `cargo run`、python → `python3 檔名`、
-  shell → shebang 指定的直譯器），不經過 debugger；要先編譯的 C／C++／Java／C# 只畫
-  `debug`。poly 沒有 debugger，`debug` 交給你已經裝的 debug extension。
+- **`run | debug` CodeLens**（設定）：程式進入點上方一行。`run` 存檔後像 Code Runner 的
+  `Run Code` 那樣執行整個檔案，命令來自 `poly.codeRunner.*`（go → `go run .`、rust →
+  `cargo run`、python → 選定的直譯器、shell → shebang 指定的直譯器），結果在輸出面板的
+  Code Runner，`poly.codeRunner.runInTerminal` 打開則在終端機；不經過 debugger。那些設定
+  有這個檔的命令就有 `run`，`poly.codeRunner.enabled` 關著也一樣。poly 沒有 debugger，
+  `debug` 交給你已經裝的 debug extension。
 - **protobuf → 生成的 Go**（設定）：`.proto` 的 `message`／`enum` 上方 `go type`，
   `service` 上方 `go server`／`go client`，`rpc` 上方 `N impls`。點下去跟引用 lens 一樣：
   一筆直接跳、多筆開 **References** 面板，編輯器停在 `.proto` 上。認 protoc-gen-go 與
@@ -420,6 +468,10 @@ pull request 網站、編輯使用者資訊、匯出 repository 設定；重新�
 | `Go to Next Changed File`          | `cmd+alt+z`       | `ctrl+alt+z`                        | 有 git              |
 | `Go to Previous Changed File`      | `cmd+alt+a`       | `ctrl+alt+a`                        | 有 git              |
 | `Revert Selected Changes and Save` | `alt+q`           | `alt+q`                             | 有 git、檔案        |
+| `Run Code`                         | `ctrl+alt+n`      | `ctrl+alt+n`                        | 開了 Code Runner    |
+| `Run Custom Command`               | `ctrl+alt+k`      | `ctrl+alt+k`                        | 開了 Code Runner    |
+| `Run By Language`                  | `ctrl+alt+j`      | `ctrl+alt+j`                        | 開了 Code Runner    |
+| `Stop Code Run`                    | `ctrl+alt+m`      | `ctrl+alt+m`                        | 開了且有程式在執行  |
 
 `Extract Variable`、`Inline Variable`、上／下一個變更檔與 `Revert Selected Changes and Save`
 的鍵若已被你裝的別的擴充綁走（例如 mushan.vscode-paste-image 的 `cmd+alt+v`、quicktype 的
@@ -433,13 +485,15 @@ pull request 網站、編輯使用者資訊、匯出 repository 設定；重新�
 `poly.checkForUpdates`、`poly.showOutput`、`poly.copyPathWithLine`、`poly.insertTableOfContents`、
 `poly.runFile`、`poly.moveToNewFile`、`poly.changeSignature`、`poly.implementInterface`、
 `poly.syntaxColors`、`poly.setSyntaxColor`、`poly.refreshTodos`、`poly.toTraditionalChinese`／
-`toSimplifiedChinese`／`toTraditionalChineseTaiwan`／`toSimplifiedChineseTaiwan`、`poly.autocorrectDocument`。
+`toSimplifiedChinese`／`toTraditionalChineseTaiwan`／`toSimplifiedChineseTaiwan`、`poly.autocorrectDocument`，
+以及 Error Lens 的 `poly.errorLens.*`。
 
 ## 設定
 
 | 設定                               | 預設      | 作用                                                                                   |
 | ---------------------------------- | --------- | -------------------------------------------------------------------------------------- |
 | `poly.serverPath`                  | `""`      | 改用指定路徑的 poly binary，空字串是用內附的那支                                       |
+| `poly.tools`                       | `{}`      | 外部工具的版本、路徑或 `"off"`，同 `poly.toml` 的 `[tools]`，同名時以這裡為準          |
 | `poly.lintOnSave`                  | `true`    | 開檔與存檔時跑 lint，改了立即生效；Lint 開關也寫這一項                                 |
 | `poly.format.enabled`              | `true`    | 關掉後 poly 的改寫都不動作（`Poly: Format Document` 除外）；Format 開關也寫它          |
 | `poly.deadCodeCodeLens.enabled`    | `false`   | 每個 Go／TS／JS／Python 檔第一行上方一條 `analyze dead code`                           |
@@ -464,6 +518,8 @@ pull request 網站、編輯使用者資訊、匯出 repository 設定；重新�
 | `poly.autocorrect.enabled`         | `false`   | AutoCorrect（huacnlee.autocorrect 的替代）                                             |
 | `poly.autocorrect.enableLint`      | `true`    | AutoCorrect 的問題列進 Problems                                                        |
 | `poly.autocorrect.formatOnSave`    | `true`    | 手動存檔時 AutoCorrect 整份修正                                                        |
+| `poly.errorLens.enabled`           | `false`   | Error Lens（usernamehw.errorlens 的替代）                                              |
+| `poly.errorLens.*`                 | 同它的    | 訊息的樣式、gutter 圖示、狀態列、CodeLens、排除與延遲，75 項，見上面的 Error Lens      |
 | `poly.plantuml.*`                  | 同 jebbs  | PlantUML 的 Java、匯出、預覽、server 與檢查，20 項，見上面的 PlantUML                  |
 | `poly.excalidraw.*`                | 同 pomdtr | Excalidraw 的主題、語言、元件庫與圖片，4 項，見上面的 Excalidraw                       |
 | `poly.drawio.*`                    | 同 hediet | draw.io 的離線／線上、主題、樣式、圖形庫、plugin 與 code link，22 項，見上面的 draw.io |
@@ -473,10 +529,23 @@ pull request 網站、編輯使用者資訊、匯出 repository 設定；重新�
 | `poly.dataPreview.*`               | 同它的    | 表格的主題、二進位檔旁寫出 JSON 與 schema、存檔後開啟，4 項，見上面的資料預覽          |
 | `poly.swaggerViewer.*`             | 同 arjun  | 預覽伺服器的主機與連接埠、在瀏覽器開、標題只列檔名與縮放，5 項，見上面的 Swagger 預覽  |
 | `poly.marp.*`                      | 同 marp   | 預覽的換行、HTML、數學式與主題，匯出的格式與瀏覽器，15 項，見上面的 Marp 投影片        |
+| `poly.codeRunner.enabled`          | `false`   | Code Runner 的命令、選單與鍵（formulahendry.code-runner 的替代）                       |
+| `poly.codeRunner.*`                | 同它的    | 各語言的命令、工作目錄、存檔、輸出面板或終端機與選單，22 項，見上面的 Code Runner      |
 
 markdown 的 Enter／Tab／粗體斜體與 `Copy Path with Line Numbers`、重構命令沒有開關：它們
-只在你按下去時才做事。每一項的完整說明在 VSCode 的設定頁（英文與正體中文都有）。專案層的
-格式化與工具設定寫在 `poly.toml`，不在這裡——見專案根目錄的 README。
+只在你按下去時才做事。每一項的完整說明在 VSCode 的設定頁（英文與正體中文都有）。
+
+外部工具的版本、路徑與開關寫在 `poly.tools`，跟 `poly.toml` 的 `[tools]` 同一套鍵與值：
+
+```jsonc
+"poly.tools": {
+  "shellcheck": "off",
+  "tflint": "0.53.0"
+}
+```
+
+同一個工具兩邊都有寫時以這裡為準。專案層的格式化設定，以及要讓 CI 也照著跑的工具版本，寫在
+`poly.toml`——見專案根目錄的 README。
 
 ## Log
 

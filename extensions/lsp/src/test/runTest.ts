@@ -104,6 +104,39 @@ async function main(): Promise<void> {
     ],
     extensionTestsEnv: { POLY_E2E_LOGS: logs },
   });
+
+  // Code Runner stands aside while formulahendry.code-runner is installed,
+  // which only shows with it installed -- and every test above has to run
+  // without it. So a second editor, beside a stand-in with its id, runs the
+  // one suite about that (see suite/index.ts).
+  const beside = mkdtempSync(join(tmpdir(), "poly-e2e-"));
+  mkdirSync(join(beside, ".vscode"));
+  writeFileSync(
+    join(beside, ".vscode", "settings.json"),
+    JSON.stringify(
+      {
+        "poly.serverPath": serverPath,
+        "poly.updateCheck.enabled": false,
+        // On, so that standing aside is the only thing left to stop Run Code.
+        "poly.codeRunner.enabled": true,
+        "poly.runCodeLens.enabled": true,
+      },
+      null,
+      2,
+    ),
+  );
+  await runTests({
+    extensionDevelopmentPath: [
+      extensionDevelopmentPath,
+      resolve(extensionDevelopmentPath, "src", "test", "fixture-code-runner"),
+    ],
+    extensionTestsPath,
+    launchArgs: [
+      `--folder-uri=${pathToFileURL(beside).toString()}`,
+      `--user-data-dir=${userDataDir(repo)}`,
+    ],
+    extensionTestsEnv: { POLY_E2E_SUITE: "code-runner-yield" },
+  });
 }
 
 main().catch((error) => {

@@ -1,7 +1,7 @@
 /**
- * The Git Graph page: the toolbar, the table of commits with the graph drawn
- * beside it, a commit's details opened under its row, find, and the
- * `data-vscode-context` that VSCode's own context menus key on.
+ * The Git History page: the toolbar, the table of commits with the graph
+ * drawn in its first column, a commit's details opened under its row, find,
+ * and the `data-vscode-context` that VSCode's own context menus key on.
  *
  * It holds no git of its own. Everything it shows comes from the host
  * (gitGraphPanel.ts), and everything it does beyond drawing is a message back.
@@ -9,7 +9,13 @@
 import "@vscode/codicons/dist/codicon.css";
 import "./gitGraph.css";
 
-import { type Layout, layout } from "../gitGraphLayout";
+import {
+  asCssVariable,
+  getHistoryItemColor,
+  getHistoryItemIndex,
+  type ISCMHistoryItemViewModel,
+  layout,
+} from "../gitGraphLayout";
 import {
   type CommitDetails,
   type FileChange,
@@ -18,30 +24,19 @@ import {
   UNCOMMITTED,
   type ViewOptions,
 } from "../gitGraphProtocol";
+import {
+  graphColumnCount,
+  renderSCMHistoryGraphPlaceholder,
+  renderSCMHistoryItemGraph,
+  SWIMLANE_HEIGHT,
+  SWIMLANE_WIDTH,
+} from "./gitGraphDraw";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
 const post = (message: { type: string; [key: string]: unknown }) => vscode.postMessage(message);
 
-/** Git Graph's twelve, in its order: the first branch is blue in both. */
-const PALETTE = [
-  "#0085d9",
-  "#d9008f",
-  "#00d90a",
-  "#d98500",
-  "#a300d9",
-  "#ff0000",
-  "#00d9cc",
-  "#e138e8",
-  "#85d900",
-  "#dc5b23",
-  "#6f24d6",
-  "#ffcc00",
-];
-const UNCOMMITTED_COLOUR = "#808080";
-const ROW = 24;
-const LANE = 16;
-const PAD = 12;
+const ROW = SWIMLANE_HEIGHT;
 
 type Column = "date" | "author" | "commit";
 interface Columns {
@@ -64,7 +59,7 @@ interface State {
   subjects: string[];
   remotes: Remote[];
   diffTool: boolean;
-  layout?: Layout;
+  layout?: ISCMHistoryItemViewModel[];
   /** The commit whose details are open, and the one compared with it if any. */
   open?: string;
   compare?: string;
@@ -148,7 +143,6 @@ const table = el("table", { class: "commits" });
 const colgroup = el("colgroup");
 const head = el("thead");
 const rows = el("tbody");
-const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 const footer = el("div", { class: "footer" });
 const notice = el("div", { class: "notice", hidden: "" });
 const popover = el("div", { class: "popover", hidden: "", role: "dialog" });
@@ -179,10 +173,8 @@ toolbar.append(
   ),
   el("div", { class: "toolbar-group end" }, optionsButton, fetchButton, remotesButton, refreshButton),
 );
-svg.classList.add("graph");
-svg.setAttribute("aria-hidden", "true");
 table.append(colgroup, head, rows);
-scroller.append(table, svg, footer);
+scroller.append(table, footer);
 document.body.append(toolbar, progress, scroller, notice, popover);
 
 // ---------------------------------------------------------------- columns
@@ -199,8 +191,14 @@ const visible = (): ("graph" | "description" | Column)[] =>
     !state.columns.hidden.includes(column as Column)
   );
 
+/** As wide as the widest row's graph, which is as wide as renderSCMHistoryItemGraph makes it. */
 function graphWidth(): number {
-  return Math.max(PAD * 2, (state.layout?.width ?? 1) * LANE + PAD);
+  return SWIMLANE_WIDTH * (Math.max(1, ...(state.layout ?? []).map(graphColumnCount)) + 1);
+}
+
+/** What the details row leaves free on its left, for the lanes that run past it. */
+function setGraphWidth(width: number): void {
+  table.style.setProperty("--graph-width", `${width}px`);
 }
 
 function renderHeader(): void {
@@ -209,6 +207,7 @@ function renderHeader(): void {
   for (const column of visible()) {
     const col = el("col", { class: column });
     const width = column === "graph" ? state.columns.widths.graph ?? graphWidth() : state.columns.widths[column];
+    if (column === "graph") setGraphWidth(width!);
     if (width && column !== "description") col.style.width = `${width}px`;
     colgroup.append(col);
     const cell = el("th", { class: column, scope: "col" }, COLUMN_TITLES[column]);
@@ -236,17 +235,16 @@ function resize(event: MouseEvent, column: "graph" | Column, col: HTMLTableColEl
   const start = event.clientX;
   const initial = col.getBoundingClientRect().width || (state.columns.widths[column] ?? 80);
   const move = (moved: MouseEvent) => {
-    const width = Math.max(column === "graph" ? PAD * 2 : 48, Math.round(initial + moved.clientX - start));
+    const width = Math.max(column === "graph" ? SWIMLANE_WIDTH * 2 : 48, Math.round(initial + moved.clientX - start));
     state.columns.widths[column] = width;
     col.style.width = `${width}px`;
-    if (column === "graph") drawGraph();
+    if (column === "graph") setGraphWidth(width);
   };
   const done = () => {
     window.removeEventListener("mousemove", move);
     window.removeEventListener("mouseup", done);
     document.body.classList.remove("resizing");
     post({ type: "columns", columns: state.columns });
-    drawGraph();
   };
   document.body.classList.add("resizing");
   window.addEventListener("mousemove", move);
@@ -297,10 +295,6 @@ function relative(seconds: number): string {
     if (Math.abs(delta) >= size) return format.format(-Math.round(delta / size), unit);
   }
   return format.format(0, "second");
-}
-
-function colourOf(index: number): string {
-  return PALETTE[index % PALETTE.length];
 }
 
 /** The reference labels of one commit, local branches first, each with its remotes folded in. */
@@ -414,8 +408,8 @@ function renderRows(): void {
   const ancestors = ancestorsOfHead(graph);
   const columns = visible();
   graph.commits.forEach((commit, index) => {
-    const node = state.layout!.nodes[index];
-    const colour = colourOf(node.colour);
+    const viewModel = state.layout![index];
+    const colour = asCssVariable(getHistoryItemColor(viewModel));
     const uncommitted = commit.hash === UNCOMMITTED;
     const row = el("tr", {
       class: [
@@ -448,7 +442,13 @@ function renderRows(): void {
     for (const column of columns) {
       switch (column) {
         case "graph":
-          row.append(el("td", { class: "graph" }));
+          // The kind is a class on the cell, as VS Code puts it on the
+          // graph's container: the stylesheet hollows HEAD's circle by it.
+          row.append(el(
+            "td",
+            { class: `graph ${viewModel.kind === "HEAD" ? "current" : viewModel.kind}`, "aria-hidden": "true" },
+            renderSCMHistoryItemGraph(viewModel),
+          ));
           break;
         case "description": {
           const subject = el("span", { class: "subject" });
@@ -492,7 +492,7 @@ function renderRows(): void {
       }
     }
     rows.append(row);
-    if (commit.hash === state.open) rows.append(detailsRow(columns.length));
+    if (commit.hash === state.open) rows.append(detailsRow(columns.length, viewModel));
   });
   markSelection();
 }
@@ -504,90 +504,25 @@ function markSelection(): void {
   }
 }
 
-// ---------------------------------------------------------------- graph
-
-/** Each listed row's vertical centre, measured, since an open details row is far taller than the rest. */
-function rowCentres(): number[] {
-  const offset = table.offsetTop;
-  return [...rows.querySelectorAll<HTMLElement>("tr.commit")].map((row) =>
-    offset + row.offsetTop + row.offsetHeight / 2
-  );
-}
-
-function drawGraph(): void {
-  const result = state.layout;
-  const graph = state.graph;
-  svg.replaceChildren();
-  if (!result || !graph) return;
-  const centres = rowCentres();
-  if (centres.length === 0) return;
-  const bottom = table.offsetTop + table.offsetHeight;
-  const width = state.columns.widths.graph ?? graphWidth();
-  svg.style.top = "0";
-  svg.style.left = `${(table.querySelector<HTMLElement>("th.graph")?.offsetLeft ?? 0) + table.offsetLeft}px`;
-  table.style.setProperty("--graph-width", `${width}px`);
-  svg.setAttribute("width", String(width));
-  svg.setAttribute("height", String(bottom));
-  const x = (col: number) => PAD + col * LANE;
-  const y = (row: number) => centres[row];
-  const ns = "http://www.w3.org/2000/svg";
-  const lines = document.createElementNS(ns, "g");
-  for (const line of result.lines) {
-    let d = `M${x(line.points[0].col)},${y(line.points[0].row)}`;
-    for (let i = 1; i < line.points.length; i++) {
-      const [p, q] = [line.points[i - 1], line.points[i]];
-      const [y1, y2] = [y(p.row), y(q.row)];
-      if (p.col === q.col) {
-        d += `L${x(q.col)},${y2}`;
-        continue;
-      }
-      // Git Graph's curve, over one row's height. When a commit's details
-      // open in between and the gap is taller, the rest is straight, on the
-      // side the layout says.
-      const span = Math.min(ROW, y2 - y1);
-      const [from, to] = q.bendFirst ? [y1, y1 + span] : [y2 - span, y2];
-      if (from > y1) d += `L${x(p.col)},${from}`;
-      d += `C${x(p.col)},${from + span * 0.8} ${x(q.col)},${to - span * 0.8} ${x(q.col)},${to}`;
-      if (to < y2) d += `L${x(q.col)},${y2}`;
-    }
-    const path = document.createElementNS(ns, "path");
-    path.setAttribute("d", d);
-    path.setAttribute("class", "line");
-    path.setAttribute("stroke", line.uncommitted ? UNCOMMITTED_COLOUR : colourOf(line.colour));
-    lines.append(path);
-  }
-  const nodes = document.createElementNS(ns, "g");
-  graph.commits.forEach((commit, row) => {
-    const node = result.nodes[row];
-    const colour = commit.hash === UNCOMMITTED ? UNCOMMITTED_COLOUR : colourOf(node.colour);
-    const circle = document.createElementNS(ns, "circle");
-    circle.setAttribute("cx", String(x(node.col)));
-    circle.setAttribute("cy", String(centres[row]));
-    circle.setAttribute("r", "4");
-    const hollow = commit.hash === UNCOMMITTED || commit.stash;
-    circle.setAttribute("class", `node${hollow ? " hollow" : ""}`);
-    circle.setAttribute("stroke", colour);
-    if (!hollow) circle.setAttribute("fill", colour);
-    nodes.append(circle);
-    if (commit.stash) {
-      const dot = document.createElementNS(ns, "circle");
-      dot.setAttribute("cx", String(x(node.col)));
-      dot.setAttribute("cy", String(centres[row]));
-      dot.setAttribute("r", "1.75");
-      dot.setAttribute("fill", colour);
-      nodes.append(dot);
-    }
-  });
-  svg.append(lines, nodes);
-}
-
 // ---------------------------------------------------------------- details
 
-function detailsRow(span: number): HTMLTableRowElement {
-  const cell = el("td", { colspan: String(span) });
-  const row = el("tr", { class: "details-row" }, cell);
-  cell.append(renderDetails());
-  return row;
+/**
+ * The open commit's details, with the lanes leaving it carried on down their
+ * left, its own lane thicker -- as VS Code draws them past a commit's changed
+ * files when one is expanded in its graph. The placeholder is drawn one row
+ * high and stretched to the details' height: the lanes are straight there.
+ */
+function detailsRow(span: number, viewModel: ISCMHistoryItemViewModel): HTMLTableRowElement {
+  const lanes = renderSCMHistoryGraphPlaceholder(
+    viewModel.outputSwimlanes,
+    viewModel.historyItem.parentIds.length > 0 ? getHistoryItemIndex(viewModel) : undefined,
+  );
+  lanes.classList.add("graph-placeholder");
+  lanes.setAttribute("viewBox", `0 0 ${SWIMLANE_WIDTH * (viewModel.outputSwimlanes.length + 1)} ${SWIMLANE_HEIGHT}`);
+  lanes.setAttribute("preserveAspectRatio", "none");
+  lanes.setAttribute("aria-hidden", "true");
+  const cell = el("td", { colspan: String(span) }, lanes, renderDetails());
+  return el("tr", { class: "details-row" }, cell);
 }
 
 interface Folder {
@@ -842,11 +777,7 @@ function renderDetails(): HTMLElement {
 const compareLabel = (hash: string) => (hash === UNCOMMITTED ? "Working Tree" : short(hash));
 
 function rerenderDetails(): void {
-  const current = rows.querySelector(".details-row td");
-  if (current) {
-    current.replaceChildren(renderDetails());
-    drawGraph();
-  }
+  rows.querySelector(".details-row .details")?.replaceWith(renderDetails());
 }
 
 /**
@@ -866,7 +797,6 @@ function select(hash: string | undefined, compare: boolean): void {
   }
   state.details = state.open ? { hash: state.open, loading: true } : undefined;
   renderRows();
-  drawGraph();
   if (!state.open) return;
   request();
   const row = rows.querySelector<HTMLElement>(`tr.commit[data-hash="${CSS.escape(state.open)}"]`);
@@ -1147,7 +1077,6 @@ optionsButton.addEventListener("click", () => {
         state.columns.muteMerges = on;
         post({ type: "columns", columns: state.columns });
         renderRows();
-        drawGraph();
       }),
       el("div", { class: "popover-title" }, "Order"),
       order("Commit Date", "date"),
@@ -1262,7 +1191,6 @@ window.addEventListener("message", (event: MessageEvent) => {
         state.graph = undefined;
         renderToolbar();
         rows.replaceChildren();
-        svg.replaceChildren();
         showNotice("No Git repository is open in this window. Open a folder that has one, or run git init.");
         return;
       }
@@ -1272,7 +1200,7 @@ window.addEventListener("message", (event: MessageEvent) => {
       state.remotes = message.remotes as Remote[];
       state.diffTool = message.diffTool as boolean;
       if (message.columns) state.columns = { ...state.columns, ...message.columns as Partial<Columns> };
-      state.layout = layout(state.graph.commits, state.view.firstParent, UNCOMMITTED);
+      state.layout = layout(state.graph.commits, state.view.firstParent, state.graph.head);
       if (changedRepo || !state.graph.commits.some((c) => c.hash === state.open)) {
         state.open = undefined;
         state.compare = undefined;
@@ -1283,7 +1211,6 @@ window.addEventListener("message", (event: MessageEvent) => {
       renderHeader();
       renderRows();
       showNotice(state.graph.commits.length === 0 ? "No commits yet." : undefined);
-      requestAnimationFrame(drawGraph);
       renderFooter();
       findMatches();
       // A refresh keeps an open commit open, its details shown until they are
@@ -1322,11 +1249,9 @@ window.addEventListener("message", (event: MessageEvent) => {
       post({ type: "columns", columns: state.columns });
       renderHeader();
       renderRows();
-      drawGraph();
       return;
     }
   }
 });
 
-new ResizeObserver(() => drawGraph()).observe(table);
 post({ type: "ready" });

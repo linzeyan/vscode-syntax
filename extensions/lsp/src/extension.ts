@@ -11,6 +11,7 @@ import {
 } from "vscode-languageclient/node";
 import { firstCodeLine } from "./anchor";
 import { activate as activateEditor } from "./editor/extension";
+import { toolsEnv } from "./editor/toolsEnv";
 import { commonRoot, useLines } from "./gowork";
 import { isOn, type Quiet, stillOn, toggler } from "./quiet";
 import { checkForUpdates, scheduleUpdateCheck } from "./update";
@@ -848,14 +849,19 @@ export async function activate(context: vscode.ExtensionContext) {
   const serverPath = resolveServerPath(context);
   const exports = activateEditor(context, serverPath);
   let yielded = yieldServers();
+  // Read again on every start, so assigning `env` and restarting is how a
+  // `poly.tools` change reaches the daemon. Spread over process.env because
+  // the client hands an executable's env to spawn as the whole environment.
+  const server = {
+    command: serverPath,
+    args: ["lsp"],
+    transport: TransportKind.stdio,
+    options: { env: { ...process.env, ...toolsEnv() } },
+  };
   client = new LanguageClient(
     "poly",
     "Poly",
-    {
-      command: serverPath,
-      args: ["lsp"],
-      transport: TransportKind.stdio,
-    },
+    server,
     {
       outputChannel: daemonLog(context),
       documentSelector: LANGUAGES.map((language) => ({
@@ -944,6 +950,10 @@ export async function activate(context: vscode.ExtensionContext) {
       // the findings already on screen: the client drops its diagnostics when
       // it stops, and a daemon started with lint off publishes none.
       if (event.affectsConfiguration("poly.lintOnSave")) {
+        void client?.restart();
+      }
+      if (event.affectsConfiguration("poly.tools")) {
+        server.options.env = { ...process.env, ...toolsEnv() };
         void client?.restart();
       }
     }),
@@ -1045,7 +1055,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (!target) {
           return;
         }
-        const terminal = vscode.window.createTerminal("poly check");
+        const terminal = vscode.window.createTerminal({ name: "poly check", env: toolsEnv() });
         terminal.show();
         terminal.sendText(`"${serverPath}" check "${target}"`);
       },
@@ -1065,7 +1075,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (!target) {
           return;
         }
-        const terminal = vscode.window.createTerminal("poly deadcode");
+        const terminal = vscode.window.createTerminal({ name: "poly deadcode", env: toolsEnv() });
         terminal.show();
         terminal.sendText(`"${serverPath}" deadcode "${target}"`);
       },

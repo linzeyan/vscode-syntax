@@ -1384,7 +1384,9 @@ fn cmd_tools(rest: &[String]) -> Result<i32> {
                         )
                     }
                     poly_tools::Resolved::Pinned(p) => println!("{name}: pinned {}", p.display()),
-                    poly_tools::Resolved::Disabled => println!("{name}: disabled in poly.toml"),
+                    poly_tools::Resolved::Disabled => {
+                        println!("{name}: disabled in {}", config.tool_source(name))
+                    }
                     // Not downloaded even when named. Fetching a binary poly
                     // would then never invoke is the confusing outcome; the
                     // one line that makes it run is the useful answer.

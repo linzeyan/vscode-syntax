@@ -3,7 +3,15 @@ import { resolve } from "node:path";
 import Mocha from "mocha";
 
 export function run(): Promise<void> {
-  const mocha = new Mocha({ ui: "tdd", color: true, timeout: 60_000 });
+  // runTest.ts launches the editor twice: once for everything, and once beside
+  // a stand-in for formulahendry.code-runner for the one suite about that.
+  const mocha = new Mocha({
+    ui: "tdd",
+    color: true,
+    timeout: 60_000,
+    grep: "Code Runner beside formulahendry.code-runner",
+    invert: process.env.POLY_E2E_SUITE !== "code-runner-yield",
+  });
   mocha.addFile(resolve(__dirname, "extension.test.js"));
   return new Promise((done, fail) => {
     // A green run has to mean tests ran. CI job logs are not readable without a

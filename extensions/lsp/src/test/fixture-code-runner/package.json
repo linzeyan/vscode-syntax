@@ -1,0 +1,10 @@
+{
+  "name": "code-runner",
+  "displayName": "poly e2e: a stand-in for formulahendry.code-runner",
+  "description": "Loaded beside poly-lsp in the e2e host's second launch and nowhere else. It has Code Runner's id and nothing else, which is all poly looks at to decide that Code Runner is installed and stand aside.",
+  "publisher": "formulahendry",
+  "version": "0.0.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  }
+}

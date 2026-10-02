@@ -48,14 +48,38 @@ export function registerMarp(context: vscode.ExtensionContext): (md: MarkdownIt)
     }
     return marp;
   };
+  const off = () => yielded() || !vscode.workspace.getConfiguration("poly.marp").get<boolean>("enabled", true);
   const loadFor = (document: vscode.TextDocument) => {
-    if (document.languageId === "markdown" && !yielded()) load();
+    if (document.languageId === "markdown" && !off()) load();
   };
   vscode.workspace.textDocuments.forEach(loadFor);
   context.subscriptions.push(
     ...standIns,
     vscode.extensions.onDidChange(standDown),
     vscode.workspace.onDidOpenTextDocument(loadFor),
+    // Once loaded, Marp refreshes the preview on its own settings; before
+    // that nobody is listening, and a switch turned on would show nothing.
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!marp && event.affectsConfiguration("poly.marp.enabled")) {
+        void vscode.commands.executeCommand("markdown.preview.refresh");
+      }
+    }),
   );
-  return (md) => (yielded() ? md : load().extendMarkdownIt(md));
+  return (md) => {
+    if (yielded()) return md;
+    if (!off()) return load().extendMarkdownIt(md);
+    // The markdown extension asks for plugins once per window, so a plugin
+    // left out now would stay out until a reload. Instead Marp is put in on
+    // the first render after the switch is turned on; switched off again,
+    // Marp itself stops recognising its documents.
+    const it = md as MarkdownIt & { parse(src: string, env: unknown): unknown };
+    const { parse } = it;
+    it.parse = (markdown, env) => {
+      if (off()) return parse.call(it, markdown, env);
+      it.parse = parse;
+      load().extendMarkdownIt(it);
+      return it.parse(markdown, env);
+    };
+    return md;
+  };
 }

@@ -1,4 +1,4 @@
-/* The Git Graph page, in the editor's own colours: every value here is a theme
+/* The Git History page, in the editor's own colours: every value here is a theme
    variable, so it reads as part of VSCode in any theme, high contrast included. */
 
 html,
@@ -388,30 +388,36 @@ td.commit-hash {
 }
 
 tr.commit {
+  --row-background: var(--vscode-editor-background);
   cursor: pointer;
 }
 
 /* Backgrounds on the row, not its cells: a muted row's cells are
    translucent, and would take the highlight down with them. */
 tr.commit:hover {
-  background: var(--vscode-list-hoverBackground);
+  --row-background: var(--vscode-list-hoverBackground);
+  background: var(--row-background);
 }
 
 tr.commit.match {
-  background: var(--vscode-editor-findMatchHighlightBackground);
+  --row-background: var(--vscode-editor-findMatchHighlightBackground);
+  background: var(--row-background);
 }
 
 tr.commit.current-match {
-  background: var(--vscode-editor-findMatchBackground);
+  --row-background: var(--vscode-editor-findMatchBackground);
+  background: var(--row-background);
 }
 
 tr.commit.compared {
-  background: var(--vscode-list-inactiveSelectionBackground);
+  --row-background: var(--vscode-list-inactiveSelectionBackground);
+  background: var(--row-background);
   color: var(--vscode-list-inactiveSelectionForeground, inherit);
 }
 
 tr.commit.selected {
-  background: var(--vscode-list-activeSelectionBackground);
+  --row-background: var(--vscode-list-activeSelectionBackground);
+  background: var(--row-background);
   color: var(--vscode-list-activeSelectionForeground, inherit);
 }
 
@@ -461,25 +467,40 @@ tr.uncommitted .subject {
 
 /* ------------------------------------------------------------ graph */
 
-svg.graph {
+/* Each row draws its own slice of the graph (gitGraphDraw.ts), edge to edge,
+   so the slices meet into unbroken lanes. */
+td.graph > svg.graph {
+  display: block;
+}
+
+/* From VS Code's scm.css (1.140.0, MIT): every circle is ringed in the row's
+   own background, which is what parts it from the lanes running into it, and
+   the centre of HEAD's and of the uncommitted changes' circles is that
+   background too. --row-background follows the row's highlight. */
+td.graph > svg.graph > circle {
+  stroke: var(--row-background);
+}
+
+td.graph.current > svg.graph > circle:last-child,
+td.graph.uncommitted-changes > svg.graph > circle:last-child {
+  fill: var(--row-background);
+}
+
+/* VS Code's, too: the open commit's lane is drawn thicker, from its circle
+   down through the details. */
+tr.commit.selected td.graph > svg.graph > path:last-of-type {
+  stroke-width: 3px;
+}
+
+.details-row svg.graph-placeholder {
   position: absolute;
-  z-index: 1;
-  pointer-events: none;
-  overflow: visible;
+  top: 0;
+  left: 0;
+  height: 100% !important;
 }
 
-svg.graph .line {
-  fill: none;
-  stroke-width: 2;
-}
-
-svg.graph .node {
-  stroke-width: 1.5;
-}
-
-svg.graph .node.hollow {
-  fill: var(--vscode-editor-background);
-  stroke-width: 2;
+.details-row svg.graph-placeholder path {
+  vector-effect: non-scaling-stroke;
 }
 
 /* ------------------------------------------------------------ references */
@@ -562,6 +583,7 @@ svg.graph .node.hollow {
 .details-row > td {
   /* The graph carries on to the left of the details, so the lines through
      this row still read as the history they are. */
+  position: relative;
   height: auto;
   padding: 2px 8px 8px var(--graph-width, 0px);
   white-space: normal;

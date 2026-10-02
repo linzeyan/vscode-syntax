@@ -119,6 +119,10 @@ async function main() {
           throw new Error(`${from}: papaparse's float pattern is not there exactly once`);
         }
         content = Buffer.concat([
+          // Apache-2.0 §4(b): a modified file says so.
+          Buffer.from(
+            "/* Modified by poly: papaparse's float pattern is replaced by papaparse 5.2's. See tools/perspective-assets.js. */\n",
+          ),
           content.subarray(0, at),
           Buffer.from(FLOAT_FIXED),
           content.subarray(at + FLOAT.length),

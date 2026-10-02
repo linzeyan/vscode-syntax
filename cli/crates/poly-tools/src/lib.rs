@@ -529,7 +529,8 @@ pub fn resolve(name: &str, config: &poly_core::Config, offline: bool) -> Resolve
             Resolved::Pinned(path)
         } else {
             Resolved::Missing(format!(
-                "poly.toml points {name} at {} (not found)",
+                "{} points {name} at {} (not found)",
+                config.tool_source(name),
                 path.display()
             ))
         };

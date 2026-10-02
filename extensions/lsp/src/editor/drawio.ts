@@ -3,10 +3,13 @@
  * that needs no VSCode: which files it opens, what draw.io is told on start,
  * and the page. drawioEditor.ts is the rest.
  *
- * hediet's extension is GPL-3.0 and none of it is here: the page loads
+ * hediet's extension is GPL-3.0, and its code is not here: the page loads
  * draw.io's own web app (Apache-2.0) and speaks draw.io's documented embed
- * protocol, and what hediet does was read off it from outside -- its manifest,
- * and what its page tells draw.io (tools/drawio-diff).
+ * protocol. Two tables are taken from it, for interoperability with that
+ * protocol and so that a drawing behaves the same in either editor:
+ * PASS_THROUGH is hediet's VSCODE_PASSTHROUGH_KEYS, and urlParams are the
+ * embed parameters its page starts draw.io with (compared with
+ * tools/drawio-diff).
  */
 
 import format from "xml-formatter";

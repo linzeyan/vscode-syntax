@@ -76,4 +76,4 @@ function load() {
   return { source, version: path.basename(root) };
 }
 
-module.exports = { installed, load };
+module.exports = { load };

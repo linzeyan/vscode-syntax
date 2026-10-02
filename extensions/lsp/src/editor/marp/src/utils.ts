@@ -21,6 +21,8 @@ export const detectMarpDocument = (doc: TextDocument): boolean =>
   doc.languageId === 'markdown' && detectMarpFromMarkdown(doc.getText())
 
 export const detectMarpFromMarkdown = (markdown: string): boolean => {
+  if (!marpConfiguration().get<boolean>('enabled', true)) return false
+
   const frontmatter = detectFrontMatter(markdown)
   if (!frontmatter) return false
 

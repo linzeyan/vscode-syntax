@@ -149,6 +149,9 @@ importers:
       parquets:
         specifier: 0.10.10
         version: 0.10.10
+      picomatch:
+        specifier: 2.3.2
+        version: 2.3.2
       plantuml-encoder:
         specifier: 1.4.0
         version: 1.4.0

@@ -1,0 +1,2 @@
+# servo/stylo has no license file at e0bcd28a1f1a0b35903b4a9b7652c6b993a26ccc (the selectors 0.39.0 commit) or at HEAD (checked 2026-10-02); its files carry MPL-2.0's Exhibit A header, so the text is the MPL-2.0 file of servo/servo, the project stylo is split out of
+https://github.com/servo/servo/blob/cdcf074f32af402eee8b93c05cd2b49958528fc1/LICENSE

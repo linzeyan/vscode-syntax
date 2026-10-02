@@ -278,6 +278,11 @@ include-hidden = false
 # the ones below is a warning -- the tool you meant keeps running, and you see
 # its findings.
 #
+# In VSCode, set these in settings.json instead, under `poly.tools`
+# (`"poly.tools": { "shellcheck": "off" }`); this table is for running poly from
+# the command line. Where both name a tool, the setting wins for that tool, and
+# the rest of this table still applies. A path there is best written absolute.
+#
 # The whole set, as of poly {{version}}:
 #
 {{tools}}

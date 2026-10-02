@@ -29,3 +29,6 @@ own formatting and lint for the same reason. What differs:
 - `preview.js` does nothing when marp-vscode's preview script is on the page. Both are in every Markdown preview once
   both extensions are installed, and each copy of marp-core defines the same custom elements: the second
   `customElements.define` throws.
+- `utils.ts` recognises no document while `poly.marp.enabled` is off, and `extension.ts` refreshes the preview when it
+  changes. Every Marp feature (the preview, diagnostics, completion, export) starts from that one check, so the switch
+  reaches all of them without an edit at each.

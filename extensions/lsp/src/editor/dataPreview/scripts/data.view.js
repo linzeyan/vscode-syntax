@@ -1,3 +1,4 @@
+// Modified by poly from RandomFractalsInc.vscode-data-preview 2.3.0; the changes are listed in LICENSE.txt.
 // data preview vars
 let vscode, title, tableSelector, rowCounter,
 	saveFileTypeSelector,

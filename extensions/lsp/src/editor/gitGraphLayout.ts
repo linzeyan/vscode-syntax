@@ -1,176 +1,234 @@
+/*!---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 /**
- * Where each commit of the Git Graph sits and how the lines between them run,
- * placed as mhutchie.git-graph 1.30.0 places them: tools/git-graph-diff/layout.js
- * reads both graphs off the screen and compares them row by row.
+ * The Git History graph's lanes and colours: VS Code's own Source Control
+ * Graph, ported from microsoft/vscode 1.140.0 (commit
+ * 07f806f999227108933c2e30515b26eecc1fda74),
+ * src/vs/workbench/contrib/scm/browser/scmHistory.ts -- the swimlanes of
+ * toISCMHistoryItemViewModelArray and the scmGraph.* colours. Its drawing is
+ * preview/gitGraphDraw.ts. MIT, under the copyright above.
  *
- * The rules, as observed. Commits are taken newest first, and each one not yet
- * on a line starts one, which then follows first parents down until it reaches
- * a commit already on a line. Every row hands out its columns left to right in
- * the order lines arrive at it, so a line moves left as soon as the lines to
- * its left have ended. A merge's other parents each get either a new line, if
- * they are on none yet, or a short one in the colour of the line they are on,
- * which joins it at the first row where that line is heading for them. A
- * colour is free again below the row where its line ended.
+ * Every row has the lanes that enter it from above (inputSwimlanes) and the
+ * lanes that leave it below (outputSwimlanes), each a commit some line is
+ * heading for and that line's colour; the page draws each row from those two
+ * alone. Kept recognisably VS Code's, so what changed is listed here:
  *
- * Two things follow that look odd but are what Git Graph draws, so they are
- * kept: the line from uncommitted changes carries on as HEAD's own line, in
- * the first colour, and a root commit that is not the last row -- an orphan
- * branch -- has a line running from it to the bottom of the graph.
+ * - The workbench helpers it imports (deepClone, rot, registerColor,
+ *   asCssVariable) are written out: a webview has none of them, and an editor
+ *   older than the one that registered scmGraph.* has no such variables, so
+ *   each carries its registered default as a fallback.
+ * - Uncommitted changes take the place of VS Code's outgoing changes node:
+ *   its colour, and its kind for the drawing.
+ * - The checked-out commit carries a `HEAD` reference in the colour VS Code
+ *   gives the current branch, whether or not a branch is checked out.
+ * - A root commit keeps the lanes beside it. VS Code drops every lane at a
+ *   root, since the graph it shows ends in one; with every branch listed a
+ *   root can sit mid-graph -- an orphan branch, or a history merged in with
+ *   --allow-unrelated-histories -- and the lanes passing it would stop dead.
+ * - Incoming changes, reference sorting and hovers are left out: the page
+ *   shows neither an upstream's incoming commits nor VS Code's hovers.
+ * - The copyright header opens with `/*!` here and in gitGraphDraw.ts, which
+ *   makes it a legal comment: esbuild keeps it in the minified page bundle.
  *
  * Pure, so the page and the unit tests run the same code.
  */
+import { UNCOMMITTED } from "./gitGraphProtocol";
 
-export interface Point {
-  row: number;
-  col: number;
+export type ColorIdentifier = string;
+
+/** The default each colour is registered with, the fallback for an editor that does not know it. */
+const colorDefaults = new Map<ColorIdentifier, string>();
+function registerColor(id: ColorIdentifier, defaults: string): ColorIdentifier {
+  colorDefaults.set(id, defaults);
+  return id;
 }
 
-export interface Line {
-  /** An index into the palette: the page takes it modulo the palette's length. */
-  colour: number;
-  /** The part of a line that leaves the uncommitted changes, which is drawn grey. */
-  uncommitted: boolean;
-  /**
-   * One point per row, from where the line starts to where it ends. A segment
-   * that changes column bends next to its upper end when `bendFirst` is set
-   * on its lower point, next to its lower end otherwise -- which only shows
-   * when a commit's details open in between and the gap is tall.
-   */
-  points: (Point & { bendFirst: boolean })[];
+/** How a webview reaches a theme colour: the variable VSCode sets on the page for each one. */
+export function asCssVariable(color: ColorIdentifier): string {
+  return `var(--vscode-${color.replace(/\./g, "-")}, ${colorDefaults.get(color)})`;
 }
-
-export interface Layout {
-  nodes: { col: number; colour: number }[];
-  lines: Line[];
-  /** The most columns any row uses. */
-  width: number;
-}
-
-/** A parent that is not listed: more commits follow that were not loaded. */
-const BELOW = -1;
 
 /**
- * Lays out `commits`, newest first. A parent that is not among them is drawn
- * as a line to the bottom, towards the commits not loaded -- except, in
- * first-parent mode, the other parents of a merge, which are left out.
+ * History item reference colors (local, remote, base)
  */
-export function layout(
-  commits: { hash: string; parents: string[] }[],
-  firstParent: boolean,
-  uncommitted = "*",
-): Layout {
-  const n = commits.length;
-  const rowOf = new Map(commits.map((commit, row) => [commit.hash, row]));
-  const parents = commits.map((commit) =>
-    commit.parents.flatMap((parent, index) => {
-      const row = rowOf.get(parent);
-      return row !== undefined ? [row] : !firstParent || index === 0 ? [BELOW] : [];
-    })
-  );
+export const historyItemRefColor = registerColor("scmGraph.historyItemRefColor", "var(--vscode-charts-blue)");
 
-  /** Per row: the next column to hand out, and what each handed-out column is a line to. */
-  const nextCol = new Array<number>(n).fill(0);
-  const heading: { to: number | undefined; branch: number }[][] = commits.map(() => []);
-  /** Per row: the column of the commit itself and the branch -- the line of first parents -- it is on, once it is on one. */
-  const col = new Array<number>(n);
-  const branchOf = new Array<number>(n);
-  const branchColour: number[] = [];
-  const parentsDone = new Array<number>(n).fill(0);
-  /** Per colour: the row its last line ended at. */
-  const colourEnded: number[] = [];
-  const lines: Line[] = [];
+/**
+ * History graph color registry
+ */
+export const colorRegistry: ColorIdentifier[] = [
+  registerColor("scmGraph.foreground1", "#FFB000"),
+  registerColor("scmGraph.foreground2", "#DC267F"),
+  registerColor("scmGraph.foreground3", "#994F00"),
+  registerColor("scmGraph.foreground4", "#40B0A6"),
+  registerColor("scmGraph.foreground5", "#B66DFF"),
+];
 
-  const take = (row: number, at: number, to: number | undefined, branch: number) => {
-    if (at === nextCol[row]) {
-      nextCol[row] = at + 1;
-      heading[row][at] = { to, branch };
-    }
-  };
-  const nextParent = (row: number) => parents[row][parentsDone[row]];
-  const freeColour = (start: number) => {
-    const reused = colourEnded.findIndex((ended) => start > ended);
-    if (reused !== -1) return reused;
-    colourEnded.push(n);
-    return colourEnded.length - 1;
-  };
-  const startLine = (lineColour: number, from: Point, isUncommitted: boolean): Line => {
-    const line = { colour: lineColour, uncommitted: isUncommitted, points: [{ ...from, bendFirst: false }] };
-    lines.push(line);
-    return line;
-  };
+export interface ISCMHistoryItem {
+  id: string;
+  parentIds: string[];
+  references?: { id: string }[];
+}
 
-  /** Draws the line from `start` towards its next parent not yet drawn to. */
-  const draw = (start: number) => {
-    let commit = start;
-    let parent = nextParent(commit);
-    let last: Point = { row: start, col: col[start] ?? nextCol[start] };
+export interface ISCMHistoryItemGraphNode {
+  /** The commit this lane is heading for. */
+  id: string;
+  color: ColorIdentifier;
+}
 
-    if (
-      parent !== undefined && parent !== BELOW && parents[start].length > 1 && col[start] !== undefined
-      && col[parent] !== undefined
-    ) {
-      // Both ends are already on lines: a short line in the parent's colour,
-      // into the first row where the parent's line is on its way to it.
-      const branch = branchOf[parent];
-      const line = startLine(branchColour[branch], last, false);
-      for (let row = start + 1; row < n; row++) {
-        const joining = heading[row].findIndex((h) => h?.to === parent && h.branch === branch);
-        const at = joining === -1 ? nextCol[row] : joining;
-        line.points.push({ row, col: at, bendFirst: joining === -1 && row !== parent ? last.col < at : true });
-        take(row, at, parent, branch);
-        last = { row, col: at };
-        if (joining !== -1) {
-          parentsDone[start]++;
-          break;
-        }
-      }
-      return;
-    }
+export interface ISCMHistoryItemViewModel {
+  historyItem: ISCMHistoryItem;
+  kind: "HEAD" | "node" | "uncommitted-changes";
+  inputSwimlanes: ISCMHistoryItemGraphNode[];
+  outputSwimlanes: ISCMHistoryItemGraphNode[];
+}
 
-    const lineColour = freeColour(start);
-    const branch = branchColour.push(lineColour) - 1;
-    if (col[start] === undefined) {
-      col[start] = last.col;
-      branchOf[start] = branch;
-    }
-    take(start, last.col, start, branch);
-    let line = startLine(lineColour, last, commits[start].hash === uncommitted);
-    let row = start + 1;
-    for (; row < n; row++) {
-      const reached = row === parent;
-      const at = reached && col[row] !== undefined ? col[row] : nextCol[row];
-      line.points.push({ row, col: at, bendFirst: last.col < at });
-      take(row, at, parent, branch);
-      last = { row, col: at };
-      if (reached) {
-        parentsDone[commit]++;
-        const wasOnALine = col[row] !== undefined;
-        if (!wasOnALine) {
-          col[row] = at;
-          branchOf[row] = branch;
-        }
-        commit = row;
-        parent = nextParent(commit);
-        if (parent === undefined || wasOnALine) break;
-        if (line.uncommitted) line = startLine(lineColour, last, false);
+const rot = (index: number, modulo: number) => (modulo + (index % modulo)) % modulo;
+
+function getLabelColorIdentifier(
+  historyItem: ISCMHistoryItem,
+  colorMap: Map<string, ColorIdentifier | undefined>,
+): ColorIdentifier | undefined {
+  if (historyItem.id === UNCOMMITTED) {
+    return historyItemRefColor;
+  } else {
+    for (const ref of historyItem.references ?? []) {
+      const colorIdentifier = colorMap.get(ref.id);
+      if (colorIdentifier !== undefined) {
+        return colorIdentifier;
       }
     }
-    // Ran off the bottom towards a parent not loaded, which is then as done
-    // as it will get. (Git Graph only does this for a parent that is not
-    // listed; one that is listed is always below, and so always reached.)
-    if (row === n && parent !== undefined) parentsDone[commit]++;
-    colourEnded[lineColour] = row;
-  };
-
-  for (let row = 0; row < n; row++) {
-    while (col[row] === undefined || nextParent(row) !== undefined) draw(row);
   }
 
-  const nodes = commits.map((_, row) => ({ col: col[row], colour: branchColour[branchOf[row]] }));
-  const width = Math.max(
-    0,
-    ...nodes.map((node) => node.col + 1),
-    ...lines.flatMap((line) => line.points.map((p) => p.col + 1)),
+  return undefined;
+}
+
+export function toISCMHistoryItemViewModelArray(
+  historyItems: ISCMHistoryItem[],
+  colorMap = new Map<string, ColorIdentifier | undefined>(),
+  currentHistoryItemRevision?: string,
+): ISCMHistoryItemViewModel[] {
+  let colorIndex = -1;
+  const viewModels: ISCMHistoryItemViewModel[] = [];
+
+  for (let index = 0; index < historyItems.length; index++) {
+    const historyItem = historyItems[index];
+
+    const kind = historyItem.id === UNCOMMITTED
+      ? "uncommitted-changes"
+      : historyItem.id === currentHistoryItemRevision
+      ? "HEAD"
+      : "node";
+    const outputSwimlanesFromPreviousItem = viewModels.at(-1)?.outputSwimlanes ?? [];
+    const inputSwimlanes = outputSwimlanesFromPreviousItem.map((i) => ({ ...i }));
+    const outputSwimlanes: ISCMHistoryItemGraphNode[] = [];
+
+    let firstParentAdded = false;
+
+    // Add first parent to the output (and, for a root, only drop the lanes
+    // that end here: see the header)
+    for (const node of inputSwimlanes) {
+      if (node.id === historyItem.id) {
+        if (!firstParentAdded && historyItem.parentIds.length > 0) {
+          outputSwimlanes.push({
+            id: historyItem.parentIds[0],
+            color: getLabelColorIdentifier(historyItem, colorMap) ?? node.color,
+          });
+          firstParentAdded = true;
+        }
+
+        continue;
+      }
+
+      outputSwimlanes.push({ ...node });
+    }
+
+    // Add unprocessed parent(s) to the output
+    for (let i = firstParentAdded ? 1 : 0; i < historyItem.parentIds.length; i++) {
+      // Color index (label -> next color)
+      let colorIdentifier: string | undefined;
+
+      if (i === 0) {
+        colorIdentifier = getLabelColorIdentifier(historyItem, colorMap);
+      } else {
+        const historyItemParent = historyItems
+          .find((h) => h.id === historyItem.parentIds[i]);
+        colorIdentifier = historyItemParent ? getLabelColorIdentifier(historyItemParent, colorMap) : undefined;
+      }
+
+      if (!colorIdentifier) {
+        colorIndex = rot(colorIndex + 1, colorRegistry.length);
+        colorIdentifier = colorRegistry[colorIndex];
+      }
+
+      outputSwimlanes.push({
+        id: historyItem.parentIds[i],
+        color: colorIdentifier,
+      });
+    }
+
+    viewModels.push({
+      historyItem,
+      kind,
+      inputSwimlanes,
+      outputSwimlanes,
+    });
+  }
+
+  return viewModels;
+}
+
+export function getHistoryItemIndex(historyItemViewModel: ISCMHistoryItemViewModel): number {
+  const historyItem = historyItemViewModel.historyItem;
+  const inputSwimlanes = historyItemViewModel.inputSwimlanes;
+
+  // Find the history item in the input swimlanes
+  const inputIndex = inputSwimlanes.findIndex((node) => node.id === historyItem.id);
+
+  // Circle index - use the input swimlane index if present, otherwise add it to the end
+  return inputIndex !== -1 ? inputIndex : inputSwimlanes.length;
+}
+
+/**
+ * The colour of a commit's circle, as renderSCMHistoryItemGraph picks it --
+ * except that a root's is the lane it ends, since its output lane at that
+ * index is now a lane passing beside it.
+ */
+export function getHistoryItemColor(historyItemViewModel: ISCMHistoryItemViewModel): ColorIdentifier {
+  const { inputSwimlanes, outputSwimlanes } = historyItemViewModel;
+  const circleIndex = getHistoryItemIndex(historyItemViewModel);
+
+  // Circle color - use the output swimlane color if present, otherwise the input swimlane color
+  return circleIndex < outputSwimlanes.length && historyItemViewModel.historyItem.parentIds.length > 0
+    ? outputSwimlanes[circleIndex].color
+    : circleIndex < inputSwimlanes.length
+    ? inputSwimlanes[circleIndex].color
+    : historyItemRefColor;
+}
+
+/**
+ * poly's commits, newest first, as VS Code's history items. In first-parent
+ * mode `git log` still names a merge's other parents; those it did not list
+ * are left out, or each would hold a lane open to the bottom of the graph.
+ */
+export function layout(
+  commits: readonly { hash: string; parents: string[] }[],
+  firstParent: boolean,
+  head?: string,
+): ISCMHistoryItemViewModel[] {
+  const listed = new Set(commits.map((commit) => commit.hash));
+  return toISCMHistoryItemViewModelArray(
+    commits.map((commit) => ({
+      id: commit.hash,
+      parentIds: firstParent
+        ? commit.parents.filter((parent, index) => index === 0 || listed.has(parent))
+        : commit.parents,
+      references: commit.hash === head ? [{ id: "HEAD" }] : [],
+    })),
+    new Map([["HEAD", historyItemRefColor]]),
+    head,
   );
-  return { nodes, lines, width };
 }

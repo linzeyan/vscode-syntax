@@ -1,14 +1,16 @@
 /**
- * mhutchie.git-graph 1.30.0, written anew: its graph of every branch, tag and
- * stash with uncommitted changes on top, a commit's details and files inline,
- * two commits compared, and its actions on branches, commits, tags, stashes
- * and remotes, in the menus of what they act on.
+ * Git History: a graph of every branch, tag and stash with uncommitted
+ * changes on top, a commit's details and files inline, two commits compared,
+ * and actions on branches, commits, tags, stashes and remotes, in the menus of
+ * what they act on.
  *
- * Git Graph's licence forbids redistributing any work derived from it, so
- * none of its code is in here; tools/git-graph-diff holds this to what it
- * does. What this registers is all that loads at startup: the command
- * handlers, the dialogs and the page itself are `dist/gitGraph.js`, loaded the
- * first time any of them is used.
+ * Its behaviour is modelled on mhutchie.git-graph 1.30.0: tools/git-graph-diff
+ * holds what it reads from git and what its actions do to Git Graph's. The
+ * graph's layout and drawing are ported from VS Code's own Source Control
+ * Graph (MIT): gitGraphLayout.ts and preview/gitGraphDraw.ts. What this
+ * registers is all that loads at startup: the command handlers, the dialogs
+ * and the page itself are `dist/gitGraph.js`, loaded the first time any of
+ * them is used.
  *
  * While Git Graph itself is installed, this stands aside from the status bar
  * and the Source Control title, so neither shows two entries; its own
@@ -25,9 +27,9 @@ const load = () => (host ??= require(path.join(__dirname, "gitGraph.js")) as Hos
 
 export function registerGitGraph(context: vscode.ExtensionContext, log: vscode.LogOutputChannel): void {
   const statusBar = vscode.window.createStatusBarItem("poly.gitGraph", vscode.StatusBarAlignment.Left, 0);
-  statusBar.name = "Git Graph";
-  statusBar.text = "Git Graph";
-  statusBar.tooltip = "View Git Graph (git log)";
+  statusBar.name = "Git History";
+  statusBar.text = "Git History";
+  statusBar.tooltip = "View Git History";
   statusBar.command = "poly.gitGraph.view";
 
   let repositories = 0;
@@ -53,7 +55,10 @@ export function registerGitGraph(context: vscode.ExtensionContext, log: vscode.L
     };
     count();
     context.subscriptions.push(api.onDidOpenRepository(count), api.onDidCloseRepository(count));
-  }, (error) => log.warn(`Git Graph: the built-in git extension did not start: ${error}`));
+    // Caught after the handler rather than beside it: without git on the
+    // machine the extension starts fine and it is `getAPI` that throws, which
+    // a rejection handler on the same `then` never sees.
+  }).catch((error) => log.warn(`Git History: the built-in git extension has no repositories to offer: ${error}`));
 
   // Every `poly.gitGraph.*` command the manifest declares, handled in the
   // lazily loaded half -- the list lives in package.json and nowhere else.

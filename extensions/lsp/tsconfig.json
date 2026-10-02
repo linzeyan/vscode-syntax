@@ -11,5 +11,5 @@
   // Everything that runs in the extension host, which is node and has no DOM.
   // The markdown preview script is the exception and carries its own config.
   "include": ["src"],
-  "exclude": ["src/editor/preview", "src/editor/marp"]
+  "exclude": ["src/editor/preview", "src/editor/marp", "src/editor/errorLens"]
 }

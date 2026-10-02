@@ -3,9 +3,8 @@
  * on them, stashes, uncommitted changes, and what a commit, a stash or a pair
  * of commits changed.
  *
- * Written from how Git Graph behaves, not from its code, which its licence
- * lets nobody redistribute in any form. tools/git-graph-diff runs this and
- * Git Graph's own data layer over the same repositories and reports every
+ * Its behaviour is modelled on Git Graph's: tools/git-graph-diff runs this
+ * and Git Graph's own data layer over the same repositories and reports every
  * difference, which is what "the same as Git Graph" means here.
  *
  * Kept apart from `vscode` so the unit tests and that comparison can load it.

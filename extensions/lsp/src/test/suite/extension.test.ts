@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import * as vscode from "vscode";
@@ -62,6 +62,39 @@ async function formatted(uri: vscode.Uri): Promise<string> {
   edit.set(uri, edits);
   assert.ok(await vscode.workspace.applyEdit(edit), "applyEdit was rejected");
   return document.getText();
+}
+
+/// A script for Code Runner that says `said` and leaves `marker` behind, so a
+/// run is seen both in the output panel and on disk. A shebang, so that it
+/// runs under the interpreter it names and needs nothing on PATH.
+function runnable(name: string, marker: string, said: string): vscode.Uri {
+  rmSync(marker, { force: true });
+  return writeFile(name, `#!/bin/sh\necho ${said}\n: > "${marker}"\n`);
+}
+
+/// The text of the output panel that says `text`, once one does.
+function outputSaying(text: string): string | undefined {
+  return vscode.workspace.textDocuments
+    .find((one) => one.uri.scheme === "output" && one.getText().includes(text))
+    ?.getText();
+}
+
+/// Long enough for a run of `runnable`'s script to have left its marker, had
+/// one started: the command has resolved by then, and the process takes
+/// milliseconds.
+async function notRun(marker: string, why: string): Promise<void> {
+  await new Promise((done) => setTimeout(done, 2_000));
+  assert.ok(!existsSync(marker), why);
+}
+
+/// The `run` lens on `uri`, invoked the way a click does.
+async function clickRunLens(uri: vscode.Uri): Promise<void> {
+  const run = await eventually("the run lens", async () => {
+    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", uri, 10);
+    return lenses?.find((lens) => lens.command?.title === "run")?.command;
+  });
+  assert.strictEqual(run.command, "poly.runFile");
+  await vscode.commands.executeCommand(run.command, ...(run.arguments ?? []));
 }
 
 suite("poly-lsp in a real editor", () => {
@@ -921,6 +954,56 @@ func main() {
     }
   });
 
+  // What it draws is upstream's and unit-tested against a stub; what only a
+  // host shows is the wiring. Off by default and first in its group; hidden
+  // from the palette only while usernamehw.errorlens runs instead; a command
+  // run while it is off loading the bundle beside dist/extension.js and acting;
+  // and drawing on a real editor without throwing once switched on.
+  test("Error Lens is off until switched on, and its commands work either way", async () => {
+    const pkg = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON;
+    const group = pkg.contributes.configuration.find((one: { title: string }) => one.title === "Error Lens");
+    assert.strictEqual(Object.keys(group.properties)[0], "poly.errorLens.enabled");
+    const errorLens = () => vscode.workspace.getConfiguration("poly.errorLens");
+    assert.strictEqual(errorLens().inspect("enabled")?.defaultValue, false);
+    const commands = (pkg.contributes.commands as { command: string }[])
+      .map((entry) => entry.command)
+      .filter((id) => id.startsWith("poly.errorLens."));
+    const palette = pkg.contributes.menus.commandPalette as { command: string; when?: string }[];
+    for (const command of commands) {
+      const entry = palette.find((one) => one.command === command);
+      assert.strictEqual(entry?.when, "!poly.yield.errorLens", command);
+    }
+
+    const uri = writeFile("errorLens.txt", "first\nsecond line\n");
+    const planted = vscode.languages.createDiagnosticCollection("errorLens-test");
+    try {
+      const problem = new vscode.Diagnostic(
+        new vscode.Range(1, 7, 1, 11),
+        "a planted problem",
+        vscode.DiagnosticSeverity.Warning,
+      );
+      planted.set(uri, [problem]);
+      const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+      editor.selection = new vscode.Selection(0, 0, 0, 0);
+      await vscode.commands.executeCommand("poly.errorLens.selectProblem");
+      assert.deepStrictEqual(
+        [editor.selection.start.line, editor.selection.start.character, editor.selection.end.character],
+        [1, 7, 11],
+      );
+
+      // The toggle writes the setting without waiting for it, hence the polls.
+      await vscode.commands.executeCommand("poly.errorLens.toggle");
+      await eventually("Error Lens switched on", () => errorLens().get("enabled") === true || undefined);
+      await vscode.commands.executeCommand("poly.errorLens.updateEverything");
+      await vscode.commands.executeCommand("poly.errorLens.toggle");
+      await eventually("Error Lens switched off", () => errorLens().get("enabled") === false || undefined);
+    } finally {
+      planted.dispose();
+      await errorLens().update("enabled", undefined, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    }
+  });
+
   // The PlantUML logic is unit-tested and measured against jebbs.plantuml
   // (tools/plantuml-diff); what only a host shows is the wiring: that the jar
   // poly.toml pins is the one run, by the configured Java, and that the export
@@ -1293,14 +1376,15 @@ func main() {
     assert.match(html, /bespoke/);
   });
 
-  // The data, the graph and what each action does to a repository are held to
-  // mhutchie.git-graph's own by tools/git-graph-diff. What only a host shows
-  // is the wiring: every command the manifest declares reaching a handler in
-  // the half loaded on first use, the panel opening on the repository it was
-  // asked for, a menu command acting on the context the page puts on what was
-  // right-clicked, and a diff side read out of a revision by the poly-git:
-  // scheme, which has to be registered before any of that has loaded.
-  test("Git Graph opens on a repository, and its commands act on what was right-clicked", async () => {
+  // The data and what each action does to a repository are held to
+  // mhutchie.git-graph's own by tools/git-graph-diff, the graph's lanes by
+  // gitGraphLayout's unit tests. What only a host shows is the wiring: every
+  // command the manifest declares reaching a handler in the half loaded on
+  // first use, the panel opening on the repository it was asked for, a menu
+  // command acting on the context the page puts on what was right-clicked, and
+  // a diff side read out of a revision by the poly-git: scheme, which has to be
+  // registered before any of that has loaded.
+  test("Git History opens on a repository, and its commands act on what was right-clicked", async () => {
     const repo = join(workspaceRoot(), "graph-repo");
     rmSync(repo, { recursive: true, force: true });
     mkdirSync(repo);
@@ -1347,7 +1431,7 @@ func main() {
     try {
       // From the Source Control title the argument is the repository itself.
       await vscode.commands.executeCommand("poly.gitGraph.view", { rootUri: vscode.Uri.file(repo) });
-      assert.strictEqual((await eventually("the Git Graph panel", page)).label, "Git Graph");
+      assert.strictEqual((await eventually("the Git History panel", page)).label, "Git History");
 
       await vscode.env.clipboard.writeText("before");
       await vscode.commands.executeCommand("poly.gitGraph.copyHash", { repo, hash });
@@ -1365,6 +1449,53 @@ func main() {
     } finally {
       const tab = page();
       if (tab) await vscode.window.tabGroups.close(tab);
+    }
+  });
+
+  // Which command runs a file, and how it is spelled, is held to upstream's by
+  // codeRunner.test.ts. What only a host shows is the switch reaching the
+  // command -- a key bound in keybindings.json gets past every `when` -- and a
+  // process actually started, with what it says landing in Code Runner's panel.
+  test("Code Runner does nothing until switched on, then runs the file into its output panel", async () => {
+    const config = vscode.workspace.getConfiguration("poly");
+    assert.strictEqual(config.get("codeRunner.enabled"), false, "Code Runner ships switched on");
+    const marker = join(workspaceRoot(), "code-runner.ran");
+    const script = runnable("code-runner.sh", marker, "poly-code-runner-says-hello");
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(script));
+
+    await vscode.commands.executeCommand("poly.codeRunner.run");
+    await notRun(marker, "Run Code ran with Code Runner switched off");
+
+    await config.update("codeRunner.enabled", true, vscode.ConfigurationTarget.Workspace);
+    try {
+      await vscode.commands.executeCommand("poly.codeRunner.run");
+      await eventually("the script to run", () => existsSync(marker) || undefined);
+      const output = await eventually("the run in the output panel", () => outputSaying("poly-code-runner-says-hello"));
+      // The line upstream prints first: the command it ran, shebang and all.
+      assert.match(output, /\[Running\] \/bin\/sh ".*code-runner\.sh"/);
+      // Finished, so the lens test below is not told "Code is already running!".
+      await eventually("the run to end", () => outputSaying("[Done] exited with code=0"));
+    } finally {
+      await config.update("codeRunner.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
+  // The lens has one switch of its own, and Code Runner's is not it: a lens
+  // that vanished, or a click that did nothing, because a different feature
+  // was off would read as broken.
+  test("the run lens runs its file through Code Runner, with Code Runner switched off", async () => {
+    const config = vscode.workspace.getConfiguration("poly");
+    assert.strictEqual(config.get("codeRunner.enabled"), false);
+    await config.update("runCodeLens.enabled", true, vscode.ConfigurationTarget.Workspace);
+    try {
+      const marker = join(workspaceRoot(), "run-lens.ran");
+      const script = runnable("run-lens.sh", marker, "poly-run-lens-says-hello");
+      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(script));
+      await clickRunLens(script);
+      await eventually("the script to run", () => existsSync(marker) || undefined);
+      await eventually("the run in the output panel", () => outputSaying("poly-run-lens-says-hello"));
+    } finally {
+      await config.update("runCodeLens.enabled", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 
@@ -1499,5 +1630,35 @@ func main() {
     });
     assert.match(text, /^\S+ \S+ \[info\] \[poly\] binary .* reports /m, "poly's own lines are not in it");
     assert.doesNotMatch(text, /^\[poly\]/m, "a line of stderr ran on from the one before, without its own stamp");
+  });
+});
+
+// Run in a launch of its own, beside a stand-in with formulahendry.code-runner's
+// id (src/test/fixture-code-runner) and with Code Runner and the run lens
+// switched on in that workspace; index.ts picks this suite out by its title.
+// Every other test has to run without the stand-in, since poly would stand
+// aside in all of them.
+suite("Code Runner beside formulahendry.code-runner", () => {
+  suiteSetup(async function() {
+    this.timeout(120_000);
+    assert.ok(vscode.extensions.getExtension("formulahendry.code-runner"), "the stand-in is not installed");
+    await vscode.extensions.getExtension(EXTENSION_ID)?.activate();
+  });
+
+  // Both installed and both answering ctrl+alt+n would run the file twice. The
+  // lens is poly's alone, so it stays.
+  test("poly's Run Code stands aside, switched on or not, and the run lens still runs", async () => {
+    const config = vscode.workspace.getConfiguration("poly");
+    assert.strictEqual(config.get("codeRunner.enabled"), true, "the workspace did not switch Code Runner on");
+    const marker = join(workspaceRoot(), "yield.ran");
+    const script = runnable("yield.sh", marker, "poly-yield-says-hello");
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(script));
+
+    await vscode.commands.executeCommand("poly.codeRunner.run");
+    await notRun(marker, "Run Code ran beside formulahendry.code-runner");
+
+    await clickRunLens(script);
+    await eventually("the script to run", () => existsSync(marker) || undefined);
+    await eventually("the run in the output panel", () => outputSaying("poly-yield-says-hello"));
   });
 });

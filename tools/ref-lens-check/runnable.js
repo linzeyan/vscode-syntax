@@ -51,8 +51,9 @@ const OUT = join(SCRATCH, "runnable.json");
  * The pair used to be `workbench.action.debug.run` and `.start` -- ctrl+F5 and
  * F5. Both are debug commands, so both wanted a launch configuration and both
  * raised the debug toolbar, and the button labelled `run` was describing
- * something it did not do. `run` is now poly's own command, which opens a
- * terminal; `debug` still hands over, because poly ships no debugger.
+ * something it did not do. `run` is now poly's own command, which runs the
+ * file the way Code Runner's Run Code does; `debug` still hands over, because
+ * poly ships no debugger.
  */
 const RUNS = { run: "poly.runFile", debug: "workbench.action.debug.start" };
 
@@ -72,11 +73,9 @@ const FIXTURES = [
     // server reports, which is the mistake the unit tests already make.
     file: "entry.ts",
     entry: "export function main(): void {",
-    // `debug` alone. TypeScript has an entry point poly finds and no one-line
-    // way to run it from a shell -- `node entry.ts` is not it -- so there is
-    // no `run` to offer. The asymmetry is the check: a run button that opened
-    // a terminal and printed a parse error would be worse than no button.
-    buttons: ["debug"],
+    // Both: `run` is offered wherever Code Runner's executor maps have a
+    // command for the file, and TypeScript's is `ts-node`.
+    buttons: ["debug", "run"],
     text: `export function main(): void {
   console.log("poly");
 }

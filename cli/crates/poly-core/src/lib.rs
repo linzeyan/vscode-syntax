@@ -4,7 +4,7 @@
 pub mod catalog;
 pub mod diag;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -1151,6 +1151,20 @@ impl FormatOptions {
     }
 }
 
+/// The editor's `poly.tools` setting, as `[tools]` lines (`"ruff" = "0.6.9"`),
+/// which the VSCode extension sets on every poly it starts.
+///
+/// Someone who installed the extension configures it in settings.json, and a
+/// poly.toml written only to pin a tool would be a file in their repository
+/// for the editor's sake. An environment variable reaches every way the editor
+/// runs poly -- the daemon, the PlantUML jar lookup, `poly check` in a
+/// terminal -- through this one function, with no flag for each of them to
+/// learn; a CLI run outside the editor never has it, and reads poly.toml alone.
+///
+/// Entry by entry it beats poly.toml: a setting is the person at the keyboard
+/// choosing, a poly.toml line is the project's default for whoever has not.
+pub const EDITOR_TOOLS: &str = "POLY_TOOLS";
+
 pub struct Config {
     /// Compiled `[languages.map]`, in file order. Patterns match against the
     /// file name (`*.tpl`) or the full path when the pattern contains a `/`.
@@ -1173,6 +1187,9 @@ pub struct Config {
     lint_severity: Vec<(Suppression, crate::diag::Severity)>,
     format_options: BTreeMap<String, FormatOptions>,
     pub tools: BTreeMap<String, String>,
+    /// The `tools` entries that came from `EDITOR_TOOLS` rather than a
+    /// poly.toml; see `tool_source`.
+    editor_tools: BTreeSet<String>,
     /// `[walk] include-hidden`. A project decision rather than a per-run one:
     /// a repo whose sources live under a dotted directory needs this on for
     /// every invocation, editor included, or the editor and CI disagree about
@@ -1231,6 +1248,14 @@ impl Config {
                 .with_context(|| format!("invalid [languages.map] pattern {pattern:?}"))?;
             map.push((glob.compile_matcher(), lang.clone()));
         }
+        let mut tools = raw.tools;
+        let mut editor_tools = BTreeSet::new();
+        if let Ok(text) = std::env::var(EDITOR_TOOLS) {
+            let editor: BTreeMap<String, String> = toml::from_str(&text)
+                .with_context(|| format!("parsing {EDITOR_TOOLS} (the poly.tools setting)"))?;
+            editor_tools.extend(editor.keys().cloned());
+            tools.extend(editor);
+        }
         Ok(Config {
             map,
             format_fail_on: parse_fail_on(raw.format.fail_on.as_deref(), "format")?,
@@ -1248,7 +1273,8 @@ impl Config {
             format_exclude: raw.format.exclude,
             lint_exclude: raw.lint.exclude,
             format_options: raw.format.languages,
-            tools: raw.tools,
+            tools,
+            editor_tools,
             include_hidden: raw.walk.include_hidden,
             root: chain
                 .first()
@@ -1271,8 +1297,20 @@ impl Config {
             lint_severity: Vec::new(),
             format_options: BTreeMap::new(),
             tools: BTreeMap::new(),
+            editor_tools: BTreeSet::new(),
             include_hidden: false,
             root: None,
+        }
+    }
+
+    /// Where `name`'s `[tools]` entry was written, as a sentence names it. A
+    /// reader sent to poly.toml for a line that lives in their editor settings
+    /// would search the repository for it and find nothing.
+    pub fn tool_source(&self, name: &str) -> &'static str {
+        if self.editor_tools.contains(name) {
+            "the poly.tools setting"
+        } else {
+            "poly.toml"
         }
     }
 

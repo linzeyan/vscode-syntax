@@ -419,7 +419,8 @@ export function registerDataPreview(context: vscode.ExtensionContext) {
       async deserializeWebviewPanel(panel: vscode.WebviewPanel, state?: State) {
         // The page saves its state only once its view config changes; upstream
         // then threw on the missing state and left an empty tab behind.
-        if (!state?.uri) {
+        // Switched off, a restored tab would be the feature appearing anyway.
+        if (!state?.uri || !vscode.workspace.getConfiguration("poly.dataPreview").get("enabled", true)) {
           panel.dispose();
           return;
         }

@@ -1,0 +1,22 @@
+{
+  // usernamehw/vscode-error-lens's sources, vendored in src/editor/errorLens,
+  // checked with the options upstream checks them with. They import each other
+  // as `src/...` and lodash as `lodash/...`; the paths below are the typecheck's
+  // half of that, the build's `--alias` flags the bundle's. Upstream's lodash is
+  // lodash-es here, which poly already ships, and its types are lodash-es's.
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "lib": ["ES2020"],
+    "module": "commonjs",
+    "noEmit": true,
+    "paths": {
+      "src/*": ["./src/editor/errorLens/src/*"],
+      "lodash/*": ["./node_modules/@types/lodash-es/*"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2020",
+    "types": ["node"]
+  },
+  "include": ["src/editor/errorLens"]
+}

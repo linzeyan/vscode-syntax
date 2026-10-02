@@ -1,0 +1,1 @@
+# dannycoates/int53 publishes no license text: none in the int53 1.0.0 package, whose readme's License section says only "BSD", and none in the repository at v1.0.0 (4c0fdf628acfc50fd7bc03ca8c1cc9949b93b922) or at HEAD (checked 2026-10-02). Its package.json declares `"license": "BSD-3-Clause"`; no copyright line exists upstream to reproduce.

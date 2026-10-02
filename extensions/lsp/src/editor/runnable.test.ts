@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { entryLine, entryPoints, findsEntryInText, interpreterOf, runLine } from "./runnable";
+import { entryLine, entryPoints, findsEntryInText } from "./runnable";
 
 const FUNCTION = 11;
 const METHOD = 5;
@@ -92,46 +92,4 @@ test("a local named main inside a function is not the program's entry", () => {
     symbol("outer", FUNCTION, [symbol("helper", FUNCTION, [symbol("main", FUNCTION)])]),
   ];
   assert.deepEqual(entryPoints(file), []);
-});
-
-test("run lines take the directory where the tool does", () => {
-  // Not `go run main.go`: a main package is rarely one file, and naming one
-  // fails on the first symbol defined next door -- which reads as a broken
-  // button rather than as the wrong command.
-  assert.equal(runLine("go", "main.go", "", false), "go run .");
-  assert.equal(runLine("rust", "main.rs", "", false), "cargo run");
-});
-
-test("a script is run under the interpreter its shebang asked for", () => {
-  assert.equal(runLine("shellscript", "d.sh", "#!/bin/zsh\n", false), "zsh \"d.sh\"");
-  assert.equal(runLine("shellscript", "d.sh", "#!/usr/bin/env bash\n", false), "bash \"d.sh\"");
-  // The lens only appears for a file with a shebang, so this is the path
-  // taken by the command palette on a .sh without one.
-  assert.equal(runLine("shellscript", "d.sh", "echo hi\n", false), "sh \"d.sh\"");
-});
-
-test("python3 everywhere, python on Windows", () => {
-  assert.equal(runLine("python", "app.py", "", false), "python3 \"app.py\"");
-  // `python3` on Windows is a Store stub that opens the Store rather than
-  // running anything.
-  assert.equal(runLine("python", "app.py", "", true), "python \"app.py\"");
-});
-
-test("a name with a space stays one argument", () => {
-  assert.equal(runLine("python", "my app.py", "", false), "python3 \"my app.py\"");
-});
-
-// C, C++, Java and C# have entry points `entryPoints` finds, and no one-line
-// way to run them. The lens draws `debug` alone for those rather than a `run`
-// that opens a terminal and prints a compiler error.
-test("no run line for a language that has to be compiled first", () => {
-  for (const languageId of ["c", "cpp", "java", "csharp", "typescript"]) {
-    assert.equal(runLine(languageId, "x", "", false), undefined, languageId);
-  }
-});
-
-test("no shebang, no interpreter", () => {
-  assert.equal(interpreterOf("echo hi\n"), undefined);
-  // A shebang has to be the first line; one further down is a comment.
-  assert.equal(interpreterOf("echo hi\n#!/bin/bash\n"), undefined);
 });

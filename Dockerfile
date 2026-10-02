@@ -45,6 +45,9 @@ COPY --chmod=755 docker/poly-${TARGETARCH} /usr/local/bin/poly
 # An image is a copy of the software, and MIT asks for the notice to come with
 # it. `docker run --entrypoint cat poly /usr/share/doc/poly/LICENSE` reads it.
 COPY LICENSE /usr/share/doc/poly/LICENSE
+# The binary is also a copy of every crate linked into it, and their licenses
+# ask the same; this is the file release.yml attaches as THIRD-PARTY-NOTICES-cli.md.
+COPY extensions/lsp/THIRD-PARTY-NOTICES.md /usr/share/doc/poly/THIRD-PARTY-NOTICES.md
 # Cheap, and the one failure this image can have that is otherwise invisible
 # until someone runs it: the wrong architecture's binary staged under the
 # right name produces "exec format error" at `docker run`, not at build.

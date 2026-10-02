@@ -1,0 +1,1 @@
+# parcel-bundler/source-map publishes no license text: none in the parcel_sourcemap crate, and none in the repository at a136bd6ba9f1d3cded501ae824341be0a54c5ce3 or at HEAD (checked 2026-10-02). Its Cargo.toml and package.json declare MIT; no copyright line exists upstream to reproduce.

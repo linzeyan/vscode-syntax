@@ -1,0 +1,1 @@
+# chrisdickinson/varint publishes no license text: none in the varint 5.0.2 package, whose README's License section says only "MIT", and none in the repository at v5.0.2 (fbcfa76d7633053aa75d58f26f9e03b12bdfd792) or at HEAD (checked 2026-10-02). Its package.json declares `"license": "MIT"`; no copyright line exists upstream to reproduce.

@@ -5,8 +5,12 @@ The page (data.view.html, scripts/data.view.js, styles/data.view.css) and the
 icons (images/) are from RandomFractalsInc.vscode-data-preview 2.3.0,
 https://github.com/RandomFractals/vscode-data-preview
 Copyright 2019 Random Fractals Inc.
-data.view.html and scripts/data.view.js are modified; the changes are listed
-in poly's src/editor/dataPreview/README.md.
+data.view.html and scripts/data.view.js are modified by poly:
+  - data.view.html loads perspective-viewer.js from beside itself rather than
+    from unpkg, its content security policy no longer allows scripts from
+    https:, and it has no ko-fi link;
+  - scripts/data.view.js ignores a message that is not an array where it
+    expects Arrow's bytes, rather than loading it as an empty Arrow file.
 
 The grid and charts (scripts/perspective.js, scripts/perspective.wasm.worker.js,
 scripts/psp.async.wasm, scripts/perspective-viewer.js,
@@ -15,8 +19,8 @@ styles/perspective-viewer/) are Perspective 0.4.0, the npm packages
 @finos/perspective, @finos/perspective-viewer, @finos/perspective-viewer-hypergrid
 and @finos/perspective-viewer-d3fc, https://github.com/finos/perspective
 Copyright (c) 2017, the Perspective Authors.
-scripts/perspective.wasm.worker.js is modified: one regular expression, of the
-papaparse bundled into it, is replaced by papaparse 5.2's.
+scripts/perspective.wasm.worker.js is modified by poly: one regular expression,
+of the papaparse bundled into it, is replaced by papaparse 5.2's.
 
 Perspective's prebuilt files bundle the packages it depends on, under these
 licenses:

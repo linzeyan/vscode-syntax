@@ -1,0 +1,1 @@
+# napi-rs/escape-simd publishes no license text: none in the escape-simd and json-escape-simd crates, and none in the repository at 4f54347555d2f520ac38b406cf69ff66d9570a57 or at HEAD (checked 2026-10-02). Its Cargo.toml declares `license = "MIT"`; no copyright line exists upstream to reproduce.

@@ -121,6 +121,16 @@
         "filenames": [
           ".autocorrectignore"
         ]
+      },
+      {
+        "id": "poly-code-runner-output"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "poly-code-runner-output",
+        "scopeName": "poly.code-runner.output",
+        "path": "./dist/code-runner/code-runner-output.tmLanguage"
       }
     ],
     "commands": [
@@ -281,6 +291,28 @@
         "command": "poly.runFile",
         "title": "%command.runFile.title%",
         "category": "%command.category%"
+      },
+      {
+        "command": "poly.codeRunner.run",
+        "title": "%command.codeRunner.run.title%",
+        "category": "%command.category%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "poly.codeRunner.runCustomCommand",
+        "title": "%command.codeRunner.runCustomCommand.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.codeRunner.runByLanguage",
+        "title": "%command.codeRunner.runByLanguage.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.codeRunner.stop",
+        "title": "%command.codeRunner.stop.title%",
+        "category": "%command.category%",
+        "icon": "$(debug-stop)"
       },
       {
         "command": "poly.extractVariable",
@@ -768,6 +800,81 @@
         "command": "poly.gitGraph.toggleCommit",
         "title": "%command.gitGraph.toggleCommit.title%",
         "toggled": "polyCommit"
+      },
+      {
+        "command": "poly.errorLens.toggle",
+        "title": "%command.errorLens.toggle.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.toggleError",
+        "title": "%command.errorLens.toggleError.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.toggleWarning",
+        "title": "%command.errorLens.toggleWarning.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.toggleInfo",
+        "title": "%command.errorLens.toggleInfo.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.toggleHint",
+        "title": "%command.errorLens.toggleHint.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.toggleInlineMessage",
+        "title": "%command.errorLens.toggleInlineMessage.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.searchForProblem",
+        "title": "%command.errorLens.searchForProblem.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.selectProblem",
+        "title": "%command.errorLens.selectProblem.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.toggleWorkspace",
+        "title": "%command.errorLens.toggleWorkspace.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.disableLine",
+        "title": "%command.errorLens.disableLine.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.findLinterRuleDefinition",
+        "title": "%command.errorLens.findLinterRuleDefinition.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.copyProblemMessage",
+        "title": "%command.errorLens.copyProblemMessage.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.excludeProblem",
+        "title": "%command.errorLens.excludeProblem.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.copyProblemCode",
+        "title": "%command.errorLens.copyProblemCode.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.errorLens.updateEverything",
+        "title": "%command.errorLens.updateEverything.title%",
+        "category": "%command.category%"
       }
     ],
     "views": {
@@ -785,7 +892,7 @@
         {
           "id": "polySwaggerFiles",
           "name": "%view.polySwaggerFiles.name%",
-          "when": "!poly.yield.swaggerViewer"
+          "when": "!poly.yield.swaggerViewer && config.poly.swaggerViewer.enabled"
         }
       ]
     },
@@ -807,7 +914,7 @@
         },
         {
           "command": "poly.plantumlExportWorkspace",
-          "when": "explorerResourceIsFolder || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i",
+          "when": "(explorerResourceIsFolder || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && config.poly.plantuml.enabled",
           "group": "7_modification@12"
         },
         {
@@ -817,17 +924,22 @@
         },
         {
           "command": "poly.swaggerPreview",
-          "when": "(resourceLangId == json || resourceLangId == yaml) && !poly.yield.swaggerViewer",
+          "when": "(resourceLangId == json || resourceLangId == yaml) && !poly.yield.swaggerViewer && config.poly.swaggerViewer.enabled",
           "group": "SwaggerViewer"
         },
         {
           "command": "poly.dataPreview",
-          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview",
+          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview && config.poly.dataPreview.enabled",
           "group": "navigation"
         },
         {
           "command": "poly.dataPreviewOnSide",
-          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview",
+          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview && config.poly.dataPreview.enabled",
+          "group": "navigation"
+        },
+        {
+          "command": "poly.codeRunner.run",
+          "when": "!explorerResourceIsFolder && config.poly.codeRunner.showRunCommandInExplorerContextMenu && config.poly.codeRunner.enabled && !poly.yield.codeRunner",
           "group": "navigation"
         }
       ],
@@ -838,62 +950,72 @@
         },
         {
           "command": "poly.plantumlPreview",
-          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && config.poly.plantuml.enabled",
           "group": "poly_plantuml@1"
         },
         {
           "command": "poly.plantumlExportCurrent",
-          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && config.poly.plantuml.enabled",
           "group": "poly_plantuml@2"
         },
         {
           "command": "poly.plantumlExportDocument",
-          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && config.poly.plantuml.enabled",
           "group": "poly_plantuml@3"
         },
         {
           "command": "poly.plantumlUrlCurrent",
-          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && config.poly.plantuml.enabled",
           "group": "poly_plantuml@4"
         },
         {
           "command": "poly.plantumlUrlDocument",
-          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && config.poly.plantuml.enabled",
           "group": "poly_plantuml@5"
         },
         {
           "command": "poly.markdownExport",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport && config.poly.markdownPdf.enabled",
           "group": "poly_markdownExport@1"
         },
         {
           "command": "poly.markdownExportPdf",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport && config.poly.markdownPdf.enabled",
           "group": "poly_markdownExport@2"
         },
         {
           "command": "poly.markdownExportHtml",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport && config.poly.markdownPdf.enabled",
           "group": "poly_markdownExport@3"
         },
         {
           "command": "poly.markdownExportPng",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport && config.poly.markdownPdf.enabled",
           "group": "poly_markdownExport@4"
         },
         {
           "command": "poly.markdownExportJpeg",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport && config.poly.markdownPdf.enabled",
           "group": "poly_markdownExport@5"
         },
         {
           "command": "poly.markdownExportAll",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport",
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && !poly.yield.markdownExport && config.poly.markdownPdf.enabled",
           "group": "poly_markdownExport@6"
         },
         {
           "command": "poly.codeSnap",
-          "when": "!poly.yield.codeSnap"
+          "when": "!poly.yield.codeSnap && config.poly.codeSnap.enabled"
+        },
+        {
+          "command": "poly.codeRunner.run",
+          "when": "!inOutput && config.poly.codeRunner.showRunCommandInEditorContextMenu && config.poly.codeRunner.enabled && !poly.yield.codeRunner",
+          "group": "navigation"
+        },
+        {
+          "command": "poly.codeRunner.stop",
+          "when": "inOutput && poly.codeRunner.codeRunning",
+          "group": "stop-code-run"
         }
       ],
       "view/title": [
@@ -974,59 +1096,75 @@
         },
         {
           "command": "poly.markdownExport",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && config.poly.markdownPdf.enabled"
         },
         {
           "command": "poly.markdownExportPdf",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && config.poly.markdownPdf.enabled"
         },
         {
           "command": "poly.markdownExportHtml",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && config.poly.markdownPdf.enabled"
         },
         {
           "command": "poly.markdownExportPng",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && config.poly.markdownPdf.enabled"
         },
         {
           "command": "poly.markdownExportJpeg",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && config.poly.markdownPdf.enabled"
         },
         {
           "command": "poly.markdownExportAll",
-          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
+          "when": "editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/ && config.poly.markdownPdf.enabled"
         },
         {
           "command": "poly.marp.export",
-          "when": "!poly.yield.marp"
+          "when": "!poly.yield.marp && config.poly.marp.enabled"
         },
         {
           "command": "poly.marp.newMarpMarkdown",
-          "when": "!poly.yield.marp"
+          "when": "!poly.yield.marp && config.poly.marp.enabled"
         },
         {
           "command": "poly.marp.showQuickPick",
-          "when": "!poly.yield.marp"
+          "when": "!poly.yield.marp && config.poly.marp.enabled"
         },
         {
           "command": "poly.marp.toggleMarpFeature",
-          "when": "!poly.yield.marp"
+          "when": "!poly.yield.marp && config.poly.marp.enabled"
         },
         {
           "command": "poly.dataPreview",
-          "when": "!poly.yield.dataPreview"
+          "when": "!poly.yield.dataPreview && config.poly.dataPreview.enabled"
         },
         {
           "command": "poly.dataPreviewOnSide",
-          "when": "!poly.yield.dataPreview"
+          "when": "!poly.yield.dataPreview && config.poly.dataPreview.enabled"
         },
         {
           "command": "poly.dataPreviewRemote",
-          "when": "!poly.yield.dataPreview"
+          "when": "!poly.yield.dataPreview && config.poly.dataPreview.enabled"
         },
         {
           "command": "poly.gitGraph.view",
           "when": "!poly.yield.gitGraph"
+        },
+        {
+          "command": "poly.codeRunner.run",
+          "when": "config.poly.codeRunner.enabled && !poly.yield.codeRunner"
+        },
+        {
+          "command": "poly.codeRunner.runCustomCommand",
+          "when": "config.poly.codeRunner.enabled && !poly.yield.codeRunner"
+        },
+        {
+          "command": "poly.codeRunner.runByLanguage",
+          "when": "config.poly.codeRunner.enabled && !poly.yield.codeRunner"
+        },
+        {
+          "command": "poly.codeRunner.stop",
+          "when": "config.poly.codeRunner.enabled && !poly.yield.codeRunner || poly.codeRunner.codeRunning"
         },
         {
           "command": "poly.gitGraph.fetch",
@@ -1235,12 +1373,120 @@
         {
           "command": "poly.gitGraph.toggleCommit",
           "when": "false"
+        },
+        {
+          "command": "poly.plantumlPreview",
+          "when": "config.poly.plantuml.enabled"
+        },
+        {
+          "command": "poly.plantumlExportCurrent",
+          "when": "config.poly.plantuml.enabled"
+        },
+        {
+          "command": "poly.plantumlExportDocument",
+          "when": "config.poly.plantuml.enabled"
+        },
+        {
+          "command": "poly.plantumlExportWorkspace",
+          "when": "config.poly.plantuml.enabled"
+        },
+        {
+          "command": "poly.plantumlUrlCurrent",
+          "when": "config.poly.plantuml.enabled"
+        },
+        {
+          "command": "poly.plantumlUrlDocument",
+          "when": "config.poly.plantuml.enabled"
+        },
+        {
+          "command": "poly.plantumlExtractSource",
+          "when": "config.poly.plantuml.enabled"
+        },
+        {
+          "command": "poly.markdownExportDiagnostics",
+          "when": "config.poly.markdownPdf.enabled"
+        },
+        {
+          "command": "poly.codeSnap",
+          "when": "config.poly.codeSnap.enabled"
+        },
+        {
+          "command": "poly.pasteImage",
+          "when": "config.poly.pasteImage.enabled"
+        },
+        {
+          "command": "poly.swaggerPreview",
+          "when": "config.poly.swaggerViewer.enabled"
+        },
+        {
+          "command": "poly.swaggerPreviewFromUrl",
+          "when": "config.poly.swaggerViewer.enabled"
+        },
+        {
+          "command": "poly.errorLens.toggle",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.toggleError",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.toggleWarning",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.toggleInfo",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.toggleHint",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.toggleInlineMessage",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.searchForProblem",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.selectProblem",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.toggleWorkspace",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.disableLine",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.findLinterRuleDefinition",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.copyProblemMessage",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.excludeProblem",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.copyProblemCode",
+          "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.errorLens.updateEverything",
+          "when": "!poly.yield.errorLens"
         }
       ],
       "editor/title": [
         {
           "command": "poly.plantumlPreview",
-          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i)",
+          "when": "(editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && config.poly.plantuml.enabled",
           "group": "navigation"
         },
         {
@@ -1268,29 +1514,41 @@
         },
         {
           "command": "poly.marp.showQuickPick",
-          "when": "editorLangId == markdown && !poly.yield.marp",
+          "when": "editorLangId == markdown && !poly.yield.marp && config.poly.marp.enabled",
           "group": "navigation"
         },
         {
           "command": "poly.dataPreview",
-          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview",
+          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview && config.poly.dataPreview.enabled",
           "group": "navigation"
         },
         {
           "command": "poly.dataPreviewOnSide",
-          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview",
+          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview && config.poly.dataPreview.enabled",
+          "group": "navigation"
+        },
+        {
+          "command": "poly.codeRunner.stop",
+          "when": "config.poly.codeRunner.showStopIconInEditorTitleMenu && poly.codeRunner.codeRunning",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "poly.codeRunner.run",
+          "when": "config.poly.codeRunner.showRunIconInEditorTitleMenu && config.poly.codeRunner.enabled && !poly.yield.codeRunner",
           "group": "navigation"
         }
       ],
       "editor/title/context": [
         {
           "command": "poly.dataPreview",
-          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview",
+          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview && config.poly.dataPreview.enabled",
           "group": "navigation"
         },
         {
           "command": "poly.dataPreviewOnSide",
-          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview",
+          "when": "resourceFilename =~ /\\.(json|jsonl|json5|hjson|ndjson|arrow|arr|avro|parquet|parq|config|env|properties|ini|yaml|yml|md|csv|tsv|txt|tab|dif|ods|xls|xlsb|xlsm|xlsx|xml|html)$/ && !poly.yield.dataPreview && config.poly.dataPreview.enabled",
           "group": "navigation"
         }
       ],
@@ -1303,7 +1561,7 @@
         },
         {
           "command": "poly.marp.newMarpMarkdown",
-          "when": "!poly.yield.marp",
+          "when": "!poly.yield.marp && config.poly.marp.enabled",
           "group": "file"
         }
       ],
@@ -1612,6 +1870,26 @@
         "when": "editorTextFocus && !editorReadonly && editorLangId =~ /^(json|jsonc|css|html|xml|javascript|javascriptreact|typescript|typescriptreact)$/"
       },
       {
+        "command": "poly.codeRunner.run",
+        "key": "ctrl+alt+n",
+        "when": "config.poly.codeRunner.enabled && !poly.yield.codeRunner"
+      },
+      {
+        "command": "poly.codeRunner.runCustomCommand",
+        "key": "ctrl+alt+k",
+        "when": "config.poly.codeRunner.enabled && !poly.yield.codeRunner"
+      },
+      {
+        "command": "poly.codeRunner.runByLanguage",
+        "key": "ctrl+alt+j",
+        "when": "config.poly.codeRunner.enabled && !poly.yield.codeRunner"
+      },
+      {
+        "command": "poly.codeRunner.stop",
+        "key": "ctrl+alt+m",
+        "when": "config.poly.codeRunner.enabled && !poly.yield.codeRunner && poly.codeRunner.codeRunning"
+      },
+      {
         "command": "poly.toggleBold",
         "key": "ctrl+b",
         "mac": "cmd+b",
@@ -1671,17 +1949,17 @@
         "command": "poly.pasteImage",
         "key": "ctrl+alt+shift+i",
         "mac": "cmd+alt+shift+i",
-        "when": "editorTextFocus && !editorReadonly && !poly.yield.pasteImage"
+        "when": "editorTextFocus && !editorReadonly && !poly.yield.pasteImage && config.poly.pasteImage.enabled"
       },
       {
         "command": "poly.plantumlPreview",
         "key": "alt+d",
-        "when": "editorTextFocus && (editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && !poly.yield.plantumlPreview"
+        "when": "editorTextFocus && (editorLangId == plantuml || resourceExtname =~ /^\\.(wsd|pu|puml|plantuml|iuml)$/i) && !poly.yield.plantumlPreview && config.poly.plantuml.enabled"
       },
       {
         "command": "poly.swaggerPreview",
         "key": "shift+alt+p",
-        "when": "editorTextFocus && !poly.yield.swaggerPreview"
+        "when": "editorTextFocus && !poly.yield.swaggerPreview && config.poly.swaggerViewer.enabled"
       },
       {
         "command": "poly.excalidrawPreventDefault",
@@ -1710,6 +1988,14 @@
             "type": "string",
             "default": "",
             "description": "%config.serverPath.description%"
+          },
+          "poly.tools": {
+            "type": "object",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            },
+            "markdownDescription": "%config.tools.description%"
           },
           "poly.lintOnSave": {
             "type": "boolean",
@@ -1746,7 +2032,8 @@
           "poly.languageServers": {
             "type": "boolean",
             "default": false,
-            "description": "%config.languageServers.description%"
+            "description": "%config.languageServers.description%",
+            "order": 0
           },
           "poly.languageServerLogs": {
             "type": "boolean",
@@ -1851,6 +2138,12 @@
         "title": "PlantUML",
         "order": 4,
         "properties": {
+          "poly.plantuml.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "%config.plantuml.enabled.description%"
+          },
           "poly.plantuml.java": {
             "type": "string",
             "default": "java",
@@ -2402,6 +2695,12 @@
         "title": "%configuration.markdownPdf.title%",
         "order": 7,
         "properties": {
+          "poly.markdownPdf.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "%config.markdownPdf.enabled.description%"
+          },
           "poly.markdownPdf.type": {
             "type": "array",
             "default": [
@@ -3202,6 +3501,12 @@
         "title": "CodeSnap",
         "order": 8,
         "properties": {
+          "poly.codeSnap.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "%config.codeSnap.enabled.description%"
+          },
           "poly.codeSnap.backgroundColor": {
             "scope": "resource",
             "type": "string",
@@ -3282,6 +3587,12 @@
         "title": "%configuration.pasteImage.title%",
         "order": 9,
         "properties": {
+          "poly.pasteImage.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "%config.pasteImage.enabled.description%"
+          },
           "poly.pasteImage.path": {
             "type": "string",
             "default": "${currentFileDir}",
@@ -3357,6 +3668,12 @@
         "title": "%configuration.dataPreview.title%",
         "order": 10,
         "properties": {
+          "poly.dataPreview.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "%config.dataPreview.enabled.description%"
+          },
           "poly.dataPreview.theme": {
             "type": "string",
             "enum": [
@@ -3390,6 +3707,12 @@
         "title": "%configuration.swaggerViewer.title%",
         "order": 11,
         "properties": {
+          "poly.swaggerViewer.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "%config.swaggerViewer.enabled.description%"
+          },
           "poly.swaggerViewer.defaultHost": {
             "type": "string",
             "default": "localhost",
@@ -3423,6 +3746,12 @@
         "title": "%configuration.marp.title%",
         "order": 12,
         "properties": {
+          "poly.marp.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "%config.marp.enabled.description%"
+          },
           "poly.marp.breaks": {
             "type": "string",
             "enum": [
@@ -3632,8 +3961,253 @@
         }
       },
       {
-        "title": "%configuration.editing.title%",
+        "title": "%configuration.codeRunner.title%",
         "order": 14,
+        "properties": {
+          "poly.codeRunner.enabled": {
+            "type": "boolean",
+            "default": false,
+            "order": 0,
+            "markdownDescription": "%config.codeRunner.enabled.description%"
+          },
+          "poly.codeRunner.executorMapByGlob": {
+            "type": "object",
+            "default": {
+              "pom.xml": "cd $dir && mvn clean package"
+            },
+            "markdownDescription": "%config.codeRunner.executorMapByGlob.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.executorMap": {
+            "type": "object",
+            "default": {
+              "javascript": "node",
+              "java": "cd $dir && javac $fileName && java $fileNameWithoutExt",
+              "c": "cd $dir && gcc $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+              "zig": "zig run",
+              "cpp": "cd $dir && g++ $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+              "objective-c": "cd $dir && gcc -framework Cocoa $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+              "php": "php",
+              "python": "$pythonPath -u $fullFileName",
+              "perl": "perl",
+              "perl6": "perl6",
+              "ruby": "ruby",
+              "go": "cd $dir && go run .",
+              "lua": "lua",
+              "groovy": "groovy",
+              "powershell": "powershell -ExecutionPolicy ByPass -File",
+              "bat": "cmd /c",
+              "shellscript": "bash",
+              "fsharp": "fsi",
+              "csharp": "scriptcs",
+              "vbscript": "cscript //Nologo",
+              "typescript": "ts-node",
+              "coffeescript": "coffee",
+              "scala": "scala",
+              "swift": "swift",
+              "julia": "julia",
+              "crystal": "crystal",
+              "ocaml": "ocaml",
+              "r": "Rscript",
+              "applescript": "osascript",
+              "clojure": "lein exec",
+              "haxe": "haxe --cwd $dirWithoutTrailingSlash --run $fileNameWithoutExt",
+              "rust": "cd $dir && cargo run",
+              "racket": "racket",
+              "scheme": "csi -script",
+              "ahk": "autohotkey",
+              "autoit": "autoit3",
+              "dart": "dart",
+              "pascal": "cd $dir && fpc $fileName && $dir$fileNameWithoutExt",
+              "d": "cd $dir && dmd $fileName && $dir$fileNameWithoutExt",
+              "haskell": "runghc",
+              "nim": "nim compile --verbosity:0 --hints:off --run",
+              "lisp": "sbcl --script",
+              "kit": "kitc --run",
+              "v": "v run",
+              "sass": "sass --style expanded",
+              "scss": "scss --style expanded",
+              "less": "cd $dir && lessc $fileName $fileNameWithoutExt.css",
+              "FortranFreeForm": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+              "fortran-modern": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+              "fortran_fixed-form": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+              "fortran": "cd $dir && gfortran $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+              "sml": "cd $dir && sml $fileName",
+              "mojo": "mojo run",
+              "erlang": "escript",
+              "spwn": "spwn build",
+              "pkl": "cd $dir && pkl eval -f yaml $fileName -o $fileNameWithoutExt.yaml",
+              "gleam": "gleam run -m $fileNameWithoutExt"
+            },
+            "markdownDescription": "%config.codeRunner.executorMap.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.executorMapByFileExtension": {
+            "type": "object",
+            "default": {
+              ".vb": "cd $dir && vbc /nologo $fileName && $dir$fileNameWithoutExt",
+              ".vbs": "cscript //Nologo",
+              ".scala": "scala",
+              ".jl": "julia",
+              ".cr": "crystal",
+              ".ml": "ocaml",
+              ".zig": "zig run",
+              ".exs": "elixir",
+              ".hx": "haxe --cwd $dirWithoutTrailingSlash --run $fileNameWithoutExt",
+              ".rkt": "racket",
+              ".scm": "csi -script",
+              ".ahk": "autohotkey",
+              ".au3": "autoit3",
+              ".kt": "cd $dir && kotlinc $fileName -include-runtime -d $fileNameWithoutExt.jar && java -jar $fileNameWithoutExt.jar",
+              ".kts": "kotlinc -script",
+              ".dart": "dart",
+              ".pas": "cd $dir && fpc $fileName && $dir$fileNameWithoutExt",
+              ".pp": "cd $dir && fpc $fileName && $dir$fileNameWithoutExt",
+              ".d": "cd $dir && dmd $fileName && $dir$fileNameWithoutExt",
+              ".hs": "runhaskell",
+              ".nim": "nim compile --verbosity:0 --hints:off --run",
+              ".csproj": "dotnet run --project",
+              ".fsproj": "dotnet run --project",
+              ".lisp": "sbcl --script",
+              ".kit": "kitc --run",
+              ".v": "v run",
+              ".vsh": "v run",
+              ".sass": "sass --style expanded",
+              ".cu": "cd $dir && nvcc $fileName -o $fileNameWithoutExt && $dir$fileNameWithoutExt",
+              ".ring": "ring",
+              ".sml": "cd $dir && sml $fileName",
+              ".mojo": "mojo run",
+              ".erl": "escript",
+              ".spwn": "spwn build",
+              ".pkl": "cd $dir && pkl eval -f yaml $fileName -o $fileNameWithoutExt.yaml",
+              ".gleam": "gleam run -m $fileNameWithoutExt"
+            },
+            "markdownDescription": "%config.codeRunner.executorMapByFileExtension.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.customCommand": {
+            "type": "string",
+            "default": "echo Hello",
+            "markdownDescription": "%config.codeRunner.customCommand.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.languageIdToFileExtensionMap": {
+            "type": "object",
+            "default": {
+              "bat": ".bat",
+              "powershell": ".ps1",
+              "typescript": ".ts"
+            },
+            "markdownDescription": "%config.codeRunner.languageIdToFileExtensionMap.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.defaultLanguage": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%config.codeRunner.defaultLanguage.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.cwd": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%config.codeRunner.cwd.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.fileDirectoryAsCwd": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.codeRunner.fileDirectoryAsCwd.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.clearPreviousOutput": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.codeRunner.clearPreviousOutput.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.saveAllFilesBeforeRun": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.codeRunner.saveAllFilesBeforeRun.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.saveFileBeforeRun": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.codeRunner.saveFileBeforeRun.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.showExecutionMessage": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.codeRunner.showExecutionMessage.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.runInTerminal": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.codeRunner.runInTerminal.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.terminalRoot": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%config.codeRunner.terminalRoot.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.preserveFocus": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.codeRunner.preserveFocus.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.ignoreSelection": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.codeRunner.ignoreSelection.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.showRunIconInEditorTitleMenu": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.codeRunner.showRunIconInEditorTitleMenu.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.showStopIconInEditorTitleMenu": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.codeRunner.showStopIconInEditorTitleMenu.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.showRunCommandInEditorContextMenu": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.codeRunner.showRunCommandInEditorContextMenu.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.showRunCommandInExplorerContextMenu": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.codeRunner.showRunCommandInExplorerContextMenu.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.temporaryFileName": {
+            "type": "string",
+            "default": "tempCodeRunnerFile",
+            "markdownDescription": "%config.codeRunner.temporaryFileName.description%",
+            "scope": "resource"
+          },
+          "poly.codeRunner.respectShebang": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.codeRunner.respectShebang.description%",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "%configuration.editing.title%",
+        "order": 15,
         "properties": {
           "poly.indentTint.enabled": {
             "type": "boolean",
@@ -3688,8 +4262,1066 @@
         }
       },
       {
+        "title": "Error Lens",
+        "order": 16,
+        "properties": {
+          "poly.errorLens.enabled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.errorLens.enabled.description%",
+            "order": 0
+          },
+          "poly.errorLens.respectUpstreamEnabled": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "%config.errorLens.respectUpstreamEnabled.enabled.description%",
+                "default": true
+              },
+              "inlineMessage": {
+                "type": "boolean",
+                "default": true
+              },
+              "gutter": {
+                "type": "boolean",
+                "default": true
+              },
+              "statusBar": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "default": {
+              "enabled": true,
+              "inlineMessage": true,
+              "gutter": true,
+              "statusBar": false
+            },
+            "markdownDescription": "%config.errorLens.respectUpstreamEnabled.description%",
+            "additionalProperties": false
+          },
+          "poly.errorLens.enabledInMergeConflict": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.errorLens.enabledInMergeConflict.description%"
+          },
+          "poly.errorLens.fontFamily": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%config.errorLens.fontFamily.description%"
+          },
+          "poly.errorLens.fontWeight": {
+            "type": "string",
+            "enum": [
+              "100",
+              "200",
+              "300",
+              "400",
+              "normal",
+              "500",
+              "600",
+              "700",
+              "bold",
+              "800",
+              "900"
+            ],
+            "default": "normal",
+            "markdownDescription": "%config.errorLens.fontWeight.description%"
+          },
+          "poly.errorLens.fontStyleItalic": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.errorLens.fontStyleItalic.description%"
+          },
+          "poly.errorLens.fontSize": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%config.errorLens.fontSize.description%"
+          },
+          "poly.errorLens.margin": {
+            "type": "string",
+            "default": "4ch",
+            "markdownDescription": "%config.errorLens.margin.description%"
+          },
+          "poly.errorLens.alignMessage": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "%config.errorLens.alignMessage.start.description%"
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "%config.errorLens.alignMessage.end.description%"
+              },
+              "minimumMargin": {
+                "type": "integer",
+                "description": "%config.errorLens.alignMessage.minimumMargin.description%",
+                "minimum": 4
+              },
+              "padding": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "default": 0,
+                  "minimum": 0
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "default": [
+                  0,
+                  0
+                ],
+                "description": "%config.errorLens.alignMessage.padding.description%"
+              },
+              "useFixedPosition": {
+                "type": "boolean",
+                "default": true,
+                "description": "%config.errorLens.alignMessage.useFixedPosition.description%"
+              }
+            },
+            "default": {
+              "start": 0,
+              "end": 0,
+              "minimumMargin": 4,
+              "padding": [
+                0,
+                0
+              ],
+              "useFixedPosition": true
+            },
+            "markdownDescription": "%config.errorLens.alignMessage.description%",
+            "additionalProperties": false
+          },
+          "poly.errorLens.border": {
+            "type": "array",
+            "default": [
+              "",
+              "",
+              "",
+              ""
+            ],
+            "items": {
+              "type": "string",
+              "default": ""
+            },
+            "minItems": 4,
+            "maxItems": 4,
+            "additionalItems": false,
+            "markdownDescription": "%config.errorLens.border.description%"
+          },
+          "poly.errorLens.padding": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%config.errorLens.padding.description%",
+            "examples": [
+              "2px 1ch"
+            ]
+          },
+          "poly.errorLens.borderRadius": {
+            "type": "string",
+            "default": "0.2em",
+            "markdownDescription": "%config.errorLens.borderRadius.description%",
+            "examples": [
+              "5px",
+              "5em 0px",
+              "0px 5em 5em 0px"
+            ]
+          },
+          "poly.errorLens.enabledDiagnosticLevels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warning",
+                "info",
+                "hint"
+              ]
+            },
+            "uniqueItems": true,
+            "markdownDescription": "%config.errorLens.enabledDiagnosticLevels.description%",
+            "default": [
+              "error",
+              "warning",
+              "info"
+            ]
+          },
+          "poly.errorLens.messageTemplate": {
+            "type": "string",
+            "default": "$message",
+            "markdownDescription": "%config.errorLens.messageTemplate.description%"
+          },
+          "poly.errorLens.messageMaxChars": {
+            "type": "integer",
+            "default": 500,
+            "minimum": 0,
+            "markdownDescription": "%config.errorLens.messageMaxChars.description%"
+          },
+          "poly.errorLens.maxInlineMessages": {
+            "type": "integer",
+            "default": 1000,
+            "minimum": 0,
+            "markdownDescription": "%config.errorLens.maxInlineMessages.description%"
+          },
+          "poly.errorLens.severityText": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "markdownDescription": "%config.errorLens.severityText.description%",
+            "default": [
+              "⛔",
+              "⚠",
+              "ℹ",
+              "🍏"
+            ],
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "poly.errorLens.messageEnabled": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.errorLens.messageEnabled.description%"
+          },
+          "poly.errorLens.messageBackgroundMode": {
+            "type": "string",
+            "default": "line",
+            "enum": [
+              "line",
+              "message",
+              "none"
+            ],
+            "enumDescriptions": [
+              "%config.errorLens.messageBackgroundMode.line%",
+              "%config.errorLens.messageBackgroundMode.message%",
+              "%config.errorLens.messageBackgroundMode.none%"
+            ],
+            "markdownDescription": "%config.errorLens.messageBackgroundMode.description%"
+          },
+          "poly.errorLens.problemRangeDecorationEnabled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.errorLens.problemRangeDecorationEnabled.description%"
+          },
+          "poly.errorLens.editorHoverPartsEnabled": {
+            "type": "object",
+            "properties": {
+              "messageEnabled": {
+                "type": "boolean",
+                "default": false
+              },
+              "sourceCodeEnabled": {
+                "type": "boolean",
+                "default": false
+              },
+              "buttonsEnabled": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "additionalProperties": false,
+            "default": {
+              "messageEnabled": false,
+              "sourceCodeEnabled": false,
+              "buttonsEnabled": false
+            },
+            "markdownDescription": "%config.errorLens.editorHoverPartsEnabled.description%"
+          },
+          "poly.errorLens.statusBarIconsEnabled": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.statusBarIconsEnabled.description%",
+            "default": false
+          },
+          "poly.errorLens.statusBarIconsPriority": {
+            "type": "integer",
+            "markdownDescription": "%config.errorLens.statusBarIconsPriority.description%",
+            "default": -9000
+          },
+          "poly.errorLens.statusBarIconsAlignment": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.statusBarIconsAlignment.description%",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "default": "left"
+          },
+          "poly.errorLens.statusBarIconsTargetProblems": {
+            "type": "string",
+            "enum": [
+              "all",
+              "activeEditor",
+              "visibleEditors"
+            ],
+            "enumDescriptions": [
+              "%config.errorLens.statusBarIconsTargetProblems.all%",
+              "%config.errorLens.statusBarIconsTargetProblems.activeEditor%",
+              "%config.errorLens.statusBarIconsTargetProblems.visibleEditors%"
+            ],
+            "default": "all",
+            "markdownDescription": "%config.errorLens.statusBarIconsTargetProblems.description%"
+          },
+          "poly.errorLens.statusBarIconsUseBackground": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.statusBarIconsUseBackground.description%",
+            "default": true
+          },
+          "poly.errorLens.statusBarIconsAtZero": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.statusBarIconsAtZero.description%",
+            "enum": [
+              "hide",
+              "removeBackground"
+            ],
+            "default": "removeBackground"
+          },
+          "poly.errorLens.statusBarMessageEnabled": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.statusBarMessageEnabled.description%",
+            "default": false
+          },
+          "poly.errorLens.statusBarMessagePriority": {
+            "type": "integer",
+            "markdownDescription": "%config.errorLens.statusBarMessagePriority.description%",
+            "default": -10000
+          },
+          "poly.errorLens.statusBarMessageAlignment": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.statusBarMessageAlignment.description%",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "default": "left"
+          },
+          "poly.errorLens.statusBarColorsEnabled": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.statusBarColorsEnabled.description%",
+            "default": false
+          },
+          "poly.errorLens.statusBarMessageType": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.statusBarMessageType.description%",
+            "enum": [
+              "closestProblem",
+              "closestSeverity",
+              "activeLine",
+              "activeCursor"
+            ],
+            "enumDescriptions": [
+              "%config.errorLens.statusBarMessageType.closestProblem%",
+              "%config.errorLens.statusBarMessageType.closestSeverity%",
+              "%config.errorLens.statusBarMessageType.activeLine%",
+              "%config.errorLens.statusBarMessageType.activeCursor%"
+            ],
+            "default": "activeLine"
+          },
+          "poly.errorLens.statusBarCommand": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.statusBarCommand.description%",
+            "enum": [
+              "goToProblem",
+              "goToLine",
+              "copyMessage"
+            ],
+            "default": "goToProblem"
+          },
+          "poly.errorLens.statusBarMessageTemplate": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%config.errorLens.statusBarMessageTemplate.description%"
+          },
+          "poly.errorLens.replace": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "properties": {
+                "matcher": {
+                  "type": "string",
+                  "description": "%config.errorLens.replace.matcher.description%"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "%config.errorLens.replace.message.description%"
+                }
+              },
+              "required": [
+                "matcher",
+                "message"
+              ]
+            },
+            "markdownDescription": "%config.errorLens.replace.description%"
+          },
+          "poly.errorLens.transmute": {
+            "type": "object",
+            "default": {},
+            "patternProperties": {
+              ".*": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "object",
+                    "properties": {
+                      "message": {
+                        "type": "string",
+                        "description": "%config.errorLens.transmute.target.message.description%",
+                        "default": ""
+                      },
+                      "messageRegex": {
+                        "type": "object",
+                        "properties": {
+                          "regex": {
+                            "type": "string",
+                            "default": ""
+                          },
+                          "flags": {
+                            "type": "string",
+                            "default": "iu"
+                          }
+                        },
+                        "description": "%config.errorLens.transmute.target.messageRegex.description%",
+                        "required": [
+                          "regex"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "source": {
+                        "type": "string",
+                        "description": "%config.errorLens.transmute.target.source.description%",
+                        "default": ""
+                      },
+                      "code": {
+                        "description": "%config.errorLens.transmute.target.code.description%",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "severity": {
+                    "type": "string",
+                    "markdownDescription": "%config.errorLens.transmute.severity.description%",
+                    "enum": [
+                      "error",
+                      "warning",
+                      "info",
+                      "hint"
+                    ]
+                  },
+                  "decoration": {
+                    "type": "object",
+                    "markdownDescription": "%config.errorLens.transmute.decoration.description%",
+                    "properties": {
+                      "light": {
+                        "type": "object",
+                        "description": "%config.errorLens.transmute.decoration.light.description%",
+                        "properties": {
+                          "backgroundColor": {
+                            "type": "string",
+                            "format": "color"
+                          },
+                          "color": {
+                            "type": "string",
+                            "format": "color"
+                          },
+                          "border": {
+                            "type": "string"
+                          },
+                          "outline": {
+                            "type": "string"
+                          },
+                          "borderRadius": {
+                            "type": "string"
+                          },
+                          "borderSpacing": {
+                            "type": "string"
+                          },
+                          "fontStyle": {
+                            "type": "string"
+                          },
+                          "fontWeight": {
+                            "type": "string"
+                          },
+                          "textDecoration": {
+                            "type": "string"
+                          },
+                          "opacity": {
+                            "type": "string"
+                          },
+                          "letterSpacing": {
+                            "type": "string"
+                          },
+                          "after": {
+                            "type": "object",
+                            "description": "%config.errorLens.transmute.decoration.light.after.description%",
+                            "properties": {
+                              "backgroundColor": {
+                                "type": "string",
+                                "format": "color"
+                              },
+                              "color": {
+                                "type": "string",
+                                "format": "color"
+                              },
+                              "border": {
+                                "type": "string"
+                              },
+                              "borderRadius": {
+                                "type": "string"
+                              },
+                              "fontStyle": {
+                                "type": "string"
+                              },
+                              "fontWeight": {
+                                "type": "string"
+                              },
+                              "textDecoration": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "dark": {
+                        "type": "object",
+                        "description": "%config.errorLens.transmute.decoration.dark.description%",
+                        "properties": {
+                          "backgroundColor": {
+                            "type": "string",
+                            "format": "color"
+                          },
+                          "color": {
+                            "type": "string",
+                            "format": "color"
+                          },
+                          "border": {
+                            "type": "string"
+                          },
+                          "outline": {
+                            "type": "string"
+                          },
+                          "borderRadius": {
+                            "type": "string"
+                          },
+                          "borderSpacing": {
+                            "type": "string"
+                          },
+                          "fontStyle": {
+                            "type": "string"
+                          },
+                          "fontWeight": {
+                            "type": "string"
+                          },
+                          "textDecoration": {
+                            "type": "string"
+                          },
+                          "opacity": {
+                            "type": "string"
+                          },
+                          "letterSpacing": {
+                            "type": "string"
+                          },
+                          "after": {
+                            "type": "object",
+                            "description": "%config.errorLens.transmute.decoration.dark.after.description%",
+                            "properties": {
+                              "backgroundColor": {
+                                "type": "string",
+                                "format": "color"
+                              },
+                              "color": {
+                                "type": "string",
+                                "format": "color"
+                              },
+                              "border": {
+                                "type": "string"
+                              },
+                              "borderRadius": {
+                                "type": "string"
+                              },
+                              "fontStyle": {
+                                "type": "string"
+                              },
+                              "fontWeight": {
+                                "type": "string"
+                              },
+                              "textDecoration": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "markdownDescription": "%config.errorLens.transmute.description%"
+          },
+          "poly.errorLens.excludeByMessage": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "default": ""
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "regex": {
+                      "type": "string",
+                      "default": ""
+                    },
+                    "flags": {
+                      "type": "string",
+                      "default": "iu"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "default": {
+                    "regex": "",
+                    "flags": "iu"
+                  }
+                }
+              ]
+            },
+            "markdownDescription": "%config.errorLens.excludeByMessage.description%"
+          },
+          "poly.errorLens.excludeBySource": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "markdownDescription": "%config.errorLens.excludeBySource.description%"
+          },
+          "poly.errorLens.excludePatterns": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "markdownDescription": "%config.errorLens.excludePatterns.description%"
+          },
+          "poly.errorLens.excludeWorkspaces": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "markdownDescription": "%config.errorLens.excludeWorkspaces.description%"
+          },
+          "poly.errorLens.disableLineComments": {
+            "type": "object",
+            "markdownDescription": "%config.errorLens.disableLineComments.description%",
+            "patternProperties": {
+              ".*": {
+                "type": "string"
+              }
+            },
+            "default": {
+              "eslint": "// eslint-disable-next-line $code",
+              "Stylelint": "/* stylelint-disable-next-line $code */"
+            }
+          },
+          "poly.errorLens.lintFilePaths": {
+            "type": "object",
+            "default": {
+              "eslint": [
+                "**/*eslint.config.{js,mjs,cjs,ts,mts,cts}",
+                "**/*.eslintrc.{js,cjs,yaml,yml,json}",
+                "**/*package.json"
+              ],
+              "Stylelint": [
+                "**/*.stylelintrc",
+                "**/*.stylelintrc.{cjs,js,json,yaml,yml}",
+                "**/*stylelint.config.{cjs,js}",
+                "**/*package.json"
+              ]
+            },
+            "patternProperties": {
+              ".*": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "enum": [
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            },
+            "markdownDescription": "%config.errorLens.lintFilePaths.description%"
+          },
+          "poly.errorLens.searchForProblemQuery": {
+            "type": "string",
+            "default": "https://duckduckgo.com/?q=$message",
+            "markdownDescription": "%config.errorLens.searchForProblemQuery.description%"
+          },
+          "poly.errorLens.selectProblemType": {
+            "type": "string",
+            "default": "closestProblem",
+            "enum": [
+              "closestProblem",
+              "closestSeverity",
+              "activeLine"
+            ],
+            "enumDescriptions": [
+              "%config.errorLens.selectProblemType.closestProblem%",
+              "%config.errorLens.selectProblemType.closestSeverity%",
+              "%config.errorLens.selectProblemType.activeLine%"
+            ],
+            "markdownDescription": "%config.errorLens.selectProblemType.description%"
+          },
+          "poly.errorLens.light": {
+            "type": "object",
+            "markdownDescription": "%config.errorLens.light.description%",
+            "properties": {
+              "errorGutterIconPath": {
+                "type": "string",
+                "description": "%config.errorLens.light.errorGutterIconPath.description%",
+                "default": ""
+              },
+              "warningGutterIconPath": {
+                "type": "string",
+                "description": "%config.errorLens.light.warningGutterIconPath.description%",
+                "default": ""
+              },
+              "infoGutterIconPath": {
+                "type": "string",
+                "description": "%config.errorLens.light.infoGutterIconPath.description%",
+                "default": ""
+              },
+              "hintGutterIconPath": {
+                "type": "string",
+                "description": "%config.errorLens.light.hintGutterIconPath.description%",
+                "default": ""
+              },
+              "errorGutterIconColor": {
+                "type": "string",
+                "default": "",
+                "markdownDescription": "%config.errorLens.light.errorGutterIconColor.description%",
+                "format": "color"
+              },
+              "warningGutterIconColor": {
+                "type": "string",
+                "default": "",
+                "markdownDescription": "%config.errorLens.light.warningGutterIconColor.description%",
+                "format": "color"
+              },
+              "infoGutterIconColor": {
+                "type": "string",
+                "default": "",
+                "markdownDescription": "%config.errorLens.light.infoGutterIconColor.description%",
+                "format": "color"
+              },
+              "hintGutterIconColor": {
+                "type": "string",
+                "default": "",
+                "markdownDescription": "%config.errorLens.light.hintGutterIconColor.description%",
+                "format": "color"
+              }
+            }
+          },
+          "poly.errorLens.delay": {
+            "type": "integer",
+            "markdownDescription": "%config.errorLens.delay.description%",
+            "default": 0
+          },
+          "poly.errorLens.delayMode": {
+            "type": "string",
+            "default": "new",
+            "enum": [
+              "new",
+              "old",
+              "debounce"
+            ],
+            "markdownEnumDescriptions": [
+              "%config.errorLens.delayMode.new%",
+              "%config.errorLens.delayMode.old%",
+              "%config.errorLens.delayMode.debounce%"
+            ],
+            "markdownDescription": "%config.errorLens.delayMode.description%"
+          },
+          "poly.errorLens.onSave": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.onSave.description%",
+            "default": false
+          },
+          "poly.errorLens.onSaveTimeout": {
+            "type": "integer",
+            "markdownDescription": "%config.errorLens.onSaveTimeout.description%",
+            "default": 500,
+            "minimum": 50
+          },
+          "poly.errorLens.onSaveUpdateOnActiveEditorChange": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.onSaveUpdateOnActiveEditorChange.description%",
+            "default": true
+          },
+          "poly.errorLens.enableOnDiffView": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.enableOnDiffView.description%",
+            "default": false
+          },
+          "poly.errorLens.followCursor": {
+            "type": "string",
+            "enum": [
+              "allLines",
+              "allLinesExceptActive",
+              "activeLine",
+              "closestProblem"
+            ],
+            "enumDescriptions": [
+              "%config.errorLens.followCursor.allLines%",
+              "%config.errorLens.followCursor.allLinesExceptActive%",
+              "%config.errorLens.followCursor.activeLine%",
+              "%config.errorLens.followCursor.closestProblem%"
+            ],
+            "markdownDescription": "%config.errorLens.followCursor.description%",
+            "default": "allLines"
+          },
+          "poly.errorLens.followCursorMore": {
+            "type": "number",
+            "markdownDescription": "%config.errorLens.followCursorMore.description%",
+            "default": 0
+          },
+          "poly.errorLens.gutterIconsEnabled": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.gutterIconsEnabled.description%",
+            "default": false
+          },
+          "poly.errorLens.gutterIconsFollowCursorOverride": {
+            "type": "boolean",
+            "markdownDescription": "%config.errorLens.gutterIconsFollowCursorOverride.description%",
+            "default": true
+          },
+          "poly.errorLens.gutterIconSize": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.gutterIconSize.description%",
+            "examples": [
+              "auto",
+              "contain",
+              "cover",
+              "50%",
+              "150%"
+            ],
+            "default": "100%"
+          },
+          "poly.errorLens.gutterIconSet": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.gutterIconSet.description%",
+            "enum": [
+              "default",
+              "defaultOutline",
+              "borderless",
+              "circle",
+              "square",
+              "squareRounded",
+              "letter",
+              "emoji"
+            ],
+            "enumDescriptions": [
+              "%config.errorLens.gutterIconSet.default%",
+              "%config.errorLens.gutterIconSet.defaultOutline%",
+              "%config.errorLens.gutterIconSet.borderless%",
+              "%config.errorLens.gutterIconSet.circle%",
+              "%config.errorLens.gutterIconSet.square%",
+              "%config.errorLens.gutterIconSet.squareRounded%",
+              "%config.errorLens.gutterIconSet.letter%",
+              "%config.errorLens.gutterIconSet.emoji%"
+            ],
+            "default": "default"
+          },
+          "poly.errorLens.gutterEmoji": {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "string",
+                "minLength": 0,
+                "default": "💀"
+              },
+              "warning": {
+                "type": "string",
+                "minLength": 0,
+                "default": "😞"
+              },
+              "info": {
+                "type": "string",
+                "minLength": 0,
+                "default": "🆗"
+              },
+              "hint": {
+                "type": "string",
+                "minLength": 0,
+                "default": "🍏"
+              }
+            },
+            "default": {
+              "error": "💀",
+              "warning": "😞",
+              "info": "🆗",
+              "hint": "🍏"
+            },
+            "additionalProperties": false,
+            "markdownDescription": "%config.errorLens.gutterEmoji.description%"
+          },
+          "poly.errorLens.errorGutterIconPath": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.errorGutterIconPath.description%",
+            "default": ""
+          },
+          "poly.errorLens.warningGutterIconPath": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.warningGutterIconPath.description%",
+            "default": ""
+          },
+          "poly.errorLens.infoGutterIconPath": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.infoGutterIconPath.description%",
+            "default": ""
+          },
+          "poly.errorLens.hintGutterIconPath": {
+            "type": "string",
+            "markdownDescription": "%config.errorLens.hintGutterIconPath.description%",
+            "default": ""
+          },
+          "poly.errorLens.errorGutterIconColor": {
+            "type": "string",
+            "default": "#e45454",
+            "markdownDescription": "%config.errorLens.errorGutterIconColor.description%",
+            "format": "color"
+          },
+          "poly.errorLens.warningGutterIconColor": {
+            "type": "string",
+            "default": "#ff942f",
+            "markdownDescription": "%config.errorLens.warningGutterIconColor.description%",
+            "format": "color"
+          },
+          "poly.errorLens.infoGutterIconColor": {
+            "type": "string",
+            "default": "#00b7e4",
+            "markdownDescription": "%config.errorLens.infoGutterIconColor.description%",
+            "format": "color"
+          },
+          "poly.errorLens.hintGutterIconColor": {
+            "type": "string",
+            "default": "#2faf64",
+            "markdownDescription": "%config.errorLens.hintGutterIconColor.description%",
+            "format": "color"
+          },
+          "poly.errorLens.removeLinebreaks": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.errorLens.removeLinebreaks.description%"
+          },
+          "poly.errorLens.replaceLinebreaksSymbol": {
+            "type": "string",
+            "default": "⏎",
+            "markdownDescription": "%config.errorLens.replaceLinebreaksSymbol.description%"
+          },
+          "poly.errorLens.scrollbarHackEnabled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.errorLens.scrollbarHackEnabled.description%"
+          },
+          "poly.errorLens.decorations": {
+            "type": "object",
+            "markdownDescription": "%config.errorLens.decorations.description%",
+            "default": {
+              "errorRange": {},
+              "warningRange": {},
+              "infoRange": {},
+              "hintRange": {},
+              "errorMessage": {},
+              "warningMessage": {},
+              "infoMessage": {},
+              "hintMessage": {}
+            },
+            "patternProperties": {
+              "^(errorRange|warningRange|infoRange|hintRange|errorMessage|warningMessage|infoMessage|hintMessage)$": {
+                "type": "object",
+                "markdownDescription": "%config.errorLens.decorations.key.description%",
+                "properties": {}
+              }
+            },
+            "additionalProperties": false
+          },
+          "poly.errorLens.ignoreUntitled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.errorLens.ignoreUntitled.description%"
+          },
+          "poly.errorLens.ignoreDirty": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.errorLens.ignoreDirty.description%"
+          },
+          "poly.errorLens.codeLensEnabled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%config.errorLens.codeLensEnabled.description%"
+          },
+          "poly.errorLens.codeLensLength": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              },
+              "max": {
+                "type": "integer",
+                "minimum": 10,
+                "default": 200
+              }
+            },
+            "additionalProperties": false,
+            "default": {
+              "min": 0,
+              "max": 200
+            },
+            "markdownDescription": "%config.errorLens.codeLensLength.description%"
+          },
+          "poly.errorLens.codeLensTemplate": {
+            "type": "string",
+            "default": "$severity $message",
+            "markdownDescription": "%config.errorLens.codeLensTemplate.description%"
+          },
+          "poly.errorLens.codeLensOnClick": {
+            "type": "string",
+            "enum": [
+              "none",
+              "showProblemsView",
+              "showQuickFix",
+              "searchForProblem"
+            ],
+            "enumDescriptions": [
+              "%config.errorLens.codeLensOnClick.none%",
+              "%config.errorLens.codeLensOnClick.showProblemsView%",
+              "%config.errorLens.codeLensOnClick.showQuickFix%",
+              "%config.errorLens.codeLensOnClick.searchForProblem%"
+            ],
+            "default": "showQuickFix",
+            "markdownDescription": "%config.errorLens.codeLensOnClick.description%"
+          }
+        }
+      },
+      {
         "title": "AutoCorrect",
-        "order": 15,
+        "order": 17,
         "properties": {
           "poly.autocorrect.enabled": {
             "type": "boolean",
@@ -3789,6 +5421,276 @@
           "dark": "#67b8e3ff",
           "light": "#0288d1ff",
           "highContrast": "#67b8e3ff"
+        }
+      },
+      {
+        "id": "poly.errorLens.errorBackground",
+        "description": "%color.errorLens.errorBackground.description%",
+        "defaults": {
+          "dark": "#e454541b",
+          "light": "#e4545420",
+          "highContrast": "#e454541b"
+        }
+      },
+      {
+        "id": "poly.errorLens.errorMessageBackground",
+        "description": "%color.errorLens.errorMessageBackground.description%",
+        "defaults": {
+          "dark": "#e4545419",
+          "light": "#e4545419",
+          "highContrast": "#e4545419"
+        }
+      },
+      {
+        "id": "poly.errorLens.errorRangeBackground",
+        "description": "%color.errorLens.errorRangeBackground.description%",
+        "defaults": {
+          "dark": "#e4545419",
+          "light": "#e4545419",
+          "highContrast": "#e4545419"
+        }
+      },
+      {
+        "id": "poly.errorLens.errorBackgroundLight",
+        "description": "%color.errorLens.errorBackgroundLight.description%",
+        "defaults": {
+          "dark": "#e4545420",
+          "light": "#e4545420",
+          "highContrast": "#e4545420"
+        }
+      },
+      {
+        "id": "poly.errorLens.errorForeground",
+        "description": "%color.errorLens.errorForeground.description%",
+        "defaults": {
+          "dark": "#ff6464",
+          "light": "#e45454",
+          "highContrast": "#ff6464"
+        }
+      },
+      {
+        "id": "poly.errorLens.errorForegroundLight",
+        "description": "%color.errorLens.errorForegroundLight.description%",
+        "defaults": {
+          "dark": "#e45454",
+          "light": "#e45454",
+          "highContrast": "#e45454"
+        }
+      },
+      {
+        "id": "poly.errorLens.warningBackground",
+        "description": "%color.errorLens.warningBackground.description%",
+        "defaults": {
+          "dark": "#ff942f1b",
+          "light": "#ff942f20",
+          "highContrast": "#ff942f1b"
+        }
+      },
+      {
+        "id": "poly.errorLens.warningMessageBackground",
+        "description": "%color.errorLens.warningMessageBackground.description%",
+        "defaults": {
+          "dark": "#ff942f19",
+          "light": "#ff942f19",
+          "highContrast": "#ff942f19"
+        }
+      },
+      {
+        "id": "poly.errorLens.warningRangeBackground",
+        "description": "%color.errorLens.warningRangeBackground.description%",
+        "defaults": {
+          "dark": "#ff942f19",
+          "light": "#ff942f19",
+          "highContrast": "#ff942f19"
+        }
+      },
+      {
+        "id": "poly.errorLens.warningBackgroundLight",
+        "description": "%color.errorLens.warningBackgroundLight.description%",
+        "defaults": {
+          "dark": "#ff942f20",
+          "light": "#ff942f20",
+          "highContrast": "#ff942f20"
+        }
+      },
+      {
+        "id": "poly.errorLens.warningForeground",
+        "description": "%color.errorLens.warningForeground.description%",
+        "defaults": {
+          "dark": "#fa973a",
+          "light": "#ff942f",
+          "highContrast": "#fa973a"
+        }
+      },
+      {
+        "id": "poly.errorLens.warningForegroundLight",
+        "description": "%color.errorLens.warningForegroundLight.description%",
+        "defaults": {
+          "dark": "#ff942f",
+          "light": "#ff942f",
+          "highContrast": "#ff942f"
+        }
+      },
+      {
+        "id": "poly.errorLens.infoBackground",
+        "description": "%color.errorLens.infoBackground.description%",
+        "defaults": {
+          "dark": "#00b7e420",
+          "light": "#00b7e420",
+          "highContrast": "#00b7e420"
+        }
+      },
+      {
+        "id": "poly.errorLens.infoMessageBackground",
+        "description": "%color.errorLens.infoMessageBackground.description%",
+        "defaults": {
+          "dark": "#00b7e419",
+          "light": "#00b7e419",
+          "highContrast": "#00b7e419"
+        }
+      },
+      {
+        "id": "poly.errorLens.infoRangeBackground",
+        "description": "%color.errorLens.infoRangeBackground.description%",
+        "defaults": {
+          "dark": "#00b7e419",
+          "light": "#00b7e419",
+          "highContrast": "#00b7e419"
+        }
+      },
+      {
+        "id": "poly.errorLens.infoBackgroundLight",
+        "description": "%color.errorLens.infoBackgroundLight.description%",
+        "defaults": {
+          "dark": "#00b7e420",
+          "light": "#00b7e420",
+          "highContrast": "#00b7e420"
+        }
+      },
+      {
+        "id": "poly.errorLens.infoForeground",
+        "description": "%color.errorLens.infoForeground.description%",
+        "defaults": {
+          "dark": "#00b7e4",
+          "light": "#00b7e4",
+          "highContrast": "#00b7e4"
+        }
+      },
+      {
+        "id": "poly.errorLens.infoForegroundLight",
+        "description": "%color.errorLens.infoForegroundLight.description%",
+        "defaults": {
+          "dark": "#00b7e4",
+          "light": "#00b7e4",
+          "highContrast": "#00b7e4"
+        }
+      },
+      {
+        "id": "poly.errorLens.hintBackground",
+        "description": "%color.errorLens.hintBackground.description%",
+        "defaults": {
+          "dark": "#17a2a220",
+          "light": "#17a2a220",
+          "highContrast": "#17a2a220"
+        }
+      },
+      {
+        "id": "poly.errorLens.hintMessageBackground",
+        "description": "%color.errorLens.hintMessageBackground.description%",
+        "defaults": {
+          "dark": "#17a2a219",
+          "light": "#17a2a219",
+          "highContrast": "#17a2a219"
+        }
+      },
+      {
+        "id": "poly.errorLens.hintRangeBackground",
+        "description": "%color.errorLens.hintRangeBackground.description%",
+        "defaults": {
+          "dark": "#17a2a219",
+          "light": "#17a2a219",
+          "highContrast": "#17a2a219"
+        }
+      },
+      {
+        "id": "poly.errorLens.hintBackgroundLight",
+        "description": "%color.errorLens.hintBackgroundLight.description%",
+        "defaults": {
+          "dark": "#17a2a220",
+          "light": "#17a2a220",
+          "highContrast": "#17a2a220"
+        }
+      },
+      {
+        "id": "poly.errorLens.hintForeground",
+        "description": "%color.errorLens.hintForeground.description%",
+        "defaults": {
+          "dark": "#2faf64",
+          "light": "#2faf64",
+          "highContrast": "#2faf64"
+        }
+      },
+      {
+        "id": "poly.errorLens.hintForegroundLight",
+        "description": "%color.errorLens.hintForegroundLight.description%",
+        "defaults": {
+          "dark": "#2faf64",
+          "light": "#2faf64",
+          "highContrast": "#2faf64"
+        }
+      },
+      {
+        "id": "poly.errorLens.statusBarIconErrorForeground",
+        "description": "%color.errorLens.statusBarIconErrorForeground.description%",
+        "defaults": {
+          "dark": "#ff6464",
+          "light": "#e45454",
+          "highContrast": "#ff6464"
+        }
+      },
+      {
+        "id": "poly.errorLens.statusBarIconWarningForeground",
+        "description": "%color.errorLens.statusBarIconWarningForeground.description%",
+        "defaults": {
+          "dark": "#fa973a",
+          "light": "#ff942f",
+          "highContrast": "#fa973a"
+        }
+      },
+      {
+        "id": "poly.errorLens.statusBarErrorForeground",
+        "description": "%color.errorLens.statusBarErrorForeground.description%",
+        "defaults": {
+          "dark": "#ff6464",
+          "light": "#e45454",
+          "highContrast": "#ff6464"
+        }
+      },
+      {
+        "id": "poly.errorLens.statusBarWarningForeground",
+        "description": "%color.errorLens.statusBarWarningForeground.description%",
+        "defaults": {
+          "dark": "#fa973a",
+          "light": "#ff942f",
+          "highContrast": "#fa973a"
+        }
+      },
+      {
+        "id": "poly.errorLens.statusBarInfoForeground",
+        "description": "%color.errorLens.statusBarInfoForeground.description%",
+        "defaults": {
+          "dark": "#00b7e4",
+          "light": "#00b7e4",
+          "highContrast": "#00b7e4"
+        }
+      },
+      {
+        "id": "poly.errorLens.statusBarHintForeground",
+        "description": "%color.errorLens.statusBarHintForeground.description%",
+        "defaults": {
+          "dark": "#2faf64",
+          "light": "#2faf64",
+          "highContrast": "#2faf64"
         }
       }
     ],
@@ -4016,8 +5918,8 @@
   },
   "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && esbuild src/editor/gitGraphPanel.ts --bundle --outfile=dist/gitGraph.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/gitGraph.ts --bundle --outdir=dist/git-graph --format=iife --platform=browser --minify --loader:.ttf=file --asset-names=\"[name]\" && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true})\" && node ../../tools/drawio-webapp.js",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit && tsc -p tsconfig.marp.json --noEmit",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/opencc-js', {recursive: true, force: true}); for (const f of ['LICENSE', 'LICENSES', 'THIRD_PARTY_LICENSES.md']) fs.cpSync('node_modules/opencc-js/' + f, 'dist/opencc-js/' + f, {recursive: true})\" && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/code-runner', {recursive: true, force: true}); fs.mkdirSync('dist/code-runner', {recursive: true}); for (const f of ['LICENSE.txt', 'code-runner-output.tmLanguage']) fs.cpSync('src/editor/codeRunner/' + f, 'dist/code-runner/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && esbuild src/editor/gitGraphPanel.ts --bundle --outfile=dist/gitGraph.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/gitGraph.ts --bundle --outdir=dist/git-graph --format=iife --platform=browser --minify --loader:.ttf=file --asset-names=\"[name]\" && node -e \"for (const f of ['LICENSE', 'LICENSE-CODE']) require('fs').cpSync('node_modules/@vscode/codicons/' + f, 'dist/git-graph/' + f); require('fs').cpSync('src/editor/preview/LICENSE-vscode.txt', 'dist/git-graph/LICENSE-vscode.txt')\" && node -e \"const fs = require('fs'); fs.rmSync('dist/errorLens', {recursive: true, force: true}); fs.mkdirSync('dist/errorLens', {recursive: true}); fs.cpSync('src/editor/errorLens/LICENSE.txt', 'dist/errorLens/LICENSE.txt')\" && esbuild src/editor/errorLens/src/extension.ts --bundle --outfile=dist/errorLens/extension.js --external:vscode --format=cjs --platform=node --minify --alias:src=./src/editor/errorLens/src --alias:lodash=lodash-es && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true}); require('fs').cpSync('media/excalidraw/FONTS.md', 'dist/excalidraw/FONTS.md')\" && node ../../tools/drawio-webapp.js",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit && tsc -p tsconfig.marp.json --noEmit && tsc -p tsconfig.errorLens.json --noEmit",
     "unit": "tsc -p tsconfig.test.json && node --test out/editor/*.test.js",
     "test:build": "pnpm run build && tsc -p tsconfig.test.json",
     "test": "pnpm run test:build && node out/test/runTest.js"
@@ -4067,6 +5969,7 @@
     "open": "11.0.0",
     "opencc-js": "1.4.2",
     "parquets": "0.10.10",
+    "picomatch": "2.3.2",
     "plantuml-encoder": "1.4.0",
     "portfinder": "1.0.38",
     "properties": "1.2.1",
