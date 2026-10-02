@@ -2,7 +2,7 @@
   "name": "poly-syntax-highlight",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.18.14",
+  "version": "0.18.15",
   "publisher": "ricky",
   "license": "MIT",
   "engines": {
