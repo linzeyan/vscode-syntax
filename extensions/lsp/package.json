@@ -1568,57 +1568,57 @@
       "webview/context": [
         {
           "command": "poly.gitGraph.addTag",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyGit",
           "group": "1_create@1"
         },
         {
           "command": "poly.gitGraph.createBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyGit",
           "group": "1_create@2"
         },
         {
           "command": "poly.gitGraph.checkoutCommit",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyGit",
           "group": "2_checkout@1"
         },
         {
           "command": "poly.gitGraph.cherryPick",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyGit",
           "group": "2_checkout@2"
         },
         {
           "command": "poly.gitGraph.revert",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyGit",
           "group": "2_checkout@3"
         },
         {
           "command": "poly.gitGraph.drop",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyAncestor && !polyMerge && !polyRoot",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyAncestor && !polyMerge && !polyRoot && polyGit",
           "group": "2_checkout@4"
         },
         {
           "command": "poly.gitGraph.mergeCommit",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead && polyGit",
           "group": "3_merge@1"
         },
         {
           "command": "poly.gitGraph.rebaseOnCommit",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead && polyGit",
           "group": "3_merge@2"
         },
         {
           "command": "poly.gitGraph.resetToCommit",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && !polyHead && polyGit",
           "group": "3_merge@3"
         },
         {
           "command": "poly.gitGraph.archiveCommit",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyGit",
           "group": "4_archive@1"
         },
         {
           "command": "poly.gitGraph.directoryDiff",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyDiffTool",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'commit' && polyDiffTool && polyGit",
           "group": "4_archive@2"
         },
         {
@@ -1633,32 +1633,32 @@
         },
         {
           "command": "poly.gitGraph.checkoutBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent && polyGit",
           "group": "1_checkout@1"
         },
         {
           "command": "poly.gitGraph.renameBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && polyGit",
           "group": "1_checkout@2"
         },
         {
           "command": "poly.gitGraph.deleteBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent && polyGit",
           "group": "1_checkout@3"
         },
         {
           "command": "poly.gitGraph.mergeBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent && polyGit",
           "group": "2_merge@1"
         },
         {
           "command": "poly.gitGraph.rebaseOnBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && !polyCurrent && polyGit",
           "group": "2_merge@2"
         },
         {
           "command": "poly.gitGraph.pushBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && polyRemotes",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && polyRemotes && polyGit",
           "group": "3_push@1"
         },
         {
@@ -1668,7 +1668,7 @@
         },
         {
           "command": "poly.gitGraph.archiveBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'branch' && polyGit",
           "group": "4_archive@1"
         },
         {
@@ -1683,27 +1683,27 @@
         },
         {
           "command": "poly.gitGraph.checkoutRemoteBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch' && polyGit",
           "group": "1_checkout@1"
         },
         {
           "command": "poly.gitGraph.deleteRemoteBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch' && polyGit",
           "group": "1_checkout@2"
         },
         {
           "command": "poly.gitGraph.fetchIntoLocalBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch' && polyGit",
           "group": "1_checkout@3"
         },
         {
           "command": "poly.gitGraph.mergeRemoteBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch' && polyGit",
           "group": "2_merge@1"
         },
         {
           "command": "poly.gitGraph.pullIntoCurrent",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch' && polyGit",
           "group": "2_merge@2"
         },
         {
@@ -1713,7 +1713,7 @@
         },
         {
           "command": "poly.gitGraph.archiveBranch",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'remoteBranch' && polyGit",
           "group": "4_archive@1"
         },
         {
@@ -1733,17 +1733,17 @@
         },
         {
           "command": "poly.gitGraph.deleteTag",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag' && polyGit",
           "group": "2_tag@1"
         },
         {
           "command": "poly.gitGraph.pushTag",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag' && polyRemotes",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag' && polyRemotes && polyGit",
           "group": "2_tag@2"
         },
         {
           "command": "poly.gitGraph.archiveTag",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'tag' && polyGit",
           "group": "4_archive@1"
         },
         {
@@ -1753,22 +1753,22 @@
         },
         {
           "command": "poly.gitGraph.applyStash",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash' && polyGit",
           "group": "1_apply@1"
         },
         {
           "command": "poly.gitGraph.popStash",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash' && polyGit",
           "group": "1_apply@2"
         },
         {
           "command": "poly.gitGraph.dropStash",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash' && polyGit",
           "group": "1_apply@3"
         },
         {
           "command": "poly.gitGraph.branchFromStash",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'stash' && polyGit",
           "group": "2_branch@1"
         },
         {
@@ -1783,22 +1783,22 @@
         },
         {
           "command": "poly.gitGraph.stashChanges",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted' && polyGit",
           "group": "1_stash@1"
         },
         {
           "command": "poly.gitGraph.resetChanges",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted' && polyGit",
           "group": "1_stash@2"
         },
         {
           "command": "poly.gitGraph.cleanUntracked",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted' && polyGit",
           "group": "1_stash@3"
         },
         {
           "command": "poly.gitGraph.openSourceControl",
-          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted'",
+          "when": "webviewId == 'poly.gitGraph' && webviewSection == 'uncommitted' && polyGit",
           "group": "2_scm@1"
         },
         {

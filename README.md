@@ -176,6 +176,8 @@
   檔案的右鍵選單做簽出、merge、rebase、cherry-pick、reset、push、刪除等操作，remote 在工具列管理。功能
   照它的行為做；圖的畫法移植自 VSCode 的原始檔控制圖（Source Control Graph，MIT），顏色是它的
   `scmGraph.*` 佈景主題色。沒有它的 `git-graph.*` 設定。兩個都裝著時 poly 讓出 status bar 與原始檔控制的按鈕。
+  電腦上沒有 git 時改由 poly 讀 repository，圖、commit 細節、比較與 diff 照常，但只能看：會改動
+  repository 的操作都需要 git。
 - **Code Runner**（`poly.codeRunner.enabled` 打開）：取代 formulahendry.code-runner。`ctrl+alt+n`（或
   `Run Code`，編輯器標題的 ▶ 按鈕與右鍵選單也有）執行目前的檔案或選取的程式碼，結果在輸出面板的 Code Runner，
   `runInTerminal` 改在終端機；`ctrl+alt+k` 執行自訂命令，`ctrl+alt+j` 先挑語言再執行，`ctrl+alt+m` 停止。

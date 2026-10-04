@@ -506,6 +506,14 @@ jobs:
       # esbuild the e2e step installed rather than a window.
       - name: Image gutter cache stays the size of the screen
         run: node tools/gutter-cache-check.js
+      # Git History's reads through `poly git` against git's own, for where
+      # there is no git. Here for the poly this job built and the esbuild the
+      # e2e step installed; the checkout is shallow, so its own history adds
+      # little and the fixtures carry the check.
+      - name: Git History reads the same through poly git
+        env:
+          POLY_BIN: ${{ github.workspace }}/cli/target/release/poly
+        run: node tools/git-embed-check.js
       # The other half of A9, here because it needs the tree the e2e step
       # installed: what the bundles carry is decided by pnpm's resolution, not
       # by a manifest anyone can read without it.

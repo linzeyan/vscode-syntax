@@ -1417,6 +1417,13 @@ func main() {
       .filter((id) => id.startsWith("poly.gitGraph."))
       .map((id) => id.slice("poly.gitGraph.".length));
     assert.deepStrictEqual([...host.handled].sort(), declared.sort(), "declared commands and handlers differ");
+    // Without git the page drops polyGit, and only the reads may stay in its menus.
+    const menus = (extension.packageJSON.contributes.menus["webview/context"] as { command: string; when: string }[])
+      .filter((entry) => entry.command.startsWith("poly.gitGraph."));
+    for (const { command, when } of menus) {
+      const read = host.READS.has(command.slice("poly.gitGraph.".length));
+      assert.strictEqual(/&& polyGit\b/.test(when), !read, `${command}: polyGit in its menu ≠ needing git`);
+    }
 
     const gitExtension = vscode.extensions.getExtension<
       { getAPI(version: 1): { openRepository(root: vscode.Uri): Promise<unknown> } }
@@ -1446,6 +1453,62 @@ func main() {
         "first\n",
         "not the file as committed",
       );
+    } finally {
+      const tab = page();
+      if (tab) await vscode.window.tabGroups.close(tab);
+    }
+  });
+
+  // Run only in the launch that disables vscode.git (runTest.ts), which is how
+  // a machine without git looks to Git History. What poly reads is held to git
+  // by tools/git-embed-check.js; what only a host shows is the switch: the
+  // repository found without vscode.git, a revision read through poly, and a
+  // command that would change the repository refused rather than run.
+  test("Git History without git reads through poly and changes nothing", async () => {
+    assert.strictEqual(vscode.extensions.getExtension("vscode.git"), undefined, "vscode.git is enabled here");
+    const repo = join(workspaceRoot(), "graph-repo");
+    rmSync(repo, { recursive: true, force: true });
+    mkdirSync(repo);
+    const git = (...args: string[]) =>
+      execFileSync("git", [
+        "-c",
+        "user.name=Ada",
+        "-c",
+        "user.email=ada@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ], {
+        cwd: repo,
+        encoding: "utf8",
+      }).trim();
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(repo, "a.txt"), "first\n");
+    git("add", "a.txt");
+    git("commit", "-q", "-m", "First");
+    git("branch", "other");
+    const hash = git("rev-parse", "HEAD");
+
+    const page = () =>
+      vscode.window.tabGroups.all.flatMap((group) => group.tabs).find((tab) =>
+        tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("poly.gitGraph")
+      );
+    try {
+      await vscode.commands.executeCommand("poly.gitGraph.view");
+      assert.strictEqual((await eventually("the Git History panel", page)).label, "Git History");
+
+      await vscode.commands.executeCommand("poly.gitGraph.checkoutBranch", { repo, branch: "other" });
+      assert.strictEqual(git("symbolic-ref", "--short", "HEAD"), "main", "a checkout ran without git");
+
+      await vscode.env.clipboard.writeText("before");
+      await vscode.commands.executeCommand("poly.gitGraph.copyHash", { repo, hash });
+      assert.strictEqual(await vscode.env.clipboard.readText(), hash);
+
+      const side = vscode.Uri.file(join(repo, "a.txt")).with({
+        scheme: "poly-git",
+        query: JSON.stringify({ repo, ref: hash, path: "a.txt" }),
+      });
+      assert.strictEqual((await vscode.workspace.openTextDocument(side)).getText(), "first\n", "poly did not read it");
     } finally {
       const tab = page();
       if (tab) await vscode.window.tabGroups.close(tab);

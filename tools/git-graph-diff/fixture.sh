@@ -20,7 +20,9 @@ at() {       # at <offset-minutes> <cmd...>: run with author and committer dates
 	shift
 	GIT_AUTHOR_DATE="@$when +0800" GIT_COMMITTER_DATE="@$when +0800" "$@"
 }
-g() { git -c gc.auto=0 -c user.name="Ada Lovelace" -c user.email=ada@example.com -c init.defaultBranch=main -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
+# maintenance.auto as well as gc.auto: git 2.54's background maintenance
+# repacks regardless of gc.auto and can race the next commit, losing objects.
+g() { git -c gc.auto=0 -c maintenance.auto=false -c user.name="Ada Lovelace" -c user.email=ada@example.com -c init.defaultBranch=main -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
 commit() { # commit <offset> <file> <message...>
 	local off=$1 file=$2
 	shift 2

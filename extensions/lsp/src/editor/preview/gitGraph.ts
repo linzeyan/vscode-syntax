@@ -59,6 +59,8 @@ interface State {
   subjects: string[];
   remotes: Remote[];
   diffTool: boolean;
+  /** Whether there is git to run; without it poly reads and nothing changes the repository. */
+  git: boolean;
   layout?: ISCMHistoryItemViewModel[];
   /** The commit whose details are open, and the one compared with it if any. */
   open?: string;
@@ -81,6 +83,7 @@ const state: State = {
   subjects: [],
   remotes: [],
   diffTool: false,
+  git: true,
   columns: { widths: {}, hidden: [], muteMerges: true, fileView: "tree" },
   find: { query: "", caseSensitive: false, regex: false, matches: [], current: -1 },
   waitingForMore: false,
@@ -950,13 +953,15 @@ function renderToolbar(): void {
   );
   remoteToggle.checked = view?.showRemoteBranches ?? true;
   const hasRemotes = state.remotes.length > 0;
-  fetchButton.hidden = !hasRemotes;
+  fetchButton.hidden = !hasRemotes || !state.git;
+  remotesButton.hidden = !state.git;
   document.body.setAttribute(
     "data-vscode-context",
     context({
       repo: state.repo,
       polyRemotes: hasRemotes,
       polyDiffTool: state.diffTool,
+      polyGit: state.git,
     }),
   );
 }
@@ -1096,7 +1101,7 @@ rows.addEventListener("click", (event) => {
 });
 rows.addEventListener("dblclick", (event) => {
   const label = (event.target as HTMLElement).closest<HTMLElement>(".ref.branch:not(.current)");
-  if (label?.dataset.branch) post({ type: "checkout", branch: label.dataset.branch });
+  if (label?.dataset.branch && state.git) post({ type: "checkout", branch: label.dataset.branch });
 });
 
 document.addEventListener("keydown", (event) => {
@@ -1199,6 +1204,7 @@ window.addEventListener("message", (event: MessageEvent) => {
       state.subjects = message.subjects as string[];
       state.remotes = message.remotes as Remote[];
       state.diffTool = message.diffTool as boolean;
+      state.git = message.git as boolean;
       if (message.columns) state.columns = { ...state.columns, ...message.columns as Partial<Columns> };
       state.layout = layout(state.graph.commits, state.view.firstParent, state.graph.head);
       if (changedRepo || !state.graph.commits.some((c) => c.hash === state.open)) {
@@ -1210,7 +1216,13 @@ window.addEventListener("message", (event: MessageEvent) => {
       renderToolbar();
       renderHeader();
       renderRows();
-      showNotice(state.graph.commits.length === 0 ? "No commits yet." : undefined);
+      showNotice(
+        state.graph.commits.length === 0
+          ? "No commits yet."
+          : state.git
+          ? undefined
+          : "Read-only: git was not found, so poly reads this history and nothing here can change it. Install git, or point git.path at it, then reload the window.",
+      );
       renderFooter();
       findMatches();
       // A refresh keeps an open commit open, its details shown until they are

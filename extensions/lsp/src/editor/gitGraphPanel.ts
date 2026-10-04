@@ -16,6 +16,7 @@ import { full as emoji } from "markdown-it-emoji";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { repositoriesOnDisk } from "./gitGraph";
 import * as act from "./gitGraphActions";
 import {
   commitDetails,
@@ -57,21 +58,17 @@ interface GitApi {
 
 async function gitApi(): Promise<GitApi> {
   const extension = vscode.extensions.getExtension<{ getAPI(version: 1): GitApi }>("vscode.git");
-  if (!extension) {
-    throw new Error("Git History needs VSCode's built-in Git extension, which is disabled");
-  }
-  const exports = extension.isActive ? extension.exports : await extension.activate();
   let api: GitApi;
   try {
+    if (!extension) throw new Error("the built-in Git extension is disabled");
+    const exports = extension.isActive ? extension.exports : await extension.activate();
+    // Without git on the machine, or with git.enabled off, the built-in
+    // extension starts anyway and only `getAPI` throws.
     api = exports.getAPI(1);
-  } catch {
-    // The built-in extension starts without git and only says "Git model not
-    // found" when asked, which names its internals rather than the fix.
-    throw new Error(
-      vscode.workspace.getConfiguration("git").get<boolean>("enabled", true)
-        ? "git was not found. Install git, or point git.path at it, then reload the window."
-        : "VSCode's Git support is off (git.enabled).",
-    );
+  } catch (error) {
+    log?.info(`Git History: no git to run (${error instanceof Error ? error.message : error}); reading with poly`);
+    readOnly = true;
+    return onDisk();
   }
   if (api.state !== "initialized") {
     await new Promise<void>((resolve) => {
@@ -84,6 +81,41 @@ async function gitApi(): Promise<GitApi> {
     });
   }
   return api;
+}
+
+/**
+ * The repositories vscode.git would have offered, found on disk instead, each
+ * refreshed by any change under it in the workspace.
+ *
+ * ponytail: found once, on first use; and a repository whose root is above
+ * the workspace hears only of changes inside the workspace, so a commit made
+ * from a terminal shows on the next save or refresh.
+ */
+function onDisk(): GitApi {
+  const changed = new vscode.EventEmitter<string>();
+  const watcher = vscode.workspace.createFileSystemWatcher("**");
+  for (const event of [watcher.onDidChange, watcher.onDidCreate, watcher.onDidDelete]) {
+    event((uri) => changed.fire(uri.fsPath));
+  }
+  const never = new vscode.EventEmitter<never>().event;
+  return {
+    git: { path: "" },
+    state: "initialized",
+    onDidChangeState: never,
+    repositories: repositoriesOnDisk().map((root) => ({
+      rootUri: vscode.Uri.file(root),
+      state: {
+        onDidChange: (listener, thisArgs, disposables) =>
+          changed.event(
+            (file) => (file === root || file.startsWith(root + path.sep)) && listener.call(thisArgs),
+            undefined,
+            disposables,
+          ),
+      },
+    })),
+    onDidOpenRepository: never,
+    onDidCloseRepository: never,
+  };
 }
 
 /** What a menu command is handed: the `data-vscode-context` of what was right-clicked, merged up to the page. */
@@ -109,8 +141,46 @@ const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(emoj
 const short = (hash: string) => (hash === UNCOMMITTED ? "Working Tree" : hash.slice(0, 7));
 
 let api: GitApi | undefined;
-let log: vscode.LogOutputChannel;
-const gitAt = (repo: string): Git => gitIn(api?.git.path || "git", repo);
+let starting: Promise<GitApi> | undefined;
+const ready = async () => (api ??= await (starting ??= gitApi()));
+let log: vscode.LogOutputChannel | undefined;
+let poly = "poly";
+/**
+ * Set where there is no git to run: poly answers the same questions with the
+ * same output (`poly git`, held to git by tools/git-embed-check.js), and
+ * nothing that would need git -- changing the repository, archiving, a diff
+ * tool -- is offered.
+ */
+let readOnly = false;
+const gitAt = (repo: string): Git => (readOnly ? gitIn(poly, repo, ["git"]) : gitIn(api?.git.path || "git", repo));
+
+/** The commands that only read, copy or arrange the panel: all that runs without git. */
+export const READS = new Set([
+  "view",
+  "copyHash",
+  "copySubject",
+  "createPullRequest",
+  "filterToBranch",
+  "copyBranchName",
+  "viewTag",
+  "copyTagName",
+  "copyStashName",
+  "viewDiff",
+  "viewDiffWithWorkingFile",
+  "viewFileAtRevision",
+  "openFile",
+  "copyFilePath",
+  "copyRelativeFilePath",
+  "toggleDate",
+  "toggleAuthor",
+  "toggleCommit",
+]);
+
+function needsGit(): void {
+  void vscode.window.showErrorMessage(
+    "Git History: this needs git, which was not found. Install git, or point git.path at it, then reload the window.",
+  );
+}
 
 /** A diff side: a file as it is in `ref`, or nothing at all when `ref` is empty. */
 function revisionUri(repo: string, ref: string, file: string): vscode.Uri {
@@ -121,9 +191,11 @@ function revisionUri(repo: string, ref: string, file: string): vscode.Uri {
 }
 
 /** Content for a `poly-git:` side; empty where the file does not exist, as on the far side of an addition. */
-export async function content(uri: vscode.Uri): Promise<string> {
+export async function content(uri: vscode.Uri, polyPath: string): Promise<string> {
+  poly = polyPath;
   const { repo, ref, path: file } = JSON.parse(uri.query) as { repo: string; ref: string; path: string };
   if (!ref) return "";
+  await ready();
   return await gitAt(repo)(["show", `${ref}:${file}`]).catch(() => "");
 }
 
@@ -267,6 +339,7 @@ class GraphPanel {
         subjects: graph.commits.map((commit) => md.renderInline(commit.subject)),
         remotes: remotes.map((remote) => ({ name: remote.name, pr: act.pullRequestUrl(remote, "") !== undefined })),
         diffTool,
+        git: !readOnly,
         columns: this.context.globalState.get("poly.gitGraph.columns"),
       });
     } catch (error) {
@@ -291,13 +364,17 @@ class GraphPanel {
       case "columns":
         void this.context.globalState.update("poly.gitGraph.columns", message.columns);
         return;
+      // The page offers none of these without git; this is the backstop.
       case "fetch":
+        if (readOnly) return needsGit();
         if (repo) await fetchAll(repo);
         return;
       case "remotes":
+        if (readOnly) return needsGit();
         if (repo) await manageRemotes(repo);
         return;
       case "checkout":
+        if (readOnly) return needsGit();
         if (repo) {
           await attempt(
             repo,
@@ -374,7 +451,7 @@ class GraphPanel {
 
 /** Opens the panel, or brings it forward, on `repo` or the one it last showed. */
 async function show(context: vscode.ExtensionContext, repo?: string): Promise<void> {
-  api ??= await gitApi();
+  await ready();
   if (!GraphPanel.current) {
     const panel = vscode.window.createWebviewPanel(VIEW_TYPE, "Git History", vscode.ViewColumn.Active, {
       enableScripts: true,
@@ -413,7 +490,7 @@ async function attempt(
     return true;
   } catch (error) {
     const text = String(error instanceof Error ? error.message : error);
-    log.warn(`Git History: ${title}: ${text}`);
+    log?.warn(`Git History: ${title}: ${text}`);
     void vscode.window.showErrorMessage(`${title} failed: ${text}`);
     return false;
   } finally {
@@ -1182,16 +1259,20 @@ const COMMANDS: Record<string, (ctx: Context, context: vscode.ExtensionContext) 
 export async function run(
   context: vscode.ExtensionContext,
   output: vscode.LogOutputChannel,
+  polyPath: string,
   command: string,
   ...args: unknown[]
 ): Promise<unknown> {
   log = output;
+  poly = polyPath;
   const handler = COMMANDS[command];
   if (!handler) {
     throw new Error(`poly.gitGraph.${command} is declared in the manifest but has no handler`);
   }
   try {
-    api ??= await gitApi();
+    await ready();
+    // The menus hide these without git; a key binding gets past any `when`.
+    if (readOnly && !READS.has(command)) return needsGit();
     return await handler((args[0] ?? {}) as Context, context);
   } catch (error) {
     void vscode.window.showErrorMessage(`Git History: ${error instanceof Error ? error.message : error}`);

@@ -352,6 +352,10 @@ VSCode 自己的原始檔控制圖（Source Control Graph，MIT），顏色是�
   分支或 tag、merge、rebase、cherry-pick、revert、reset、push、刪除、封存、套用或捨棄 stash、複製名稱與雜湊
   等；欄位標題的右鍵選單切換日期、作者、commit 三欄。會改動 repository 的操作先問選項（例如 merge 要不要
   `--no-ff`、push 要不要 force with lease）。Create Pull Request 支援 GitHub、GitLab 與 Bitbucket。
+- **沒有 git 時**（沒裝、找不到，或 `git.enabled` 關掉）：poly 自己讀 repository（`poly git`，內建
+  gitoxide），圖、commit 細節、比較、diff、tag 與複製照常，頂端提示目前唯讀。簽出、merge、push、封存、
+  diff 工具等需要 git 的操作不出現在選單與工具列；裝好 git（或設定 `git.path`）重新載入視窗即恢復。
+  repository 從工作區資料夾與其下一層找，檔案有變動就重新整理。
 
 和 mhutchie.git-graph 不同的地方：對話框是 VSCode 的輸入框與清單，右鍵選單是 VSCode 的選單，顏色跟著佈景
 主題；沒有它的 `git-graph.*` 設定，看法都在工具列上改。沒有的功能：頭像、code review 模式、issue 連結、自訂

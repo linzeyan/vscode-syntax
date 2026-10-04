@@ -16,6 +16,7 @@
  * and the Source Control title, so neither shows two entries; its own
  * commands stay available under their own names.
  */
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
@@ -25,7 +26,36 @@ type Host = typeof import("./gitGraphPanel");
 let host: Host | undefined;
 const load = () => (host ??= require(path.join(__dirname, "gitGraph.js")) as Host);
 
-export function registerGitGraph(context: vscode.ExtensionContext, log: vscode.LogOutputChannel): void {
+/**
+ * The repositories in the workspace as the disk shows them, for where there is
+ * no git to ask: the one each folder is in, and any directly inside a folder
+ * (vscode.git's own default scan depth).
+ */
+export function repositoriesOnDisk(): string[] {
+  const found = new Set<string>();
+  const isRepo = (dir: string) => fs.existsSync(path.join(dir, ".git"));
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    if (folder.uri.scheme !== "file") continue;
+    const root = folder.uri.fsPath;
+    for (let dir = root;; dir = path.dirname(dir)) {
+      if (isRepo(dir)) {
+        found.add(dir);
+        break;
+      }
+      if (path.dirname(dir) === dir) break;
+    }
+    try {
+      for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        if (entry.isDirectory() && isRepo(path.join(root, entry.name))) found.add(path.join(root, entry.name));
+      }
+    } catch {
+      // An unreadable folder has no repositories to show.
+    }
+  }
+  return [...found].sort();
+}
+
+export function registerGitGraph(context: vscode.ExtensionContext, log: vscode.LogOutputChannel, poly: string): void {
   const statusBar = vscode.window.createStatusBarItem("poly.gitGraph", vscode.StatusBarAlignment.Left, 0);
   statusBar.name = "Git History";
   statusBar.text = "Git History";
@@ -44,11 +74,12 @@ export function registerGitGraph(context: vscode.ExtensionContext, log: vscode.L
   };
   update();
   // The item shows only where there is a repository to graph. The built-in
-  // git extension is what knows; it activates on its own at startup.
+  // git extension is what knows; it activates on its own at startup. Where it
+  // has no git to run, the panel reads with poly, so the disk is asked instead.
   const git = vscode.extensions.getExtension<{ getAPI(version: 1): GitApi }>("vscode.git");
   void Promise.resolve(git?.isActive ? git.exports : git?.activate()).then((exports) => {
     const api = exports?.getAPI(1);
-    if (!api) return;
+    if (!api) throw new Error("the built-in Git extension is disabled");
     const count = () => {
       repositories = api.repositories.length;
       update();
@@ -58,7 +89,11 @@ export function registerGitGraph(context: vscode.ExtensionContext, log: vscode.L
     // Caught after the handler rather than beside it: without git on the
     // machine the extension starts fine and it is `getAPI` that throws, which
     // a rejection handler on the same `then` never sees.
-  }).catch((error) => log.warn(`Git History: the built-in git extension has no repositories to offer: ${error}`));
+  }).catch((error) => {
+    log.info(`Git History: no git to run (${error}); finding repositories on disk`);
+    repositories = repositoriesOnDisk().length;
+    update();
+  });
 
   // Every `poly.gitGraph.*` command the manifest declares, handled in the
   // lazily loaded half -- the list lives in package.json and nowhere else.
@@ -67,7 +102,7 @@ export function registerGitGraph(context: vscode.ExtensionContext, log: vscode.L
     context.subscriptions.push(
       vscode.commands.registerCommand(
         command,
-        (...args: unknown[]) => load().run(context, log, command.slice("poly.gitGraph.".length), ...args),
+        (...args: unknown[]) => load().run(context, log, poly, command.slice("poly.gitGraph.".length), ...args),
       ),
     );
   }
@@ -77,7 +112,7 @@ export function registerGitGraph(context: vscode.ExtensionContext, log: vscode.L
     // Registered here rather than on first use: a diff tab restored with the
     // window asks for its content before anything else has loaded the panel.
     vscode.workspace.registerTextDocumentContentProvider("poly-git", {
-      provideTextDocumentContent: (uri) => load().content(uri),
+      provideTextDocumentContent: (uri) => load().content(uri, poly),
     }),
   );
 }

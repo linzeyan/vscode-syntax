@@ -2307,7 +2307,7 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   marpPlugin = registerMarp(context);
   mirrorSyntaxColors(context);
   registerAutocorrect(context, log);
-  registerGitGraph(context, log);
+  registerGitGraph(context, log, poly);
   registerErrorLens(context);
 
   // The fence rule reads the setting on every render, so turning the diagrams

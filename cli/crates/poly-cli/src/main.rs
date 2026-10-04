@@ -6,6 +6,7 @@
 mod batch;
 mod coverage;
 mod fmt;
+mod git;
 mod lsp;
 mod proxy;
 mod report;
@@ -36,6 +37,11 @@ fn main() {
 
 fn run() -> Result<i32> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Before --help and --version: its arguments are git's, passed through
+    // verbatim, and a ref named `-h` is not a question for poly.
+    if args.first().is_some_and(|cmd| cmd == "git") {
+        return Ok(git::run(&args[1..]));
+    }
     // Answered wherever they appear. Someone typing `poly fmt --help` is
     // asking the same question as `poly --help`, and split_flags rejecting it
     // as an unknown flag would be a joke at their expense.

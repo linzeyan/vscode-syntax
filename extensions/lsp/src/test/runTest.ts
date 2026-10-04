@@ -137,6 +137,26 @@ async function main(): Promise<void> {
     ],
     extensionTestsEnv: { POLY_E2E_SUITE: "code-runner-yield" },
   });
+
+  // Git History reads with poly where there is no git, which every other run
+  // here has. With vscode.git disabled the panel sees what a machine without
+  // git shows it, while the test itself can still use git to build a repository.
+  const gitless = mkdtempSync(join(tmpdir(), "poly-e2e-"));
+  mkdirSync(join(gitless, ".vscode"));
+  writeFileSync(
+    join(gitless, ".vscode", "settings.json"),
+    JSON.stringify({ "poly.serverPath": serverPath, "poly.updateCheck.enabled": false }, null, 2),
+  );
+  await runTests({
+    extensionDevelopmentPath,
+    extensionTestsPath,
+    launchArgs: [
+      `--folder-uri=${pathToFileURL(gitless).toString()}`,
+      `--user-data-dir=${userDataDir(repo)}`,
+      "--disable-extension=vscode.git",
+    ],
+    extensionTestsEnv: { POLY_E2E_SUITE: "no-git" },
+  });
 }
 
 main().catch((error) => {

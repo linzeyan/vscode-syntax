@@ -30,14 +30,15 @@ export class GitError extends Error {}
 
 const F = "\x1f";
 
-export function gitIn(executable: string, cwd: string): Git {
+/** `lead` goes before git's own arguments: `["git"]` when poly answers in git's place. */
+export function gitIn(executable: string, cwd: string, lead: string[] = []): Git {
   return (args) =>
     new Promise((resolve, reject) => {
       execFile(
         executable,
         // Reading must not take the index lock: a refresh racing the user's own
         // `git commit` would make theirs fail.
-        ["--no-optional-locks", ...args],
+        [...lead, "--no-optional-locks", ...args],
         // Nothing can answer a credential prompt from here; failing at once
         // beats a fetch that hangs until the user gives up on it.
         { cwd, encoding: "utf8", maxBuffer: 1 << 28, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } },

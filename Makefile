@@ -34,7 +34,7 @@ export CARGO_PROFILE_RELEASE_LTO CARGO_PROFILE_RELEASE_CODEGEN_UNITS
 .DEFAULT_GOAL := help
 .PHONY: help build test lint notices pins config dogfood smoke probe e2e gates \
 	version grammars tokdeps grammar-diff grammar-fuzz grammar-corpus grammar-real editor-diff ext-diff mermaid-diff engine-diff \
-	lsp-fmt-diff ref-lens lens-probe toc-fuzz list-fuzz gutter-cache bump control clean syntax
+	lsp-fmt-diff ref-lens lens-probe toc-fuzz list-fuzz gutter-cache git-embed bump control clean syntax
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -186,6 +186,14 @@ list-fuzz: build ## List keystrokes against the formatter that has to accept the
 # visible lines".
 gutter-cache: ## The image gutter cache stays the size of what is on screen
 	node tools/gutter-cache-check.js
+
+# Where there is no git, Git History hands its questions to `poly git`. Every
+# view, details pane, comparison and tag it reads, through each, compared on the
+# fixtures git-graph-diff builds (exactly) and on this checkout's own history
+# (up to git's rename and line-split heuristics; see the script). Name more
+# repositories to check them instead: `node tools/git-embed-check.js <repo>...`.
+git-embed: ## Git History reads the same through poly git as through git
+	node tools/git-embed-check.js
 
 # The offline half of ci.yml's grammars job. The other half re-fetches every
 # pinned grammar, which needs the network and a token; what stays here is
@@ -394,7 +402,7 @@ version: build ## Check every version string agrees, binary included
 # grammars, then extensions. CI runs them in parallel and a developer cannot, so
 # this is the serial reading of the same list rather than the same order; what
 # still holds is that a failure here lands on the gate CI would name.
-gates: lint test notices pins config nls smoke dogfood version probe lens-probe go tf rust deadcode grammars e2e editor syntax ref-lens gutter-cache toc-fuzz list-fuzz ## Everything above, grouped as CI's jobs are
+gates: lint test notices pins config nls smoke dogfood version probe lens-probe go tf rust deadcode grammars e2e editor syntax ref-lens gutter-cache git-embed toc-fuzz list-fuzz ## Everything above, grouped as CI's jobs are
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0

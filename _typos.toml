@@ -29,6 +29,9 @@ advices = "advices"
 qouted = "qouted"
 # HashiCorp, in grammar source rationales.
 Hashi = "Hashi"
+# gix's `rela_path`, the repository-relative path on status items; the only
+# way to read it.
+rela = "rela"
 # highlight.js's MikroTik RouterOS theme, one of the values
 # poly.markdownPdf.highlightStyle accepts; the enum is upstream's, verbatim.
 routeros = "routeros"

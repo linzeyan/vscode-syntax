@@ -71,6 +71,17 @@ encoding_rs = "0.8"
 # Lua's parser, needed directly because selene lints an `Ast` rather than a
 # string and re-exports nothing.
 full_moon = "2.2"
+# Git History's reads where the editor finds no git (`poly git`). gitoxide
+# rather than libgit2: pure Rust, so the six release targets cross-compile with
+# no C or OpenSSL, and MIT/Apache rather than GPL-with-exception. Reads only --
+# no network, no worktree mutation -- so none of the transport features.
+gix = { version = "0.88", default-features = false, features = [
+  "anyhow",
+  "basic",
+  "max-performance-safe",
+  "sha1",
+  "status",
+] }
 globset = "0.4"
 ignore = "0.4"
 # deno.json is JSON with comments, and deno.jsonc says so in its name. Already

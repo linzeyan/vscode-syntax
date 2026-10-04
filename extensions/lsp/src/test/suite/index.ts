@@ -2,15 +2,22 @@ import { resolve } from "node:path";
 
 import Mocha from "mocha";
 
+/** The launches after the first (runTest.ts), each for the one test that needs its editor. */
+const ONLY: Record<string, string> = {
+  "code-runner-yield": "Code Runner beside formulahendry.code-runner",
+  "no-git": "Git History without git",
+};
+
 export function run(): Promise<void> {
-  // runTest.ts launches the editor twice: once for everything, and once beside
-  // a stand-in for formulahendry.code-runner for the one suite about that.
+  // runTest.ts launches the editor once for everything, then once per entry in
+  // ONLY: beside a stand-in for formulahendry.code-runner, and without vscode.git.
+  const suite = process.env.POLY_E2E_SUITE;
   const mocha = new Mocha({
     ui: "tdd",
     color: true,
     timeout: 60_000,
-    grep: "Code Runner beside formulahendry.code-runner",
-    invert: process.env.POLY_E2E_SUITE !== "code-runner-yield",
+    grep: suite ? ONLY[suite] : Object.values(ONLY).join("|"),
+    invert: !suite,
   });
   mocha.addFile(resolve(__dirname, "extension.test.js"));
   return new Promise((done, fail) => {
