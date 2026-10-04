@@ -4847,7 +4847,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "poly-cli"
-version = "0.18.15"
+version = "0.18.16"
 dependencies = [
  "anyhow",
  "gix",
@@ -4864,7 +4864,7 @@ dependencies = [
 
 [[package]]
 name = "poly-core"
-version = "0.18.15"
+version = "0.18.16"
 dependencies = [
  "anyhow",
  "ec4rs",
@@ -4877,7 +4877,7 @@ dependencies = [
 
 [[package]]
 name = "poly-engines"
-version = "0.18.15"
+version = "0.18.16"
 dependencies = [
  "anyhow",
  "apollo-parser",
@@ -4940,7 +4940,7 @@ dependencies = [
 
 [[package]]
 name = "poly-tools"
-version = "0.18.15"
+version = "0.18.16"
 dependencies = [
  "anyhow",
  "flate2",
