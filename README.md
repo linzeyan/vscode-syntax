@@ -206,8 +206,11 @@
   `1 interface`，方法寫在型別外面的語言（Go）再多一顆 `4 methods`。只有一筆就直接跳過去，多筆
   開檔案總管裡的 **References** 面板——那是 poly 自己的樹，每一列除了原始碼還帶**行號**與
   **它落在哪個符號裡**（`method Handle`、`func main`），內建的 `references-view` 兩欄都沒有，
-  而別人的樹加不了欄位。全部的數字都來自該語言已註冊的 provider，poly 只數與畫。
-  數字存在 `$XDG_CACHE_HOME/poly/refs/`（預設 `~/.cache/poly/refs/`），重開視窗時先畫上次的
+  而別人的樹加不了欄位。數字來自該語言已註冊的 provider，poly 只數與畫。**GraphQL 與 nginx**
+  沒有 server 答得出引用，由 poly 自己按名字算：GraphQL 的 type、fragment、directive；nginx 的
+  `upstream`、`location @name`、`set`／`map` 等宣告的變數、`limit_req_zone` 之類的 zone、
+  `log_format`。範圍是整個 workspace folder，沒有 scope；同一份答案也給 outline 與 Find All
+  References。數字存在 `$XDG_CACHE_HOME/poly/refs/`（預設 `~/.cache/poly/refs/`），重開視窗時先畫上次的
   數字、背景重新問過再更新。`poly.referencesCodeLens.enabled` 可關。
 - **`run | debug` CodeLens**：程式進入點（Go／Rust／C／C++／Java 的 `main`、C# 的 `Main`、
   Python 的 `if __name__ == "__main__"`、shell 的 shebang）上方一行。`run` 存檔後像 Code Runner

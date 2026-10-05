@@ -1,7 +1,17 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { Answered, At, declarationKeys, elsewhere, implLabel, lensTargets, nameStart, refLabel } from "./references";
+import {
+  Answered,
+  At,
+  declarationKeys,
+  elsewhere,
+  implLabel,
+  lensTargets,
+  luaDeclarations,
+  nameStart,
+  refLabel,
+} from "./references";
 
 // vscode.SymbolKind, by the numbers the provider actually hands over.
 const FUNCTION = 11;
@@ -213,4 +223,37 @@ test("a count is reused for a while and then asked again", () => {
   assert.equal(answered.get("file:///b.go", "22:Circle#0"), undefined);
   answered.forget("file:///a.go");
   assert.equal(answered.get("file:///a.go", "22:Circle#0"), undefined);
+});
+
+test("a Lua file's declarations get a lens, and its assignments do not", () => {
+  // lua-language-server's outline of one file, as it answered on 2026-10-05
+  // (LSP kinds minus one): it names a kind after the value, so the module table
+  // is an Object and a literal a String or Number, and it repeats a name for
+  // every assignment to it.
+  const STRING = 14;
+  const NUMBER = 15;
+  const BOOLEAN = 16;
+  const ARRAY = 17;
+  const OBJECT = 18;
+  const file = [
+    symbol("NAME", STRING), // local NAME = "x"
+    symbol("enabled", BOOLEAN), // local enabled = true
+    symbol("list", ARRAY, [symbol("[1]", NUMBER)]), // local list = { 1 }
+    symbol("obj", VARIABLE), // local obj = setmetatable({}, {})
+    symbol("uninit", VARIABLE), // local uninit
+    symbol("GLOBAL", NUMBER), // GLOBAL = 1
+    symbol("Class", OBJECT), // local Class = {}
+    symbol("Class.__index", VARIABLE), // Class.__index = Class
+    symbol("Class.new", FUNCTION), // function Class.new() ... end
+    symbol("Class:method", METHOD), // function Class:method() ... end
+    symbol("t", OBJECT, [symbol("field", NUMBER), symbol("fn", FUNCTION)]),
+    symbol("outer", FUNCTION, [symbol("inner", NUMBER)]), // its local
+    symbol("uninit", NUMBER), // uninit = 2
+  ];
+  assert.deepEqual(
+    lensTargets(luaDeclarations(file), 100).map((t) => t.symbol.name),
+    ["NAME", "enabled", "list", "obj", "uninit", "GLOBAL", "Class", "Class.new", "Class:method", "t", "outer"],
+  );
+  // Nothing here implements anything, so no Lua declaration asks that question.
+  assert.ok(lensTargets(luaDeclarations(file), 100).every((t) => t.implementation === undefined));
 });

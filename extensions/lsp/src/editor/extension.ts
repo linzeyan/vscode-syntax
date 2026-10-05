@@ -53,6 +53,7 @@ import {
   implLabel,
   LensTarget,
   lensTargets,
+  luaDeclarations,
   nameStart,
   refLabel,
 } from "./references";
@@ -1591,7 +1592,10 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         askAgainLater(document.uri, "no outline");
         return [];
       }
-      const found = lensTargets(symbols, MAX_LENSES);
+      const found = lensTargets(
+        document.languageId === "lua" ? luaDeclarations(symbols) : symbols,
+        MAX_LENSES,
+      );
       const keys = declarationKeys(found.map((target) => target.symbol));
       const targets: Anchored[] = found.map((target, index) => ({
         ...target,

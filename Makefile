@@ -143,12 +143,13 @@ syntax: ## Typecheck, build and package poly-syntax-highlight
 # has. The protobuf and shell sections have no offline server to ask, so they
 # supply providers shaped like what `make lens-probe` measured; that pins poly's
 # wiring, and `lens-probe` is what says the real servers still behave that way.
+# GraphQL and nginx are answered by poly's own daemon, hence the build.
 #
 # It exists because `make editor`'s unit tests could not see the defect that
 # put a count over every parameter and local: they assert against a symbol tree
 # written by the same hand as the rule, and the rule was wrong about what a
 # real server reports. Every lens added since is checked here for that reason.
-ref-lens: ## Where poly's code lenses land, in a real extension host
+ref-lens: build ## Where poly's code lenses land, in a real extension host
 	node tools/ref-lens-check/run.js
 
 # The table of contents command's anchors against the ones the preview writes,

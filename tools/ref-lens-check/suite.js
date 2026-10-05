@@ -15,6 +15,7 @@ const { writeFileSync } = require("node:fs");
 const vscode = require("vscode");
 
 const { measure: measureCost } = require("./cost");
+const { observeNavigate } = require("./navigate");
 const { observeProto } = require("./proto");
 const runnable = require("./runnable");
 
@@ -180,12 +181,14 @@ exports.run = async function run() {
 
   // The .proto half, whole in its own module: it brings its own servers.
   const proto = await observeProto();
+  // And GraphQL and nginx, whose providers are poly's daemon.
+  const navigate = await observeNavigate(lensesFor);
 
   writeFileSync(
     process.env.POLY_LENS_OUT,
     `${
       JSON.stringify(
-        { vscode: vscode.version, lenses: lines, flat, flatSymbols, outline, proto },
+        { vscode: vscode.version, lenses: lines, flat, flatSymbols, outline, proto, navigate },
         null,
         2,
       )

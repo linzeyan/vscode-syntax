@@ -16,6 +16,7 @@ const { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = requ
 const { join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 
+const navigate = require("./navigate");
 const proto = require("./proto");
 const runnable = require("./runnable");
 
@@ -152,6 +153,10 @@ async function main() {
           "poly.referencesCodeLens.enabled": true,
           "poly.runCodeLens.enabled": true,
           "poly.protobufCodeLens.enabled": true,
+          // The checkout's build, as `make e2e` does: GraphQL and nginx are
+          // answered by the daemon, and a bundled bin/poly is whichever release
+          // was last packaged here, not the code under test.
+          "poly.serverPath": process.env.POLY_BIN ?? join(ROOT, "cli", "target", "release", "poly"),
         },
         null,
         2,
@@ -160,6 +165,7 @@ async function main() {
   );
 
   const protoEnv = proto.writeFixture(WORKSPACE);
+  const navigateEnv = navigate.writeFixture(WORKSPACE);
 
   execFileSync("pnpm", ["run", "build"], { cwd: LSP, stdio: "inherit" });
 
@@ -174,6 +180,7 @@ async function main() {
       POLY_LENS_OUT: OUT,
       POLY_COST_OUT: COST_OUT,
       ...protoEnv,
+      ...navigateEnv,
     },
     ...(cachedVSCode() ? { vscodeExecutablePath: cachedVSCode() } : {}),
     launchArgs: [
@@ -265,6 +272,7 @@ async function main() {
   }
 
   problems.push(...proto.checkProto(report.proto));
+  problems.push(...navigate.checkNavigate(report.navigate));
 
   console.log(
     `\nVSCode ${report.vscode}, ${report.lenses.length} lines carry a lens; `

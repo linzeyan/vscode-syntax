@@ -182,6 +182,50 @@ export function lensTargets<T extends LensSymbol>(
   return found;
 }
 
+/** lua-language-server's kinds for a value: String, Number, Boolean, Array, Object. */
+const LUA_VALUE_KINDS: ReadonlySet<number> = new Set([14, 15, 16, 17, 18]);
+
+/**
+ * lua-language-server's outline, reshaped into declarations `lensTargets` reads.
+ *
+ * It names a symbol's kind after the value assigned, not the declaration --
+ * measured 2026-10-05: `local M = {}` is an Object, `local NAME = "x"` a
+ * String, `local n = 0` a Number -- so the module table and every literal
+ * constant fell outside `COUNTED_KINDS` and drew nothing. It also reports each
+ * assignment as a symbol of its own: `count = count + 1` and
+ * `Class.__index = Class` came back as Variables, and those were the ones that
+ * did get a lens, over a line that declares nothing.
+ *
+ * So a value becomes a Variable, a name already seen is an assignment, and a
+ * dotted name is a field write unless it is a function -- `function M.add` is
+ * how a Lua module declares its exports. A method becomes a Function: Lua has
+ * no interfaces, and lua-language-server declares an implementation provider,
+ * so `Class:method` would otherwise be asked what it implements.
+ *
+ * ponytail: a table becomes a Variable, so a function written inside its
+ * constructor (`return { setup = function() end }`) gets no lens of its own;
+ * walk an Object's callable children if that style needs one.
+ */
+export function luaDeclarations<T extends LensSymbol & { readonly name: string }>(
+  symbols: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  const declared: T[] = [];
+  for (const symbol of symbols) {
+    const callable = symbol.kind === 11 || symbol.kind === 5; // Function, Method
+    if (seen.has(symbol.name) || (!callable && /[.:]/.test(symbol.name))) {
+      continue;
+    }
+    seen.add(symbol.name);
+    if (LUA_VALUE_KINDS.has(symbol.kind)) {
+      declared.push({ ...symbol, kind: 12 /* Variable */ });
+    } else {
+      declared.push(symbol.kind === 5 ? { ...symbol, kind: 11 } : symbol);
+    }
+  }
+  return declared;
+}
+
 /**
  * Answers about a declaration that are not the declaration itself.
  *

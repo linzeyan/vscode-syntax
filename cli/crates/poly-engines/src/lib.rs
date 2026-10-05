@@ -7,6 +7,7 @@ pub mod lint;
 mod proto;
 pub mod schema;
 pub mod shell;
+pub mod symbols;
 pub mod unicode;
 mod workflow;
 

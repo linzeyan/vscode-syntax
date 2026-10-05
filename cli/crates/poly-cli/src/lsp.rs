@@ -371,6 +371,9 @@ struct Server {
     /// would spend them blocked on an empty channel.
     package_jobs: Option<std::sync::mpsc::Sender<PackageJob>>,
     diagnostics: Arc<Mutex<Diagnostics>>,
+    /// What poly read from GraphQL and nginx files to answer references with.
+    /// See `crate::navigate`.
+    navigation: crate::navigate::Index,
 }
 
 /// One `workspace/symbol` query, waiting on the servers it was sent to.
@@ -626,6 +629,9 @@ fn serve(connection: Connection) -> Result<()> {
     };
     let init_params = connection.initialize(serde_json::to_value(capabilities)?)?;
     let mut server = Server::new(connection, init_params);
+    // Here and not in `Server::new`, which the tests build sessions with: a
+    // request sent from there would sit first in every test's editor queue.
+    server.register_navigation();
 
     // A receive error means the editor closed the pipe: nothing left to serve.
     while let Ok(message) = server.connection.receiver.recv() {
@@ -651,6 +657,10 @@ fn serve(connection: Connection) -> Result<()> {
                     "textDocument/formatting" => server.on_formatting(request),
                     "textDocument/rangeFormatting" => server.on_range_formatting(request),
                     "textDocument/hover" => server.on_hover(request),
+                    // Registered for GraphQL and nginx only, so these reach poly
+                    // for those two and for nothing else. See `crate::navigate`.
+                    "textDocument/documentSymbol" => server.on_document_symbol(request),
+                    "textDocument/references" => server.on_references(request),
                     "workspace/executeCommand" => server.on_execute_command(request),
                     // Reached poly because no downstream claimed it. Dropping
                     // it is not a harmless no-op: the editor waits on that id
@@ -762,6 +772,7 @@ impl Server {
             package_roots: HashSet::new(),
             package_jobs: None,
             diagnostics: Arc::new(Mutex::new(Diagnostics::default())),
+            navigation: crate::navigate::Index::default(),
         }
     }
 
@@ -1312,6 +1323,87 @@ impl Server {
             .get(&at.text_document.uri)
             .and_then(|diagnostics| rule_hover(diagnostics, at.position));
         Response::new_ok(request.id, serde_json::json!(hover))
+    }
+
+    /// Ask the editor to send GraphQL and nginx outline and reference requests
+    /// here. See `crate::navigate::registrations` for why this is not a
+    /// capability declared at initialize.
+    fn register_navigation(&self) {
+        let request = lsp_server::Request {
+            id: lsp_server::RequestId::from("poly:register:navigate".to_string()),
+            method: "client/registerCapability".to_string(),
+            params: serde_json::json!({ "registrations": crate::navigate::registrations() }),
+        };
+        let _ = self.connection.sender.send(Message::Request(request));
+    }
+
+    /// The language and text of a document poly navigates itself, or `None`
+    /// for any other: the buffer when it is open, the file when it is not.
+    fn navigated(&self, uri: &Url) -> Option<(String, String)> {
+        let path = uri_path(uri);
+        let language = self
+            .language_ids
+            .get(uri)
+            .cloned()
+            .or_else(|| {
+                ["graphql", "nginx"]
+                    .into_iter()
+                    .find(|l| crate::navigate::is_file_of(l, &path))
+                    .map(str::to_string)
+            })
+            .filter(|language| poly_engines::symbols::applies(language))?;
+        let text = match self.documents.get(uri) {
+            Some(text) => text.clone(),
+            None => std::fs::read_to_string(&path).ok()?,
+        };
+        Some((language, text))
+    }
+
+    fn on_document_symbol(&mut self, request: lsp_server::Request) -> Response {
+        let Some(uri) = request_uri(&request.params) else {
+            return Response::new_ok(request.id, serde_json::Value::Null);
+        };
+        match self.navigated(&uri) {
+            Some((language, text)) => Response::new_ok(
+                request.id,
+                crate::navigate::document_symbols(&language, &text),
+            ),
+            None => Response::new_ok(request.id, serde_json::Value::Null),
+        }
+    }
+
+    /// Every place the name under the cursor is written, across the workspace
+    /// folder the document is in.
+    fn on_references(&mut self, request: lsp_server::Request) -> Response {
+        let params: lsp_types::ReferenceParams = match serde_json::from_value(request.params) {
+            Ok(params) => params,
+            Err(e) => return Response::new_err(request.id, INTERNAL_ERROR, e.to_string()),
+        };
+        let at = params.text_document_position;
+        let uri = at.text_document.uri;
+        let Some((language, text)) = self.navigated(&uri) else {
+            return Response::new_ok(request.id, serde_json::Value::Null);
+        };
+        // Not on a name: an empty list, which is what the editor shows as
+        // "no references" -- null would read as "nobody answered".
+        let Some((space, name)) = crate::navigate::mention_at(&language, &text, at.position) else {
+            return Response::new_ok(request.id, serde_json::json!([]));
+        };
+        let root = crate::navigate::root_of(&self.init_params, &uri_path(&uri));
+        let open: Vec<(Url, &str)> = self
+            .documents
+            .iter()
+            .filter(|(open, _)| self.language_ids.get(*open) == Some(&language))
+            .map(|(open, text)| (open.clone(), text.as_str()))
+            .collect();
+        let found = self.navigation.references(
+            &language,
+            &root,
+            &open,
+            (space, &name),
+            params.context.include_declaration,
+        );
+        Response::new_ok(request.id, serde_json::json!(found))
     }
 
     fn on_execute_command(&mut self, request: lsp_server::Request) -> Response {
