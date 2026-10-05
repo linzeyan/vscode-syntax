@@ -11,7 +11,6 @@ import { CodeManager, executorFor } from "./codeRunner/codeManager";
 import { registerCodeSnap } from "./codeSnap";
 import { registerDataPreview } from "./dataPreview";
 import type { FromSql, ToSql } from "./dbml";
-import { registerDrawio } from "./drawioEditor";
 import { registerErrorLens } from "./errorLens";
 import { registerExcalidraw } from "./excalidrawEditor";
 import { registerGitGraph } from "./gitGraph";
@@ -2298,7 +2297,6 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   referenceTree = registerReferenceTree(context);
   drawPlantuml = registerPlantuml(context, poly);
   registerExcalidraw(context);
-  registerDrawio(context);
   registerMarkdownExport(context, (id) => MARKDOWN_LANGUAGES.has(id));
   registerCodeSnap(context);
   registerPasteImage(context, (id) => MARKDOWN_LANGUAGES.has(id));

@@ -319,8 +319,7 @@ pub fn diagram_file(path: &Path) -> bool {
     [
         ".drawio.svg",
         ".dio.svg",
-        // The XML poly's draw.io editor opens, which it writes indented as
-        // hediet's does.
+        // The bare XML, as hediet's editor and draw.io's own apps save it.
         ".drawio",
         ".dio",
         ".excalidraw.svg",

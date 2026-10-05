@@ -39,10 +39,6 @@ FONT = re.compile(r"(?i)\.(ttf|otf|woff2?|eot)$")
 COPYLEFT = re.compile(
     r"GNU (LESSER |LIBRARY |AFFERO )?GENERAL PUBLIC LICENSE|Eclipse Public License - v"
 )
-# draw.io's web app keeps its own layout, with directories named like npm
-# packages (js/mermaid, js/jszip) that are its builds, not copies of ours; its
-# licenses are media/drawio's.
-OWN_LAYOUT = ("dist/drawio/",)
 
 
 def license_problems(manifest: dict, archive: zipfile.ZipFile) -> list[str]:
@@ -93,10 +89,8 @@ def license_problems(manifest: dict, archive: zipfile.ZipFile) -> list[str]:
     # license belongs at the directory carrying its name.
     directories = {str(one) for path in files for one in PurePosixPath(path).parents}
     for directory in sorted(directories):
-        if (
-            PurePosixPath(directory).name in packages
-            and not directory.startswith(OWN_LAYOUT)
-            and not any(str(PurePosixPath(one).parent) == directory for one in licenses)
+        if PurePosixPath(directory).name in packages and not any(
+            str(PurePosixPath(one).parent) == directory for one in licenses
         ):
             problems.append(
                 f"{directory}/: named for a package and has no license file"
@@ -174,8 +168,8 @@ def main() -> int:
     ]
     # And the files code loads by path at run time (`dist/dbml.js`, the
     # preview's `dist/diagram/*.js`, the PlantUML preview page under
-    # `media/plantuml/`, the Excalidraw page's styles and fonts, draw.io's web
-    # app, markdown export's styles and template, CodeSnap's page, Paste Image's
+    # `media/plantuml/`, the Excalidraw page's styles and fonts, markdown
+    # export's styles and template, CodeSnap's page, Paste Image's
     # clipboard scripts, Data Preview's page and Perspective, the Swagger
     # preview's page, schemas and Swagger UI, Marp's bundles and the template
     # script marp-cli reads beside itself, Git Graph's page with its icon font
@@ -190,7 +184,6 @@ def main() -> int:
             [
                 *root.glob("dist/**/*.js"),
                 *root.glob("dist/excalidraw/**/*"),
-                *root.glob("dist/drawio/**/*"),
                 *root.glob("dist/markdown-pdf/**/*"),
                 *root.glob("dist/codesnap/**/*"),
                 *root.glob("dist/paste-image/**/*"),
@@ -205,7 +198,6 @@ def main() -> int:
                 *root.glob("media/errorLens/**/*"),
                 *root.glob("media/plantuml/**/*"),
                 *root.glob("media/excalidraw/**/*"),
-                *root.glob("media/drawio/**/*"),
             ]
         )
         if one.is_file()

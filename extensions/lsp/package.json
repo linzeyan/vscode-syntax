@@ -104,13 +104,6 @@
         ]
       },
       {
-        "id": "xml",
-        "extensions": [
-          ".drawio",
-          ".dio"
-        ]
-      },
-      {
         "id": "yaml",
         "filenames": [
           ".autocorrectrc"
@@ -377,51 +370,6 @@
       {
         "command": "poly.outdentListItem",
         "title": "%command.outdentListItem.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioConvert",
-        "title": "%command.drawioConvert.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioExport",
-        "title": "%command.drawioExport.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioTheme",
-        "title": "%command.drawioTheme.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioNewFile",
-        "title": "%command.drawioNewFile.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioToggleCodeLink",
-        "title": "%command.drawioToggleCodeLink.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioLinkCode",
-        "title": "%command.drawioLinkCode.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioLinkFile",
-        "title": "%command.drawioLinkFile.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioLinkSymbol",
-        "title": "%command.drawioLinkSymbol.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "poly.drawioLinkWorkspaceSymbol",
-        "title": "%command.drawioLinkWorkspaceSymbol.title%",
         "category": "%command.category%"
       },
       {
@@ -918,11 +866,6 @@
           "group": "7_modification@12"
         },
         {
-          "command": "poly.drawioLinkFile",
-          "when": "!explorerResourceIsFolder && (activeCustomEditorId == 'poly.drawio' || activeCustomEditorId == 'poly.drawio.png')",
-          "group": "7_modification@13"
-        },
-        {
           "command": "poly.swaggerPreview",
           "when": "(resourceLangId == json || resourceLangId == yaml) && !poly.yield.swaggerViewer && config.poly.swaggerViewer.enabled",
           "group": "SwaggerViewer"
@@ -1081,18 +1024,6 @@
         {
           "command": "poly.excalidrawPreventDefault",
           "when": "false"
-        },
-        {
-          "command": "poly.drawioConvert",
-          "when": "activeCustomEditorId == 'poly.drawio' || activeCustomEditorId == 'poly.drawio.png'"
-        },
-        {
-          "command": "poly.drawioExport",
-          "when": "activeCustomEditorId == 'poly.drawio' || activeCustomEditorId == 'poly.drawio.png'"
-        },
-        {
-          "command": "poly.drawioTheme",
-          "when": "activeCustomEditorId == 'poly.drawio' || activeCustomEditorId == 'poly.drawio.png'"
         },
         {
           "command": "poly.markdownExport",
@@ -1557,9 +1488,6 @@
           "command": "poly.excalidrawNewFile"
         },
         {
-          "command": "poly.drawioNewFile"
-        },
-        {
           "command": "poly.marp.newMarpMarkdown",
           "when": "!poly.yield.marp && config.poly.marp.enabled",
           "group": "file"
@@ -1972,11 +1900,6 @@
         "key": "ctrl+y",
         "mac": "cmd+shift+z",
         "when": "activeCustomEditorId == 'poly.excalidraw'"
-      },
-      {
-        "command": "poly.drawioLinkCode",
-        "key": "shift+f3",
-        "when": "!findWidgetVisible"
       }
     ],
     "configuration": [
@@ -2452,242 +2375,6 @@
               "exportWithDarkMode": false
             },
             "markdownDescription": "%config.excalidraw.image.description%"
-          }
-        }
-      },
-      {
-        "title": "draw.io",
-        "order": 6,
-        "properties": {
-          "poly.drawio.offline": {
-            "type": "boolean",
-            "default": true,
-            "markdownDescription": "%config.drawio.offline.description%"
-          },
-          "poly.drawio.online-url": {
-            "type": "string",
-            "default": "https://embed.diagrams.net/",
-            "markdownDescription": "%config.drawio.online-url.description%"
-          },
-          "poly.drawio.theme": {
-            "type": "string",
-            "enum": [
-              "auto",
-              "kennedy",
-              "min",
-              "simple",
-              "sketch"
-            ],
-            "default": "kennedy",
-            "markdownDescription": "%config.drawio.theme.description%"
-          },
-          "poly.drawio.appearance": {
-            "type": "string",
-            "enum": [
-              "automatic",
-              "light",
-              "dark",
-              "high-contrast-light",
-              "high-contrast"
-            ],
-            "default": "light",
-            "markdownDescription": "%config.drawio.appearance.description%"
-          },
-          "poly.drawio.simpleLabels": {
-            "type": "boolean",
-            "default": false,
-            "markdownDescription": "%config.drawio.simpleLabels.description%"
-          },
-          "poly.drawio.zoomFactor": {
-            "type": "number",
-            "default": 1.2,
-            "markdownDescription": "%config.drawio.zoomFactor.description%"
-          },
-          "poly.drawio.globalVars": {
-            "type": "object",
-            "markdownDescription": "%config.drawio.globalVars.description%"
-          },
-          "poly.drawio.resizeImages": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "default": null,
-            "markdownDescription": "%config.drawio.resizeImages.description%"
-          },
-          "poly.drawio.showTooltipIcons": {
-            "type": "boolean",
-            "default": false,
-            "markdownDescription": "%config.drawio.showTooltipIcons.description%"
-          },
-          "poly.drawio.showLinkIcons": {
-            "type": "boolean",
-            "default": false,
-            "markdownDescription": "%config.drawio.showLinkIcons.description%"
-          },
-          "poly.drawio.showConnectHandle": {
-            "type": "boolean",
-            "default": false,
-            "markdownDescription": "%config.drawio.showConnectHandle.description%"
-          },
-          "poly.drawio.styles": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "commonStyle": {
-                  "type": "object",
-                  "properties": {
-                    "fontColor": {
-                      "type": "string"
-                    },
-                    "strokeColor": {
-                      "type": "string"
-                    },
-                    "fillColor": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "graph": {
-                  "type": "object",
-                  "properties": {
-                    "background": {
-                      "type": "string"
-                    },
-                    "gridColor": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            },
-            "markdownDescription": "%config.drawio.styles.description%"
-          },
-          "poly.drawio.defaultVertexStyle": {
-            "type": "object",
-            "markdownDescription": "%config.drawio.defaultVertexStyle.description%"
-          },
-          "poly.drawio.defaultEdgeStyle": {
-            "type": "object",
-            "markdownDescription": "%config.drawio.defaultEdgeStyle.description%"
-          },
-          "poly.drawio.colorNames": {
-            "type": "object",
-            "markdownDescription": "%config.drawio.colorNames.description%"
-          },
-          "poly.drawio.presetColors": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "markdownDescription": "%config.drawio.presetColors.description%"
-          },
-          "poly.drawio.customColorSchemes": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "title": {
-                    "type": "string"
-                  },
-                  "fill": {
-                    "type": "string"
-                  },
-                  "stroke": {
-                    "type": "string"
-                  },
-                  "gradient": {
-                    "type": "string"
-                  },
-                  "font": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            "markdownDescription": "%config.drawio.customColorSchemes.description%"
-          },
-          "poly.drawio.customFonts": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [],
-            "markdownDescription": "%config.drawio.customFonts.description%"
-          },
-          "poly.drawio.customLibraries": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "entryId": {
-                  "type": "string"
-                },
-                "libName": {
-                  "type": "string"
-                },
-                "url": {
-                  "type": "string"
-                },
-                "xml": {
-                  "type": "string"
-                },
-                "json": {},
-                "file": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "entryId",
-                "libName"
-              ]
-            },
-            "default": [],
-            "markdownDescription": "%config.drawio.customLibraries.description%"
-          },
-          "poly.drawio.plugins": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "file": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "file"
-              ]
-            },
-            "default": [],
-            "markdownDescription": "%config.drawio.plugins.description%"
-          },
-          "poly.drawio.knownPlugins": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "pluginId": {
-                  "type": "string"
-                },
-                "fingerprint": {
-                  "type": "string"
-                },
-                "allowed": {
-                  "type": "boolean"
-                }
-              }
-            },
-            "default": [],
-            "scope": "application",
-            "markdownDescription": "%config.drawio.knownPlugins.description%"
-          },
-          "poly.drawio.codeLinkActivated": {
-            "type": "boolean",
-            "default": false,
-            "markdownDescription": "%config.drawio.codeLinkActivated.description%"
           }
         }
       },
@@ -5875,38 +5562,6 @@
             "filenamePattern": "*.excalidraw.png"
           }
         ]
-      },
-      {
-        "viewType": "poly.drawio",
-        "displayName": "%customEditor.drawio.displayName%",
-        "priority": "default",
-        "selector": [
-          {
-            "filenamePattern": "*.drawio"
-          },
-          {
-            "filenamePattern": "*.dio"
-          },
-          {
-            "filenamePattern": "*.drawio.svg"
-          },
-          {
-            "filenamePattern": "*.dio.svg"
-          }
-        ]
-      },
-      {
-        "viewType": "poly.drawio.png",
-        "displayName": "%customEditor.drawio.displayName%",
-        "priority": "default",
-        "selector": [
-          {
-            "filenamePattern": "*.drawio.png"
-          },
-          {
-            "filenamePattern": "*.dio.png"
-          }
-        ]
       }
     ],
     "jsonValidation": [
@@ -5918,7 +5573,7 @@
   },
   "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/opencc-js', {recursive: true, force: true}); for (const f of ['LICENSE', 'LICENSES', 'THIRD_PARTY_LICENSES.md']) fs.cpSync('node_modules/opencc-js/' + f, 'dist/opencc-js/' + f, {recursive: true})\" && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/code-runner', {recursive: true, force: true}); fs.mkdirSync('dist/code-runner', {recursive: true}); for (const f of ['LICENSE.txt', 'code-runner-output.tmLanguage']) fs.cpSync('src/editor/codeRunner/' + f, 'dist/code-runner/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/drawioPage.ts src/editor/preview/drawioOnline.ts --bundle --outdir=dist --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts src/editor/preview/diagram/drawio.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && esbuild src/editor/gitGraphPanel.ts --bundle --outfile=dist/gitGraph.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/gitGraph.ts --bundle --outdir=dist/git-graph --format=iife --platform=browser --minify --loader:.ttf=file --asset-names=\"[name]\" && node -e \"for (const f of ['LICENSE', 'LICENSE-CODE']) require('fs').cpSync('node_modules/@vscode/codicons/' + f, 'dist/git-graph/' + f); require('fs').cpSync('src/editor/preview/LICENSE-vscode.txt', 'dist/git-graph/LICENSE-vscode.txt')\" && node -e \"const fs = require('fs'); fs.rmSync('dist/errorLens', {recursive: true, force: true}); fs.mkdirSync('dist/errorLens', {recursive: true}); fs.cpSync('src/editor/errorLens/LICENSE.txt', 'dist/errorLens/LICENSE.txt')\" && esbuild src/editor/errorLens/src/extension.ts --bundle --outfile=dist/errorLens/extension.js --external:vscode --format=cjs --platform=node --minify --alias:src=./src/editor/errorLens/src --alias:lodash=lodash-es && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true}); require('fs').cpSync('media/excalidraw/FONTS.md', 'dist/excalidraw/FONTS.md')\" && node ../../tools/drawio-webapp.js",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/opencc-js', {recursive: true, force: true}); for (const f of ['LICENSE', 'LICENSES', 'THIRD_PARTY_LICENSES.md']) fs.cpSync('node_modules/opencc-js/' + f, 'dist/opencc-js/' + f, {recursive: true})\" && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/code-runner', {recursive: true, force: true}); fs.mkdirSync('dist/code-runner', {recursive: true}); for (const f of ['LICENSE.txt', 'code-runner-output.tmLanguage']) fs.cpSync('src/editor/codeRunner/' + f, 'dist/code-runner/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && esbuild src/editor/gitGraphPanel.ts --bundle --outfile=dist/gitGraph.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/gitGraph.ts --bundle --outdir=dist/git-graph --format=iife --platform=browser --minify --loader:.ttf=file --asset-names=\"[name]\" && node -e \"for (const f of ['LICENSE', 'LICENSE-CODE']) require('fs').cpSync('node_modules/@vscode/codicons/' + f, 'dist/git-graph/' + f); require('fs').cpSync('src/editor/preview/LICENSE-vscode.txt', 'dist/git-graph/LICENSE-vscode.txt')\" && node -e \"const fs = require('fs'); fs.rmSync('dist/errorLens', {recursive: true, force: true}); fs.mkdirSync('dist/errorLens', {recursive: true}); fs.cpSync('src/editor/errorLens/LICENSE.txt', 'dist/errorLens/LICENSE.txt')\" && esbuild src/editor/errorLens/src/extension.ts --bundle --outfile=dist/errorLens/extension.js --external:vscode --format=cjs --platform=node --minify --alias:src=./src/editor/errorLens/src --alias:lodash=lodash-es && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true}); require('fs').cpSync('media/excalidraw/FONTS.md', 'dist/excalidraw/FONTS.md')\"",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit && tsc -p tsconfig.marp.json --noEmit && tsc -p tsconfig.errorLens.json --noEmit",
     "unit": "tsc -p tsconfig.test.json && node --test out/editor/*.test.js",
     "test:build": "pnpm run build && tsc -p tsconfig.test.json",
@@ -5988,7 +5643,6 @@
     "vega-lite": "^6.4.3",
     "vscode-languageclient": "^9.0.1",
     "xlsx": "file:vendor/xlsx-0.20.3.tgz",
-    "xml-formatter": "2.6.1",
     "yaml": "2.9.0"
   },
   "devDependencies": {
@@ -6007,7 +5661,6 @@
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.1",
-    "jszip": "3.10.1",
     "mocha": "^10.7.0",
     "typed-emitter": "2.1.0",
     "typescript": "^5.4.0"

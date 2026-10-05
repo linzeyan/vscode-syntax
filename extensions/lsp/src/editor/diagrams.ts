@@ -3,8 +3,7 @@
  *
  * The set is MarkNote's: nomnoml, flowchart.js (as `flowchart` or `flow`),
  * js-sequence-diagrams (`sequence`), vega and vega-lite, markmap, and an
- * Excalidraw scene's JSON (`excalidraw`) -- and a draw.io diagram's XML
- * (`drawio`), which hediet.vscode-drawio draws. No
+ * Excalidraw scene's JSON (`excalidraw`). No
  * built-in draws any of them, so unlike mermaid there is nothing to stand down
  * for. The split is mermaid's too: this module runs in the extension host and
  * decides the markup, `preview/diagrams.ts` draws it in the webview.
@@ -29,7 +28,6 @@ export const DIAGRAMS: Readonly<Record<string, string>> = {
   "vega-lite": "vega",
   markmap: "markmap",
   excalidraw: "excalidraw",
-  drawio: "drawio",
 };
 
 /**

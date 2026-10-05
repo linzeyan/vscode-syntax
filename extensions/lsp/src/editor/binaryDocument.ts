@@ -2,7 +2,7 @@
  * A drawing kept in a file that is not edited as text -- a PNG with the
  * drawing inside, or a scene the page rewrites whole -- for a custom editor:
  * the page replaces the bytes, and VSCode saves, reverts and backs them up.
- * The Excalidraw and draw.io editors both keep theirs here.
+ * The Excalidraw editor keeps its own here.
  */
 import * as vscode from "vscode";
 

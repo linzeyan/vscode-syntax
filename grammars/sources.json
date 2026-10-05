@@ -68,7 +68,7 @@
     {
       "id": "xml",
       "override": true,
-      "rationale": "Same upstream as built-in; xsl is a separate language contributed by the same extension. The two extensions are draw.io's diagram, which poly-lsp's editor saves as indented XML and whose source opens as text; the built-in claims neither, and hediet.vscode-drawio named them a language of its own with no grammar at all.",
+      "rationale": "Same upstream as built-in; xsl is a separate language contributed by the same extension. The two extensions are draw.io's diagram, saved as XML and opened as text beside whichever editor draws it; the built-in claims neither, and hediet.vscode-drawio named them a language of its own with no grammar at all.",
       "repo": "microsoft/vscode",
       "language": { "extensions": [".drawio", ".dio"] },
       "license": "MIT",

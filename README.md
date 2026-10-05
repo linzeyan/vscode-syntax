@@ -130,13 +130,6 @@
   元件庫可存在工作區裡跟著專案走，主題與語言可設。設定在 `poly.excalidraw.*`，名稱同它的。
   介面與手寫字型打包在 extension 裡，中文字型要用時才從 esm.sh 下載。兩個都裝著時 VSCode 會請你
   選預設的編輯器。
-- **draw.io**：取代 hediet.vscode-drawio。`.drawio`、`.dio`、`.drawio.svg`、`.drawio.png`（`.dio`
-  的也是）用 draw.io 開，draw.io 打包在 extension 裡、不必連網，存出來的檔案與它的相同：XML 以
-  四格縮排寫回，SVG／PNG 存的是圖片本身並嵌著圖。用文字編輯器改 XML，開著的圖跟著變。另有轉換
-  存法、匯出、主題、新增圖、自訂圖形庫與 plugin（執行前先問你），以及 code link：把節點連到一段
-  程式碼、檔案或符號，打開 status bar 的 Code Link 後雙擊節點就跳過去，連結格式同它的。設定在
-  `poly.drawio.*`，名稱同它的；`poly.drawio.offline` 關掉改用線上的 draw.io。兩個都裝著時
-  VSCode 會請你選預設的編輯器。
 - **Markdown 匯出**：取代 yzane.markdown-pdf。`Export Markdown (pdf)`／`(html)`／`(png)`／`(jpeg)`，
   右鍵選單也有，也可以存檔時自動轉換；匯出的檔案與它的相同：語法上色、KaTeX 數學式、PlantUML 與
   mermaid 圖、引入別的 markdown 檔，PDF 的紙張、邊界與頁首頁尾可設。設定在 `poly.markdownPdf.*`，
@@ -247,8 +240,8 @@
   `sequence`、`vega`、`vega-lite`、`markmap`、`excalidraw`（scene 的 JSON），範圍與畫法同
   MarkNote。函式庫在文件第一次用到時才載入；
   深色主題下，本身不吃配色的圖畫在淺色底卡上。`plantuml`（或 `puml`、`uml`）也在內：有設
-  `poly.plantuml.server` 就交給 server，否則在本機用 Java 畫。`drawio` 是 draw.io 圖的 XML，畫
-  第一頁。`poly.markdownDiagrams.enabled` 打開。
+  `poly.plantuml.server` 就交給 server，否則在本機用 Java 畫。`poly.markdownDiagrams.enabled`
+  打開。
 - **GitHub 樣式的 preview**：取代 Markdown Preview Github Styling，九種 GitHub 配色（含
   高對比與色盲友善）、跟隨編輯器或系統的深淺色。`poly.markdownGithubStyle.enabled` 打開；
   那個 extension 還裝著的時候 poly 讓開。

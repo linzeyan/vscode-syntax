@@ -81,7 +81,7 @@ C/C++、Swift、HashiCorp Terraform、Lua（sumneko）、Bash IDE、Buf 的那�
 - **markdown preview 的 mermaid 圖表**（設定）：VSCode 1.135 起內建就有，屆時 poly 自動讓開。
 - **markdown preview 的其他圖表**（設定）：fence 語言為 `nomnoml`、`flowchart`／`flow`、
   `sequence`、`vega`、`vega-lite`、`markmap`、`excalidraw`（scene 的 JSON），同 MarkNote。畫不出來時
-  原始碼留著，錯誤訊息寫在下面。`plantuml`／`puml`／`uml` 見下面的 PlantUML，`drawio` 見 draw.io。
+  原始碼留著，錯誤訊息寫在下面。`plantuml`／`puml`／`uml` 見下面的 PlantUML。
 - **GitHub 樣式的 preview**（設定）：Markdown Preview Github Styling 的樣式與三個設定，
   那個 extension 還裝著時 poly 讓開。
 
@@ -174,38 +174,6 @@ pomdtr.excalidraw-editor 的替代：`.excalidraw`、`.excalidraw.json`、`.exca
 韓文／捷克文的介面變英文、存檔沒等寫完就回報完成、revert 之後畫面還是舊的、未存檔的新圖在
 VSCode 重開後變空白。pomdtr.excalidraw-editor 還裝著時，兩者都登記為預設編輯器，VSCode 會請你
 選一個。
-
-### draw.io
-
-hediet.vscode-drawio 的替代：`.drawio`、`.dio`、`.drawio.svg`、`.dio.svg`、`.drawio.png`、
-`.dio.png` 用 draw.io 開。draw.io（31.5.2）打包在 extension 裡，不必連網；存出來的檔案與它的
-相同，設定在 `poly.drawio.*`，名稱同它的 `hediet.vscode-drawio.*`。
-
-- **三種存法**：`.drawio`／`.dio` 存成四格縮排的 XML，以 XML 著色；`.drawio.svg`／`.drawio.png`
-  存的是圖片本身，圖嵌在裡面，放進文件直接能看，再開還能編輯。用文字編輯器改 XML 時，開著的圖
-  跟著變。
-- **`Convert draw.io Diagram To...`**：在三種存法之間轉換，未存檔的修改也算；舊檔刪掉，新檔
-  開起來。**`Export draw.io Diagram To...`** 另存一份 SVG、PNG 或 `.drawio`。
-- **`New draw.io Diagram`**：File > New File 裡也有。
-- **主題**：`draw.io Theme` 一次選介面（`poly.drawio.theme`）與深淺（`poly.drawio.appearance`，
-  `automatic` 跟著 VSCode）。介面語言跟著 VSCode 的顯示語言。
-- **圖形庫與 plugin**：`poly.drawio.customLibraries` 把 JSON、XML、URL 或檔案裡的圖形放進側欄，
-  draw.io 自己存出的圖形庫檔也行。`poly.drawio.plugins` 載入 plugin：每個檔第一次執行、內容變了
-  之後都會問你，答案記在使用者設定，工作區設定改不了。
-- **code link**：節點連到程式碼。選取一段程式碼按 `shift+f3`（`Link Selected Code with draw.io Node`）
-  連到圖上選著的節點；檔案總管的右鍵連整個檔案（命令面板上是目前的檔案）；`Link Symbol with draw.io Node`／
-  `Link Workspace Symbol with draw.io Node` 連符號。status bar 的 Code Link 打開時，雙擊節點跳到它
-  連的地方，沒連過而標籤寫 `#符號名` 的跳到那個符號。連結存在節點裡，格式同 hediet.vscode-drawio，
-  兩邊畫的圖互通。
-- **markdown preview**（`poly.markdownDiagrams.enabled`）：fence 語言為 `drawio`，內容是圖的 XML，
-  畫第一頁。
-
-`poly.drawio.offline` 關掉時改開 `poly.drawio.online-url` 的 draw.io（預設 embed.diagrams.net）；
-這時 plugin、`poly.drawio.resizeImages` 與 code link 不作用，因為頁面在別的網域。和
-hediet.vscode-drawio 不同的地方都是修掉它的 bug：revert 之後畫面還是舊的；draw.io 自己存出的
-圖形庫檔讀不進來，連圖都畫不出來；code link 打開時雙擊節點什麼事都不發生；markdown 裡的圖少了
-AWS、Cisco 這類圖示，preview 還說有內容被停用。它的 Live Share 共同編輯與 `local-storage` 設定
-沒有做。兩者都裝著時，VSCode 會請你選預設的編輯器。
 
 ### Markdown 匯出
 
@@ -494,47 +462,46 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 
 ## 設定
 
-| 設定                               | 預設      | 作用                                                                                   |
-| ---------------------------------- | --------- | -------------------------------------------------------------------------------------- |
-| `poly.serverPath`                  | `""`      | 改用指定路徑的 poly binary，空字串是用內附的那支                                       |
-| `poly.tools`                       | `{}`      | 外部工具的版本、路徑或 `"off"`，同 `poly.toml` 的 `[tools]`，同名時以這裡為準          |
-| `poly.lintOnSave`                  | `true`    | 開檔與存檔時跑 lint，改了立即生效；Lint 開關也寫這一項                                 |
-| `poly.format.enabled`              | `true`    | 關掉後 poly 的改寫都不動作（`Poly: Format Document` 除外）；Format 開關也寫它          |
-| `poly.deadCodeCodeLens.enabled`    | `false`   | 每個 Go／TS／JS／Python 檔第一行上方一條 `analyze dead code`                           |
-| `poly.languageServers`             | `false`   | 把語言功能路由給下游 server（見上），改完要重新載入視窗                                |
-| `poly.languageServerLogs`          | `true`    | 下游 server 的 stderr 轉進 Poly 輸出面板                                               |
-| `poly.memoryLog`                   | `false`   | 每開關一個檔寫一行 daemon 握著什麼（RSS、文件數、各快取）                              |
-| `poly.updateCheck.enabled`         | `true`    | 背景檢查新版，有就直接安裝                                                             |
-| `poly.updateCheck.intervalDays`    | `7`       | 檢查間隔，`0` 是每次啟動都查                                                           |
-| `poly.indentTint.enabled`          | `false`   | 縮排上色                                                                               |
-| `poly.imagePreview.enabled`        | `false`   | gutter 圖片縮圖                                                                        |
-| `poly.unicodeHighlight.enabled`    | `false`   | 不可見與冒充 ASCII 的字元（gremlins 的替代）                                           |
-| `poly.referencesCodeLens.enabled`  | `false`   | `N refs`／`N impls`／`N methods`                                                       |
-| `poly.protobufCodeLens.enabled`    | `false`   | `.proto` → 生成的 Go                                                                   |
-| `poly.runCodeLens.enabled`         | `false`   | `run \| debug`                                                                         |
-| `poly.markdownMermaid.enabled`     | `false`   | preview 裡畫 mermaid                                                                   |
-| `poly.markdownDiagrams.enabled`    | `false`   | preview 裡畫 nomnoml／flowchart／sequence／vega／markmap／excalidraw／plantuml／drawio |
-| `poly.markdownGithubStyle.enabled` | `false`   | preview 套 GitHub 樣式；`.colorTheme`／`.lightTheme`／`.darkTheme` 選配色              |
-| `poly.postfixCompletion.enabled`   | `false`   | `.if`／`.for` 之類的展開                                                               |
-| `poly.todo.enabled`                | `false`   | 檔案總管的 TODOs 面板                                                                  |
-| `poly.todo.tags`                   | 五個標籤  | TODOs 面板找哪些字                                                                     |
-| `poly.syntaxColors`                | `{}`      | scope → 顏色與樣式，蓋過 theme；只能設在使用者層級                                     |
-| `poly.autocorrect.enabled`         | `false`   | AutoCorrect（huacnlee.autocorrect 的替代）                                             |
-| `poly.autocorrect.enableLint`      | `true`    | AutoCorrect 的問題列進 Problems                                                        |
-| `poly.autocorrect.formatOnSave`    | `true`    | 手動存檔時 AutoCorrect 整份修正                                                        |
-| `poly.errorLens.enabled`           | `false`   | Error Lens（usernamehw.errorlens 的替代）                                              |
-| `poly.errorLens.*`                 | 同它的    | 訊息的樣式、gutter 圖示、狀態列、CodeLens、排除與延遲，75 項，見上面的 Error Lens      |
-| `poly.plantuml.*`                  | 同 jebbs  | PlantUML 的 Java、匯出、預覽、server 與檢查，20 項，見上面的 PlantUML                  |
-| `poly.excalidraw.*`                | 同 pomdtr | Excalidraw 的主題、語言、元件庫與圖片，4 項，見上面的 Excalidraw                       |
-| `poly.drawio.*`                    | 同 hediet | draw.io 的離線／線上、主題、樣式、圖形庫、plugin 與 code link，22 項，見上面的 draw.io |
-| `poly.markdownPdf.*`               | 同 yzane  | 匯出的格式、位置、樣式、Chrome、PDF 版面與圖片範圍，43 項，見上面的 Markdown 匯出      |
-| `poly.codeSnap.*`                  | 同 adpyke | 截圖的背景、陰影、視窗樣式、行號與快門動作，11 項，見上面的 CodeSnap                   |
-| `poly.pasteImage.*`                | 同 mushan | 圖片存放的資料夾與檔名、插入的路徑與寫法、存檔前的檔名框，12 項，見上面的貼上圖片      |
-| `poly.dataPreview.*`               | 同它的    | 表格的主題、二進位檔旁寫出 JSON 與 schema、存檔後開啟，4 項，見上面的資料預覽          |
-| `poly.swaggerViewer.*`             | 同 arjun  | 預覽伺服器的主機與連接埠、在瀏覽器開、標題只列檔名與縮放，5 項，見上面的 Swagger 預覽  |
-| `poly.marp.*`                      | 同 marp   | 預覽的換行、HTML、數學式與主題，匯出的格式與瀏覽器，15 項，見上面的 Marp 投影片        |
-| `poly.codeRunner.enabled`          | `false`   | Code Runner 的命令、選單與鍵（formulahendry.code-runner 的替代）                       |
-| `poly.codeRunner.*`                | 同它的    | 各語言的命令、工作目錄、存檔、輸出面板或終端機與選單，22 項，見上面的 Code Runner      |
+| 設定                               | 預設      | 作用                                                                                  |
+| ---------------------------------- | --------- | ------------------------------------------------------------------------------------- |
+| `poly.serverPath`                  | `""`      | 改用指定路徑的 poly binary，空字串是用內附的那支                                      |
+| `poly.tools`                       | `{}`      | 外部工具的版本、路徑或 `"off"`，同 `poly.toml` 的 `[tools]`，同名時以這裡為準         |
+| `poly.lintOnSave`                  | `true`    | 開檔與存檔時跑 lint，改了立即生效；Lint 開關也寫這一項                                |
+| `poly.format.enabled`              | `true`    | 關掉後 poly 的改寫都不動作（`Poly: Format Document` 除外）；Format 開關也寫它         |
+| `poly.deadCodeCodeLens.enabled`    | `false`   | 每個 Go／TS／JS／Python 檔第一行上方一條 `analyze dead code`                          |
+| `poly.languageServers`             | `false`   | 把語言功能路由給下游 server（見上），改完要重新載入視窗                               |
+| `poly.languageServerLogs`          | `true`    | 下游 server 的 stderr 轉進 Poly 輸出面板                                              |
+| `poly.memoryLog`                   | `false`   | 每開關一個檔寫一行 daemon 握著什麼（RSS、文件數、各快取）                             |
+| `poly.updateCheck.enabled`         | `true`    | 背景檢查新版，有就直接安裝                                                            |
+| `poly.updateCheck.intervalDays`    | `7`       | 檢查間隔，`0` 是每次啟動都查                                                          |
+| `poly.indentTint.enabled`          | `false`   | 縮排上色                                                                              |
+| `poly.imagePreview.enabled`        | `false`   | gutter 圖片縮圖                                                                       |
+| `poly.unicodeHighlight.enabled`    | `false`   | 不可見與冒充 ASCII 的字元（gremlins 的替代）                                          |
+| `poly.referencesCodeLens.enabled`  | `false`   | `N refs`／`N impls`／`N methods`                                                      |
+| `poly.protobufCodeLens.enabled`    | `false`   | `.proto` → 生成的 Go                                                                  |
+| `poly.runCodeLens.enabled`         | `false`   | `run \| debug`                                                                        |
+| `poly.markdownMermaid.enabled`     | `false`   | preview 裡畫 mermaid                                                                  |
+| `poly.markdownDiagrams.enabled`    | `false`   | preview 裡畫 nomnoml／flowchart／sequence／vega／markmap／excalidraw／plantuml        |
+| `poly.markdownGithubStyle.enabled` | `false`   | preview 套 GitHub 樣式；`.colorTheme`／`.lightTheme`／`.darkTheme` 選配色             |
+| `poly.postfixCompletion.enabled`   | `false`   | `.if`／`.for` 之類的展開                                                              |
+| `poly.todo.enabled`                | `false`   | 檔案總管的 TODOs 面板                                                                 |
+| `poly.todo.tags`                   | 五個標籤  | TODOs 面板找哪些字                                                                    |
+| `poly.syntaxColors`                | `{}`      | scope → 顏色與樣式，蓋過 theme；只能設在使用者層級                                    |
+| `poly.autocorrect.enabled`         | `false`   | AutoCorrect（huacnlee.autocorrect 的替代）                                            |
+| `poly.autocorrect.enableLint`      | `true`    | AutoCorrect 的問題列進 Problems                                                       |
+| `poly.autocorrect.formatOnSave`    | `true`    | 手動存檔時 AutoCorrect 整份修正                                                       |
+| `poly.errorLens.enabled`           | `false`   | Error Lens（usernamehw.errorlens 的替代）                                             |
+| `poly.errorLens.*`                 | 同它的    | 訊息的樣式、gutter 圖示、狀態列、CodeLens、排除與延遲，75 項，見上面的 Error Lens     |
+| `poly.plantuml.*`                  | 同 jebbs  | PlantUML 的 Java、匯出、預覽、server 與檢查，20 項，見上面的 PlantUML                 |
+| `poly.excalidraw.*`                | 同 pomdtr | Excalidraw 的主題、語言、元件庫與圖片，4 項，見上面的 Excalidraw                      |
+| `poly.markdownPdf.*`               | 同 yzane  | 匯出的格式、位置、樣式、Chrome、PDF 版面與圖片範圍，43 項，見上面的 Markdown 匯出     |
+| `poly.codeSnap.*`                  | 同 adpyke | 截圖的背景、陰影、視窗樣式、行號與快門動作，11 項，見上面的 CodeSnap                  |
+| `poly.pasteImage.*`                | 同 mushan | 圖片存放的資料夾與檔名、插入的路徑與寫法、存檔前的檔名框，12 項，見上面的貼上圖片     |
+| `poly.dataPreview.*`               | 同它的    | 表格的主題、二進位檔旁寫出 JSON 與 schema、存檔後開啟，4 項，見上面的資料預覽         |
+| `poly.swaggerViewer.*`             | 同 arjun  | 預覽伺服器的主機與連接埠、在瀏覽器開、標題只列檔名與縮放，5 項，見上面的 Swagger 預覽 |
+| `poly.marp.*`                      | 同 marp   | 預覽的換行、HTML、數學式與主題，匯出的格式與瀏覽器，15 項，見上面的 Marp 投影片       |
+| `poly.codeRunner.enabled`          | `false`   | Code Runner 的命令、選單與鍵（formulahendry.code-runner 的替代）                      |
+| `poly.codeRunner.*`                | 同它的    | 各語言的命令、工作目錄、存檔、輸出面板或終端機與選單，22 項，見上面的 Code Runner     |
 
 markdown 的 Enter／Tab／粗體斜體與 `Copy Path with Line Numbers`、重構命令沒有開關：它們
 只在你按下去時才做事。每一項的完整說明在 VSCode 的設定頁（英文與正體中文都有）。

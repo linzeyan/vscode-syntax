@@ -31,7 +31,7 @@ test("each kind names a bundle the build writes", () => {
   // load.
   assert.deepEqual(
     [...new Set(Object.values(DIAGRAMS))].sort(),
-    ["drawio", "excalidraw", "flowchart", "markmap", "nomnoml", "sequence", "vega"],
+    ["excalidraw", "flowchart", "markmap", "nomnoml", "sequence", "vega"],
   );
 });
 

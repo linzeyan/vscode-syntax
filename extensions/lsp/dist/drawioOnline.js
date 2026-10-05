@@ -1,1 +1,0 @@
-"use strict";(()=>{var i=acquireVsCodeApi(),o=document.querySelector("iframe"),s=new URL(o.src).origin;window.addEventListener("message",e=>{if(e.source===o.contentWindow){e.origin===s&&typeof e.data=="string"&&i.postMessage(JSON.parse(e.data));return}typeof e.data?.action=="string"&&o.contentWindow?.postMessage(JSON.stringify(e.data),s)});})();
