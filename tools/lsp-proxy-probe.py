@@ -687,6 +687,15 @@ def editor_settings(params):
     ]
 
 
+def navigation(msg):
+    """poly's own registration for GraphQL and nginx (navigate.rs).
+
+    Sent at every startup and about no downstream server, so every check here
+    that reads a registerCapability as "poly started a server" must skip it.
+    """
+    return msg.get("id") == "poly:register:navigate"
+
+
 def pump(want_id=None, want_method=None, limit=2000):
     """Read until the wanted response or notification, answering server requests.
 
@@ -701,7 +710,7 @@ def pump(want_id=None, want_method=None, limit=2000):
         INBOX.append(msg)
         if want_id is not None and msg.get("id") == want_id and "method" not in msg:
             return msg, INBOX[start:]
-        if want_method is not None and msg.get("method") == want_method:
+        if want_method is not None and msg.get("method") == want_method and not navigation(msg):
             return msg, INBOX[start:]
         if "method" in msg and "id" in msg:
             # A request from the server side. `null` is a legal answer to
@@ -2682,7 +2691,7 @@ def an_official_extension_already_serves_it():
         open_document(root, name, "shellscript", MAIN_SH)
     end_session(root, watcher)
 
-    said = [m["method"] for m in INBOX if m.get("method")]
+    said = [m["method"] for m in INBOX if m.get("method") and not navigation(m)]
     assert "client/registerCapability" not in said, f"poly started it anyway: {said}"
     assert "window/showMessage" not in said, f"poly called it missing: {INBOX}"
     yielded = [line for line in STDERR if "so poly does not start a second one" in line]
