@@ -55,6 +55,7 @@ import {
   lensTargets,
   luaDeclarations,
   nameStart,
+  rDeclarations,
   refLabel,
 } from "./references";
 import { ReferenceTree, registerReferenceTree } from "./referenceTree";
@@ -1101,6 +1102,20 @@ async function showReferences(
 }
 
 /**
+ * The NAMESPACE of the package an R file belongs to, or "" for a script.
+ *
+ * R CMD build reads a package's code from `<package>/R/` and nowhere deeper,
+ * so that directory's parent is the one place it can be.
+ */
+function namespaceOf(file: string): Promise<string> {
+  const dir = path.dirname(file);
+  if (path.basename(dir) !== "R") {
+    return Promise.resolve("");
+  }
+  return fs.promises.readFile(path.join(path.dirname(dir), "NAMESPACE"), "utf8").catch(() => "");
+}
+
+/**
  * What a reference or implementation provider says about the declaration at
  * `position`, minus the declaration itself -- see `elsewhere`.
  */
@@ -1592,10 +1607,12 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         askAgainLater(document.uri, "no outline");
         return [];
       }
-      const found = lensTargets(
-        document.languageId === "lua" ? luaDeclarations(symbols) : symbols,
-        MAX_LENSES,
-      );
+      const declared = document.languageId === "lua"
+        ? luaDeclarations(symbols)
+        : document.languageId === "r"
+        ? rDeclarations(symbols, await namespaceOf(document.uri.fsPath))
+        : symbols;
+      const found = lensTargets(declared, MAX_LENSES);
       const keys = declarationKeys(found.map((target) => target.symbol));
       const targets: Anchored[] = found.map((target, index) => ({
         ...target,

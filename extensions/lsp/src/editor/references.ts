@@ -227,6 +227,59 @@ export function luaDeclarations<T extends LensSymbol & { readonly name: string }
 }
 
 /**
+ * arity's outline of an R file, cut down to what another file names.
+ *
+ * Measured 2026-10-06 (arity 0.22.0): every top-level assignment is a symbol of
+ * its own, so `df <- df[...]` after `df <- data.frame()` is a second lens with
+ * a different count, and an R script reassigns like that all the way down. The
+ * first assignment is the declaration.
+ *
+ * And an S3 method runs through its generic -- `print(r)` reaches
+ * `print.record` -- so nothing ever writes its name, arity answers with the
+ * declaration alone, and the lens reads `no refs` over code that runs. A
+ * package's NAMESPACE lists every one (`S3method(print, record)`), and R CMD
+ * check holds it to that, so those get no lens rather than a wrong one.
+ *
+ * ponytail: an S3 method in a script has no NAMESPACE to say so and keeps its
+ * `no refs`; S4 (`setClass`, `setGeneric`) has no symbols in arity at all.
+ */
+export function rDeclarations<T extends LensSymbol & { readonly name: string }>(
+  symbols: readonly T[],
+  namespace: string,
+): T[] {
+  const methods = s3Methods(namespace);
+  const seen = new Set<string>();
+  return symbols.filter((symbol) => {
+    // arity names `%+%` with its backticks, and NAMESPACE writes it without.
+    const name = symbol.name.replace(/^`(.*)`$/, "$1");
+    if (seen.has(name) || methods.has(name)) {
+      return false;
+    }
+    seen.add(name);
+    return true;
+  });
+}
+
+/**
+ * The functions a NAMESPACE registers as S3 methods.
+ *
+ * `S3method(print, record)` is `print.record`; a third argument names the
+ * function outright. roxygen2 quotes some generics (`"["`) and qualifies the
+ * delayed ones (`dplyr::filter`), and the function is named without either.
+ */
+export function s3Methods(namespace: string): Set<string> {
+  const bare = (arg: string) => arg.trim().replace(/^["'`](.*)["'`]$/, "$1").replace(/^\w[\w.]*::/, "");
+  const methods = new Set<string>();
+  for (const [, args] of namespace.matchAll(/^\s*S3method\(([^)]*)\)/gm)) {
+    const [generic, cls, method] = args.split(",").map(bare);
+    if (generic && cls) {
+      methods.add(method || `${generic}.${cls}`);
+    }
+  }
+  return methods;
+}
+
+/**
  * Answers about a declaration that are not the declaration itself.
  *
  * `vscode.executeReferenceProvider` asks with `includeDeclaration: true`, so
