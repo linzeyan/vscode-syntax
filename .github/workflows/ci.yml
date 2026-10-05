@@ -115,6 +115,9 @@ jobs:
       # and Rust would therefore be missing here forever -- the cli job lints
       # it on a runner that has cargo. These four cover every tool the image
       # does download: actionlint, hadolint and shellcheck.
+      #
+      # No tool cache here, unlike cli and acceptance: the download is what
+      # this step is testing.
       - name: The image can lint a repository
         run: |
           docker run --rm -v "$PWD:/work" poly:ci --version
@@ -163,6 +166,17 @@ jobs:
           workspaces: cli
           shared-key: ci
           cache-on-failure: true
+      # The tools poly downloads for the dogfood gate. poly-tools.lock records
+      # every (version, platform) with its sha256, so it is the whole key: a
+      # bump misses once and saves the new set. Per job, because each job
+      # downloads a different set and only the first save under a key sticks.
+      # Not for time -- measured at 0.18.18 these cost seconds -- but because
+      # a release-asset host answering 500 four times failed this job.
+      - name: Cache poly's downloaded tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/poly/tools
+          key: poly-tools-${{ github.job }}-${{ runner.os }}-${{ hashFiles('poly-tools.lock') }}
       # rustfmt first: it needs no build, so a formatting slip fails in seconds
       # instead of after the workspace compiles.
       - name: Rust formatting
@@ -318,6 +332,13 @@ jobs:
           shared-key: ci
           save-if: false
           cache-on-failure: true
+      # As in the cli job, for this job's set: golangci-lint, tflint, and the
+      # arity and buf the proxy probe starts.
+      - name: Cache poly's downloaded tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/poly/tools
+          key: poly-tools-${{ github.job }}-${{ runner.os }}-${{ hashFiles('poly-tools.lock') }}
       # The pinned half of the toolchain, and the expensive half: `go install
       # gopls` compiles a large Go program from source, and it did so on every
       # push. Everything here is content-addressed by version, so the only miss
