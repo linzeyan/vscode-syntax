@@ -253,6 +253,34 @@ ignore = []
 # "tests/fixtures/**" = ["ruff/F401", "typos/typo"]
 # "vendor/*.sh" = ["shellcheck/*"]
 
+# ── [lint.schemas] ─────────────────────────────────────────────────────────
+# Glob -> the JSON Schema those YAML and TOML files are checked against. A
+# value the schema rejects is reported as `schema/<keyword>` -- the keyword that
+# failed, so `schema/required` means the same thing whichever schema said it --
+# at `warning`, on the key or value at fault.
+#
+# A file can also name its own schema, with the line the editor extensions for
+# these languages already read, and that line wins over this table:
+#
+#   # yaml-language-server: $schema=https://example.com/app.schema.json
+#   #:schema ./app.schema.json                                     (TOML)
+#
+# Nothing is checked unless one of the two names a schema. SchemaStore's catalog
+# is not consulted: its file patterns put the wrong schema on 106 of the 569
+# files they matched in the corpus poly is measured on.
+#
+# A schema is a URL or a path; a path is relative to this file's directory, as
+# the globs are, and a file's own `$schema=` line is relative to that file. A
+# URL is fetched once a day into poly's cache and the cached copy is used when
+# the network is not there; a schema that cannot be read at all fails the run
+# as "could not check" rather than passing the file. Every matching glob
+# applies, so a file two of them claim has to satisfy both.
+#
+# Default: empty.
+[lint.schemas]
+# "compose*.yaml" = "https://json.schemastore.org/docker-compose.json"
+# "config/*.toml" = "schemas/config.schema.json"
+
 # ── [walk] ─────────────────────────────────────────────────────────────────
 [walk]
 # Walk paths beginning with a dot. Off by default, because a dot prefix is how a

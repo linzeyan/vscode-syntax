@@ -187,6 +187,13 @@ const POLICY: &[(&str, Policy)] = &[
     // reason `typescript` and `deno_lint` are: one is "PHP will not run this
     // file" at error, the other is seven lint rules at warning.
     ("php", Policy::Poly(Severity::Error)),
+    // A value the schema a YAML or TOML file names rejects. Warning rather than
+    // error, and measured: of the 18 findings a schema raised over the corpus's
+    // files once the wrong-file matches were set aside, 14 were the schema being
+    // stricter or older than the program that reads the file -- `FUNDING.yml`
+    // keys GitHub's own template leaves empty, a `fly.toml` boolean fly still
+    // accepts. A schema is somebody's description of a tool, not the tool.
+    ("schema", Policy::Poly(Severity::Warning)),
     ("poly", Policy::PerRule),
 ];
 

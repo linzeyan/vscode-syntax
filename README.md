@@ -360,6 +360,18 @@
   是「定義在別的檔案」——federation 的 `@link`、隔壁模組宣告的 type、只有幾個 type 而沒有
   root 的 schema 片段。一份 schema 是好幾個檔案組起來的，而 poly 一次看一個檔案，那些不是
   這個檔案的缺陷。
+- **YAML 與 TOML 照它們指定的 JSON Schema 驗證**（code 長 `schema/<keyword>`，例如
+  `schema/required`、`schema/type`、`schema/additionalProperties`，等級 warning）。schema 由
+  檔案自己指定，寫法跟 redhat.vscode-yaml 與 even-better-toml 讀的那行相同——YAML 寫
+  `# yaml-language-server: $schema=<網址或路徑>`，TOML 寫 `#:schema <網址或路徑>`——或在
+  `poly.toml` 的 `[lint.schemas]` 用 glob 對應。兩者都沒有就不檢查，`poly check` 的 coverage
+  只有在真的有檔案被檢查時才多一列 `schema`。錯誤標在出錯的那個 key 或值上：拼錯的 key、
+  型別不對的值、少了必填欄位的那個區段的 key。網址的 schema 一天抓一次、存在 poly 的快取，
+  沒網路時用快取的那份；完全讀不到時算「沒檢查到」（結束碼 2），不會當成通過。
+  **SchemaStore 的檔名對應不用**，這是量過的決定：1,329 個真實 YAML／TOML 上它對到 569 個，
+  其中 106 個是錯的檔（一個 `**/scenarios/*/*.yaml` 就把 104 個 QA fixture 當成資安工具的設
+  定檔）；而對得對的那些，報出來的東西大多是 schema 比讀它的程式還嚴或還舊。XML 的
+  XSD／DTD 不做；JSON 由 VSCode 內建的 JSON 支援驗證。
 - **Markdown 的 lint 是 rumdl 的 7 條規則**，全部只報壞掉的東西：相對連結指向不存在的檔
   （MD057）、錨點不存在（MD051）、連結寫反 `(文字)[網址]`（MD011）、空連結（MD042）、
   參考式連結沒有定義（MD052）、標題跳級（MD001）、圖片沒有 alt（MD045）。code 長
@@ -929,6 +941,10 @@ unpinned-dependency = "info"
 [lint.per-file-ignores] # 只關掉某條規則，檔案照樣 lint
 "tests/fixtures/**" = ["ruff/F401"]
 "vendor/*.sh" = ["shellcheck/*"] # tool/* 是整支工具
+
+[lint.schemas] # 這些 YAML／TOML 照哪份 JSON Schema 驗證；檔案自己的 $schema 行優先
+"compose*.yaml" = "https://json.schemastore.org/docker-compose.json"
+"config/*.toml" = "schemas/config.schema.json" # 路徑相對於這個 poly.toml
 
 [walk]
 include-hidden = false # 預設；true 會連點開頭的路徑一起走（.git/ 仍然跳過）

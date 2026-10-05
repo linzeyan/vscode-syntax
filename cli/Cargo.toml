@@ -89,6 +89,11 @@ ignore = "0.4"
 # config costs a feature rather than a dependency -- and it is the same parser
 # `deno lint` reads that file with.
 jsonc-parser = { version = "0.33", features = ["serde"] }
+# JSON Schema, draft 4 through 2020-12, for the YAML and TOML files that name a
+# schema. Default features off because each one is a fetch poly does itself:
+# `resolve-http` brings reqwest and a second TLS stack beside poly-tools' ureq,
+# and `resolve-file` is a reader for the paths poly already resolves.
+jsonschema = { version = "0.58", default-features = false }
 # CSS's printer for `poly minify`. A parser is unavoidable here -- CSS
 # whitespace is only mostly insignificant, and the exceptions (the descendant
 # combinator in `a b`, the spaces inside `calc(1px + 2px)`, anything inside a
@@ -270,6 +275,10 @@ stylua = { version = "=2.5.2", default-features = false, features = [
   "luau",
 ] }
 toml = "0.8"
+# The parser under `toml`, named directly for the one thing `toml::Value`
+# drops: where each key and value was written. A schema finding has to land on
+# a line, and this is the version `toml` 0.8 already links.
+toml_edit = "0.22"
 # The spell checker's engine: tokenizer, `Typo`, `Status`. Named directly
 # because `typos_cli` takes and returns these types and re-exports none of them.
 typos = "0.10"
@@ -293,6 +302,10 @@ typos-cli = "=1.49.1"
 # adds 314 words and would have poly reporting typos the binary it replaces
 # never did. Pinning is what keeps "embedded" from quietly meaning "upgraded".
 typos-dict = "=0.14.0"
+# File paths to `file://` base URIs and back, so a local schema's relative
+# `$ref` resolves on Windows drive paths too. Already in the tree through
+# lsp-types.
+url = "2"
 xmlem = "0.5"
 # The parser behind pretty_yaml, named directly so poly's workflow rules read
 # the same tree `poly fmt` formats. pretty_yaml already links it, so this costs

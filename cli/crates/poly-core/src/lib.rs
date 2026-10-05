@@ -398,6 +398,9 @@ struct RawLint {
     /// Glob -> the rules that path may not report. See `Config::lint_ignored`.
     #[serde(rename = "per-file-ignores")]
     per_file_ignores: BTreeMap<String, Vec<String>>,
+    /// Glob -> the JSON Schema those files are checked against. See
+    /// `Config::lint_schemas`.
+    schemas: BTreeMap<String, String>,
 }
 
 /// One rule, or one set of them, named the way poly.toml and a `poly: ignore`
@@ -1184,6 +1187,9 @@ pub struct Config {
     lint_ignore: Vec<Suppression>,
     /// `[lint.severity]`, sorted most precise first so the first match wins.
     lint_severity: Vec<(Suppression, crate::diag::Severity)>,
+    /// `[lint.schemas]`, each schema already resolved to a URL or an absolute
+    /// path. See `lint_schemas`.
+    lint_schemas: Vec<(GlobMatcher, String)>,
     format_options: BTreeMap<String, FormatOptions>,
     pub tools: BTreeMap<String, String>,
     /// The `tools` entries that came from `EDITOR_TOOLS` rather than a
@@ -1255,6 +1261,10 @@ impl Config {
             editor_tools.extend(editor.keys().cloned());
             tools.extend(editor);
         }
+        let root = chain
+            .first()
+            .and_then(|p| p.parent())
+            .map(Path::to_path_buf);
         Ok(Config {
             map,
             format_fail_on: parse_fail_on(raw.format.fail_on.as_deref(), "format")?,
@@ -1269,16 +1279,14 @@ impl Config {
                 .map(|entry| Suppression::parse(entry, "[lint] ignore"))
                 .collect::<Result<Vec<_>>>()?,
             lint_severity: compile_severities(&raw.lint.severity)?,
+            lint_schemas: compile_schemas(&raw.lint.schemas, root.as_deref())?,
             format_exclude: raw.format.exclude,
             lint_exclude: raw.lint.exclude,
             format_options: raw.format.languages,
             tools,
             editor_tools,
             include_hidden: raw.walk.include_hidden,
-            root: chain
-                .first()
-                .and_then(|p| p.parent())
-                .map(Path::to_path_buf),
+            root,
         })
     }
 
@@ -1294,6 +1302,7 @@ impl Config {
             lint_ignores: Vec::new(),
             lint_ignore: Vec::new(),
             lint_severity: Vec::new(),
+            lint_schemas: Vec::new(),
             format_options: BTreeMap::new(),
             tools: BTreeMap::new(),
             editor_tools: BTreeSet::new(),
@@ -1372,6 +1381,26 @@ impl Config {
             .map(|(_, severity)| *severity)
     }
 
+    /// The JSON Schemas `[lint.schemas]` maps `path` to, as URLs or absolute
+    /// paths.
+    ///
+    /// Every matching entry rather than the first, because a BTreeMap's first is
+    /// alphabetical and not anything the project said: two globs that both claim
+    /// a file are two schemas it has to satisfy, which is also how VS Code's JSON
+    /// support combines them. A schema the file names for itself replaces these
+    /// (poly-engines' `schema::lint`), and both the CLI and the daemon ask here.
+    pub fn lint_schemas(&self, path: &Path) -> Vec<String> {
+        if self.lint_schemas.is_empty() {
+            return Vec::new();
+        }
+        let relative = self.relative(path);
+        self.lint_schemas
+            .iter()
+            .filter(|(matcher, _)| matcher.is_match(relative))
+            .map(|(_, schema)| schema.clone())
+            .collect()
+    }
+
     /// Path as the patterns in this config were written: relative to the
     /// directory holding the poly.toml they came from.
     fn relative<'p>(&self, path: &'p Path) -> &'p Path {
@@ -1435,6 +1464,32 @@ fn parse_fail_on(value: Option<&str>, section: &str) -> Result<crate::diag::Fail
         None => Ok(crate::diag::FailOn::default()),
         Some(v) => crate::diag::FailOn::parse(v).map_err(|e| anyhow::anyhow!("[{section}] {e}")),
     }
+}
+
+/// `[lint.schemas]`, with each schema resolved where it was written: a URL as
+/// is, a path against the config root, the directory the globs are anchored at
+/// too. Resolved here rather than at lint time because "relative to what" is a
+/// question only the config knows the answer to.
+fn compile_schemas(
+    raw: &BTreeMap<String, String>,
+    root: Option<&Path>,
+) -> Result<Vec<(GlobMatcher, String)>> {
+    let mut compiled = Vec::new();
+    for (pattern, schema) in raw {
+        let glob = Glob::new(pattern)
+            .with_context(|| format!("invalid [lint.schemas] pattern {pattern:?}"))?;
+        let schema = if schema.contains("://") {
+            schema.clone()
+        } else {
+            let path = Path::new(schema);
+            match root {
+                Some(root) if path.is_relative() => root.join(path).to_string_lossy().into_owned(),
+                _ => schema.clone(),
+            }
+        };
+        compiled.push((glob.compile_matcher(), schema));
+    }
+    Ok(compiled)
 }
 
 fn compile_per_file_ignores(

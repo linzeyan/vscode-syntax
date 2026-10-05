@@ -2447,6 +2447,20 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
             }
         },
     };
+    // A schema is not a language's linter -- a YAML file is checked against one
+    // only when it or poly.toml names it -- so it is asked beside `lint_engine`
+    // rather than through it, as `poly check` asks. From the buffer, so a
+    // directive takes effect as it is typed, at the next lint.
+    match poly_engines::schema::lint(
+        &lang,
+        path,
+        text,
+        &config.lint_schemas(path),
+        poly_tools::schema,
+    ) {
+        Ok(found) => issues.extend(found.into_iter().flatten()),
+        Err(e) => eprintln!("[poly] schema error {}: {e:#}", path.display()),
+    }
     // Spelling is asked separately because it has no language to dispatch on,
     // and from disk rather than from the buffer: on stdin the document is
     // called `-`, so the per-type config keyed off the file name stops applying

@@ -530,15 +530,18 @@ const MUTABLE_REFS: &[&str] = &[
 /// questions is four `Option` hops and a cast on the tree as parsed. The cost of
 /// the layer is one pass and one allocation per node; what it buys is rules that
 /// read like the schema they are enforcing.
+///
+/// `schema` walks the same tree to put a JSON Schema finding on a line, which is
+/// why the shape is visible to the crate rather than to this module alone.
 #[derive(Debug)]
-struct Node {
-    at: usize,
-    end: usize,
-    value: Value,
+pub(crate) struct Node {
+    pub(crate) at: usize,
+    pub(crate) end: usize,
+    pub(crate) value: Value,
 }
 
 #[derive(Debug)]
-enum Value {
+pub(crate) enum Value {
     Scalar(String),
     Seq(Vec<Node>),
     /// Key node and value node, in the order they were written -- findings are
@@ -558,7 +561,7 @@ impl Node {
         }
     }
 
-    fn str(&self) -> Option<&str> {
+    pub(crate) fn str(&self) -> Option<&str> {
         match &self.value {
             Value::Scalar(s) => Some(s),
             _ => None,
@@ -631,6 +634,21 @@ fn parse(text: &str) -> Option<Node> {
         return Some(from_block(&block));
     }
     document.flow().as_ref().map(from_flow)
+}
+
+/// Every document of `text` as a value tree, in order, for a reader that has to
+/// find its way to the nth one. An empty document is still an entry -- `None` --
+/// so the positions line up with serde_yaml's reading of the same stream.
+pub(crate) fn documents(text: &str) -> Vec<Option<Node>> {
+    let Some(root) = yaml_parser::parse(text).ok().and_then(ast::Root::cast) else {
+        return Vec::new();
+    };
+    root.documents()
+        .map(|document| match document.block() {
+            Some(block) => Some(from_block(&block)),
+            None => document.flow().as_ref().map(from_flow),
+        })
+        .collect()
 }
 
 fn from_block(block: &ast::Block) -> Node {

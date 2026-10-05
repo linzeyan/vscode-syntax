@@ -740,16 +740,22 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
 
     if !walked.is_empty() {
         init_thread_pool();
-        let results: Vec<Result<Vec<FileIssue>>> = walked
+        // Each file's findings, and whether a JSON Schema checked it. Which
+        // files a schema reaches is only known once a file is read -- the
+        // directive is a line in it -- so unlike the engine rows below, the
+        // schema row is counted here rather than derived.
+        let results: Vec<Result<(Vec<FileIssue>, bool)>> = walked
             .par_iter()
             .map(|(path, config)| {
                 let mut found = poly_engines::lint::spell(path)?;
                 found.extend(poly_engines::lint::unicode(path)?);
+                let mut schema_checked = false;
                 if let Some(lang) = config.language(path) {
                     let linted = lint_engine(&lang, path).is_some();
                     let embeds = embedded_shellcheck.is_some()
                         && poly_engines::shell::hosts_shell(&lang, path);
-                    if linted || embeds {
+                    let schema = poly_engines::schema::applies(&lang);
+                    if linted || embeds || schema {
                         let text = std::fs::read_to_string(path)
                             .with_context(|| format!("reading {}", path.display()))?;
                         if linted {
@@ -763,15 +769,28 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                                 &text,
                             )?);
                         }
+                        if schema {
+                            if let Some(more) = poly_engines::schema::lint(
+                                &lang,
+                                path,
+                                &text,
+                                &config.lint_schemas(path),
+                                poly_tools::schema,
+                            )? {
+                                found.extend(more);
+                                schema_checked = true;
+                            }
+                        }
                     }
                 }
-                Ok(found
+                let found = found
                     .into_iter()
                     .map(|issue| FileIssue {
                         file: path.clone(),
                         issue,
                     })
-                    .collect())
+                    .collect();
+                Ok((found, schema_checked))
             })
             .collect();
         let mut broken = 0usize;
@@ -785,9 +804,13 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         // walk is ordered and a row that reads differently between two runs
         // over the same tree is a row nobody can diff.
         let mut first_failure: Option<String> = None;
+        let mut schema_files = 0usize;
         for result in results {
             match result {
-                Ok(found) => issues.extend(found),
+                Ok((found, schema_checked)) => {
+                    issues.extend(found);
+                    schema_files += usize::from(schema_checked);
+                }
                 Err(err) => {
                     broken += 1;
                     let message = format!("{err:#}");
@@ -818,6 +841,11 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         // a .mailmap as readily as a .rs, so its scope is every file the walk
         // kept (`spell`).
         coverage.record("typos", walked.len(), coverage::Status::Ran);
+        // Only when a file named a schema: a row reading "schema 0 files" in
+        // every repository without one would be a line about nothing.
+        if schema_files > 0 {
+            coverage.record("schema", schema_files, coverage::Status::Ran);
+        }
         // Not attributed to an engine: the failure is a file poly could not
         // read or a configuration none of them could load, and blaming ruff for
         // an unreadable _typos.toml would be a worse answer than naming the

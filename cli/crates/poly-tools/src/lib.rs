@@ -726,9 +726,15 @@ const DOWNLOAD_BACKOFF: std::time::Duration = std::time::Duration::from_millis(2
 /// quietly downloading again until one passes is exactly how a tamper signal
 /// turns into a flake.
 fn download(url: &str) -> Result<Vec<u8>> {
+    download_with(&ureq::Agent::new_with_defaults(), url)
+}
+
+/// `download`, through an agent with settings of its own -- a schema fetch has
+/// a deadline a tool download must not have.
+fn download_with(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>> {
     let mut attempt = 1u32;
     loop {
-        let error = match ureq::get(url).call().and_then(|mut response| {
+        let error = match agent.get(url).call().and_then(|mut response| {
             response
                 .body_mut()
                 .with_config()
@@ -753,6 +759,71 @@ fn download(url: &str) -> Result<Vec<u8>> {
         eprintln!("[poly] {url}: {error} — retrying ({attempt}/{DOWNLOAD_ATTEMPTS})");
         std::thread::sleep(DOWNLOAD_BACKOFF * 2u32.pow(attempt - 1));
         attempt += 1;
+    }
+}
+
+/// How long a fetched JSON Schema is used before it is asked for again.
+///
+/// A day, because a schema is a document its owner edits, unlike a pinned
+/// tool: caching it forever would keep reporting against a version upstream has
+/// since fixed. CI starts with an empty cache and always fetches.
+const SCHEMA_FRESH: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// The longest a schema fetch may take, retries included.
+///
+/// The daemon lints on the thread that answers the editor, so a fetch that
+/// hangs is a frozen editor rather than a slow lint. Ten seconds is past any
+/// healthy response and short enough to read as an error, not a hang.
+const SCHEMA_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// A JSON Schema a YAML or TOML file named, as text: poly-engines' `schema::Fetch`.
+///
+/// Cached under the poly cache beside the tools, keyed by the URL's sha256. A
+/// copy older than `SCHEMA_FRESH` is fetched again, and a failed fetch falls
+/// back to that copy however old it is -- a stale schema is a better answer on
+/// a train than "could not check", and the fallback says so on stderr.
+pub fn schema(url: &str) -> Result<String> {
+    let file = cache_dir()
+        .with_file_name("schemas")
+        .join(format!("{:x}.json", sha2::Sha256::digest(url.as_bytes())));
+    let age = std::fs::metadata(&file)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok());
+    if age.is_some_and(|age| age < SCHEMA_FRESH) {
+        if let Ok(text) = std::fs::read_to_string(&file) {
+            return Ok(text);
+        }
+    }
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(SCHEMA_DEADLINE))
+        .build()
+        .into();
+    let fetched = download_with(&agent, url).and_then(|body| {
+        String::from_utf8(body).with_context(|| format!("{url} is not UTF-8 text"))
+    });
+    match fetched {
+        Ok(text) => {
+            // Written beside and renamed over, so a concurrent reader -- the
+            // daemon and a `poly check` share this directory -- never sees half
+            // a schema. A cache that cannot be written costs the next run a
+            // fetch, not this one its answer.
+            let partial = file.with_extension(format!("{}.part", std::process::id()));
+            if let Some(dir) = file.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            if std::fs::write(&partial, &text).is_ok() {
+                let _ = std::fs::rename(&partial, &file);
+            }
+            Ok(text)
+        }
+        Err(error) => match std::fs::read_to_string(&file) {
+            Ok(text) => {
+                eprintln!("[poly] {error:#} -- checking against the copy cached earlier");
+                Ok(text)
+            }
+            Err(_) => Err(error),
+        },
     }
 }
 
