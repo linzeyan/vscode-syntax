@@ -710,7 +710,11 @@ def pump(want_id=None, want_method=None, limit=2000):
         INBOX.append(msg)
         if want_id is not None and msg.get("id") == want_id and "method" not in msg:
             return msg, INBOX[start:]
-        if want_method is not None and msg.get("method") == want_method and not navigation(msg):
+        if (
+            want_method is not None
+            and msg.get("method") == want_method
+            and not navigation(msg)
+        ):
             return msg, INBOX[start:]
         if "method" in msg and "id" in msg:
             # A request from the server side. `null` is a legal answer to
