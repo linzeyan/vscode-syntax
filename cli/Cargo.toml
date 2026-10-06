@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/poly-cli", "crates/poly-core", "crates/poly-engines", "crates/poly-tools"]
 
 [workspace.package]
-version = "0.18.19"
+version = "0.18.20"
 edition = "2021"
 license = "MIT"
 
