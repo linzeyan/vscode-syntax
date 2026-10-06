@@ -235,7 +235,7 @@ test("the jar is what poly installed or pinned, never a launcher on PATH", () =>
   assert.equal(jarOf("plantuml: pinned /w/tools/plantuml.jar\n"), "/w/tools/plantuml.jar");
   // `java -jar` on a shell script fails with a message about zip files, which
   // is a worse answer than saying there is no jar.
-  assert.equal(jarOf("plantuml: no managed build for this platform, PATH has /usr/bin/plantuml"), undefined);
+  assert.equal(jarOf("plantuml: on PATH, /usr/bin/plantuml"), undefined);
   assert.equal(jarOf("plantuml: disabled in poly.toml"), undefined);
 });
 

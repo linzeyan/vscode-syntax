@@ -17,8 +17,8 @@ CI 跑的是同一個 binary、同一份設定，所以本機存檔跟 pipeline 
   Format Document 挑的是同一個（這個語言的預設 formatter）。這組按鍵本來就是 Format Document
   的，poly 接手只為了讓開關擋不到它。
 - **Lint**：存檔即時 diagnostics 進 Problems panel；`Poly: Lint (poly check)` 在終端跑完整
-  CLI。內嵌 ruff、selene、sqruff，其餘（shellcheck、actionlint、hadolint……）受管下載並以
-  sha256 驗證；專案自己的 biome／eslint 優先。
+  CLI。內嵌 ruff、selene、sqruff，其餘（shellcheck、actionlint、hadolint……）先用 PATH 上的
+  （主版號跟 poly 釘的相同即可），沒有才受管下載並以 sha256 驗證；專案自己的 biome／eslint 優先。
   - **三個工具讀不了單一 buffer**，所以跑的是整個範圍：golangci-lint 一個 Go module、
     cargo clippy 一個 workspace、tflint 一個目錄。它們比單檔 linter 慢，答案是存檔後幾秒才到。
 - **`Poly: Analyze Dead Code`**：Go／TypeScript／JavaScript／Python 的整體可達性分析，

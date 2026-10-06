@@ -298,15 +298,16 @@ include-hidden = false
 # Where an external tool comes from, per tool. Four kinds of value:
 #
 #   "off"             never run it; poly stays quiet about it being absent
-#   "on"              run it at poly's pinned version -- the same as leaving the
-#                     line out, except for the tools poly leaves off by default
+#   "on"              run it -- the same as leaving the line out, except for the
+#                     tools poly leaves off by default
 #   "<path>"          use this binary (anything containing a / or \, absolute
 #                     or relative to this file's directory)
-#   "<version>"       download this version instead of poly's pinned one
+#   "<version>"       download this version, even when PATH has the tool
 #
-# Default: absent, i.e. poly's own pinned version, downloaded on first use into
-# ~/.cache/poly/tools and verified against a recorded sha256. If there is no
-# managed build for the platform, PATH is tried before poly reports it missing.
+# Default: absent, i.e. the copy on PATH, at any version that shares the major
+# of poly's pin -- golangci-lint 2.x, not 1.x, whose command line poly does not
+# speak. With none there, poly's pinned version, downloaded on first use into
+# ~/.cache/poly/tools and verified against the sha256 poly ships with.
 # `poly tools list` prints what each name resolved to and why.
 #
 # A path that does not exist stops the run: poly would otherwise skip that tool
@@ -321,34 +322,34 @@ include-hidden = false
 #
 # The whole set, as of poly 0.18.19:
 #
-#   actionlint           1.7.12   downloaded on first use
-#   arity                0.22.0   downloaded on first use
+#   actionlint           1.7.12   PATH first, else downloaded
+#   arity                0.22.0   PATH first, else downloaded
 #   bash-language-server -        language server, from PATH
-#   buf                  1.72.0   downloaded on first use
+#   buf                  1.72.0   PATH first, else downloaded
 #   cargo                system   from the project's toolchain, on PATH
 #   clang-format         system   from the project's toolchain, on PATH
 #   clangd               -        language server, from PATH
 #   deadcode             -        whole-program analysis (`poly deadcode`)
-#   gofumpt              0.11.0   downloaded on first use
-#   golangci-lint        2.13.2   downloaded on first use
+#   gofumpt              0.11.0   PATH first, else downloaded
+#   golangci-lint        2.13.2   PATH first, else downloaded
 #   gopls                -        language server, from PATH
 #   hadolint             2.15.1   off; set it to "on" and poly downloads it
-#   jsonnetfmt           0.22.0   downloaded on first use
+#   jsonnetfmt           0.22.0   PATH first, else downloaded
 #   knip                 -        whole-program analysis (`poly deadcode`)
 #   lua-language-server  -        language server, from PATH
-#   plantuml             1.2026.8 downloaded on first use
+#   plantuml             1.2026.8 PATH first, else downloaded
 #   ruff                 -        compiled into poly; remove the entry
 #   rust-analyzer        -        language server, from PATH
 #   selene               -        compiled into poly; remove the entry
-#   shellcheck           0.11.0   downloaded on first use
-#   shfmt                3.13.1   downloaded on first use
+#   shellcheck           0.11.0   PATH first, else downloaded
+#   shfmt                3.13.1   PATH first, else downloaded
 #   sourcekit-lsp        -        language server, from PATH
 #   stylua               -        compiled into poly; remove the entry
 #   swift-format         system   from the project's toolchain, on PATH
-#   swiftlint            0.65.1   downloaded on first use
+#   swiftlint            0.65.1   PATH first, else downloaded
 #   terraform            system   from the project's toolchain, on PATH
 #   terraform-ls         -        language server, from PATH
-#   tflint               0.64.0   downloaded on first use
+#   tflint               0.64.0   PATH first, else downloaded
 #   typos                -        compiled into poly; remove the entry
 #   vulture              -        whole-program analysis (`poly deadcode`)
 #

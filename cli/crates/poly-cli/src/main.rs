@@ -1412,12 +1412,7 @@ fn cmd_tools(rest: &[String]) -> Result<i32> {
             for name in names {
                 match poly_tools::resolve(name, &config, false) {
                     poly_tools::Resolved::Managed(p) => println!("{name}: {}", p.display()),
-                    poly_tools::Resolved::Path(p) => {
-                        println!(
-                            "{name}: no managed build for this platform, PATH has {}",
-                            p.display()
-                        )
-                    }
+                    poly_tools::Resolved::Path(p) => println!("{name}: on PATH, {}", p.display()),
                     poly_tools::Resolved::Pinned(p) => println!("{name}: pinned {}", p.display()),
                     poly_tools::Resolved::Disabled => {
                         println!("{name}: disabled in {}", config.tool_source(name))

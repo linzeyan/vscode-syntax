@@ -290,15 +290,16 @@ include-hidden = false
 # Where an external tool comes from, per tool. Four kinds of value:
 #
 #   "off"             never run it; poly stays quiet about it being absent
-#   "on"              run it at poly's pinned version -- the same as leaving the
-#                     line out, except for the tools poly leaves off by default
+#   "on"              run it -- the same as leaving the line out, except for the
+#                     tools poly leaves off by default
 #   "<path>"          use this binary (anything containing a / or \, absolute
 #                     or relative to this file's directory)
-#   "<version>"       download this version instead of poly's pinned one
+#   "<version>"       download this version, even when PATH has the tool
 #
-# Default: absent, i.e. poly's own pinned version, downloaded on first use into
-# ~/.cache/poly/tools and verified against a recorded sha256. If there is no
-# managed build for the platform, PATH is tried before poly reports it missing.
+# Default: absent, i.e. the copy on PATH, at any version that shares the major
+# of poly's pin -- golangci-lint 2.x, not 1.x, whose command line poly does not
+# speak. With none there, poly's pinned version, downloaded on first use into
+# ~/.cache/poly/tools and verified against the sha256 poly ships with.
 # `poly tools list` prints what each name resolved to and why.
 #
 # A path that does not exist stops the run: poly would otherwise skip that tool

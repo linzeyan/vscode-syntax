@@ -30,7 +30,8 @@ const TEMPLATE: &str = include_str!("poly.example.toml.in");
 /// may say.
 #[derive(Clone, Copy)]
 enum Source {
-    /// poly pins the version and downloads it on first use.
+    /// poly pins the version, and downloads it when PATH has no copy of
+    /// that major.
     Pinned(&'static str),
     /// Pinned and downloadable, but not run unless poly.toml asks. See
     /// `poly_tools::DEFAULT_OFF`.
@@ -277,7 +278,7 @@ pub fn export() -> String {
     let mut tools = String::new();
     for tool in &known {
         let (version, note) = match tool.source {
-            Source::Pinned(v) => (v, "downloaded on first use"),
+            Source::Pinned(v) => (v, "PATH first, else downloaded"),
             Source::OffByDefault(v) => (v, "off; set it to \"on\" and poly downloads it"),
             Source::Toolchain => ("system", "from the project's toolchain, on PATH"),
             Source::Server => ("-", "language server, from PATH"),

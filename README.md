@@ -289,9 +289,11 @@
   （Protobuf 的格式化，同一支 binary 也是上面那個 language server）、
   arity（R 的格式化與 lint，同樣也是上面那個 language server）、
   jsonnetfmt（Jsonnet 的格式化，`.jsonnet`／`.libsonnet`，用它的預設值，不另設旗標）、
-  PlantUML（MIT 版的 jar，給編輯器的預覽與匯出用，不做 lint；Java 要自己裝）。版本釘死，
-  每個平台的 sha256 都預先寫進 `poly-tools.lock`——下載對不上就直接失敗，而不是
-  信任第一次抓到的東西。
+  PlantUML（MIT 版的 jar，給編輯器的預覽與匯出用，不做 lint；Java 要自己裝）。PATH 上
+  已經有同一個工具就直接用它，版本不同沒關係，只要主版號跟 poly 釘的一樣（golangci-lint
+  要 2.x，1.x 的命令列不相容）；PlantUML 例外，一律用 poly 下載的 jar。PATH 上沒有才
+  下載 poly 釘死的版本，每個平台的 sha256 都預先寫進 `poly-tools.lock` 並編進 poly——
+  下載對不上就直接失敗，而不是信任第一次抓到的東西。
 - **zsh 只格式化，不 lint**（`.zsh`）。shfmt 讀得懂 zsh 文法，shellcheck 讀不懂——它只支
   援 sh／bash／dash／ksh。以前 poly 把 `.zsh` 一起丟給 shellcheck，結果是拿 bash 文法解析
   zsh：361 個真實 `.zsh` 檔案上產生 2,454 條 findings，佔量測語料裡全部 shellcheck findings
@@ -413,7 +415,7 @@
   獨立命令而不是 `poly fmt` 的旗標——兩者契約相反，`fmt` 是「符合專案風格」，而沒有
   人的風格是一行 40KB。不支援 `--strict`／`--format`／`--fail-on`（沒有 findings 可
   塑形，也沒有外部工具會缺席），拼對了卻無效的旗標一律拒絕。
-- 工具解析順序：指定（VSCode 的 `poly.tools`，其次 `poly.toml` 的 `[tools]`）→ 專案內工具 → 內嵌引擎 → 受管下載 → PATH。
+- 工具解析順序：指定（VSCode 的 `poly.tools`，其次 `poly.toml` 的 `[tools]`）→ 專案內工具 → 內嵌引擎 → PATH（主版號相同即可）→ 受管下載。指定版本號時跳過 PATH，直接下載那個版本。
 
 ## 安裝
 

@@ -261,7 +261,8 @@ def buf_path(poly):
     ).stdout
     for line in printed.split("\n"):
         if line.startswith("buf:"):
-            return line.split(":", 1)[1].strip()
+            # A buf already on PATH is the one poly runs, and says so.
+            return line.split(":", 1)[1].strip().removeprefix("on PATH, ")
     raise SystemExit(f"`{poly} tools install buf` printed no path:\n{printed}")
 
 

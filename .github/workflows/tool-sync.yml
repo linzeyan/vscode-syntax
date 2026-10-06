@@ -56,7 +56,9 @@ jobs:
         run: |
           cargo build --release --manifest-path cli/Cargo.toml
           cargo test --manifest-path cli/Cargo.toml -p poly-tools --release
-          cli/target/release/poly tools install
+          # PATH emptied: poly takes a tool already on PATH before it downloads,
+          # and the point here is to fetch every new pin and check it.
+          env -u PATH cli/target/release/poly tools install
           python tools/tool-sync.py --check
       # A linter upgrade can find things the old one did not, which is the
       # entire point and also the thing most likely to make this PR fail CI.

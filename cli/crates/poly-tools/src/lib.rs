@@ -3,8 +3,9 @@
 //! runners producing poly_core::diag::Issue.
 //!
 //! Resolution per tool: poly.toml `[tools]` entry (version pin / "off" /
-//! explicit path) -> managed download cache -> PATH. Project-local tool
-//! detection (node_modules/.bin, rustfmt) is M4 backlog.
+//! explicit path) -> PATH, at any version of the pinned major -> managed
+//! download cache. Project-local tool detection (node_modules/.bin, rustfmt)
+//! is M4 backlog.
 
 pub mod project;
 pub mod run;
@@ -544,30 +545,101 @@ pub fn resolve(name: &str, config: &poly_core::Config, offline: bool) -> Resolve
         Some("on") | None => tool.version,
         Some(pinned) => pinned,
     };
-    match ensure_installed(tool, version, config, offline) {
-        Ok(Some(path)) => return Resolved::Managed(path),
-        Ok(None) => {} // no asset for this platform: fall through to PATH
-        Err(e) => {
-            // Download failed (offline, checksum, ...): fall back to PATH but
-            // remember why in case PATH misses too.
-            if let Some(path) = find_on_path(name) {
-                return Resolved::Path(path);
-            }
-            return Resolved::Missing(format!("{e:#}"));
+    // plantuml is never taken from PATH: poly runs a jar, and a `plantuml` on
+    // PATH is a launcher script that brings its own Java.
+    let on_path = || {
+        (tool.name != "plantuml")
+            .then(|| find_on_path(name))
+            .flatten()
+            .filter(|path| same_tool(tool, path))
+    };
+    // What the machine already runs comes first, at whatever version it is. A
+    // version written in `[tools]` is a request for that version, so it goes to
+    // the download instead.
+    let written = version != tool.version;
+    if !written {
+        if let Some(path) = on_path() {
+            return Resolved::Path(path);
         }
     }
-    match find_on_path(name) {
-        Some(path) => Resolved::Path(path),
-        None => Resolved::Missing(format!(
+    let missing = match ensure_installed(tool, version, config, offline) {
+        Ok(Some(path)) => return Resolved::Managed(path),
+        Ok(None) => format!(
             "{name} has no managed build for {} and is not on PATH",
             current_platform()
-        )),
+        ),
+        Err(e) => format!("{e:#}"),
+    };
+    // A written version with no build here, or a failed download: the
+    // machine's own copy still beats nothing.
+    match written.then(on_path).flatten() {
+        Some(path) => Resolved::Path(path),
+        None => Resolved::Missing(missing),
     }
 }
 
-/// Last resort of `resolve`, and the only route for the tools poly never
-/// installs for you — rustfmt, clang-format, and the language servers the LSP
-/// daemon proxies, all of which have to match the project's own toolchain.
+/// Is the binary at `path` the tool poly pins, at any version?
+///
+/// Asked by running `--version` and reading the first `N.N` it prints. Minor
+/// and patch may differ -- the machine's copy is taken as it is -- but the
+/// major has to match, because that is where a command line changes:
+/// golangci-lint 1.x rejects the `--output.json.path` poly passes 2.x. A binary
+/// that cannot say its version is not taken either: a mise shim with no version
+/// set for this directory exits non-zero, though its error names one.
+///
+/// ponytail: the first `N.N` printed is the version for every registry tool
+/// today; one that prints another number first needs a probe of its own.
+fn same_tool(tool: &Tool, path: &Path) -> bool {
+    let Some(want) = major(tool.version) else {
+        // "system": the project's toolchain, whatever version it is.
+        return true;
+    };
+    let Ok(output) = std::process::Command::new(path)
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .output()
+    else {
+        return false;
+    };
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let same = output.status.success() && major(&said) == Some(want);
+    if !same {
+        eprintln!(
+            "[poly] {} is not {} {want}.x ({}), so poly uses its own",
+            path.display(),
+            tool.name,
+            said.lines().next().unwrap_or("no output").trim()
+        );
+    }
+    same
+}
+
+/// The major version in the first `N.N` of `text`, whatever precedes it.
+fn major(text: &str) -> Option<u64> {
+    let bytes = text.as_bytes();
+    (0..bytes.len()).find_map(|start| {
+        if !bytes[start].is_ascii_digit() || (start > 0 && bytes[start - 1].is_ascii_digit()) {
+            return None;
+        }
+        let end = start
+            + bytes[start..]
+                .iter()
+                .take_while(|b| b.is_ascii_digit())
+                .count();
+        let dotted =
+            bytes.get(end) == Some(&b'.') && bytes.get(end + 1).is_some_and(|b| b.is_ascii_digit());
+        dotted.then(|| text[start..end].parse().ok()).flatten()
+    })
+}
+
+/// `resolve`'s first stop for a tool poly pins, and the only route for the
+/// tools poly never installs for you — rustfmt, clang-format, and the language
+/// servers the LSP daemon proxies, all of which have to match the project's
+/// own toolchain.
 pub fn find_on_path(name: &str) -> Option<PathBuf> {
     let exe = if cfg!(windows) {
         format!("{name}.exe")
@@ -1484,6 +1556,78 @@ mod tests {
         assert!(std::fs::read_to_string(&lock).unwrap().contains(digest));
         verify("unpinned", "1.0", "1.0-any", &wrong, &lock, false)
             .expect_err("a digest the project recorded binds the editor too");
+    }
+
+    /// What the registry's tools print for `--version`, copied from real runs:
+    /// the version is the first `N.N`, whether a word, a `v` or a label comes
+    /// before it, and a later `go1.26` does not get in the way.
+    #[test]
+    fn a_version_is_read_from_what_the_tool_prints() {
+        for (said, want) in [
+            (
+                "golangci-lint has version 2.12.2 built with go1.26.2 from c0d3ddc9",
+                2,
+            ),
+            ("golangci-lint has version 1.64.8 built with go1.24.1", 1),
+            (
+                "ShellCheck - shell script analysis tool\nversion: 0.10.0",
+                0,
+            ),
+            ("v0.10.0 (go1.26.4)", 0),
+            ("Haskell Dockerfile Linter 2.14.0", 2),
+            (
+                "TFLint version 0.53.0\n+ ruleset.terraform (0.9.1-bundled)",
+                0,
+            ),
+            ("1.2026.8", 1),
+        ] {
+            assert_eq!(major(said), Some(want), "{said}");
+        }
+        assert_eq!(major("system"), None);
+    }
+
+    /// The machine's copy is taken at any minor or patch and refused at another
+    /// major: a golangci-lint 1.x on PATH would have failed every run against
+    /// the 2.x command line poly speaks. One that cannot say its version is
+    /// refused too -- a mise shim names a version in the error it exits with.
+    #[cfg(unix)]
+    #[test]
+    fn path_is_taken_at_any_version_of_the_pinned_major() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let fake = |name: &str, script: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        let golangci = tool("golangci-lint").unwrap();
+        assert!(same_tool(
+            golangci,
+            &fake(
+                "older",
+                "echo 'golangci-lint has version 2.1.0 built with go1.24'"
+            )
+        ));
+        assert!(!same_tool(
+            golangci,
+            &fake(
+                "v1",
+                "echo 'golangci-lint has version 1.64.8 built with go1.24'"
+            )
+        ));
+        assert!(!same_tool(
+            golangci,
+            &fake(
+                "shim",
+                "echo 'mise ERROR No version is set for shim: golangci-lint 2.12.2' >&2; exit 1"
+            )
+        ));
+        // A toolchain tool has no pin to compare against.
+        assert!(same_tool(
+            tool("terraform").unwrap(),
+            &fake("terraform", "exit 1")
+        ));
     }
 
     /// `offline` is a promise, not a preference. An air-gapped run must not
