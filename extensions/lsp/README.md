@@ -364,7 +364,8 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 - **`Copy Path with Line Numbers`**：複製 `路徑:行號`，多行選取是 `路徑:42-51`。就是 `rg`
   印的、CI annotation 連過去的、終端機點得動的那個形狀。
 - **引用與實作 CodeLens**（設定）：每個宣告一行 `11 refs`；interface 多一顆 `3 impls`，
-  具體型別多一顆 `1 interface`，方法寫在型別外面的語言（Go）再多一顆 `4 methods`。
+  具體型別有滿足 interface 才多一顆 `1 interface`，方法寫在型別外面的語言（Go）再多一顆
+  `4 methods`。
   數字全部來自該語言已註冊的 provider，poly 只數與畫。
   - `N refs`、`N impls`、`N methods` 點下去都一樣：只有一筆就直接跳過去，多筆開檔案總管裡的
     **References** 面板。那是 poly 自己的樹，

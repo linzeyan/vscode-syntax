@@ -202,9 +202,10 @@
   在游標原位問 `refactor.rewrite`，**游標要在參數上**；Implement Interface 問 `quickfix` 挑
   「補上缺的方法」，**要先有一個編不過的斷言**（Go 是 `var _ Shape = Triangle{}`），因為
   server 是對著診斷提供那條修正的。
-- **引用與實作 CodeLens**：每個宣告一行 `11 refs`；interface 多一顆 `3 impls`，具體型別多一顆
-  `1 interface`，方法寫在型別外面的語言（Go）再多一顆 `4 methods`。只有一筆就直接跳過去，多筆
-  開檔案總管裡的 **References** 面板——那是 poly 自己的樹，每一列除了原始碼還帶**行號**與
+- **引用與實作 CodeLens**：每個宣告一行 `11 refs`；interface 多一顆 `3 impls`，具體型別有滿足
+  interface 才多一顆 `1 interface`，方法寫在型別外面的語言（Go）再多一顆 `4 methods`。
+  只有一筆就直接跳過去，多筆開檔案總管裡的 **References** 面板——那是 poly 自己的樹，每一列除了
+  原始碼還帶**行號**與
   **它落在哪個符號裡**（`method Handle`、`func main`），內建的 `references-view` 兩欄都沒有，
   而別人的樹加不了欄位。數字來自該語言已註冊的 provider，poly 只數與畫。**GraphQL 與 nginx**
   沒有 server 答得出引用，由 poly 自己按名字算：GraphQL 的 type、fragment、directive；nginx 的

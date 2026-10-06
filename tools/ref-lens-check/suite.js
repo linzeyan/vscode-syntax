@@ -11,6 +11,7 @@
 // it pins is the shape every server shares -- a declaration's body is full of
 // names, and none of them is a declaration another file can reach.
 const { writeFileSync } = require("node:fs");
+const { join } = require("node:path");
 
 const vscode = require("vscode");
 
@@ -35,7 +36,9 @@ const READY_MS = 60_000;
  * cannot: all three providers fire `onDidChangeCodeLenses` only when a `poly.*`
  * setting changes, and no fixture changes one, so the first answer is the final
  * one. The settle loop is here for TypeScript's lens, which waits for its
- * project -- and the only TypeScript fixture asks for `atLeast` of one.
+ * project -- and the only TypeScript fixture asks for `atLeast` of one. The one
+ * late lens is an upward count, drawn after the refs lens beside it has asked;
+ * `observeUpward` waits for it by number.
  */
 async function lensesFor(uri, atLeast = 1) {
   const deadline = Date.now() + READY_MS;
@@ -97,6 +100,55 @@ function registerFlatProvider(uri) {
   ];
 }
 
+/**
+ * Two classes in a language whose implementation provider answers upward, and
+ * only one of them satisfies anything.
+ *
+ * gopls answers at `type Circle struct` with the interface it satisfies, and
+ * with nothing at the many structs and methods that satisfy none -- each of
+ * which read `no interfaces`. The upward count is now drawn only once it is
+ * known to be above zero, so both halves are pinned: the class with an
+ * interface says so, and the other carries its refs and nothing more. `log`,
+ * because nothing else in the host answers for it, and a language that has
+ * answered upward stays that way for the session.
+ */
+async function observeUpward(lensesFor) {
+  const file = join(vscode.workspace.workspaceFolders[0].uri.fsPath, "upward.log");
+  writeFileSync(file, "Circle\n\nLoose\n\nShape\n\ncalled here\n");
+  const uri = vscode.Uri.file(file);
+  const selector = { scheme: "file", language: "log" };
+  const word = (line) => new vscode.Range(line, 0, line, 5);
+  const disposables = [
+    vscode.languages.registerDocumentSymbolProvider(selector, {
+      provideDocumentSymbols() {
+        return [
+          new vscode.DocumentSymbol("Circle", "", vscode.SymbolKind.Class, word(0), word(0)),
+          new vscode.DocumentSymbol("Loose", "", vscode.SymbolKind.Class, word(2), word(2)),
+        ];
+      },
+    }),
+    vscode.languages.registerReferenceProvider(selector, {
+      provideReferences(_document, position) {
+        return [new vscode.Location(uri, word(position.line)), new vscode.Location(uri, word(6))];
+      },
+    }),
+    vscode.languages.registerImplementationProvider(selector, {
+      provideImplementation(_document, position) {
+        return position.line === 0 ? [new vscode.Location(uri, word(4))] : [];
+      },
+    }),
+  ];
+  await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+  // Three: two refs and the one interface, which arrives a redraw later.
+  const said = (await lensesFor(uri, 3)).map((lens) =>
+    `${lens.range.start.line}:${lens.command?.title ?? "(unresolved)"}`
+  );
+  for (const disposable of disposables) {
+    disposable.dispose();
+  }
+  return said.sort();
+}
+
 exports.run = async function run() {
   await vscode.extensions.getExtension("ricky.poly-lsp").activate();
 
@@ -124,6 +176,7 @@ exports.run = async function run() {
   for (const disposable of disposables) {
     disposable.dispose();
   }
+  const upward = await observeUpward(lensesFor);
 
   const uri = vscode.Uri.file(process.env.POLY_LENS_FIXTURE);
   const document = await vscode.workspace.openTextDocument(uri);
@@ -188,7 +241,7 @@ exports.run = async function run() {
     process.env.POLY_LENS_OUT,
     `${
       JSON.stringify(
-        { vscode: vscode.version, lenses: lines, flat, flatSymbols, outline, proto, navigate },
+        { vscode: vscode.version, lenses: lines, flat, flatSymbols, upward, outline, proto, navigate },
         null,
         2,
       )

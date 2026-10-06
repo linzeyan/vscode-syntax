@@ -970,6 +970,11 @@ class ReferenceLens extends vscode.CodeLens {
     /** The declaration, as `declarationKeys` names it -- what `Answered` keys on. */
     readonly key: string,
     range: vscode.Range,
+    /**
+     * On a refs lens over a declaration asked the upward question: the count
+     * the `up` lens beside it was drawn from, 0 when it was not drawn.
+     */
+    readonly up?: number,
   ) {
     super(range);
   }
@@ -1580,6 +1585,12 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
       .finally(() => refreshing.delete(flight));
   };
 
+  /** The last count for `id`, from this session or an earlier one; 0 when none. */
+  const known = (at: vscode.Uri, id: string) => {
+    const place = placeOf(at);
+    return counted.get(at.toString(), id) ?? (place && store.get(place.folder, place.file, id)) ?? 0;
+  };
+
   const provider: vscode.CodeLensProvider = {
     onDidChangeCodeLenses: changed.event,
 
@@ -1666,12 +1677,21 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
       const methods = methodsByType(symbols);
       const lenses = targets.flatMap((target) => {
         const range = target.at;
-        const lenses: vscode.CodeLens[] = [
-          new ReferenceLens(document.uri, "refs", target.key, range),
-        ];
         const direction = target.implementation;
-        if (direction && answers[direction]) {
-          lenses.push(new ReferenceLens(document.uri, direction, target.key, range));
+        // `no interfaces` is not news -- most types and methods satisfy
+        // nothing -- and a lens cannot be taken back once it is resolved, so
+        // the upward count is drawn only once it is known to be above zero.
+        // Until then the refs lens asks for it, which keeps the question to
+        // declarations on screen, and a yes redraws.
+        const up = direction === "up" && answers.up ? known(document.uri, `up|${target.key}`) : undefined;
+        const lenses: vscode.CodeLens[] = [
+          new ReferenceLens(document.uri, "refs", target.key, range, up),
+        ];
+        if (direction === "down" && answers.down) {
+          lenses.push(new ReferenceLens(document.uri, "down", target.key, range));
+        }
+        if (up) {
+          lenses.push(new ReferenceLens(document.uri, "up", target.key, range));
         }
         // Already resolved, and the only lens here that is: the count is in the
         // symbol tree that has already been fetched, so there is nothing to ask
@@ -1702,7 +1722,7 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
     },
 
     async resolveCodeLens(lens, token) {
-      const { uri: at, counts, key } = lens as ReferenceLens;
+      const { uri: at, counts, key, up } = lens as ReferenceLens;
       const start = lens.range.start;
       const id = `${counts}|${key}`;
       let count = counted.get(at.toString(), id);
@@ -1729,6 +1749,14 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         }
         count = others?.length ?? 0;
         settle(at, id, count);
+        // Drawn on a count that went to zero before it resolved; the redraw
+        // leaves it out.
+        if (counts === "up" && count === 0) {
+          redrawSoon();
+        }
+      }
+      if (up !== undefined && counted.get(at.toString(), `up|${key}`) === undefined) {
+        refresh(at, start, "up", `up|${key}`, up);
       }
       lens.command = {
         title: counts === "refs" ? refLabel(count) : implLabel(count, counts),

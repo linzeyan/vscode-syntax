@@ -214,6 +214,15 @@ async function main() {
     );
   }
 
+  // A provider that does answer upward, over a class that satisfies something
+  // and one that satisfies nothing -- see `observeUpward`.
+  const wantUp = ["0:1 interface", "0:1 ref", "2:1 ref"];
+  if ((report.upward ?? []).join() !== wantUp.join()) {
+    problems.push(
+      `the upward lens: expected ${JSON.stringify(wantUp)}, got ${JSON.stringify(report.upward)}`,
+    );
+  }
+
   const titles = new Map(report.lenses.map((one) => [one.text, one.poly]));
   for (const [text, said] of Object.entries(IMPLS)) {
     if (!(titles.get(text) ?? []).includes(said)) {
