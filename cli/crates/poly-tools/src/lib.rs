@@ -627,10 +627,71 @@ fn lock_path(config: &poly_core::Config) -> PathBuf {
         .join("poly-tools.lock")
 }
 
+/// poly's own pins: the sha256 of every (version, platform) the registry
+/// downloads, as tools/tool-sync.py records them from upstream's release API.
+///
+/// Compiled in, because the project's lock is the wrong place to look for
+/// them: every repository but this one has none, so each first download was
+/// trust on first use and wrote a poly-tools.lock into a workspace that never
+/// asked for one.
+const PINS: &str = include_str!("../../../../poly-tools.lock");
+
+/// Check a download's `digest` against the lock that speaks for it.
+///
+/// poly's pins decide whenever they hold `key` ("<version>-<platform>"), and
+/// then nothing is written anywhere. A version poly does not pin -- `[tools]
+/// x = "1.2.3"` -- falls back to the project's lock, trust on first use: the
+/// first download is recorded and later ones must match. `record` is false
+/// under the editor, which never adds a file to the workspace it was opened on.
+fn verify(
+    tool: &str,
+    version: &str,
+    key: &str,
+    digest: &str,
+    lock_file: &Path,
+    record: bool,
+) -> Result<()> {
+    let mismatch = |expected: &str| {
+        anyhow!(
+            "{tool} {version} sha256 mismatch: lock has {expected}, download is {digest} — upstream re-tagged or download corrupted"
+        )
+    };
+    let pins: toml::Table = PINS.parse().context("parsing poly's own poly-tools.lock")?;
+    if let Some(expected) = pins
+        .get(tool)
+        .and_then(|t| t.get(key))
+        .and_then(|v| v.as_str())
+    {
+        return if expected == digest {
+            Ok(())
+        } else {
+            Err(mismatch(expected))
+        };
+    }
+    let mut lock: toml::Table = std::fs::read_to_string(lock_file)
+        .ok()
+        .and_then(|t| t.parse().ok())
+        .unwrap_or_default();
+    let entry = lock
+        .entry(tool.to_string())
+        .or_insert_with(|| toml::Value::Table(Default::default()));
+    match entry.get(key).and_then(|v| v.as_str()) {
+        Some(expected) if expected != digest => Err(mismatch(expected)),
+        Some(_) => Ok(()),
+        None if !record => Ok(()),
+        None => {
+            if let Some(table) = entry.as_table_mut() {
+                table.insert(key.to_string(), toml::Value::String(digest.to_string()));
+            }
+            std::fs::write(lock_file, toml::to_string_pretty(&lock)?)
+                .with_context(|| format!("writing {}", lock_file.display()))
+        }
+    }
+}
+
 /// Download+verify+extract `tool` into the cache; returns None when the
 /// platform has no asset. Already-cached binaries return immediately.
-/// First download records the sha256 in poly-tools.lock (trust on first
-/// use); later downloads must match it.
+/// See `verify` for which lock a download is checked against.
 fn ensure_installed(
     tool: &Tool,
     version: &str,
@@ -666,31 +727,16 @@ fn ensure_installed(
     );
     let body = download(&asset.url)?;
     let digest = format!("{:x}", sha2::Sha256::digest(&body));
-
-    let lock_file = lock_path(config);
-    let mut lock: toml::Table = std::fs::read_to_string(&lock_file)
-        .ok()
-        .and_then(|t| t.parse().ok())
-        .unwrap_or_default();
-    let key = format!("{}-{}", version, platform);
-    let entry = lock
-        .entry(tool.name.to_string())
-        .or_insert_with(|| toml::Value::Table(Default::default()));
-    match entry.get(&key).and_then(|v| v.as_str()) {
-        Some(expected) if expected != digest => bail!(
-            "{} {} sha256 mismatch: lock has {expected}, download is {digest} — upstream re-tagged or download corrupted",
-            tool.name,
-            version
-        ),
-        Some(_) => {}
-        None => {
-            if let Some(table) = entry.as_table_mut() {
-                table.insert(key, toml::Value::String(digest.clone()));
-            }
-            std::fs::write(&lock_file, toml::to_string_pretty(&lock)?)
-                .with_context(|| format!("writing {}", lock_file.display()))?;
-        }
-    }
+    verify(
+        tool.name,
+        version,
+        &format!("{version}-{platform}"),
+        &digest,
+        &lock_path(config),
+        // The extension sets this on every poly it starts, empty or not, and a
+        // CLI run never has it -- so it doubles as "who is asking".
+        std::env::var_os(poly_core::EDITOR_TOOLS).is_none(),
+    )?;
 
     extract(&body, asset.kind, tool.name, &target)?;
     Ok(Some(target))
@@ -1405,6 +1451,39 @@ mod tests {
         let error = format!("{error:#}");
         assert!(error.contains("sha256 mismatch"), "{error}");
         assert!(!error.contains("attempts"), "{error}");
+    }
+
+    /// Which lock a download answers to decides whether a file appears in the
+    /// project. poly pins every version it downloads, so a workspace that never
+    /// asked for a poly-tools.lock must not get one -- the editor was writing
+    /// one beside every Go module it linted. A version poly does not pin is
+    /// still recorded, by the CLI only, and a recorded one binds both.
+    #[test]
+    fn only_an_unpinned_version_is_recorded_and_only_by_the_cli() {
+        let dir = tempfile::tempdir().unwrap();
+        let lock = dir.path().join("poly-tools.lock");
+        let pins: toml::Table = PINS.parse().unwrap();
+        let (tool, keys) = pins.iter().next().expect("poly pins at least one tool");
+        let (key, digest) = keys.as_table().unwrap().iter().next().unwrap();
+        let digest = digest.as_str().unwrap();
+        let wrong = "0".repeat(64);
+
+        verify(tool, "pinned", key, digest, &lock, true).expect("poly's own pin");
+        let error = verify(tool, "pinned", key, &wrong, &lock, true)
+            .expect_err("a digest poly pins differently is not an install");
+        assert!(format!("{error:#}").contains("sha256 mismatch"));
+        assert!(
+            !lock.exists(),
+            "a pinned download wrote a lock into the project"
+        );
+
+        verify("unpinned", "1.0", "1.0-any", digest, &lock, false).unwrap();
+        assert!(!lock.exists(), "the editor wrote a lock into its workspace");
+
+        verify("unpinned", "1.0", "1.0-any", digest, &lock, true).unwrap();
+        assert!(std::fs::read_to_string(&lock).unwrap().contains(digest));
+        verify("unpinned", "1.0", "1.0-any", &wrong, &lock, false)
+            .expect_err("a digest the project recorded binds the editor too");
     }
 
     /// `offline` is a promise, not a preference. An air-gapped run must not
