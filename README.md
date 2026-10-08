@@ -235,7 +235,7 @@
   那部分要改 `editor.semanticTokenColorCustomizations`。
 - **`Poly: Set Syntax Color`**：不知道 scope 叫什麼就用這個。從目前這個檔的文法的 scope 清單挑一個
   （可打字過濾，已設定的會顯示目前的值），輸入 `#C586C0` 或 `#C586C0 italic`，寫進
-  `poly.syntaxColors`；留空就刪掉那一項。
+  `poly.syntaxColors`；留空就刪掉那一項。遠端視窗（WSL、SSH）讀不到文法，改成直接輸入 scope 名稱。
 - **`Poly: Syntax Colors for This Language`**：同一份清單整份列出，做成可以直接複製的
   `poly.syntaxColors` 片段。改配色這件事 VSCode 一直都做得到，卡住的是沒人知道 scope 叫什麼——
   內建的 `Inspect Editor Tokens and Scopes` 一次只給游標下的那一個。顏色欄位是 `#RRGGBB`

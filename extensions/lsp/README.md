@@ -409,7 +409,7 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
   你自己寫的 rule 與各 theme 專屬的設定原樣保留。有 semantic tokens 的語言要另改
   `editor.semanticTokenColorCustomizations`。
 - **`Set Syntax Color`**：從目前這個檔的文法的全部 scope 挑一個，輸入 `#C586C0` 或
-  `#C586C0 italic`，寫進 `poly.syntaxColors`；留空刪掉那一項。
+  `#C586C0 italic`，寫進 `poly.syntaxColors`；留空刪掉那一項。讀不到文法時（遠端視窗）改成直接輸入 scope。
 - **`Syntax Colors for This Language`**：同一份 scope 清單整份列出，做成可以直接複製的
   `poly.syntaxColors` 片段。顏色欄位是 `#RRGGBB` 佔位字串，所以整份貼上去不會改變任何顏色。
 

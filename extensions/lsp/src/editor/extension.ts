@@ -1194,23 +1194,39 @@ async function showSyntaxColors(editor: vscode.TextEditor): Promise<void> {
  */
 async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
   const languageId = editor.document.languageId;
-  const found = grammarScopes(languageId);
-  if (!found) {
-    return;
-  }
   const config = vscode.workspace.getConfiguration("poly");
   const colors = { ...config.inspect<Record<string, string>>("syntaxColors")?.globalValue };
-  const picked = await vscode.window.showQuickPick(
-    found.scopes.map((scope) => ({ label: scope, description: colors[scope] ?? "" })),
-    { placeHolder: `The ${languageId} scope to colour -- type to filter, e.g. comment or keyword` },
-  );
-  if (!picked) {
+  let scope: string | undefined;
+  if (grammarFor(languageId)) {
+    const found = grammarScopes(languageId);
+    if (!found) {
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      found.scopes.map((one) => ({ label: one, description: colors[one] ?? "" })),
+      { placeHolder: `The ${languageId} scope to colour -- type to filter, e.g. comment or keyword` },
+    );
+    scope = picked?.label;
+  } else {
+    // Typed rather than refused: in a remote window this host sees only the
+    // remote side's extensions and the server ships no grammars, so the one
+    // painting the file is out of reach -- but a scope name still colours it.
+    const named = await vscode.window.showInputBox({
+      title: "Set Syntax Color",
+      prompt: `Poly cannot see the ${languageId} grammar${
+        vscode.env.remoteName ? " from a remote window" : ""
+      }. Type the scope to colour, e.g. comment or keyword.`,
+      validateInput: (text) => (text.trim() ? undefined : "A scope name, e.g. comment"),
+    });
+    scope = named?.trim();
+  }
+  if (!scope) {
     return;
   }
   const typed = await vscode.window.showInputBox({
-    title: picked.label,
+    title: scope,
     prompt: "A colour and optional styles, e.g. #C586C0 or #C586C0 italic. Empty goes back to the theme's.",
-    value: picked.description,
+    value: colors[scope] ?? "",
     validateInput: (text) => {
       const style = parseStyle(text);
       return typeof style === "string" ? style : undefined;
@@ -1224,9 +1240,9 @@ async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
     return;
   }
   if (style) {
-    colors[picked.label] = styleText(style);
+    colors[scope] = styleText(style);
   } else {
-    delete colors[picked.label];
+    delete colors[scope];
   }
   await setPoly("syntaxColors", colors);
 }

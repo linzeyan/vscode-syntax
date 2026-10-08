@@ -1062,6 +1062,45 @@ suite("poly-lsp in a real editor", () => {
     }
   });
 
+  // A remote window's case, made here: a file whose grammar poly cannot see,
+  // because a remote host sees none of the local side's. Refusing there left
+  // no way to colour anything; the scope is typed instead and lands like one
+  // picked from the list.
+  test("Set Syntax Color takes a typed scope when the file's grammar is out of sight", async () => {
+    await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument({ language: "plaintext", content: "x\n" }),
+    );
+    assert.ok(
+      !vscode.extensions.all.some((one) =>
+        (one.packageJSON?.contributes?.grammars ?? []).some((grammar: { language?: string }) =>
+          grammar.language === "plaintext"
+        )
+      ),
+      "plaintext has a grammar now, so this no longer reaches the typed path",
+    );
+    const window = vscode.window as unknown as Record<string, unknown>;
+    const { showInputBox } = vscode.window;
+    const answers = ["comment", "#6A9955 italic"];
+    window.showInputBox = () => Promise.resolve(answers.shift());
+    try {
+      await vscode.commands.executeCommand("poly.setSyntaxColor");
+      assert.deepStrictEqual(answers, [], "the command stopped before asking for both");
+      await eventually(
+        "the typed scope in poly.syntaxColors",
+        () =>
+          vscode.workspace.getConfiguration("poly").inspect<Record<string, string>>("syntaxColors")?.globalValue
+              ?.comment === "#6A9955 italic" || undefined,
+      );
+    } finally {
+      window.showInputBox = showInputBox;
+      await setPoly("syntaxColors", undefined, vscode.ConfigurationTarget.Global);
+      await vscode.workspace
+        .getConfiguration("editor")
+        .update("tokenColorCustomizations", undefined, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    }
+  });
+
   // The conversion is unit-tested against OpenCC; this is the bundle found
   // beside dist/extension.js and the edit landing in every selection.
   test("Chinese conversion rewrites each selection, and the whole file when there is none", async () => {
