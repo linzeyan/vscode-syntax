@@ -48,22 +48,10 @@ CI 跑的是同一個 binary、同一份設定，所以本機存檔跟 pipeline 
   VSCode 的 notebook editor 不走 LSP 文字文件，所以要用批次命令或 `poly fmt`。
 - 背景檢查 GitHub Releases，有新版就自己下載安裝，只問要不要重新載入視窗。
 
-## 語言功能（預設關閉）
+## 語言功能
 
-`poly.languageServers` 打開後，poly 把 hover、definition、references、outline、completion、
-rename、code action、inlay hint、call/type hierarchy、semantic tokens 等路由給**專案自己
-toolchain 裡的** language server：gopls、rust-analyzer、clangd、sourcekit-lsp、terraform-ls、
-lua-language-server、bash-language-server，以及 poly 代抓的 buf 與 arity。
-
-poly 不實作任何一行語意分析，只做路由，所以品質就是那支 server 的品質。server 一律從 PATH
-找，找不到就說一聲；WSL 裡不找 `/mnt/c` 這類 Windows 磁碟上的目錄。改完要重新載入視窗。
-
-**已經有官方 extension 的語言，poly 讓開**：裝了 Go（golang.go）、rust-analyzer、clangd 或
-C/C++、Swift、HashiCorp Terraform、Lua（sumneko）、Bash IDE、Buf 的那幾個語言，poly 不啟動
-自己那支 server，同一個語言不會有兩支在跑、兩份 hover。裝上或移除那個 extension 時 poly
-自己重新分配，不用重新載入視窗。
-
-存檔時會跑的 `source.*` code action 不轉（會跟 poly 的格式化搶同一段程式碼），燈泡裡的照常。
+poly 只處理格式化與 lint。hover、跳到定義、補全、rename 等語言功能交給各語言自己的
+extension（Go、rust-analyzer、Python 等）。
 
 ## 編輯器便利功能
 
@@ -415,7 +403,7 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
     `poly.toml` 管那邊，管不到高亮。
 - **TODOs 檢視**（設定）：檔案總管多一個面板，列出整個 workspace 的 `TODO`／`FIXME`／
   `HACK`／`XXX`／`BUG`。只在面板顯示時才掃描，排除規則沿用 `files.exclude`／`search.exclude`。
-- **語法顏色**（設定 `poly.syntaxColors`）：設定畫面裡一張 scope → 顏色的表，例如 `comment` →
+- **語法顏色**（設定 `poly.syntaxColors`）：settings.json 的 `poly` 區塊裡一張 scope → 顏色的表，例如 `comment` →
   `#6A9955 italic`；刪掉一項就回到 theme 的顏色。poly 把它複製進
   `editor.tokenColorCustomizations`（主題只讀那裡），成為名為 `poly.syntaxColors` 的 rule，
   你自己寫的 rule 與各 theme 專屬的設定原樣保留。有 semantic tokens 的語言要另改
@@ -463,6 +451,10 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 
 ## 設定
 
+設定全部在一個 `poly` 物件裡，啟用時寫進使用者的 settings.json：每一項上面的註解寫用途、可選的值與
+預設值，沒設的是註解掉的預設值，取消註解再改值就生效；設過的值重寫時原樣保留。下表的
+`poly.format.enabled` 指的是 `"poly": { "format": { "enabled": … } }`。
+
 | 設定                               | 預設      | 作用                                                                                  |
 | ---------------------------------- | --------- | ------------------------------------------------------------------------------------- |
 | `poly.serverPath`                  | `""`      | 改用指定路徑的 poly binary，空字串是用內附的那支                                      |
@@ -470,8 +462,6 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 | `poly.lintOnSave`                  | `true`    | 開檔與存檔時跑 lint，改了立即生效；Lint 開關也寫這一項                                |
 | `poly.format.enabled`              | `true`    | 關掉後 poly 的改寫都不動作（`Poly: Format Document` 除外）；Format 開關也寫它         |
 | `poly.deadCodeCodeLens.enabled`    | `false`   | 每個 Go／TS／JS／Python 檔第一行上方一條 `analyze dead code`                          |
-| `poly.languageServers`             | `false`   | 把語言功能路由給下游 server（見上），改完要重新載入視窗                               |
-| `poly.languageServerLogs`          | `true`    | 下游 server 的 stderr 轉進 Poly 輸出面板                                              |
 | `poly.memoryLog`                   | `false`   | 每開關一個檔寫一行 daemon 握著什麼（RSS、文件數、各快取）                             |
 | `poly.updateCheck.enabled`         | `true`    | 背景檢查新版，有就直接安裝                                                            |
 | `poly.updateCheck.intervalDays`    | `7`       | 檢查間隔，`0` 是每次啟動都查                                                          |
@@ -505,14 +495,16 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 | `poly.codeRunner.*`                | 同它的    | 各語言的命令、工作目錄、存檔、輸出面板或終端機與選單，22 項，見上面的 Code Runner     |
 
 markdown 的 Enter／Tab／粗體斜體與 `Copy Path with Line Numbers`、重構命令沒有開關：它們
-只在你按下去時才做事。每一項的完整說明在 VSCode 的設定頁（英文與正體中文都有）。
+只在你按下去時才做事。每一項的完整說明在 settings.json 的 `poly` 區塊裡，就在那一項上方（英文或正體中文，照編輯器的語言）。
 
 外部工具的版本、路徑與開關寫在 `poly.tools`，跟 `poly.toml` 的 `[tools]` 同一套鍵與值：
 
 ```jsonc
-"poly.tools": {
-  "shellcheck": "off",
-  "tflint": "0.53.0"
+"poly": {
+  "tools": {
+    "shellcheck": "off",
+    "tflint": "0.53.0",
+  },
 }
 ```
 
@@ -521,7 +513,7 @@ markdown 的 Enter／Tab／粗體斜體與 `Copy Path with Line Numbers`、重�
 
 ## Log
 
-兩個輸出面板：**Poly** 是 daemon 的（啟動、每次 lint／format、下游 server 的 stderr），
+兩個輸出面板：**Poly** 是 daemon 的（啟動、每次 lint／format），
 **Poly Editor** 是編輯器功能的（lens 為什麼沒畫之類，細節在 debug 層級，用 `Developer: Set Log
 Level` 打開）。兩者都寫到磁碟上，是 `Developer: Open Extension Logs Folder` 打開的資料夾裡
 `ricky.poly-lsp/` 底下的 `Poly.log` 與 `Poly Editor.log`，回報問題時附這兩個檔就夠了。WSL、SSH 的

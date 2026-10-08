@@ -32,7 +32,7 @@ CARGO_PROFILE_RELEASE_CODEGEN_UNITS ?= 16
 export CARGO_PROFILE_RELEASE_LTO CARGO_PROFILE_RELEASE_CODEGEN_UNITS
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint notices pins config dogfood smoke probe e2e gates \
+.PHONY: help build test lint notices pins config dogfood smoke e2e gates \
 	version grammars tokdeps grammar-diff grammar-fuzz grammar-corpus grammar-real editor-diff ext-diff mermaid-diff engine-diff \
 	lsp-fmt-diff ref-lens lens-probe toc-fuzz list-fuzz gutter-cache git-embed bump control clean syntax
 
@@ -85,15 +85,7 @@ dogfood: build ## poly formats and lints its own repo
 smoke: build ## LSP handshake, formatting and a memory soak over stdio
 	python3 tools/lsp-smoke.py $(POLY)
 
-# Skips a language whose server is not installed and says so. CI installs five
-# of the six and asserts they are present, because a check that only ever skips
-# is a check nobody is running.
-probe: build ## Language server proxy, against whichever servers are installed
-	python3 tools/lsp-proxy-probe.py $(POLY)
-
-# Its own target rather than more of `probe`: this one is about gofumpt and
-# golangci-lint, which is `poly check`'s side of Go and not the proxy's, and it
-# needs a Go toolchain rather than a language server.
+# gofumpt and golangci-lint, `poly check`'s side of Go; it needs a Go toolchain.
 go: build ## poly's Go support end to end: gofumpt, golangci-lint, editor vs CI
 	python3 tools/go-acceptance.py $(POLY)
 
@@ -333,11 +325,10 @@ ext-diff: build ## poly against the extensions it replaced, with screenshots (do
 # nothing about whether they still say it.
 #
 # It was an audit, on the grounds that CI has neither gopls nor buf. Both halves
-# of that were wrong: ci.yml installs a pinned gopls for `probe` in the same
-# job, and buf is poly's to download. So it is a gate that skips when the Go
-# toolchain is absent, and CI passes `--require` to say that skipping there is
-# a failure -- the same contract `probe` already has.
-lens-probe: build ## What gopls and buf still offer the lenses poly routes to
+# of that were wrong: ci.yml installs a pinned gopls, and buf is poly's to
+# download. So it is a gate that skips when the Go toolchain is absent, and CI
+# passes `--require` to say that skipping there is a failure.
+lens-probe: build ## What gopls and buf still offer the lenses poly asks for
 	python3 tools/lens-probe.py $(POLY)
 
 # The one differential whose reference ships inside the editor rather than
@@ -403,7 +394,7 @@ version: build ## Check every version string agrees, binary included
 # grammars, then extensions. CI runs them in parallel and a developer cannot, so
 # this is the serial reading of the same list rather than the same order; what
 # still holds is that a failure here lands on the gate CI would name.
-gates: lint test notices pins config nls smoke dogfood version probe lens-probe go tf rust deadcode grammars e2e editor syntax ref-lens gutter-cache git-embed toc-fuzz list-fuzz ## Everything above, grouped as CI's jobs are
+gates: lint test notices pins config nls smoke dogfood version lens-probe go tf rust deadcode grammars e2e editor syntax ref-lens gutter-cache git-embed toc-fuzz list-fuzz ## Everything above, grouped as CI's jobs are
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0
@@ -425,7 +416,7 @@ bump: ## Move every version string to VERSION=x.y.z
 #
 # A behaviour change is only proven by a binary that fails the new check, so
 # this builds one from any ref into its own worktree. Kept as a target because
-# every round of proxy work has needed it and the worktree dance is easy to get
+# every round of daemon work has needed it and the worktree dance is easy to get
 # wrong -- a control built in the working tree is not a control.
 control: ## Build a comparison binary from REF=<git-ref> into /tmp
 	@test -n "$(REF)" || { echo "usage: make control REF=<git-ref>" >&2; exit 1; }

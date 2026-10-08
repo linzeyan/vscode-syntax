@@ -2,8 +2,8 @@
  * Which declarations get a reference count, and what the count says.
  *
  * poly computes no references. It asks the editor, the editor asks whichever
- * provider is registered for the language -- for Go that is poly's own proxy in
- * front of gopls -- and this file only decides where to put the number and how
+ * provider is registered for the language -- for Go that is gopls, run by the
+ * Go extension -- and this file only decides where to put the number and how
  * to word it. That distinction is what lets the feature live here at all:
  * counting an answer somebody else produced is not implementing a language
  * feature, it is handing over data already in hand.

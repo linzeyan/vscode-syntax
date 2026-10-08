@@ -26,6 +26,7 @@ import * as path from "node:path";
 
 import * as vscode from "vscode";
 
+import { affects } from "../settings";
 import { corrections, lineEdits } from "./autocorrect";
 
 import ignore = require("ignore");
@@ -204,7 +205,7 @@ export function registerAutocorrect(context: vscode.ExtensionContext, log: vscod
       }
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (["poly.autocorrect", "poly.lintOnSave"].some((section) => event.affectsConfiguration(section))) {
+      if (["poly.autocorrect", "poly.lintOnSave"].some((section) => affects(event, section))) {
         relintAll();
       }
     }),

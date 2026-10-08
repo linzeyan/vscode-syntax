@@ -7,7 +7,7 @@ import {
   workspace,
 } from 'vscode'
 import { DirectiveParser } from '../directives/parser'
-import { mathTypesettingConfiguration } from '../utils'
+import { mathTypesettingConfiguration, watchSetting } from '../utils'
 
 interface ParsedMathDirective {
   range: Range
@@ -59,9 +59,10 @@ export function register(
 }
 
 export function subscribe(subscriptions: Disposable[], refresh: () => void) {
+  const mathTypesettingChanged = watchSetting('poly.marp.mathTypesetting')
   subscriptions.push(
     workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('poly.marp.mathTypesetting')) refresh()
+      if (mathTypesettingChanged(e)) refresh()
     }),
   )
 }

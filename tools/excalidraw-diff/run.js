@@ -29,6 +29,7 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { gunzipSync, inflateSync } = require("node:zlib");
+const { settingsOf } = require("../ext-diff/settings");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
@@ -246,7 +247,7 @@ function readable(file, base64) {
 }
 
 /**
- * pomdtr's manifest against poly's: settings (type, default, scope, and every
+ * pomdtr's manifest against poly's: settings (type, default, and every
  * value pomdtr allows), the file patterns, the keys, the title bar and the
  * commands, with `excalidraw.` read as `poly.excalidraw`.
  */
@@ -254,7 +255,7 @@ function manifestProblems(extensions) {
   const dir = readdirSync(extensions).find((one) => one.startsWith("pomdtr.excalidraw-editor-"));
   const theirs = JSON.parse(readFileSync(join(extensions, dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
-  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
+  const polySettings = settingsOf(ours);
   const problems = [];
   const show = (value) => JSON.stringify(value);
 
@@ -265,7 +266,7 @@ function manifestProblems(extensions) {
       problems.push(`setting ${key}: poly has none`);
       continue;
     }
-    for (const field of ["type", "default", "scope"]) {
+    for (const field of ["type", "default"]) {
       if (show(spec[field]) !== show(mine[field])) {
         problems.push(`setting ${key} ${field}: pomdtr ${show(spec[field])} poly ${show(mine[field])}`);
       }

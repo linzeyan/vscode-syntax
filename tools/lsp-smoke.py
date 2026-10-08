@@ -631,7 +631,7 @@ somewhere is going to have an opinion about, followed by a list:
         r"memory after didClose: .*?(?P<documents>\d+) documents .*?"
         r"(?P<hashes>\d+) lint hashes; (?P<scopes>\d+) package scopes; "
         r"findings lint (?P<lint>\d+) package (?P<package>\d+) over (?P<files>\d+) files, "
-        r"format (?P<format>\d+), downstream (?P<downstream>\d+)"
+        r"format (?P<format>\d+)"
     )
     with open(LOG_PATH) as f:
         held = [m.groupdict() for m in (HELD.search(line) for line in f) if m]

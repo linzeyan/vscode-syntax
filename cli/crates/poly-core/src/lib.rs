@@ -1211,11 +1211,34 @@ pub enum Scope {
     Lint,
 }
 
+/// The user's own poly.toml, under every project's: `$XDG_CONFIG_HOME/poly/
+/// poly.toml` (`~/.config/poly/` when unset), `%APPDATA%\poly\` on Windows.
+///
+/// Only the lowest layer of `discover`'s merge. It never makes a directory a
+/// project root, so `root` -- and with it `[lint.schemas]` paths, exclude
+/// anchors and poly-tools.lock -- still belongs to the nearest project file.
+pub fn global_config() -> Option<PathBuf> {
+    let base = if cfg!(windows) {
+        std::env::var_os("APPDATA").map(PathBuf::from)
+    } else {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+    };
+    base.map(|dir| dir.join("poly").join("poly.toml"))
+}
+
 impl Config {
     /// Walk upward from `start` (a file or directory), collect every
     /// `poly.toml` on the way, and field-level-merge them with nearer files
-    /// winning — monorepo subdirs override only what they declare.
+    /// winning — monorepo subdirs override only what they declare. The user's
+    /// `global_config` is merged under all of them.
     pub fn discover(start: &Path) -> Result<Config> {
+        Self::discover_over(start, global_config().as_deref())
+    }
+
+    fn discover_over(start: &Path, global: Option<&Path>) -> Result<Config> {
         let mut dir = if start.is_dir() {
             start
         } else {
@@ -1233,7 +1256,13 @@ impl Config {
             }
         }
         let mut merged = toml::Value::Table(Default::default());
-        for path in chain.iter().rev() {
+        // A project under the config directory already has the file in its
+        // chain; merging it twice would change nothing but is not free.
+        let global = global.filter(|g| g.is_file() && !chain.iter().any(|c| c == g));
+        for path in global
+            .into_iter()
+            .chain(chain.iter().rev().map(PathBuf::as_path))
+        {
             let text = std::fs::read_to_string(path)
                 .with_context(|| format!("reading {}", path.display()))?;
             let value: toml::Value = text
@@ -1887,6 +1916,40 @@ mod tests {
         assert_eq!(inner.format_options("python").line_width, Some(79));
         assert_eq!(inner.format_options("python").indent_width, Some(4));
         assert_eq!(inner.format_options("typescript").use_tabs, Some(true));
+    }
+
+    /// The user's own poly.toml fills in what a project leaves unsaid, and
+    /// nothing more: the project's answer wins key by key, and the project --
+    /// not the config directory -- stays the root that excludes, schema paths
+    /// and the lock are anchored to.
+    #[test]
+    fn the_global_config_is_the_bottom_layer_and_never_the_root() {
+        let home = tempfile::tempdir().unwrap();
+        let global = home.path().join("poly.toml");
+        std::fs::write(
+            &global,
+            "[format.python]\nline-width = 100\nindent-width = 2\n[lint]\nfail-on = \"error\"\n",
+        )
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(root.join("poly.toml"), "[format.python]\nline-width = 79\n").unwrap();
+
+        let config = Config::discover_over(root, Some(&global)).unwrap();
+        assert_eq!(config.format_options("python").line_width, Some(79));
+        assert_eq!(config.format_options("python").indent_width, Some(2));
+        assert_eq!(
+            config.lint_fail_on,
+            crate::diag::FailOn::Severity(crate::diag::Severity::Error)
+        );
+        assert_eq!(config.root.as_deref(), Some(root));
+
+        // No project file at all: the global one still applies, and there is
+        // still no root -- a lone file is not a project.
+        let bare = tempfile::tempdir().unwrap();
+        let config = Config::discover_over(bare.path(), Some(&global)).unwrap();
+        assert_eq!(config.format_options("python").line_width, Some(100));
+        assert_eq!(config.root, None);
     }
 
     #[test]

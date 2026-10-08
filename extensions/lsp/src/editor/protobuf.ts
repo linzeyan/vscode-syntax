@@ -8,7 +8,7 @@
  * protoc-gen-go is defined to do. This file is that definition written down.
  *
  * Everything else is delegated. The proto declarations come from
- * `buf lsp serve`, which poly already routes `.proto` to; the Go declarations
+ * `buf lsp serve`, which the Buf extension runs for `.proto`; the Go declarations
  * come from whichever server answers for the generated file. poly forms a name
  * and asks -- the same shape as the reference lens, one step further out.
  *

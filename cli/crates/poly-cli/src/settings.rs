@@ -38,8 +38,6 @@ enum Source {
     OffByDefault(&'static str),
     /// Never downloaded: it has to match the project's own toolchain.
     Toolchain,
-    /// A language server `poly lsp` starts, from PATH for the same reason.
-    Server,
     /// A whole-program analysis `poly deadcode` runs.
     Analysis,
     /// Compiled into poly. An entry for it is a mistake, and the string is the
@@ -55,8 +53,8 @@ struct Known {
 
 /// Every name `[tools]` recognises, sorted.
 ///
-/// Assembled from the four places that each own part of the answer rather than
-/// written out again here, because a fifth copy is what this whole module
+/// Assembled from the three places that each own part of the answer rather than
+/// written out again here, because a fourth copy is what this whole module
 /// exists to remove. It drives all three uses -- the exported documentation,
 /// the unknown-name warning, and the nearest match that warning suggests -- so
 /// a tool cannot be added to poly and stay undocumented, or documented and stay
@@ -77,17 +75,6 @@ fn known_tools() -> Vec<Known> {
             },
         })
         .collect();
-    names.extend(
-        crate::lsp::LANGUAGE_SERVERS
-            .iter()
-            // buf is in both lists -- it is a formatter poly pins that also
-            // serves protobuf -- and the registry entry is the fuller answer.
-            .filter(|(_, server)| poly_tools::tool(server).is_none())
-            .map(|(_, server)| Known {
-                name: server,
-                source: Source::Server,
-            }),
-    );
     names.extend(crate::ANALYSIS_TOOLS.iter().map(|(name, _)| Known {
         name,
         source: Source::Analysis,
@@ -281,7 +268,6 @@ pub fn export() -> String {
             Source::Pinned(v) => (v, "PATH first, else downloaded"),
             Source::OffByDefault(v) => (v, "off; set it to \"on\" and poly downloads it"),
             Source::Toolchain => ("system", "from the project's toolchain, on PATH"),
-            Source::Server => ("-", "language server, from PATH"),
             Source::Analysis => ("-", "whole-program analysis (`poly deadcode`)"),
             Source::Embedded(_) => ("-", "compiled into poly; remove the entry"),
         };
@@ -414,6 +400,37 @@ fn defaults_table(text: &str) -> Option<&str> {
     let (_, rest) = text.split_once("line-width  indent-width  use-tabs")?;
     let (table, _) = rest.split_once("# sql is sqruff's")?;
     Some(table)
+}
+
+// ── global ─────────────────────────────────────────────────────────────────
+
+/// Leave the user's global poly.toml (`poly_core::global_config`) complete:
+/// the export, so every key is there with its default and what it does.
+///
+/// Written when there is none, and rewritten when the one there still says
+/// nothing but the defaults -- an untouched copy from an older poly, which
+/// would otherwise never show a key added since. Comment edits in such a file
+/// are lost; a file with any value changed is the user's and is left alone.
+pub fn write_global() -> Result<Option<std::path::PathBuf>> {
+    let Some(path) = poly_core::global_config() else {
+        return Ok(None);
+    };
+    Ok(write_global_at(&path, &export())?.then_some(path))
+}
+
+fn write_global_at(path: &std::path::Path, text: &str) -> Result<bool> {
+    if let Ok(existing) = std::fs::read_to_string(path) {
+        let defaults_only =
+            existing.parse::<toml::Value>().ok() == text.parse::<toml::Value>().ok();
+        if existing == text || !defaults_only {
+            return Ok(false);
+        }
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(path, text)?;
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -573,5 +590,28 @@ mod tests {
             assert!(text.contains(name), "{name} missing");
         }
         assert!(self_test().is_ok());
+    }
+
+    /// The global file stays complete without ever overwriting a choice: an
+    /// untouched copy from an older poly is refreshed, an edited one is not.
+    #[test]
+    fn the_global_file_is_refreshed_only_while_it_holds_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("poly").join("poly.toml");
+        let text = export();
+
+        assert!(write_global_at(&path, &text).unwrap(), "missing: written");
+        assert!(!write_global_at(&path, &text).unwrap(), "current: no write");
+
+        // An older export: the same values, different prose.
+        std::fs::write(&path, format!("# from an older poly\n{text}")).unwrap();
+        assert!(write_global_at(&path, &text).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+
+        let edited = text.replace("include-hidden = false", "include-hidden = true");
+        assert_ne!(edited, text, "the fixture edit has to land");
+        std::fs::write(&path, &edited).unwrap();
+        assert!(!write_global_at(&path, &text).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
     }
 }

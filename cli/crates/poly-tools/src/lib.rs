@@ -279,14 +279,10 @@ pub const TOOLS: &[Tool] = &[
             })
         },
     },
-    // The only tool here that is also a language server (`buf lsp serve`).
-    // Every other server poly proxies resolves from PATH because it has to
-    // match the toolchain that built the project -- gopls reads the Go version
-    // out of go.mod, rust-analyzer wants the rustc that compiled the crate,
-    // clangd wants the compile database. A .proto file is a declaration with
-    // no build behind it, so buf has nothing to match and poly can pin it like
-    // any other formatter. That is what makes protobuf work out of the box
-    // instead of only for people who already ran `brew install buf`.
+    // A .proto file is a declaration with no build behind it, so buf has no
+    // toolchain to match and poly can pin it like any other formatter. That is
+    // what makes protobuf work out of the box instead of only for people who
+    // already ran `brew install buf`.
     Tool {
         name: "buf",
         version: "1.72.0",
@@ -310,8 +306,8 @@ pub const TOOLS: &[Tool] = &[
     },
     // R's whole toolchain in one binary: formatter, linter and language server
     // (`arity lsp`). buf is the precedent and the reasoning is buf's -- an R
-    // script has no build for a server to be in step with, so there is no
-    // toolchain for poly to match and pinning the version is free. Without it R
+    // script has no build to be in step with, so there is no toolchain for
+    // poly to match and pinning the version is free. Without it R
     // has nothing: no formatter ships with R, and the ecosystem's own tools are
     // R packages that need an R installation poly cannot assume.
     Tool {

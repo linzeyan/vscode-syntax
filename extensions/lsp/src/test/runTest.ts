@@ -4,8 +4,8 @@
 // contributed commands all live outside the protocol, and both times we broke
 // them the protocol tests stayed green.
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -46,8 +46,31 @@ function userDataDir(repo: string): string {
   return join(root, `poly-e2e-${key}`, "user-data");
 }
 
+/// The suite's own cache and config directories, with the real cache's
+/// downloaded tools in it.
+///
+/// The reference lens keeps its counts per workspace under the cache, and each
+/// run here opens a fresh temporary workspace nobody opens again: 77 of the 86
+/// files in one developer's real cache were this suite's. Tools are linked, not
+/// copied, because an empty tools directory is a download per run. The config
+/// directory is empty so the daemon neither reads a developer's global
+/// poly.toml nor writes one into their home. Not on Windows, where both are
+/// LOCALAPPDATA/APPDATA and CI's runner is thrown away.
+function cacheHome(): Record<string, string> {
+  if (process.platform === "win32") {
+    return {};
+  }
+  const tools = join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "poly", "tools");
+  const home = mkdtempSync(join(tmpdir(), "poly-e2e-cache-"));
+  mkdirSync(tools, { recursive: true });
+  mkdirSync(join(home, "poly"));
+  symlinkSync(tools, join(home, "poly", "tools"));
+  return { XDG_CACHE_HOME: home, XDG_CONFIG_HOME: mkdtempSync(join(tmpdir(), "poly-e2e-config-")) };
+}
+
 async function main(): Promise<void> {
   stripHostEnvironment();
+  const cache = cacheHome();
   // Compiled to out/test/runTest.js, so two levels up is the extension root.
   const extensionDevelopmentPath = resolve(__dirname, "..", "..");
   const extensionTestsPath = resolve(__dirname, "suite", "index");
@@ -63,18 +86,16 @@ async function main(): Promise<void> {
     join(workspace, ".vscode", "settings.json"),
     JSON.stringify(
       {
-        "poly.serverPath": serverPath,
-        // Would pop modal-ish UI that nothing in a headless run dismisses.
-        "poly.updateCheck.enabled": false,
-        // Off for real users until they ask for it; on here, because the
-        // proxy is exactly the part no protocol test can prove -- whether
-        // VSCode acts on a capability registered after initialize.
-        "poly.languageServers": true,
-        // Same: every poly feature that is not formatting or linting now ships
-        // off, so a suite that exercises one has to say so. Inheriting the
-        // default would turn the dead-code lens tests into a 45-second wait
-        // for a lens nobody asked for, reported as a timeout.
-        "poly.deadCodeCodeLens.enabled": true,
+        poly: {
+          serverPath,
+          // Would pop modal-ish UI that nothing in a headless run dismisses.
+          updateCheck: { enabled: false },
+          // Every poly feature that is not formatting or linting ships off, so
+          // a suite that exercises one has to say so. Inheriting the
+          // default would turn the dead-code lens tests into a 45-second wait
+          // for a lens nobody asked for, reported as a timeout.
+          deadCodeCodeLens: { enabled: true },
+        },
       },
       null,
       2,
@@ -102,7 +123,7 @@ async function main(): Promise<void> {
       `--user-data-dir=${userDataDir(repo)}`,
       `--logsPath=${logs}`,
     ],
-    extensionTestsEnv: { POLY_E2E_LOGS: logs },
+    extensionTestsEnv: { ...cache, POLY_E2E_LOGS: logs },
   });
 
   // Code Runner stands aside while formulahendry.code-runner is installed,
@@ -115,11 +136,13 @@ async function main(): Promise<void> {
     join(beside, ".vscode", "settings.json"),
     JSON.stringify(
       {
-        "poly.serverPath": serverPath,
-        "poly.updateCheck.enabled": false,
-        // On, so that standing aside is the only thing left to stop Run Code.
-        "poly.codeRunner.enabled": true,
-        "poly.runCodeLens.enabled": true,
+        poly: {
+          serverPath,
+          updateCheck: { enabled: false },
+          // On, so that standing aside is the only thing left to stop Run Code.
+          codeRunner: { enabled: true },
+          runCodeLens: { enabled: true },
+        },
       },
       null,
       2,
@@ -135,7 +158,7 @@ async function main(): Promise<void> {
       `--folder-uri=${pathToFileURL(beside).toString()}`,
       `--user-data-dir=${userDataDir(repo)}`,
     ],
-    extensionTestsEnv: { POLY_E2E_SUITE: "code-runner-yield" },
+    extensionTestsEnv: { ...cache, POLY_E2E_SUITE: "code-runner-yield" },
   });
 
   // Git History reads with poly where there is no git, which every other run
@@ -145,7 +168,7 @@ async function main(): Promise<void> {
   mkdirSync(join(gitless, ".vscode"));
   writeFileSync(
     join(gitless, ".vscode", "settings.json"),
-    JSON.stringify({ "poly.serverPath": serverPath, "poly.updateCheck.enabled": false }, null, 2),
+    JSON.stringify({ poly: { serverPath, updateCheck: { enabled: false } } }, null, 2),
   );
   await runTests({
     extensionDevelopmentPath,
@@ -155,7 +178,7 @@ async function main(): Promise<void> {
       `--user-data-dir=${userDataDir(repo)}`,
       "--disable-extension=vscode.git",
     ],
-    extensionTestsEnv: { POLY_E2E_SUITE: "no-git" },
+    extensionTestsEnv: { ...cache, POLY_E2E_SUITE: "no-git" },
   });
 }
 

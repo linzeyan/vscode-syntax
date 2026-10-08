@@ -77,18 +77,9 @@ function shown<T extends object>(thing: T): T & { dispose(): void } {
 
 const registered: string[] = [];
 let overrides: Record<string, unknown> = {};
-const declared: Record<string, { default?: unknown; type: string }> = manifest.contributes.configuration.find(
-  (group: { title: string }) => group.title === "Error Lens",
-).properties;
-/** VSCode's default for a setting that declares none, as `light` does. */
-const EMPTY: Record<string, unknown> = { object: {}, array: [], string: "", boolean: false, number: 0, integer: 0 };
 /** What `workspace.getConfiguration().get("poly.errorLens")` gives: the manifest's defaults, then the test's. */
 function settings(): Record<string, unknown> {
-  const defaults = Object.entries(declared).map(([key, schema]) => [
-    key.slice("poly.errorLens.".length),
-    schema.default ?? EMPTY[schema.type],
-  ]);
-  return { ...Object.fromEntries(defaults), ...overrides };
+  return { ...manifest.contributes.configuration.properties.poly.default.errorLens, ...overrides };
 }
 
 /** A namespace that fails loudly on what the stub lacks, so a new API call shows up here rather than as `undefined`. */
@@ -142,7 +133,11 @@ const vscode = {
 // --- the bundle ---------------------------------------------------------------
 
 interface ErrorLens {
-  activate(context: object, standAside: () => boolean): () => void;
+  activate(
+    context: object,
+    standAside: () => boolean,
+    writeSetting: (id: string, value: unknown) => Promise<void>,
+  ): () => void;
   $state: { statusBarIcons: { updateText(): void } };
   extUtils: {
     diagnosticToInlineMessage(template: string, diagnostic: Diagnostic, count: number): string;
@@ -187,7 +182,7 @@ const context = { subscriptions: [], asAbsolutePath: (path: string) => join(LSP,
 let standAside = false;
 // What poly's errorLens.ts does: activate once, then refresh whenever the
 // settings change or the original extension comes or goes.
-const refresh = errorLens.activate(context, () => standAside);
+const refresh = errorLens.activate(context, () => standAside, async () => {});
 function configure(next: Record<string, unknown>): void {
   overrides = { enabled: true, ...next };
   refresh();

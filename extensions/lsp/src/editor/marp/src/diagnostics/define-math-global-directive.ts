@@ -13,7 +13,7 @@ import {
   WorkspaceEdit,
 } from 'vscode'
 import { DirectiveParser } from '../directives/parser'
-import { mathTypesettingConfiguration } from '../utils'
+import { mathTypesettingConfiguration, watchSetting } from '../utils'
 
 interface DefineMathGlobalDirectiveDiagnostic extends Diagnostic {
   frontMatterRange: Range
@@ -136,9 +136,10 @@ export class DefineMathGlobalDirective implements CodeActionProvider {
 }
 
 export function subscribe(subscriptions: Disposable[], refresh: () => void) {
+  const mathTypesettingChanged = watchSetting('poly.marp.mathTypesetting')
   subscriptions.push(
     workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('poly.marp.mathTypesetting')) refresh()
+      if (mathTypesettingChanged(e)) refresh()
     }),
 
     languages.registerCodeActionsProvider(

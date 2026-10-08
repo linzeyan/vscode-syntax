@@ -45,317 +45,22 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
-/// Languages poly hands to a real language server, and the binary that serves
-/// them.
-///
-/// PATH only, never a managed download — the same policy rustfmt and
-/// clang-format already follow (01 §4.3). A language server has to match the
-/// toolchain that built the project, and a version poly chose would be a
-/// version poly chose wrong.
-///
-/// buf is the one entry that reason does not reach, so it is the one entry
-/// poly resolves through the tool registry instead. A `.proto` is a
-/// declaration with no build behind it: there is no toolchain for
-/// `buf lsp serve` to be out of step with, and poly already pins that exact
-/// binary as protobuf's formatter and linter. Making it PATH-only would mean
-/// downloading buf to format a file and then refusing to use it to navigate
-/// the same file. See `server_command`.
-pub(crate) const LANGUAGE_SERVERS: &[(&str, &str)] = &[
-    ("go", "gopls"),
-    ("rust", "rust-analyzer"),
-    ("c", "clangd"),
-    ("cpp", "clangd"),
-    ("swift", "sourcekit-lsp"),
-    // Terraform only. Generic .hcl (Packer, Consul) is a different language
-    // that happens to share a syntax, and terraform-ls would read it as a
-    // module that makes no sense.
-    ("terraform", "terraform-ls"),
-    ("lua", "lua-language-server"),
-    // Shell is the one language here poly already lints and formats without
-    // being able to navigate: `.sh` reaches the editor with no symbols at all,
-    // so the outline is empty and every lens poly draws over a declaration has
-    // nothing to draw over. bash-language-server is the server for it, and it
-    // is PATH-only like the rest -- a project that wants shell navigation
-    // installs it, and one that does not pays nothing.
-    ("shellscript", "bash-language-server"),
-    ("protobuf", "buf"),
-    // buf's reasoning again: an R script has no build behind it, so there is no
-    // toolchain for `arity lsp` to be out of step with, and poly already pins
-    // this exact binary as R's formatter and linter.
-    ("r", "arity"),
-];
-
-/// What a binary needs before it is a language server at all.
-///
-/// Not a preference and not poly's opinion: `terraform-ls` on its own prints
-/// its usage and exits, because the language server is a subcommand of it.
-/// buf is the same shape -- it is a whole protobuf toolkit, and the server is
-/// one verb of it. Every other server here is its own entry point.
-const LAUNCH: &[(&str, &[&str])] = &[
-    ("terraform-ls", &["serve"]),
-    ("buf", &["lsp", "serve"]),
-    ("arity", &["lsp"]),
-    ("bash-language-server", &["start"]),
-];
-
-/// The command that installs a server, where there is exactly one.
-///
-/// Only three, and the rest are left out on purpose rather than forgotten.
-/// These are the ones whose own project names a single command that works the
-/// same on every platform poly ships for, and whose toolchain a user of that
-/// language already has -- `go`, `rustup`, `npm`. clangd, sourcekit-lsp,
-/// terraform-ls and lua-language-server come from a package manager that
-/// differs per OS, or from an SDK, and a command that is right on macOS and
-/// wrong on Windows is worse in a popup than no command: it gets pasted.
-const INSTALL: &[(&str, &str)] = &[
-    ("gopls", "go install golang.org/x/tools/gopls@latest"),
-    ("rust-analyzer", "rustup component add rust-analyzer"),
-    (
-        "bash-language-server",
-        "npm install -g bash-language-server",
-    ),
-];
-
-/// Why a server poly would have started is not going to run.
-///
-/// Three answers rather than one `None`, because the editor is told something
-/// different about each. Before this split all three were the same stderr
-/// line, and the one a user could act on -- the server is simply not
-/// installed -- was also the one nobody saw: the log is not where anyone looks
-/// when references just come back empty.
-#[derive(Debug, PartialEq)]
-enum Unavailable {
-    /// `[tools] x = "off"`. The project decided, so there is nothing to tell
-    /// anyone -- a popup about their own setting would be a nag, not news.
-    Disabled,
-    /// A PATH-only server that is not on PATH, which is the one case where the
-    /// remedy is "install it" and poly can say how.
-    NotOnPath,
-    /// poly pins it or poly.toml points at it, and it is not there anyway.
-    /// Carries `resolve`'s own sentence, which already says what went wrong.
-    Missing(String),
-}
-
-/// How poly gets hold of a language server binary.
-///
-/// The tool registry when poly pins the binary, PATH when the project does.
-/// Membership in the registry is the test rather than a name check: it is
-/// exactly the statement "poly chose this version", and buf is the only
-/// language server that statement is true of. It also means `poly.toml` can
-/// turn buf off or point it somewhere else through the same `[tools]` entry
-/// that governs it as a formatter, rather than through a second setting that
-/// says the same thing.
-fn server_command(name: &str, config: &poly_core::Config) -> Result<PathBuf, Unavailable> {
-    // A `[tools]` entry decides first, registry member or not. For buf that is
-    // the version poly pins; for the PATH-only servers it is the two answers a
-    // project may need and previously had no way to give: `off` turns one
-    // server off without turning the proxy off, and a path runs a different
-    // binary in its place -- which is how a drop-in replacement (rust-glancer
-    // for rust-analyzer) gets used without poly holding an opinion about which
-    // of them is better. Both were silently ignored before, because `resolve`
-    // was only consulted for tools poly downloads.
-    if poly_tools::tool(name).is_some() || config.tools.contains_key(name) {
-        use poly_tools::Resolved;
-        return match poly_tools::resolve(name, config, false) {
-            Resolved::Managed(path) | Resolved::Path(path) | Resolved::Pinned(path) => Ok(path),
-            // No server is off by default today; if one ever is, it is off for
-            // the same reason `off` is -- somebody decided -- and says as much.
-            Resolved::Disabled | Resolved::OffByDefault => Err(Unavailable::Disabled),
-            Resolved::Missing(why) => Err(Unavailable::Missing(why)),
-        };
-    }
-    poly_tools::find_on_path(name).ok_or(Unavailable::NotOnPath)
-}
-
-/// What the editor is told about a server that is not going to run, if
-/// anything.
-///
-/// A popup and not only the stderr line, because the stderr line was the whole
-/// story and it was not enough: with `poly.languageServers` on and no
-/// bash-language-server, shell functions had no references and nothing on
-/// screen said why. The extension stays quiet once that setting is on, so this
-/// is the only place the cause can surface.
-///
-/// The languages are named the way the stderr line names them -- poly's ids,
-/// which are the editor's too for every language here -- rather than through a
-/// second table of display names that would have to be kept in step with
-/// `LANGUAGE_SERVERS`.
-fn unavailable_message(name: &str, why: &Unavailable, languages: &[String]) -> Option<String> {
-    let (reason, remedy) = match why {
-        Unavailable::Disabled => return None,
-        Unavailable::NotOnPath => (
-            format!("{name} is not on PATH"),
-            match INSTALL.iter().find(|(known, _)| *known == name) {
-                Some((_, command)) => {
-                    format!("Install it with `{command}`, then reload the window.")
-                }
-                None => "Install it and put it on PATH, then reload the window.".to_string(),
-            },
-        ),
-        // "Install it" would be wrong advice here: poly.toml names a binary
-        // that is not where it says, or poly's own download failed, and the
-        // sentence from `resolve` is the thing to fix. Reloading is still part
-        // of the answer, since the absence is remembered for the session.
-        Unavailable::Missing(why) => (
-            why.clone(),
-            "Reload the window once that is fixed.".to_string(),
-        ),
-    };
-    Some(format!(
-        "poly: {reason}, so {} files get no outline, references or hover. {remedy}",
-        languages.join(", ")
-    ))
-}
-
-/// `initializationOptions.yieldServers`: server name to the id of the editor
-/// extension already serving that server's languages.
-///
-/// The client knows which extensions are installed and poly does not, so the
-/// client decides and this only obeys. An unknown name is dropped with a line
-/// on stderr rather than kept: the list is written by hand on the TypeScript
-/// side, and a typo there would otherwise leave poly quietly starting the
-/// second server this exists to prevent.
-fn yield_servers(init_params: &serde_json::Value) -> HashMap<String, String> {
-    let Some(given) = init_params
-        .get("initializationOptions")
-        .and_then(|o| o.get("yieldServers"))
-        .filter(|v| !v.is_null())
-    else {
-        return HashMap::new();
-    };
-    let Ok(given) = serde_json::from_value::<HashMap<String, String>>(given.clone()) else {
-        eprintln!("[poly] yieldServers is not a map of server name to extension id; ignored");
-        return HashMap::new();
-    };
-    given
-        .into_iter()
-        .filter(|(name, _)| {
-            let known = is_language_server(name);
-            if !known {
-                eprintln!(
-                    "[poly] yieldServers names {name:?}, which is not a server poly routes to; ignored"
-                );
-            }
-            known
-        })
-        .collect()
-}
-
-fn args_for(table: &'static [(&str, &[&str])], name: &str) -> &'static [&'static str] {
-    table
-        .iter()
-        .find(|(known, _)| *known == name)
-        .map(|(_, args)| *args)
-        .unwrap_or(&[])
-}
-
-/// The language server that answers for `language`, if poly knows one.
-fn server_for(language: &str) -> Option<&'static str> {
-    LANGUAGE_SERVERS
-        .iter()
-        .find(|(known, _)| *known == language)
-        .map(|(_, name)| *name)
-}
-
-/// Is `name` a binary poly runs as a language server?
-///
-/// Asked of a *finding's* source, which is why it is a membership test rather
-/// than a name: it is how `merged` tells "poly ran a linter the proxied server
-/// is not" (selene, swiftlint) from "poly ran the proxied server's own linter"
-/// (arity), without either side having to be listed twice.
-fn is_language_server(name: &str) -> bool {
-    LANGUAGE_SERVERS.iter().any(|(_, server)| *server == name)
-}
-
-/// Every language a server answers for.
-///
-/// The map is written language-first because that is the direction a request
-/// arrives in, but the server is what gets started — clangd serves c and cpp
-/// from one process, and starting one per language would index the project
-/// twice to give the same answers.
-fn languages_for(name: &str) -> Vec<String> {
-    LANGUAGE_SERVERS
-        .iter()
-        .filter(|(_, known)| *known == name)
-        .map(|(language, _)| language.to_string())
-        .collect()
-}
-
 struct Server {
     connection: Connection,
     documents: HashMap<Url, String>,
     /// The language each open document has in the editor, as its didOpen said.
     ///
-    /// Routing only -- see `server_of`. Same keys as `documents` and dropped
+    /// Navigation only -- see `navigated`. Same keys as `documents` and dropped
     /// with it, which is why `log_memory` does not count it separately.
     language_ids: HashMap<Url, String>,
     lint_on_save: bool,
-    /// Opt-in, and off by default: taking over Go means colliding with a
-    /// golang.go the user has probably already installed, and that is their
-    /// call to make rather than something a poly upgrade does to them.
-    language_servers: bool,
-    /// Whether a downstream server's own stderr reaches poly's log. On by
-    /// default: a server explaining why it cannot answer well is exactly what
-    /// this project refuses to swallow. Off sends it to the void — poly's own
-    /// messages about a server that is missing or died are unaffected, since
-    /// those are poly's to write.
-    language_server_logs: bool,
     /// Whether every document opened and closed writes a line saying what poly
     /// is holding. Off by default: it is a line per file in a log people read
     /// to find out why a lint did not run.
     memory_log: bool,
-    /// The editor's own InitializeParams, replayed to each downstream server.
+    /// The editor's own InitializeParams, kept for the workspace folders
+    /// `crate::navigate::root_of` searches -- updated as folders come and go.
     init_params: serde_json::Value,
-    /// Running servers, keyed by binary name rather than language: clangd
-    /// answers for c and cpp and there must be exactly one of it.
-    ///
-    /// Started on first sight of a document it answers for, never eagerly —
-    /// gopls costs seconds and memory, and most sessions never open a Go file.
-    /// A server that failed to start is remembered as absent so poly does not
-    /// retry the spawn on every keystroke.
-    downstream: HashMap<String, Option<crate::proxy::Downstream>>,
-    /// Servers an installed extension already runs, by the id the client gave
-    /// for that extension. See `yield_servers`.
-    ///
-    /// Kept out of `downstream` rather than recorded there as absent, because
-    /// absent is not what they are: `route` answers a request for an absent
-    /// server with nothing, which here would also swallow poly's own rule hover
-    /// on a Go file that golang.go is serving perfectly well. A yielded server
-    /// has to leave poly exactly as it is with `languageServers` off.
-    yield_to: HashMap<String, String>,
-    /// The members of `yield_to` already named in the log, so a session that
-    /// opens forty Go files says why gopls is not starting once.
-    yielded: HashSet<String>,
-    /// Server that answered the most recent `textDocument/completion`, which is
-    /// the only thing that can route a `completionItem/resolve`. See `route`.
-    last_completion: Option<String>,
-    /// The same, for `codeAction/resolve`.
-    last_code_action: Option<String>,
-    /// The same, for `inlayHint/resolve`. No server measured so far asks for
-    /// resolution, but the flag that turns it on is the server's own and rides
-    /// through the registration untouched, so the route has to exist.
-    last_inlay_hint: Option<String>,
-    /// The same, for `codeLens/resolve`. Same reason as inlay hints: whether a
-    /// resolve ever arrives is decided by the server's own
-    /// `codeLensProvider.resolveProvider`, which poly relays rather than reads.
-    last_code_lens: Option<String>,
-    /// Editor ids of `textDocument/codeAction` requests still in flight.
-    ///
-    /// A response carries an id and no method, so this is the only way the pump
-    /// thread can tell a code action list from any other reply — and the pump
-    /// thread is where it has to be told, because a downstream response never
-    /// reaches the main loop. Shared for the same reason `diagnostics` is.
-    code_action_ids: Arc<Mutex<HashSet<lsp_server::RequestId>>>,
-    /// `workspace/symbol` requests still collecting answers, by editor id.
-    ///
-    /// Shared with the pump threads for the same reason `code_action_ids` is:
-    /// the answers arrive there, one per server, and the editor gets one reply
-    /// only once the last of them has landed.
-    symbol_fanouts: Arc<Mutex<HashMap<lsp_server::RequestId, FanOut>>>,
-    /// Whether the editor has been told poly answers `workspace/symbol`.
-    ///
-    /// Once per session, not once per server: see `workspace_symbol_registration`.
-    workspace_symbol_registered: bool,
     /// Content hash at last lint per document: external linters cost tens of
     /// ms to seconds, so an unchanged save republishes nothing.
     lint_hashes: HashMap<Url, u64>,
@@ -374,15 +79,6 @@ struct Server {
     /// What poly read from GraphQL and nginx files to answer references with.
     /// See `crate::navigate`.
     navigation: crate::navigate::Index,
-}
-
-/// One `workspace/symbol` query, waiting on the servers it was sent to.
-struct FanOut {
-    /// How many servers still owe an answer. The editor's reply goes out when
-    /// this reaches zero, whether the answers were symbols, nulls or errors —
-    /// a query that silently never completes leaves Ctrl+T spinning forever.
-    pending: usize,
-    answers: Vec<serde_json::Value>,
 }
 
 /// A linter that answers about a whole directory tree rather than a buffer.
@@ -428,12 +124,6 @@ impl PackageLinter {
 struct PackageJob {
     linter: PackageLinter,
     root: PathBuf,
-    /// Whether a language server answers for this scope's files, read at queue
-    /// time because the worker cannot ask: the map that knows lives on the main
-    /// thread. A whole-scope linter only reports on the language that queued it
-    /// — .go files in a Go module, .tf files in a Terraform directory — so one
-    /// answer covers the run.
-    proxied: bool,
 }
 
 /// Every source of diagnostics for a document, in one place.
@@ -442,9 +132,9 @@ struct PackageJob {
 /// publish on its own — the last one to speak erases the rest. Everything is
 /// kept here and every publish sends the union.
 ///
-/// Shared rather than owned by `Server` because the downstream half arrives on
-/// another thread: a language server publishes when it has something to say,
-/// not when the editor asks poly a question.
+/// Shared rather than owned by `Server` because the whole-package half arrives
+/// on the worker thread, when a linter finishes rather than when the editor
+/// asks poly a question.
 #[derive(Default)]
 struct Diagnostics {
     lint: HashMap<Url, Vec<lsp_types::Diagnostic>>,
@@ -460,46 +150,14 @@ struct Diagnostics {
     /// `envs/prod/modules/db` found and is not going to repeat.
     package: HashMap<(PackageLinter, PathBuf), HashMap<Url, Vec<lsp_types::Diagnostic>>>,
     format: HashMap<Url, lsp_types::Diagnostic>,
-    downstream: HashMap<Url, Vec<lsp_types::Diagnostic>>,
-}
-
-/// What makes two publishes of the same defect the same defect.
-///
-/// A finding with no source or no code is not matchable this way and is never
-/// dropped: poly knows nothing about it, and guessing it is a duplicate loses
-/// it. That is the safe direction -- reporting a defect twice is a nuisance,
-/// and silently dropping one is a bug nobody can see.
-fn finding_key(found: &lsp_types::Diagnostic) -> Option<(String, String, u32)> {
-    let code = match found.code.as_ref()? {
-        lsp_types::NumberOrString::String(code) => code.clone(),
-        lsp_types::NumberOrString::Number(code) => code.to_string(),
-    };
-    Some((found.source.clone()?, code, found.range.start.line))
 }
 
 impl Diagnostics {
     /// The whole set for a uri, as the editor should see it.
     ///
-    /// The formatter's parse failure is dropped for a proxied document on
-    /// purpose: it is one the language server already reports, with a range
-    /// covering the problem rather than the point the formatter gave up at.
-    /// Lint findings are not dropped — selene and swiftlint report things no
-    /// language server looks for, and silently losing them on a setting the
-    /// user turned on for *more* information would be the wrong trade.
-    ///
-    /// One lint source is the exception, and it is the exception by identity
-    /// rather than by opinion: arity is R's linter *and* R's language server,
-    /// so on a proxied document arity has already published exactly these
-    /// findings under its own name. Keeping poly's copy would print every R
-    /// finding twice — the failure `[tools] hadolint` and actionlint's
-    /// shellcheck pass were both turned off to avoid. Nothing is lost: the
-    /// findings are the same ones, from the same binary, and `poly check` in CI
-    /// (where there is no server) still reports them itself.
-    ///
-    /// The formatter is dropped on an unparsable document for a third reason,
-    /// and this one applies whether or not a server is proxying: see
+    /// The formatter's error is dropped on an unparsable document: see
     /// `says_it_does_not_parse`.
-    fn merged(&self, uri: &Url, proxied: bool) -> Vec<lsp_types::Diagnostic> {
+    fn merged(&self, uri: &Url) -> Vec<lsp_types::Diagnostic> {
         let mut all = self.lint.get(uri).cloned().unwrap_or_default();
         all.extend(
             self.package
@@ -508,35 +166,9 @@ impl Diagnostics {
                 .flatten()
                 .cloned(),
         );
-        if proxied {
-            all.retain(|d| !d.source.as_deref().is_some_and(is_language_server));
-        }
-        if !proxied && !all.iter().any(says_it_does_not_parse) {
+        if !all.iter().any(says_it_does_not_parse) {
             all.extend(self.format.get(uri).cloned());
         }
-        // A server that runs a linter poly also runs publishes the same finding
-        // under the same name, and the rule above cannot see it: it matches a
-        // source against server names, and `shellcheck` is a tool's name, not a
-        // server's. Measured 2026-09-21 with bash-language-server and
-        // shellcheck both on PATH: one `.sh` came back with every finding
-        // twice.
-        //
-        // Deduplicated on the line rather than the whole range. Two programs
-        // reading the same defect are not obliged to underline it identically,
-        // and this pair did not: shellcheck reports a tab as eight columns, and
-        // poly passed that number through where bash-language-server converted
-        // it, so every tab-indented duplicate survived a range match. poly's
-        // side of that is fixed now and these two agree, which is exactly why
-        // the key must not depend on it -- the next pair gets no such promise.
-        let mine: HashSet<_> = all.iter().filter_map(finding_key).collect();
-        all.extend(
-            self.downstream
-                .get(uri)
-                .cloned()
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|d| finding_key(d).is_none_or(|key| !mine.contains(&key))),
-        );
         all
     }
 
@@ -546,7 +178,6 @@ impl Diagnostics {
             found.remove(uri);
         }
         self.format.remove(uri);
-        self.downstream.remove(uri);
     }
 }
 
@@ -612,12 +243,10 @@ fn serve(connection: Connection) -> Result<()> {
             commands: EXECUTE_COMMANDS.iter().map(|c| c.to_string()).collect(),
             ..Default::default()
         }),
-        // Declared for the downstream servers rather than for poly, which has
-        // no use for a folder list of its own. Without it the editor never
-        // sends `workspace/didChangeWorkspaceFolders` at all, and adding a
-        // second project to the window leaves every running server resolving
-        // imports against the tree that was open at startup — and every server
-        // started afterwards being told the same stale list.
+        // For GraphQL and nginx references, which search the workspace folder a
+        // document is in. Without it the editor never sends
+        // `workspace/didChangeWorkspaceFolders` at all, and a second project
+        // added to the window would be searched as if it were not there.
         workspace: Some(lsp_types::WorkspaceServerCapabilities {
             workspace_folders: Some(lsp_types::WorkspaceFoldersServerCapabilities {
                 supported: Some(true),
@@ -632,6 +261,13 @@ fn serve(connection: Connection) -> Result<()> {
     // Here and not in `Server::new`, which the tests build sessions with: a
     // request sent from there would sit first in every test's editor queue.
     server.register_navigation();
+    // The daemon and not every CLI run: the editor is where most people meet
+    // poly, and `poly check` on a CI runner has no business writing to $HOME.
+    match crate::settings::write_global() {
+        Ok(Some(path)) => eprintln!("[poly] wrote {}", path.display()),
+        Ok(None) => {}
+        Err(e) => eprintln!("[poly] could not write the global poly.toml: {e:#}"),
+    }
 
     // A receive error means the editor closed the pipe: nothing left to serve.
     while let Ok(message) = server.connection.receiver.recv() {
@@ -642,17 +278,6 @@ fn serve(connection: Connection) -> Result<()> {
                 }
                 let started = Instant::now();
                 let method = request.method.clone();
-                // A proxied language answers for itself. The reply carries the
-                // editor's own request id, so it lands where it belongs
-                // without poly touching it.
-                let request = match server.route(request) {
-                    Ok(None) => continue,
-                    Ok(Some(request)) => request,
-                    Err(e) => {
-                        eprintln!("[poly] {method}: {e:#}");
-                        continue;
-                    }
-                };
                 let response = match method.as_str() {
                     "textDocument/formatting" => server.on_formatting(request),
                     "textDocument/rangeFormatting" => server.on_range_formatting(request),
@@ -662,10 +287,9 @@ fn serve(connection: Connection) -> Result<()> {
                     "textDocument/documentSymbol" => server.on_document_symbol(request),
                     "textDocument/references" => server.on_references(request),
                     "workspace/executeCommand" => server.on_execute_command(request),
-                    // Reached poly because no downstream claimed it. Dropping
-                    // it is not a harmless no-op: the editor waits on that id
-                    // for the rest of the session, so the feature looks hung
-                    // instead of absent.
+                    // Dropping it is not a harmless no-op: the editor waits on
+                    // that id for the rest of the session, so the feature looks
+                    // hung instead of absent.
                     _ => Response::new_err(
                         request.id,
                         METHOD_NOT_FOUND,
@@ -679,18 +303,18 @@ fn serve(connection: Connection) -> Result<()> {
                 server.connection.sender.send(Message::Response(response))?;
             }
             Message::Notification(notification) => server.on_notification(notification)?,
-            // Either an answer to something poly asked the editor (its own
-            // registrations), or one meant for a downstream server that asked
-            // through poly.
-            Message::Response(response) => server.on_client_response(response),
+            // The editor's answer to the one thing poly asks it, the
+            // navigation registration. Only a refusal is worth a line.
+            Message::Response(response) => {
+                if let Some(error) = &response.error {
+                    eprintln!(
+                        "[poly] the editor rejected a registration: {}",
+                        error.message
+                    );
+                }
+            }
         }
     }
-
-    // Here rather than only on the `shutdown` path: an editor that dies takes
-    // its pipe with it and never asks politely, and that is exactly when a
-    // downstream server is left holding a project's worth of memory. Observed
-    // as rust-analyzer's "client exited without proper shutdown sequence".
-    server.stop_downstream();
     Ok(())
 }
 
@@ -698,9 +322,8 @@ fn serve(connection: Connection) -> Result<()> {
 ///
 /// lsp-server takes the message after `shutdown` to be `exit` and fails on
 /// anything else. But the editor can still be answering something poly asked
-/// before the shutdown -- the answer to a `client/registerCapability` for a
-/// downstream server that had just started is the one observed -- and that is
-/// not a protocol violation. It made the daemon exit 2 in the middle of a
+/// before the shutdown -- the answer to a `client/registerCapability` is the
+/// one observed -- and that is not a protocol violation. It made the daemon exit 2 in the middle of a
 /// restart, and the client does not restart a server that dies while it is
 /// being stopped: a toggle of the Lint switch that raced a registration left
 /// the window without poly until a reload.
@@ -733,8 +356,8 @@ impl Server {
     /// nothing started.
     ///
     /// Apart from `serve` so the tests can hold one over an in-memory
-    /// connection: what a didOpen starts, routes and tells the editor is only
-    /// visible from inside a session.
+    /// connection: what a didOpen records and tells the editor is only visible
+    /// from inside a session.
     fn new(connection: Connection, init_params: serde_json::Value) -> Server {
         let option = |name: &str, default: bool| {
             init_params
@@ -744,436 +367,21 @@ impl Server {
                 .unwrap_or(default)
         };
         let lint_on_save = option("lintOnSave", true);
-        let language_servers = option("languageServers", false);
-        let language_server_logs = option("languageServerLogs", true);
         let memory_log = option("memoryLog", false);
-        let yield_to = yield_servers(&init_params);
 
         Server {
             connection,
             documents: HashMap::new(),
             language_ids: HashMap::new(),
             lint_on_save,
-            language_servers,
-            language_server_logs,
             memory_log,
             init_params,
-            downstream: HashMap::new(),
-            yield_to,
-            yielded: HashSet::new(),
-            last_completion: None,
-            last_code_action: None,
-            last_inlay_hint: None,
-            last_code_lens: None,
-            code_action_ids: Arc::new(Mutex::new(HashSet::new())),
-            symbol_fanouts: Arc::new(Mutex::new(HashMap::new())),
-            workspace_symbol_registered: false,
             lint_hashes: HashMap::new(),
             package_roots: HashSet::new(),
             package_jobs: None,
             diagnostics: Arc::new(Mutex::new(Diagnostics::default())),
             navigation: crate::navigate::Index::default(),
         }
-    }
-
-    /// Hand `request` to a downstream server if one answers for it.
-    ///
-    /// `Ok(None)` means it was forwarded and poly must stay quiet — two
-    /// replies to one id is a protocol violation, and the editor believes the
-    /// first. `Ok(Some(request))` hands it back for poly to answer itself.
-    fn route(&mut self, request: lsp_server::Request) -> Result<Option<lsp_server::Request>> {
-        // The one request that goes to every server instead of one. It names no
-        // document, so there is nothing to pick a server by, and the honest
-        // answer is the union of what they all say.
-        if request.method == "workspace/symbol" {
-            return self.fan_out_symbols(request);
-        }
-        // A file operation names files that are about to move rather than a
-        // document that is open, so nothing in `PROXIED` can describe it and
-        // the ordinary uri lookup would come up empty on a folder.
-        if let Some((_, key)) = crate::proxy::FILE_OPERATIONS
-            .iter()
-            .find(|(method, _)| *method == request.method)
-        {
-            return self.route_file_operation(key, request);
-        }
-        let routable = crate::proxy::PROXIED
-            .iter()
-            .any(|(method, _)| *method == request.method)
-            || crate::proxy::EXTRA_ROUTED.contains(&request.method.as_str())
-            || crate::proxy::SEMANTIC_TOKENS.contains(&request.method.as_str())
-            // The one method both sides answer: poly declared three commands of
-            // its own at initialize and each server registers its own list, so
-            // the gate lets it through and the command name decides below.
-            || request.method == "workspace/executeCommand";
-        if !routable {
-            return Ok(Some(request));
-        }
-        // completionItem/resolve names no document -- it is a follow-up about
-        // an item some server already produced, and once two servers are up
-        // there is nothing in the request to tell them apart. The item's `data`
-        // field could carry the origin, but that field belongs to the server
-        // that made the item and rewriting it would break resolve outright.
-        // A resolve is always about the list currently on screen, and there is
-        // only ever one of those, so the last completion's server is it.
-        let name = match request.method.as_str() {
-            "completionItem/resolve" => self.last_completion.clone(),
-            // Same problem, same answer, and only because the on-save kinds are
-            // gone: those put several action lists in flight at once, and
-            // "whichever server answered last" would be the wrong one. The
-            // lightbulb is one list at a time, like a completion list.
-            "codeAction/resolve" => self.last_code_action.clone(),
-            "inlayHint/resolve" => self.last_inlay_hint.clone(),
-            "codeLens/resolve" => self.last_code_lens.clone(),
-            "workspace/executeCommand" => self.server_for_command(&request.params),
-            _ => request_uri(&request.params)
-                .and_then(|uri| self.server_of(&uri))
-                .map(str::to_string),
-        };
-        let Some(name) = name else {
-            return Ok(Some(request));
-        };
-        if request.method == "textDocument/completion" {
-            self.last_completion = Some(name.clone());
-        }
-        if request.method == "textDocument/inlayHint" {
-            self.last_inlay_hint = Some(name.clone());
-        }
-        if request.method == "textDocument/codeLens" {
-            self.last_code_lens = Some(name.clone());
-        }
-        if request.method == "textDocument/codeAction" {
-            if crate::proxy::only_withheld_actions(&request.params) {
-                // The save asking for kinds poly does not hand over. An empty
-                // list is the honest answer and it costs no round trip.
-                let empty = Response {
-                    id: request.id,
-                    result: Some(serde_json::json!([])),
-                    error: None,
-                };
-                self.connection.sender.send(Message::Response(empty))?;
-                return Ok(None);
-            }
-            self.last_code_action = Some(name.clone());
-        }
-        match self.downstream.get_mut(&name) {
-            Some(Some(server)) => {
-                // Only once it is really going downstream: an id recorded for a
-                // request poly answers itself would sit in the set forever,
-                // since nothing comes back through the pump thread to clear it.
-                if request.method == "textDocument/codeAction" {
-                    self.code_action_ids
-                        .lock()
-                        .expect("code action lock")
-                        .insert(request.id.clone());
-                }
-                server.send(Message::Request(request))?;
-                Ok(None)
-            }
-            // The server was registered for and is now gone: answer nothing
-            // rather than let the editor wait for a reply that is never
-            // coming.
-            Some(None) => {
-                let empty = crate::proxy::nothing(request.id);
-                self.connection.sender.send(Message::Response(empty))?;
-                Ok(None)
-            }
-            None => Ok(Some(request)),
-        }
-    }
-
-    /// Hand a `workspace/will*Files` request to the server that asked for it.
-    ///
-    /// Not a fan-out, unlike `workspace/symbol`: the answer is a WorkspaceEdit
-    /// the editor applies to the user's files, and two servers editing the same
-    /// rename would be two opinions about one set of bytes. One server it is.
-    ///
-    /// Which one is usually not a question — the editor only sends this because
-    /// poly registered the method, with that server's own filters on it, so a
-    /// single registration means a single candidate. The uri is consulted only
-    /// when two servers want the same operation, and it can legitimately fail
-    /// to answer: rust-analyzer registers folders as well as files, and a
-    /// folder has no extension to read a language off.
-    fn route_file_operation(
-        &mut self,
-        key: &str,
-        request: lsp_server::Request,
-    ) -> Result<Option<lsp_server::Request>> {
-        let targets = self.file_operation_servers(key);
-        let name = match targets.as_slice() {
-            // Nothing registered it, so this should not have arrived. Null is
-            // "no edit", which is exactly what poly has to offer, and it lets
-            // the rename go through instead of failing it with an error.
-            [] => {
-                self.connection
-                    .sender
-                    .send(Message::Response(crate::proxy::nothing(request.id)))?;
-                return Ok(None);
-            }
-            [only] => only.clone(),
-            several => {
-                let picked = file_operation_uri(&request.params)
-                    .and_then(|uri| self.server_of(&uri))
-                    .filter(|name| several.iter().any(|target| target == name));
-                match picked {
-                    Some(name) => name.to_string(),
-                    None => {
-                        eprintln!(
-                            "[poly] {}: {} servers want it and the path names no language",
-                            request.method,
-                            several.len()
-                        );
-                        self.connection
-                            .sender
-                            .send(Message::Response(crate::proxy::nothing(request.id)))?;
-                        return Ok(None);
-                    }
-                }
-            }
-        };
-        match self.downstream.get_mut(&name) {
-            Some(Some(server)) => {
-                server.send(Message::Request(request))?;
-                Ok(None)
-            }
-            _ => {
-                self.connection
-                    .sender
-                    .send(Message::Response(crate::proxy::nothing(request.id)))?;
-                Ok(None)
-            }
-        }
-    }
-
-    /// The running servers that asked to hear about one kind of file operation.
-    fn file_operation_servers(&self, key: &str) -> Vec<String> {
-        self.downstream
-            .iter()
-            .filter(|(_, server)| {
-                server.as_ref().is_some_and(|server| {
-                    crate::proxy::answers_file_operation(&server.capabilities, key)
-                })
-            })
-            .map(|(name, _)| name.clone())
-            .collect()
-    }
-
-    /// Ask every running server that answers `workspace/symbol`, and reply once.
-    ///
-    /// The one place poly turns a single request into several. Each server gets
-    /// the request with the editor's own id, unchanged, so the answers all come
-    /// back carrying it — which is exactly what the accumulator keys on. Telling
-    /// them apart is not needed; counting them is.
-    fn fan_out_symbols(
-        &mut self,
-        request: lsp_server::Request,
-    ) -> Result<Option<lsp_server::Request>> {
-        let targets: Vec<String> = self
-            .downstream
-            .iter()
-            .filter(|(_, server)| {
-                server.as_ref().is_some_and(|server| {
-                    crate::proxy::answers_workspace_symbol(&server.capabilities)
-                })
-            })
-            .map(|(name, _)| name.clone())
-            .collect();
-        if targets.is_empty() {
-            // Nothing registered the method, so this should not arrive at all.
-            // Handing it back gets the editor a `-32601` rather than silence.
-            return Ok(Some(request));
-        }
-        // Recorded before the first send, not after the last: the pump threads
-        // are already running, and a fast server can answer while the next one
-        // is still being written to.
-        self.symbol_fanouts.lock().expect("symbol lock").insert(
-            request.id.clone(),
-            FanOut {
-                pending: targets.len(),
-                answers: Vec::new(),
-            },
-        );
-        for name in &targets {
-            let sent = match self.downstream.get_mut(name) {
-                Some(Some(server)) => server.send(Message::Request(request.clone())),
-                // Gone between the filter above and here, which nothing in this
-                // loop can do — but the count is already committed, so it has to
-                // be settled either way.
-                _ => Err(anyhow::anyhow!("{name} is no longer running")),
-            };
-            if let Err(e) = sent {
-                eprintln!("[poly] {name}: {e:#}");
-                // Its share of the reply is never coming. Settle it here or the
-                // fan-out waits on it forever.
-                if let Some(done) = settle_symbols(&self.symbol_fanouts, &request.id, None) {
-                    self.connection.sender.send(Message::Response(done))?;
-                }
-            }
-        }
-        Ok(None)
-    }
-
-    /// A reply from the editor: to poly's own registration, or to a request a
-    /// downstream server made through poly.
-    fn on_client_response(&mut self, response: Response) {
-        if crate::proxy::is_poly_id(&response.id) {
-            if let Some(error) = &response.error {
-                eprintln!(
-                    "[poly] the editor rejected a registration: {}",
-                    error.message
-                );
-            }
-            return;
-        }
-        let Some((name, id)) = crate::proxy::untag(&response.id) else {
-            return; // not ours and not theirs; nothing to do with it
-        };
-        if let Some(Some(server)) = self.downstream.get_mut(&name) {
-            // `answered`, not a bare restore: the editor's reply to a
-            // `client/registerCapability` is `"result": null`, which lsp_server
-            // parses to `None` and then does not serialise at all. The server
-            // receives a response with neither result nor error and is entitled
-            // to reject it — sourcekit-lsp does, once, and then stops answering.
-            let restored = crate::proxy::answered(Response { id, ..response });
-            if let Err(e) = server.send(Message::Response(restored)) {
-                eprintln!("[poly] {name}: {e:#}");
-            }
-        }
-    }
-
-    /// Start server `name` for the document at `uri`, if it is wanted.
-    ///
-    /// Called on didOpen, and keyed by server: opening a .cpp after a .c finds
-    /// the clangd that is already running rather than starting a second one.
-    /// Failure is recorded as "this server is absent" so a missing gopls costs
-    /// one message rather than one spawn attempt per keystroke — and it is a
-    /// message, because a silently absent feature is the failure this project
-    /// keeps refusing to ship.
-    fn ensure_downstream(&mut self, name: &str, uri: &Url) {
-        if !self.language_servers || self.downstream.contains_key(name) {
-            return;
-        }
-        let languages = languages_for(name);
-        // Before anything is resolved: a yielded server is not looked for, so
-        // it can be neither started nor reported missing. Two servers on one
-        // project is the whole cost being avoided -- gopls twice is two
-        // indexes, and every hover and reference answered twice over.
-        if let Some(extension) = self.yield_to.get(name) {
-            if self.yielded.insert(name.to_string()) {
-                eprintln!(
-                    "[poly] {name}: {extension} is installed and serves {}, so poly does not start a second one",
-                    languages.join(", ")
-                );
-            }
-            return;
-        }
-        // The document's own config, so a `[tools]` entry disabling or
-        // relocating a registry-resolved server is honoured the same way it is
-        // for the formatter (R5/A4).
-        let config = poly_core::Config::discover(&uri_path(uri))
-            .unwrap_or_else(|_| poly_core::Config::empty());
-        let command = match server_command(name, &config) {
-            Ok(command) => command,
-            Err(why) => {
-                eprintln!(
-                    "[poly] {name} is unavailable — no language features for {}",
-                    languages.join(", ")
-                );
-                // Once per server per session, which the entry below is what
-                // guarantees: nothing reaches this line for `name` again.
-                if let Some(message) = unavailable_message(name, &why, &languages) {
-                    self.show_warning(message);
-                }
-                self.downstream.insert(name.to_string(), None);
-                return;
-            }
-        };
-        let sender = self.connection.sender.clone();
-        let diagnostics = Arc::clone(&self.diagnostics);
-        let code_action_ids = Arc::clone(&self.code_action_ids);
-        let symbol_fanouts = Arc::clone(&self.symbol_fanouts);
-        let started = Instant::now();
-        let server = crate::proxy::Downstream::start(
-            name,
-            &languages,
-            &command,
-            args_for(LAUNCH, name),
-            self.language_server_logs,
-            &self.init_params,
-            Box::new(move |message| {
-                // Three things cannot just be passed along. A publishDiagnostics
-                // replaces the whole set for the uri, so forwarding it verbatim
-                // erases poly's own findings; a code action list may carry the
-                // on-save kinds poly promised the editor it does not offer; and
-                // a workspace symbol answer is one server's share of a reply
-                // the editor must receive exactly once.
-                let message = merge_publish(&diagnostics, message);
-                let message = strip_source_actions(&code_action_ids, message);
-                if let Some(message) = collect_symbols(&symbol_fanouts, message) {
-                    let _ = sender.send(message);
-                }
-            }),
-        );
-        match server {
-            Ok(server) => {
-                eprintln!(
-                    "[poly] {name} ready in {:.0}ms",
-                    started.elapsed().as_secs_f64() * 1000.0
-                );
-                self.register_downstream(&server);
-                self.downstream.insert(name.to_string(), Some(server));
-            }
-            // Every error out of `start` already names the server, so this
-            // does not repeat it.
-            Err(e) => {
-                eprintln!("[poly] {e:#}");
-                self.downstream.insert(name.to_string(), None);
-            }
-        }
-    }
-
-    /// Tell the editor which features this server answers for, scoped to its
-    /// languages. Nothing was declared at initialize, so until this lands the
-    /// editor offers none of them.
-    fn register_downstream(&mut self, server: &crate::proxy::Downstream) {
-        let mut registrations =
-            crate::proxy::registrations(&server.capabilities, &server.name, &server.languages);
-        // Not part of `registrations`, which is per-server: this one is per
-        // session. Whoever comes up first claims it and every server that
-        // starts later joins the fan-out without registering again.
-        if !self.workspace_symbol_registered
-            && crate::proxy::answers_workspace_symbol(&server.capabilities)
-        {
-            self.workspace_symbol_registered = true;
-            registrations.push(crate::proxy::workspace_symbol_registration());
-        }
-        if registrations.is_empty() {
-            eprintln!("[poly] {} declared nothing poly proxies", server.name);
-            return;
-        }
-        let request = lsp_server::Request {
-            id: lsp_server::RequestId::from(format!("poly:register:{}", server.name)),
-            method: "client/registerCapability".to_string(),
-            params: serde_json::json!({ "registrations": registrations }),
-        };
-        let _ = self.connection.sender.send(Message::Request(request));
-    }
-
-    /// A popup in the editor, for the one kind of news stderr is not enough
-    /// for. See `unavailable_message`.
-    fn show_warning(&self, message: String) {
-        let params = lsp_types::ShowMessageParams {
-            typ: lsp_types::MessageType::WARNING,
-            message,
-        };
-        // A send error means the editor is gone, and so is anyone to tell.
-        let _ = self
-            .connection
-            .sender
-            .send(Message::Notification(Notification::new(
-                "window/showMessage".to_string(),
-                params,
-            )));
     }
 
     /// The language poly detects for a document, by the same rules the CLI
@@ -1183,61 +391,6 @@ impl Server {
         poly_core::Config::discover(&path)
             .unwrap_or_else(|_| poly_core::Config::empty())
             .language(&path)
-    }
-
-    /// The server poly would route this document to, running or not.
-    ///
-    /// The editor's language id first, and poly's own detection only when that
-    /// names no server. Routing is the one question where the editor's answer
-    /// is the right one: it is the editor that decided this document is shell
-    /// and registered it under that selector, so it is the editor that sends
-    /// the outline and hover requests for it. Path detection alone never
-    /// reached bash-language-server for three kinds of file VSCode calls
-    /// shellscript -- a `.zsh`, which poly calls `zsh` so shellcheck never
-    /// sees it; a script named only by its shebang; a dotfile like `.bashrc`
-    /// -- and for each of them the editor sent requests poly could only
-    /// refuse, about a document the server had never been shown.
-    ///
-    /// Lint and format do not come through here and must not: they ask
-    /// `language_of`, the same question `poly check` asks, and a `.zsh` has
-    /// to keep missing shellcheck there however the editor labels it (R5/A4).
-    ///
-    /// The fallback covers every document the editor did not open -- a file
-    /// operation, a call hierarchy item in another file -- and every id the
-    /// table does not list, which leaves those exactly as they were.
-    fn server_of(&self, uri: &Url) -> Option<&'static str> {
-        self.language_ids
-            .get(uri)
-            .and_then(|id| server_for(id))
-            .or_else(|| self.language_of(uri).as_deref().and_then(server_for))
-    }
-
-    /// Which running server declared this command, if any.
-    ///
-    /// A command names no document, so nothing in the request locates it: the
-    /// only thing that can is the list each server declared at initialize. Those
-    /// are namespaced (`gopls.*`, `rust-analyzer.*`) so a name matches at most
-    /// one, and poly's own three are in nobody's list — `None` here is what
-    /// hands them to `on_execute_command`.
-    ///
-    /// This is what makes gopls's refactorings work at all. Every code action it
-    /// offers carries a `command` and no `edit`, so `Extract declarations to new
-    /// file` and `Change signature` are one request each and were doing nothing
-    /// until poly forwarded it.
-    fn server_for_command(&self, params: &serde_json::Value) -> Option<String> {
-        let command = params.get("command")?.as_str()?;
-        self.downstream.iter().find_map(|(name, server)| {
-            crate::proxy::server_commands(&server.as_ref()?.capabilities)
-                .iter()
-                .any(|declared| declared == command)
-                .then(|| name.clone())
-        })
-    }
-
-    fn stop_downstream(&mut self) {
-        for server in self.downstream.values_mut().flatten() {
-            server.stop();
-        }
     }
 
     fn on_formatting(&mut self, request: lsp_server::Request) -> Response {
@@ -1478,30 +631,13 @@ impl Server {
     }
 
     fn on_notification(&mut self, notification: Notification) -> Result<()> {
-        // Recorded ahead of `sync_downstream`, which is where a didOpen starts
-        // the server: it has to pick the same one every later request about
-        // this document is routed to, and both ask `server_of`.
-        if notification.method == "textDocument/didOpen" {
-            let document = notification.params.get("textDocument");
-            let uri = document
-                .and_then(|d| d.get("uri"))
-                .and_then(serde_json::Value::as_str)
-                .and_then(|uri| Url::parse(uri).ok());
-            let id = document
-                .and_then(|d| d.get("languageId"))
-                .and_then(serde_json::Value::as_str);
-            if let (Some(uri), Some(id)) = (uri, id) {
-                self.language_ids.insert(uri, id.to_string());
-            }
-        }
-        self.sync_downstream(&notification);
-        self.broadcast_downstream(&notification);
-        self.file_operation_downstream(&notification);
         match notification.method.as_str() {
             "textDocument/didOpen" => {
                 let params: DidOpenTextDocumentParams =
                     serde_json::from_value(notification.params)?;
                 let uri = params.text_document.uri;
+                self.language_ids
+                    .insert(uri.clone(), params.text_document.language_id);
                 self.documents
                     .insert(uri.clone(), params.text_document.text);
                 if self.lint_on_save {
@@ -1527,8 +663,6 @@ impl Server {
                 }
             }
             "workspace/didChangeWorkspaceFolders" => {
-                // The running servers were told by `broadcast_downstream`
-                // above. This is for the ones not started yet.
                 let folders = folders_after(&self.init_params, &notification.params);
                 eprintln!("[poly] workspace folders: {}", folders.len());
                 self.init_params["workspaceFolders"] = serde_json::Value::Array(folders);
@@ -1538,8 +672,6 @@ impl Server {
                     serde_json::from_value(notification.params)?;
                 let uri = params.text_document.uri;
                 self.documents.remove(&uri);
-                // After `sync_downstream` above has used it to hand the close
-                // to the server that had the open.
                 self.language_ids.remove(&uri);
                 self.lint_hashes.remove(&uri);
                 self.lock().forget(&uri);
@@ -1550,78 +682,6 @@ impl Server {
             _ => {}
         }
         Ok(())
-    }
-
-    /// Mirror a document lifecycle notification to the server that owns the
-    /// language, starting it on first sight.
-    ///
-    /// Without this a downstream server reads the file from disk while the
-    /// editor holds unsaved edits, and every answer is quietly one save
-    /// behind. `didOpen` is also the only signal poly gets that this session
-    /// is going to need the server at all.
-    /// Hand a notification to every running server.
-    ///
-    /// Nothing in it says which one it is for, and that is not a gap: each
-    /// server registered the globs it cares about, so a file it has no interest
-    /// in is one it ignores.
-    fn broadcast_downstream(&mut self, notification: &Notification) {
-        if !crate::proxy::BROADCAST.contains(&notification.method.as_str()) {
-            return;
-        }
-        for server in self.downstream.values_mut().flatten() {
-            if let Err(e) = server.send(Message::Notification(notification.clone())) {
-                eprintln!("[poly] {}: {e:#}", server.name);
-            }
-        }
-    }
-
-    /// Deliver a `workspace/did*Files` notification to the servers that asked.
-    ///
-    /// Addressed rather than broadcast, which is the opposite of what
-    /// `didChangeWatchedFiles` does one function up — and the difference is
-    /// that poly knows the answer here. A watcher is registered by the server
-    /// straight through poly, which never sees who wanted what; a file
-    /// operation is declared in the capabilities poly reads at startup.
-    fn file_operation_downstream(&mut self, notification: &Notification) {
-        let Some((_, key)) = crate::proxy::FILE_OPERATIONS
-            .iter()
-            .find(|(method, _)| *method == notification.method)
-        else {
-            return;
-        };
-        for name in self.file_operation_servers(key) {
-            if let Some(Some(server)) = self.downstream.get_mut(&name) {
-                if let Err(e) = server.send(Message::Notification(notification.clone())) {
-                    eprintln!("[poly] {name}: {e:#}");
-                }
-            }
-        }
-    }
-
-    fn sync_downstream(&mut self, notification: &Notification) {
-        if !crate::proxy::SYNCED.contains(&notification.method.as_str()) {
-            return;
-        }
-        let Some(uri) = notification
-            .params
-            .get("textDocument")
-            .and_then(|d| d.get("uri"))
-            .and_then(serde_json::Value::as_str)
-            .and_then(|uri| Url::parse(uri).ok())
-        else {
-            return;
-        };
-        let Some(name) = self.server_of(&uri) else {
-            return;
-        };
-        if notification.method == "textDocument/didOpen" {
-            self.ensure_downstream(name, &uri);
-        }
-        if let Some(Some(server)) = self.downstream.get_mut(name) {
-            if let Err(e) = server.send(Message::Notification(notification.clone())) {
-                eprintln!("[poly] {name}: {e:#}");
-            }
-        }
     }
 
     fn publish_lint(&mut self, uri: &Url) -> Result<()> {
@@ -1655,7 +715,7 @@ impl Server {
     ///
     /// The soak in `tools/lsp-smoke.py` has always been able to see the daemon
     /// get bigger and never able to say what got bigger -- `ps` reports one
-    /// number and poly has six places to keep something. These are those six,
+    /// number and poly has five places to keep something. These are those five,
     /// and RSS is printed beside them so a line stands on its own.
     ///
     /// Written on open and close rather than on a timer. Those are the two
@@ -1680,28 +740,16 @@ impl Server {
             .map(Vec::len)
             .sum();
         let lint: usize = diagnostics.lint.values().map(Vec::len).sum();
-        let downstream_found: usize = diagnostics.downstream.values().map(Vec::len).sum();
-        let servers: Vec<&str> = self
-            .downstream
-            .iter()
-            .filter(|(_, running)| running.is_some())
-            .map(|(name, _)| name.as_str())
-            .collect();
         eprintln!(
             "[poly] memory after {event}: rss {}; {} documents {}; {} lint hashes; \
              {} package scopes; findings lint {lint} package {package_found} over {package} files, \
-             format {}, downstream {downstream_found}; servers {}",
+             format {}",
             rss_kb().map_or_else(|| "?".to_string(), human_kb),
             self.documents.len(),
             human_kb(text as u64 / 1024),
             self.lint_hashes.len(),
             self.package_roots.len(),
             diagnostics.format.len(),
-            if servers.is_empty() {
-                "none".to_string()
-            } else {
-                servers.join(", ")
-            },
         );
     }
 
@@ -1736,11 +784,7 @@ impl Server {
             });
             self.package_jobs = Some(jobs);
         }
-        let job = PackageJob {
-            linter,
-            root,
-            proxied: self.is_proxied(uri),
-        };
+        let job = PackageJob { linter, root };
         // A send error means the worker died, which it only does when the queue
         // is dropped with the server. Nothing useful to say at that point.
         let _ = self.package_jobs.as_ref().expect("package queue").send(job);
@@ -1755,20 +799,12 @@ impl Server {
 
     /// Publish everything known about a document, from whichever source.
     ///
-    /// Every publish poly makes about its own findings goes through here, so
-    /// this is the one place that has to know a downstream server may also have
-    /// something to say about the same uri. A missing formatter is unaffected:
-    /// that path returns without an error and says so on stderr, so nothing is
-    /// swallowed by staying quiet in the editor.
+    /// A missing formatter is unaffected: that path returns without an error
+    /// and says so on stderr, so nothing is swallowed by staying quiet in the
+    /// editor.
     fn publish_all(&mut self, uri: &Url) -> Result<()> {
-        let diagnostics = self.lock().merged(uri, self.is_proxied(uri));
+        let diagnostics = self.lock().merged(uri);
         self.publish(uri, diagnostics)
-    }
-
-    /// Is a downstream server answering for this document?
-    fn is_proxied(&self, uri: &Url) -> bool {
-        self.server_of(uri)
-            .is_some_and(|name| matches!(self.downstream.get(name), Some(Some(_))))
     }
 
     fn publish(&mut self, uri: &Url, diagnostics: Vec<lsp_types::Diagnostic>) -> Result<()> {
@@ -1838,35 +874,9 @@ fn human_kb(kb: u64) -> String {
     }
 }
 
-/// The document a routed request is about.
-///
-/// `textDocument.uri` is the ordinary shape. The hierarchy follow-ups name no
-/// textDocument at all — `callHierarchy/incomingCalls` carries the item a
-/// `prepare` handed back — but that item names its own file, which is what
-/// makes them routable at all. They could have gone the way of
-/// `completionItem/resolve` and followed the last server to answer; they do
-/// not, because "the file this item is in" is the true answer and "whoever
-/// spoke last" is only usually the same thing.
-/// The first path a file-operation request names.
-///
-/// `oldUri` for a rename, `uri` for a create or a delete. Only the first entry:
-/// the editor batches a multi-file move into one request, and poly picking one
-/// server per request means picking one path to read it off. A batch spanning
-/// two languages would be routed by whichever came first — an honest limit,
-/// and one nothing in the reply could paper over anyway, since a WorkspaceEdit
-/// is one server's answer or the other's.
-fn file_operation_uri(params: &serde_json::Value) -> Option<Url> {
-    let first = params.get("files")?.as_array()?.first()?;
-    let uri = first.get("oldUri").or_else(|| first.get("uri"))?;
-    Url::parse(uri.as_str()?).ok()
-}
-
+/// The document a request is about.
 fn request_uri(params: &serde_json::Value) -> Option<Url> {
-    let uri = params
-        .get("textDocument")
-        .and_then(|document| document.get("uri"))
-        .or_else(|| params.get("item").and_then(|item| item.get("uri")))?;
-    Url::parse(uri.as_str()?).ok()
+    Url::parse(params.get("textDocument")?.get("uri")?.as_str()?).ok()
 }
 
 /// Underline from the reported position to the end of that line.
@@ -2159,80 +1169,12 @@ fn external_lint(
     Ok(issues)
 }
 
-/// Record a downstream server's diagnostics and hand back what to send instead.
-///
-/// Anything that is not a `publishDiagnostics` travels on untouched. So does a
-/// `publishDiagnostics` whose params will not parse: passing the server's own
-/// notification through is no worse than what poly did before, and dropping it
-/// would lose the only report of a real problem.
-///
-/// The document is proxied by definition — a server only publishes about files
-/// it was given — so the formatter's parse failure stays suppressed here for
-/// the same reason `merged` suppresses it.
-fn merge_publish(store: &Mutex<Diagnostics>, message: Message) -> Message {
-    let Message::Notification(notification) = &message else {
-        return message;
-    };
-    if notification.method != "textDocument/publishDiagnostics" {
-        return message;
-    }
-    let Ok(params) =
-        serde_json::from_value::<PublishDiagnosticsParams>(notification.params.clone())
-    else {
-        return message;
-    };
-    let mut store = store.lock().expect("diagnostics lock");
-    store
-        .downstream
-        .insert(params.uri.clone(), params.diagnostics);
-    let merged = PublishDiagnosticsParams {
-        diagnostics: store.merged(&params.uri, true),
-        uri: params.uri,
-        version: params.version,
-    };
-    drop(store);
-    Message::Notification(Notification::new(
-        "textDocument/publishDiagnostics".to_string(),
-        merged,
-    ))
-}
-
-/// Take the on-save kinds out of a code action list on its way to the editor.
-///
-/// Here rather than in the main loop because a downstream response never gets
-/// there: the pump thread is the only place it exists. A response carries an id
-/// and no method, so `pending` — filled by `route` as each request goes out —
-/// is what says which one this is.
-fn strip_source_actions(
-    pending: &Mutex<HashSet<lsp_server::RequestId>>,
-    message: Message,
-) -> Message {
-    let Message::Response(mut response) = message else {
-        return message;
-    };
-    if !pending
-        .lock()
-        .expect("code action lock")
-        .remove(&response.id)
-    {
-        return Message::Response(response);
-    }
-    response.result = response.result.map(crate::proxy::without_withheld_actions);
-    Message::Response(response)
-}
-
 /// The workspace folders after applying one `didChangeWorkspaceFolders` event.
 ///
-/// `init_params` is the editor's own InitializeParams, replayed verbatim to
-/// each server as it starts — and servers start lazily, so one that comes up an
-/// hour into the session would otherwise be handed the folders that happened to
-/// be open at startup. gopls resolves imports against that list; being wrong
-/// about it is being wrong about what the project *is*.
-///
-/// `rootUri` and `rootPath` are left alone. They are deprecated, they name the
-/// folder the window was opened with rather than the current set, and rewriting
-/// them would move the root out from under a server that is already indexing
-/// against it.
+/// Kept in `init_params` because that is where `crate::navigate::root_of`
+/// reads them, so a folder added an hour into the session is searched like one
+/// that was open at startup. `rootUri` and `rootPath` are left alone: they are
+/// deprecated and name the folder the window was opened with.
 fn folders_after(
     init_params: &serde_json::Value,
     params: &serde_json::Value,
@@ -2403,7 +1345,7 @@ fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn
         replace_package_findings(&mut store, job, fresh)
             .into_iter()
             .map(|uri| {
-                let diagnostics = store.merged(&uri, job.proxied);
+                let diagnostics = store.merged(&uri);
                 (uri, diagnostics)
             })
             .collect::<Vec<_>>()
@@ -2418,66 +1360,6 @@ fn run_package_lint(job: &PackageJob, store: &Mutex<Diagnostics>, send: &impl Fn
             },
         )));
     }
-}
-
-/// Record one server's share of a fan-out, and hand back the editor's reply
-/// once every server has answered.
-///
-/// `answer` is the server's result, or `None` for a share that is never coming —
-/// a server that errored, or one that could not be written to at all. Both count
-/// as answered: the editor is owed exactly one reply and waiting on a server
-/// that has nothing left to say is how Ctrl+T ends up spinning forever.
-fn settle_symbols(
-    fanouts: &Mutex<HashMap<lsp_server::RequestId, FanOut>>,
-    id: &lsp_server::RequestId,
-    answer: Option<serde_json::Value>,
-) -> Option<Response> {
-    let mut fanouts = fanouts.lock().expect("symbol lock");
-    let fanout = fanouts.get_mut(id)?;
-    fanout.answers.extend(answer);
-    // Saturating, so a server that answers one id twice costs a duplicated
-    // symbol rather than a count that never reaches zero.
-    fanout.pending = fanout.pending.saturating_sub(1);
-    if fanout.pending > 0 {
-        return None;
-    }
-    let fanout = fanouts.remove(id)?;
-    Some(Response {
-        id: id.clone(),
-        result: Some(crate::proxy::merge_symbols(fanout.answers)),
-        error: None,
-    })
-}
-
-/// Hold a downstream response back if it is one server's share of a fan-out.
-///
-/// `None` means the message was swallowed: it was a share, and either more are
-/// outstanding or the merged reply is being returned in its place. Here rather
-/// than in the main loop for the same reason `strip_source_actions` is — a
-/// downstream response only exists on the pump thread.
-///
-/// Every other response travels on. A fan-out is keyed by the editor's own
-/// request id, which is unique across the session, so nothing else can match.
-fn collect_symbols(
-    fanouts: &Mutex<HashMap<lsp_server::RequestId, FanOut>>,
-    message: Message,
-) -> Option<Message> {
-    let Message::Response(response) = &message else {
-        return Some(message);
-    };
-    if !fanouts
-        .lock()
-        .expect("symbol lock")
-        .contains_key(&response.id)
-    {
-        return Some(message);
-    }
-    // An error is a server declining to answer, not a reason to lose the ones
-    // that did — it goes on stderr and its share settles as nothing.
-    if let Some(error) = &response.error {
-        eprintln!("[poly] workspace/symbol: {}", error.message);
-    }
-    settle_symbols(fanouts, &response.id, response.result.clone()).map(Message::Response)
 }
 
 fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
@@ -2829,36 +1711,6 @@ mod tests {
         );
     }
 
-    /// The hierarchy follow-ups are routable only because their item names a
-    /// file. Without this the request falls through to poly, which answers
-    /// nothing, and the References panel's call tree is empty for no visible
-    /// reason.
-    #[test]
-    fn a_hierarchy_item_routes_by_its_own_file() {
-        let ordinary = serde_json::json!({
-            "textDocument": {"uri": "file:///p/main.go"},
-            "position": {"line": 1, "character": 2},
-        });
-        assert_eq!(
-            request_uri(&ordinary).unwrap().as_str(),
-            "file:///p/main.go"
-        );
-
-        // callHierarchy/incomingCalls and the three like it.
-        let follow_up = serde_json::json!({
-            "item": {"name": "Greet", "uri": "file:///p/other.go", "kind": 12},
-        });
-        assert_eq!(
-            request_uri(&follow_up).unwrap().as_str(),
-            "file:///p/other.go"
-        );
-
-        // completionItem/resolve names neither, which is why it is routed by
-        // the last server to answer instead.
-        assert!(request_uri(&serde_json::json!({"label": "x"})).is_none());
-        assert!(request_uri(&serde_json::json!({"item": {"name": "x"}})).is_none());
-    }
-
     fn diagnostic(source: &str) -> lsp_types::Diagnostic {
         lsp_types::Diagnostic {
             source: Some(source.to_string()),
@@ -2886,48 +1738,11 @@ mod tests {
         Url::parse("file:///a.lua").expect("valid uri")
     }
 
-    /// `proxied` plays no part in which findings a run owns, so it is fixed.
     fn package_job(linter: PackageLinter, root: &str) -> PackageJob {
         PackageJob {
             linter,
             root: PathBuf::from(root),
-            proxied: true,
         }
-    }
-
-    /// A file operation names files that are moving, not a document that is
-    /// open, so the ordinary uri lookup finds nothing in it.
-    ///
-    /// The folder case is the one that matters and the one with no answer:
-    /// rust-analyzer registers `**` for folders, and a directory has no
-    /// extension to read a language off. That is survivable only because a
-    /// single registration means a single candidate — `route_file_operation`
-    /// asks this question at all only when two servers want the same operation.
-    #[test]
-    fn a_file_operation_is_located_by_the_path_it_names() {
-        let rename = serde_json::json!({
-            "files": [{"oldUri": "file:///w/src/old.rs", "newUri": "file:///w/src/new.rs"}]
-        });
-        assert_eq!(
-            file_operation_uri(&rename).as_ref().map(Url::as_str),
-            Some("file:///w/src/old.rs"),
-            "the language is the one the file has now, not the one it is moving to"
-        );
-
-        // Create and delete name the file directly.
-        let created = serde_json::json!({"files": [{"uri": "file:///w/src/new.rs"}]});
-        assert_eq!(
-            file_operation_uri(&created).as_ref().map(Url::as_str),
-            Some("file:///w/src/new.rs")
-        );
-
-        // A folder rename parses to a uri like any other; it is `language_of`
-        // that has nothing to say about it, one layer up.
-        let folder = serde_json::json!({
-            "files": [{"oldUri": "file:///w/src", "newUri": "file:///w/lib"}]
-        });
-        assert!(file_operation_uri(&folder).is_some());
-        assert!(file_operation_uri(&serde_json::json!({"files": []})).is_none());
     }
 
     /// A server command id must never be an id the extension contributes.
@@ -3107,106 +1922,6 @@ mod tests {
         assert!(editor_config(None).is_err());
     }
 
-    /// Turning the proxy on must not cost the user findings it never replaces.
-    ///
-    /// selene and swiftlint are the two linters that run in the editor for a
-    /// proxied language, and no language server looks for what they look for.
-    /// Before these were merged, whichever side published last erased the
-    /// other, and the setting silently traded lint away for language features.
-    #[test]
-    fn a_proxied_document_keeps_both_halves() {
-        let mut store = Diagnostics::default();
-        store.lint.insert(uri(), vec![diagnostic("selene")]);
-        store
-            .downstream
-            .insert(uri(), vec![diagnostic("Lua Diagnostics.")]);
-
-        assert_eq!(
-            sources(&store.merged(&uri(), true)),
-            ["selene", "Lua Diagnostics."]
-        );
-    }
-
-    /// ...except when the linter and the server are the same binary.
-    ///
-    /// arity is R's linter and R's language server, so a proxied R document
-    /// gets arity's findings from arity itself and poly's copy is the same
-    /// finding a second time. selene is the control: lua-language-server is a
-    /// different tool looking for different things, so it stays either way.
-    #[test]
-    fn a_proxied_document_drops_the_linter_that_is_also_the_server() {
-        let mut store = Diagnostics::default();
-        store
-            .lint
-            .insert(uri(), vec![diagnostic("selene"), diagnostic("arity")]);
-        store.downstream.insert(uri(), vec![diagnostic("arity")]);
-
-        // Proxied: arity speaks once, as itself.
-        assert_eq!(sources(&store.merged(&uri(), true)), ["selene", "arity"]);
-        // Not proxied: nobody else is reporting, so poly's copy is the answer.
-        store.downstream.remove(&uri());
-        assert_eq!(sources(&store.merged(&uri(), false)), ["selene", "arity"]);
-    }
-
-    /// The formatter's parse failure is the one thing a server does replace,
-    /// with a range covering the problem rather than the point rustfmt gave up.
-    #[test]
-    fn a_proxied_document_drops_only_the_format_error() {
-        let mut store = Diagnostics::default();
-        store.lint.insert(uri(), vec![diagnostic("selene")]);
-        store.format.insert(uri(), diagnostic("poly/format"));
-
-        assert_eq!(
-            sources(&store.merged(&uri(), false)),
-            ["selene", "poly/format"]
-        );
-        assert_eq!(sources(&store.merged(&uri(), true)), ["selene"]);
-    }
-
-    /// A file that does not parse says so once, not twice.
-    ///
-    /// bash-language-server runs shellcheck when it finds one on PATH, and so
-    /// does poly. Measured 2026-09-21 with both installed: one `.sh` came back
-    /// with every finding twice, because the rule that drops poly's copy for a
-    /// proxied document matches a source against *server* names and this one is
-    /// a tool's name. Registering a shell server in 0.14.0 is what made this
-    /// reachable; nothing about it is specific to shell.
-    #[test]
-    fn a_server_running_polys_own_linter_does_not_double_report() {
-        let mut store = Diagnostics::default();
-        store.lint.insert(
-            uri(),
-            vec![
-                finding("shellcheck", "SC2086"),
-                finding("shellcheck", "SC2119"),
-            ],
-        );
-
-        // The server's copy of one of them, at a different column: shellcheck
-        // counts a tab as eight and the server converts to the code units LSP
-        // asks for, so the two copies of a finding on a tab-indented line never
-        // share a range. Matching ranges would leave exactly those duplicates.
-        let mut elsewhere = finding("shellcheck", "SC2119");
-        elsewhere.range.start.character = 7;
-        elsewhere.range.end.character = 12;
-        store.downstream.insert(
-            uri(),
-            vec![
-                finding("shellcheck", "SC2086"),
-                elsewhere,
-                finding("bashIde", "parse"),
-            ],
-        );
-
-        // Each defect once, poly's copy kept -- it is the pinned shellcheck,
-        // and the one `poly check` reports in CI where no server runs. What the
-        // server found on its own is untouched.
-        assert_eq!(
-            sources(&store.merged(&uri(), true)),
-            ["shellcheck", "shellcheck", "bashIde"]
-        );
-    }
-
     /// The linter reports `toml/syntax` on change and the formatter fails on
     /// the same error on save, at the same line and column and in the same
     /// words. Both were published, so the editor drew two squiggles over one
@@ -3221,13 +1936,10 @@ mod tests {
         // formatter alone. A file can be misspelt *and* badly formatted, and
         // those are two things to say.
         store.lint.insert(uri(), vec![finding("typos", "spelling")]);
-        assert_eq!(
-            sources(&store.merged(&uri(), false)),
-            ["typos", "poly/format"]
-        );
+        assert_eq!(sources(&store.merged(&uri())), ["typos", "poly/format"]);
 
         store.lint.insert(uri(), vec![finding("toml", "syntax")]);
-        assert_eq!(sources(&store.merged(&uri(), false)), ["toml"]);
+        assert_eq!(sources(&store.merged(&uri())), ["toml"]);
 
         // arity spells the same claim differently, and it is the case a rule
         // keyed on "does the format error carry a position" would have missed:
@@ -3235,7 +1947,7 @@ mod tests {
         store
             .lint
             .insert(uri(), vec![finding("arity", "syntax-error")]);
-        assert_eq!(sources(&store.merged(&uri(), false)), ["arity"]);
+        assert_eq!(sources(&store.merged(&uri())), ["arity"]);
     }
 
     /// The rules the editor treats as "this file does not parse" are exactly
@@ -3269,15 +1981,15 @@ mod tests {
         );
     }
 
-    /// Four publishers, one uri, and `publishDiagnostics` replaces the whole
+    /// Three publishers, one uri, and `publishDiagnostics` replaces the whole
     /// set: every one of them has to survive the others.
     ///
-    /// This is the shape of the bug package lint could have introduced. gopls
-    /// publishes on its own schedule, the per-file linters publish on save, and
-    /// golangci-lint publishes whenever a module finishes compiling — three
-    /// independent clocks. If any of them sent only its own half, saving a Go
-    /// file would erase the module's findings and the next module run would
-    /// erase gopls's.
+    /// This is the shape of the bug package lint could have introduced. The
+    /// per-file linters publish on save, the formatter on format, and
+    /// golangci-lint whenever a module finishes compiling — three independent
+    /// clocks. If any of them sent only its own half, saving a Go file would
+    /// erase the module's findings and the next module run would erase the
+    /// file's.
     #[test]
     fn no_publisher_erases_another() {
         let mut store = Diagnostics::default();
@@ -3287,16 +1999,10 @@ mod tests {
             HashMap::from([(uri(), vec![diagnostic("golangci-lint")])]),
         );
         store.format.insert(uri(), diagnostic("poly/format"));
-        store.downstream.insert(uri(), vec![diagnostic("gopls")]);
 
         assert_eq!(
-            sources(&store.merged(&uri(), true)),
-            ["typos", "golangci-lint", "gopls"],
-            "the format error is the only thing a server replaces"
-        );
-        assert_eq!(
-            sources(&store.merged(&uri(), false)),
-            ["typos", "golangci-lint", "poly/format", "gopls"]
+            sources(&store.merged(&uri())),
+            ["typos", "golangci-lint", "poly/format"]
         );
     }
 
@@ -3323,11 +2029,10 @@ mod tests {
             (PackageLinter::Golangci, PathBuf::from("/w/cli")),
             HashMap::from([(elsewhere.clone(), vec![diagnostic("errcheck")])]),
         );
-        // gopls also has something to say about the file that was fixed. The
-        // whole-module run knows nothing about it and must not take it away.
-        store
-            .downstream
-            .insert(fixed.clone(), vec![diagnostic("gopls")]);
+        // The per-file linters also have something to say about the file that
+        // was fixed. The whole-module run knows nothing about it and must not
+        // take it away.
+        store.lint.insert(fixed.clone(), vec![diagnostic("typos")]);
 
         let fresh = HashMap::from([(broken.clone(), vec![diagnostic("errcheck")])]);
         let mut affected = replace_package_findings(&mut store, &job, fresh);
@@ -3338,10 +2043,10 @@ mod tests {
             [broken.clone(), fixed.clone()],
             "the cleared file is republished too, or the squiggle never goes away"
         );
-        assert_eq!(sources(&store.merged(&fixed, true)), ["gopls"]);
-        assert_eq!(sources(&store.merged(&broken, true)), ["errcheck"]);
+        assert_eq!(sources(&store.merged(&fixed)), ["typos"]);
+        assert_eq!(sources(&store.merged(&broken)), ["errcheck"]);
         assert_eq!(
-            sources(&store.merged(&elsewhere, true)),
+            sources(&store.merged(&elsewhere)),
             ["errcheck"],
             "another module's report is not this run's to clear"
         );
@@ -3387,12 +2092,12 @@ mod tests {
             "a run republishes what it owns, and it owns neither of the others"
         );
         assert_eq!(
-            sources(&store.merged(&nested, false)),
+            sources(&store.merged(&nested)),
             ["tflint"],
             "the directory below has its own run and tflint never descended into it"
         );
         assert_eq!(
-            sources(&store.merged(&beside, false)),
+            sources(&store.merged(&beside)),
             ["errcheck"],
             "the other linter's report shares a directory, not a run"
         );
@@ -3494,336 +2199,6 @@ mod tests {
         assert_eq!(package_lint_scope("go", &orphan), None);
     }
 
-    /// The downstream half arrives as a notification poly has to rewrite in
-    /// flight; everything else it forwards has to come out unchanged.
-    #[test]
-    fn merge_publish_rewrites_only_diagnostics() {
-        let store = Mutex::new(Diagnostics::default());
-        store
-            .lock()
-            .expect("lock")
-            .lint
-            .insert(uri(), vec![diagnostic("selene")]);
-
-        let incoming = Message::Notification(Notification::new(
-            "textDocument/publishDiagnostics".to_string(),
-            PublishDiagnosticsParams {
-                uri: uri(),
-                diagnostics: vec![diagnostic("Lua Diagnostics.")],
-                version: None,
-            },
-        ));
-        let Message::Notification(out) = merge_publish(&store, incoming) else {
-            panic!("still a notification");
-        };
-        let params: PublishDiagnosticsParams =
-            serde_json::from_value(out.params).expect("params survive the rewrite");
-        assert_eq!(sources(&params.diagnostics), ["selene", "Lua Diagnostics."]);
-        // Recorded, not just forwarded: poly's next publish has to include the
-        // server's half too, or saving the file would erase it again.
-        assert_eq!(
-            sources(&store.lock().expect("lock").merged(&uri(), true)),
-            ["selene", "Lua Diagnostics."]
-        );
-
-        let other = Message::Notification(Notification::new(
-            "window/logMessage".to_string(),
-            serde_json::json!({"type": 3, "message": "hi"}),
-        ));
-        let Message::Notification(out) = merge_publish(&store, other) else {
-            panic!("untouched");
-        };
-        assert_eq!(out.method, "window/logMessage");
-    }
-
-    /// One query, several servers, exactly one reply — and not before the last
-    /// of them has spoken.
-    ///
-    /// Replying early is the failure worth guarding: it looks right, because the
-    /// first server's symbols do show up, and the rest are simply missing. A
-    /// second reply on the same id is a protocol violation the editor answers by
-    /// believing the first, so the bug would be invisible from the outside.
-    #[test]
-    fn a_symbol_query_answers_once_the_last_server_has() {
-        let id = lsp_server::RequestId::from(7);
-        let fanouts = Mutex::new(HashMap::from([(
-            id.clone(),
-            FanOut {
-                pending: 2,
-                answers: Vec::new(),
-            },
-        )]));
-        let share = |name: &str| {
-            Message::Response(Response {
-                id: id.clone(),
-                result: Some(serde_json::json!([{"name": name}])),
-                error: None,
-            })
-        };
-
-        assert!(
-            collect_symbols(&fanouts, share("Greet")).is_none(),
-            "one server in, one still owing: nothing may reach the editor yet"
-        );
-        let Some(Message::Response(reply)) = collect_symbols(&fanouts, share("greet")) else {
-            panic!("the last answer completes the query");
-        };
-        assert_eq!(
-            reply.result,
-            Some(serde_json::json!([{"name": "Greet"}, {"name": "greet"}])),
-            "both servers' symbols, in one list"
-        );
-        assert!(
-            fanouts.lock().expect("lock").is_empty(),
-            "a finished query is forgotten, or the map grows for the session"
-        );
-    }
-
-    /// A server that declines still owes the count, or Ctrl+T spins forever.
-    ///
-    /// Three ways to decline and all of them arrive here: an error response, a
-    /// `null` result, and — through `settle_symbols(.., None)` — a server poly
-    /// could not even write to.
-    #[test]
-    fn a_server_that_declines_still_completes_the_query() {
-        let id = lsp_server::RequestId::from(7);
-        let fanouts = Mutex::new(HashMap::from([(
-            id.clone(),
-            FanOut {
-                pending: 3,
-                answers: Vec::new(),
-            },
-        )]));
-
-        let refused = Message::Response(Response {
-            id: id.clone(),
-            result: None,
-            error: Some(lsp_server::ResponseError {
-                code: INTERNAL_ERROR,
-                message: "not indexed".to_string(),
-                data: None,
-            }),
-        });
-        assert!(collect_symbols(&fanouts, refused).is_none());
-
-        let nothing = Message::Response(Response {
-            id: id.clone(),
-            result: Some(serde_json::Value::Null),
-            error: None,
-        });
-        assert!(collect_symbols(&fanouts, nothing).is_none());
-
-        let Some(Message::Response(reply)) = collect_symbols(
-            &fanouts,
-            Message::Response(Response {
-                id: id.clone(),
-                result: Some(serde_json::json!([{"name": "Greet"}])),
-                error: None,
-            }),
-        ) else {
-            panic!("the third answer completes the query");
-        };
-        assert_eq!(
-            reply.result,
-            Some(serde_json::json!([{"name": "Greet"}])),
-            "the one server that answered is not lost to the two that did not"
-        );
-    }
-
-    /// The pump sees every response, and only a fan-out's shares are its
-    /// business. A hover reply held back is a request the editor waits on for
-    /// the rest of the session.
-    #[test]
-    fn only_a_fanned_out_reply_is_held_back() {
-        let fanouts = Mutex::new(HashMap::from([(
-            lsp_server::RequestId::from(7),
-            FanOut {
-                pending: 1,
-                answers: Vec::new(),
-            },
-        )]));
-        let hover = Message::Response(Response {
-            id: lsp_server::RequestId::from(8),
-            result: Some(serde_json::json!({"contents": "docs"})),
-            error: None,
-        });
-        assert!(collect_symbols(&fanouts, hover).is_some());
-
-        let notification = Message::Notification(Notification::new(
-            "window/logMessage".to_string(),
-            serde_json::json!({"type": 3, "message": "hi"}),
-        ));
-        assert!(collect_symbols(&fanouts, notification).is_some());
-    }
-
-    /// A publishDiagnostics poly cannot parse still has to reach the editor:
-    /// the server is reporting a real problem either way, and dropping it would
-    /// make poly the reason a diagnostic vanished.
-    #[test]
-    fn merge_publish_passes_unparsable_diagnostics_through() {
-        let store = Mutex::new(Diagnostics::default());
-        let incoming = Message::Notification(Notification::new(
-            "textDocument/publishDiagnostics".to_string(),
-            serde_json::json!({"uri": "not a uri"}),
-        ));
-        let Message::Notification(out) = merge_publish(&store, incoming) else {
-            panic!("still a notification");
-        };
-        assert_eq!(out.params, serde_json::json!({"uri": "not a uri"}));
-    }
-
-    /// The pump thread sees responses to everything, so it has to filter the
-    /// code action lists and leave every other reply alone — a hover result
-    /// rewritten as if it were an action list is a far worse bug than the one
-    /// this is preventing.
-    #[test]
-    fn only_a_code_action_reply_is_filtered() {
-        let pending = Mutex::new(HashSet::from([lsp_server::RequestId::from(7)]));
-        let list = serde_json::json!([
-            {"title": "Organize Imports", "kind": "source.organizeImports"},
-            {"title": "Extract", "kind": "refactor.extract"},
-        ]);
-        let reply = |id: i32| {
-            Message::Response(Response {
-                id: lsp_server::RequestId::from(id),
-                result: Some(list.clone()),
-                error: None,
-            })
-        };
-
-        let Message::Response(filtered) = strip_source_actions(&pending, reply(7)) else {
-            panic!("still a response");
-        };
-        assert_eq!(
-            filtered.result.unwrap(),
-            serde_json::json!([{"title": "Extract", "kind": "refactor.extract"}])
-        );
-
-        // Same payload, an id poly never recorded: not a code action list, so
-        // it travels untouched.
-        let Message::Response(passed) = strip_source_actions(&pending, reply(8)) else {
-            panic!("still a response");
-        };
-        assert_eq!(passed.result.unwrap(), list);
-
-        // The id is spent once it is answered, so a later reply reusing the
-        // number cannot be mistaken for another action list.
-        assert!(pending.lock().unwrap().is_empty());
-    }
-
-    /// The routing table is read in both directions and they have to agree.
-    ///
-    /// `downstream` is keyed by server while requests arrive by language, so a
-    /// language whose server does not list it back would spawn a process no
-    /// request could ever reach.
-    #[test]
-    fn every_language_maps_to_a_server_that_claims_it() {
-        for (language, name) in LANGUAGE_SERVERS {
-            assert_eq!(server_for(language), Some(*name));
-            assert!(
-                languages_for(name).contains(&language.to_string()),
-                "{name} does not answer for {language}"
-            );
-        }
-        // The case this keying exists for: one process, both languages.
-        assert_eq!(languages_for("clangd"), ["c", "cpp"]);
-        assert_eq!(server_for("c"), server_for("cpp"));
-        // A language poly formats but has no server for stays poly's alone.
-        assert_eq!(server_for("typescript"), None);
-    }
-
-    /// `[tools]` reaches the language servers too, not just the tools poly
-    /// downloads.
-    ///
-    /// Both answers were silently ignored before: a project could not turn one
-    /// server off without turning the whole proxy off, and could not point at a
-    /// drop-in replacement at all. Silently, because a server that never starts
-    /// looks exactly like a server that is not installed.
-    #[test]
-    fn a_project_can_disable_or_replace_a_path_only_server() {
-        let entry = |value: &str| {
-            let mut config = poly_core::Config::empty();
-            config
-                .tools
-                .insert("rust-analyzer".to_string(), value.to_string());
-            config
-        };
-        assert_eq!(
-            server_command("rust-analyzer", &entry("off")),
-            Err(Unavailable::Disabled)
-        );
-
-        // A path that is not there is a failure, not a fall back to PATH: the
-        // project said which binary it wanted.
-        assert!(matches!(
-            server_command("rust-analyzer", &entry("./bin/rust-glancer")),
-            Err(Unavailable::Missing(_))
-        ));
-
-        // No entry, so PATH decides as it always did.
-        let empty = poly_core::Config::empty();
-        assert_eq!(
-            server_command("rust-analyzer", &empty).ok(),
-            poly_tools::find_on_path("rust-analyzer")
-        );
-        // And a miss there is its own answer, apart from the two above: it is
-        // the only one the editor is told how to fix.
-        assert_eq!(
-            server_command("poly-test-no-such-server", &empty),
-            Err(Unavailable::NotOnPath)
-        );
-    }
-
-    /// Three reasons a server is not running, and the editor hears about two.
-    ///
-    /// `off` is the project's own decision, so a popup about it on every window
-    /// would be a nag; the other two are news nobody had before -- the stderr
-    /// line was all there was, and with `poly.languageServers` on the extension
-    /// deliberately says nothing, so shell functions with no references had no
-    /// visible cause. The install command appears only where there is one
-    /// command for every platform, because a wrong one in a popup gets pasted.
-    #[test]
-    fn a_missing_server_says_how_to_fix_it_and_a_disabled_one_says_nothing() {
-        let shell = ["shellscript".to_string()];
-        assert_eq!(
-            unavailable_message("bash-language-server", &Unavailable::Disabled, &shell),
-            None
-        );
-
-        let missing = unavailable_message("bash-language-server", &Unavailable::NotOnPath, &shell)
-            .expect("a missing server is news");
-        assert!(
-            missing.contains("bash-language-server is not on PATH"),
-            "{missing}"
-        );
-        assert!(missing.contains("shellscript"), "{missing}");
-        assert!(
-            missing.contains("`npm install -g bash-language-server`"),
-            "{missing}"
-        );
-        assert!(missing.contains("reload the window"), "{missing}");
-
-        // clangd comes from a different package manager on every OS, so it
-        // gets the instruction and no command.
-        let c = ["c".to_string(), "cpp".to_string()];
-        let clangd = unavailable_message("clangd", &Unavailable::NotOnPath, &c).unwrap();
-        assert!(clangd.contains("c, cpp"), "{clangd}");
-        assert!(clangd.contains("put it on PATH"), "{clangd}");
-        assert!(!clangd.contains('`'), "no command to paste: {clangd}");
-
-        // A poly.toml path that is wrong is fixed in poly.toml, not by
-        // installing anything, so the reason is `resolve`'s and so is the fix.
-        let why = "poly.toml points gopls at /p/bin/gopls (not found)";
-        let pinned = unavailable_message(
-            "gopls",
-            &Unavailable::Missing(why.to_string()),
-            &["go".to_string()],
-        )
-        .unwrap();
-        assert!(pinned.contains(why), "{pinned}");
-        assert!(!pinned.contains("go install"), "{pinned}");
-    }
-
     /// The race that took poly out of a window: the editor stopping the daemon
     /// while answering a registration poly had just asked for. The answer
     /// lands between `shutdown` and `exit`, and the daemon has to wait for the
@@ -3833,7 +2208,7 @@ mod tests {
         let (server, editor) = Connection::memory();
         let shutdown = lsp_server::Request::new(7.into(), "shutdown".to_string(), ());
         let late = Response::new_ok(
-            lsp_server::RequestId::from("poly:register:gopls".to_string()),
+            lsp_server::RequestId::from("poly:register:navigate".to_string()),
             (),
         );
         editor.sender.send(Message::Response(late)).unwrap();
@@ -3861,233 +2236,6 @@ mod tests {
             editor.receiver.try_recv().is_err(),
             "answered a request it does not own"
         );
-    }
-
-    /// A session over an in-memory pipe, and the editor's end of it.
-    ///
-    /// Lint is off in every one: these are about which server a document
-    /// reaches, and linting a `.sh` would resolve shellcheck -- a download on a
-    /// machine that does not have it.
-    fn session(mut options: serde_json::Value) -> (Server, Connection) {
-        let (server, editor) = Connection::memory();
-        options["lintOnSave"] = serde_json::json!(false);
-        let init = serde_json::json!({ "initializationOptions": options });
-        (Server::new(server, init), editor)
-    }
-
-    /// A project whose poly.toml points bash-language-server somewhere it is
-    /// not, so the server is missing on every machine alike -- whatever this
-    /// one has on PATH -- and nothing a test does can start a real one.
-    fn project(tools: &str) -> (tempfile::TempDir, PathBuf) {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        std::fs::write(root.join("poly.toml"), format!("[tools]\n{tools}")).unwrap();
-        (dir, root)
-    }
-
-    fn file_uri(root: &Path, name: &str) -> Url {
-        Url::from_file_path(root.join(name)).unwrap()
-    }
-
-    fn open(server: &mut Server, uri: &Url, language_id: &str) {
-        let params = serde_json::json!({
-            "textDocument": {"uri": uri, "languageId": language_id, "version": 1, "text": "f() { :; }\n"},
-        });
-        server
-            .on_notification(Notification::new(
-                "textDocument/didOpen".to_string(),
-                params,
-            ))
-            .unwrap();
-    }
-
-    fn close(server: &mut Server, uri: &Url) {
-        let params = serde_json::json!({ "textDocument": {"uri": uri} });
-        server
-            .on_notification(Notification::new(
-                "textDocument/didClose".to_string(),
-                params,
-            ))
-            .unwrap();
-    }
-
-    /// The outline request, which is what shell had none of before routing.
-    fn outline(id: i32, uri: &Url) -> lsp_server::Request {
-        lsp_server::Request {
-            id: lsp_server::RequestId::from(id),
-            method: "textDocument/documentSymbol".to_string(),
-            params: serde_json::json!({ "textDocument": {"uri": uri} }),
-        }
-    }
-
-    /// Every popup the editor has been sent so far.
-    fn popups(editor: &Connection) -> Vec<String> {
-        editor
-            .receiver
-            .try_iter()
-            .filter_map(|message| match message {
-                Message::Notification(n) if n.method == "window/showMessage" => {
-                    n.params["message"].as_str().map(str::to_string)
-                }
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// A missing server is said once per session, and a disabled one never.
-    ///
-    /// Once, because the absence is remembered and the next forty `.sh` files
-    /// opened are not forty pieces of news. Never for `off`, because the
-    /// project decided that and the reader of a popup did not ask to be told.
-    #[test]
-    fn the_editor_hears_once_about_a_missing_server_and_never_about_a_disabled_one() {
-        let (_dir, root) =
-            project("bash-language-server = \"./missing/bash-language-server\"\ngopls = \"off\"\n");
-        let (mut server, editor) = session(serde_json::json!({"languageServers": true}));
-
-        open(&mut server, &file_uri(&root, "a.sh"), "shellscript");
-        open(&mut server, &file_uri(&root, "b.sh"), "shellscript");
-        open(&mut server, &file_uri(&root, "main.go"), "go");
-
-        let said = popups(&editor);
-        assert_eq!(said.len(), 1, "{said:?}");
-        // poly.toml's reason, which is also proof the fixture was read rather
-        // than this machine's PATH.
-        assert!(
-            said[0].contains("poly.toml points bash-language-server"),
-            "{said:?}"
-        );
-        // Both are remembered as absent all the same: neither is retried.
-        assert!(matches!(
-            server.downstream.get("bash-language-server"),
-            Some(None)
-        ));
-        assert!(matches!(server.downstream.get("gopls"), Some(None)));
-    }
-
-    /// A server an installed extension already runs is not started, not
-    /// reported missing, and not in poly's way.
-    ///
-    /// The fixture's bash-language-server is missing, so without the yield this
-    /// session would pop up a warning and record the server as absent -- which
-    /// is the other half of what is checked. Absent is the wrong state for a
-    /// yielded server: `route` answers an absent server's requests with
-    /// nothing, and the hover poly declares for its own findings would go
-    /// silent on every file the other extension is serving.
-    #[test]
-    fn a_yielded_server_is_never_looked_for() {
-        let (_dir, root) = project("bash-language-server = \"./missing/bash-language-server\"\n");
-        let (mut server, editor) = session(serde_json::json!({
-            "languageServers": true,
-            "yieldServers": {
-                "bash-language-server": "mads-hartmann.bash-ide-vscode",
-                "gopl": "golang.go",
-            },
-        }));
-
-        let script = file_uri(&root, "a.sh");
-        open(&mut server, &script, "shellscript");
-        open(&mut server, &file_uri(&root, "b.sh"), "shellscript");
-
-        assert!(popups(&editor).is_empty());
-        assert!(!server.downstream.contains_key("bash-language-server"));
-        assert!(server.yielded.contains("bash-language-server"));
-        // A typo in the client's list names nothing poly would start.
-        assert!(!server.yield_to.contains_key("gopl"));
-
-        let hover = lsp_server::Request {
-            id: lsp_server::RequestId::from(7),
-            method: "textDocument/hover".to_string(),
-            params: serde_json::json!({
-                "textDocument": {"uri": script},
-                "position": {"line": 0, "character": 0},
-            }),
-        };
-        assert!(
-            server.route(hover).unwrap().is_some(),
-            "a hover on a yielded server's file is poly's to answer"
-        );
-    }
-
-    /// VSCode calls three kinds of file shellscript that poly's path detection
-    /// does not, and each has to reach the shell server anyway.
-    ///
-    /// A `.zsh` is `zsh` to poly on purpose, so shellcheck never lints it; a
-    /// script named by its shebang alone and a dotfile have no extension at
-    /// all. The editor registered them under the shellscript selector and sends
-    /// their outline requests to poly -- which, routing by path, refused every
-    /// one of them, and never showed the server the document either.
-    ///
-    /// Each in a session of its own, so each one's didOpen has to be the thing
-    /// that goes looking for the server.
-    #[test]
-    fn a_document_routes_by_the_language_the_editor_gave_it() {
-        let (_dir, root) = project("bash-language-server = \"./missing/bash-language-server\"\n");
-        for name in ["prompt.zsh", "deploy", ".bashrc"] {
-            let (mut server, editor) = session(serde_json::json!({"languageServers": true}));
-            let uri = file_uri(&root, name);
-            open(&mut server, &uri, "shellscript");
-
-            assert!(
-                server.downstream.contains_key("bash-language-server"),
-                "{name}: opening it did not go looking for the shell server"
-            );
-            assert!(
-                server.route(outline(1, &uri)).unwrap().is_none(),
-                "{name}: the outline request was handed back to poly"
-            );
-            let answered = editor.receiver.try_iter().any(|message| {
-                matches!(message, Message::Response(r) if r.id == lsp_server::RequestId::from(1))
-            });
-            assert!(answered, "{name}: routed, and then nobody answered");
-
-            // What lint and format read is untouched: `poly check` has no
-            // editor to ask, so the editor's label must not reach them either.
-            let expected = (name == "prompt.zsh").then(|| "zsh".to_string());
-            assert_eq!(server.language_of(&uri), expected, "{name}");
-
-            // Closed, the label goes with it, and the path is all there is.
-            close(&mut server, &uri);
-            assert_eq!(server.server_of(&uri), None, "{name}");
-        }
-    }
-
-    /// The editor's id only decides when it names a server. Anything else --
-    /// vscode-proto3 calls a `.proto` `proto3` -- falls through to the path,
-    /// which is where every document routed before the editor was asked.
-    #[test]
-    fn an_id_the_table_does_not_know_falls_back_to_the_path() {
-        let (mut server, _editor) = session(serde_json::json!({"languageServers": false}));
-        let proto = Url::parse("file:///p/api.proto").unwrap();
-        open(&mut server, &proto, "proto3");
-        assert_eq!(server.server_of(&proto), Some("buf"));
-
-        // Never opened at all: a call hierarchy item in another file.
-        let elsewhere = Url::parse("file:///p/other.go").unwrap();
-        assert_eq!(server.server_of(&elsewhere), Some("gopls"));
-    }
-
-    /// poly passes arguments only where the binary is not itself the server.
-    ///
-    /// Everything else it might want — quieter logs, in particular — it gets
-    /// by changing what it does with the output, not by telling the server how
-    /// to behave. terraform-ls has no logging flag at all, which is what
-    /// settled that.
-    #[test]
-    fn only_a_server_that_needs_a_subcommand_gets_arguments() {
-        assert_eq!(args_for(LAUNCH, "terraform-ls"), ["serve"]);
-        for own_entry_point in [
-            "gopls",
-            "rust-analyzer",
-            "clangd",
-            "sourcekit-lsp",
-            "lua-language-server",
-        ] {
-            assert!(
-                args_for(LAUNCH, own_entry_point).is_empty(),
-                "{own_entry_point}"
-            );
-        }
     }
 
     /// Problems has to carry everything the terminal carries, in the same
@@ -4293,6 +2441,26 @@ mod tests {
         assert_eq!(apply("a\nb", &edits), "a\nB");
     }
 
+    /// A session over an in-memory pipe, and the editor's end of it.
+    ///
+    /// Lint is off: linting would resolve the tools a file needs -- a download
+    /// on a machine that does not have them.
+    fn session(mut options: serde_json::Value) -> (Server, Connection) {
+        let (server, editor) = Connection::memory();
+        options["lintOnSave"] = serde_json::json!(false);
+        let init = serde_json::json!({ "initializationOptions": options });
+        (Server::new(server, init), editor)
+    }
+
+    /// A project of its own, so no poly.toml above the temp dir decides
+    /// anything.
+    fn project() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        std::fs::write(root.join("poly.toml"), "").unwrap();
+        (dir, root)
+    }
+
     /// Format Document answers with the lines that changed, not the document.
     ///
     /// It used to answer with one edit replacing everything, and the format
@@ -4302,9 +2470,9 @@ mod tests {
     /// shows it.
     #[test]
     fn format_document_leaves_the_lines_it_did_not_change_alone() {
-        let (_dir, root) = project("");
+        let (_dir, root) = project();
         let (mut server, _editor) = session(serde_json::json!({}));
-        let uri = file_uri(&root, "a.json");
+        let uri = Url::from_file_path(root.join("a.json")).unwrap();
         let text = "{\n  \"a\":  1,\n  \"b\": 2,\n  \"c\":  3\n}\n";
         server
             .on_notification(Notification::new(
@@ -4330,7 +2498,7 @@ mod tests {
     /// name with no extension is a language poly cannot name, and gets nothing.
     #[test]
     fn an_untitled_buffer_formats_as_the_path_it_is_given() {
-        let (_dir, root) = project("");
+        let (_dir, root) = project();
         let text = "{\"a\":1,\n\n\"b\":2}\n";
         let named = root.join("Untitled-1.json");
         let edits =

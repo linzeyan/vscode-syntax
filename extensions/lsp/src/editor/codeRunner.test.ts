@@ -6,10 +6,8 @@ import { test } from "node:test";
 import { commandLine, ExecutorSettings, fallbackPython, resolveExecutor } from "./codeRunner/executor";
 
 const manifest = JSON.parse(readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8"));
-const group = manifest.contributes.configuration.find(
-  (one: { properties: Record<string, unknown> }) => "poly.codeRunner.enabled" in one.properties,
-);
-const defaultOf = (key: string) => group.properties[`poly.codeRunner.${key}`].default;
+const defaults = manifest.contributes.configuration.properties.poly.default.codeRunner;
+const defaultOf = (key: string) => defaults[key];
 
 /** What the shipped settings say, untouched -- what a user who changed nothing runs with. */
 const SHIPPED: ExecutorSettings = {
@@ -152,17 +150,12 @@ test("the lens offers run wherever the shipped table has an answer, and nowhere 
   assert.equal(resolveExecutor(SHIPPED, file("plaintext", "/w/notes.txt")), undefined);
 });
 
-test("Code Runner's switch is first in its group, off, and right after CodeLens", () => {
-  const keys = Object.keys(group.properties);
-  assert.equal(keys[0], "poly.codeRunner.enabled");
-  assert.equal(group.properties["poly.codeRunner.enabled"].default, false);
-  // The Settings editor sorts by name; `order` is what keeps it on top.
-  assert.equal(group.properties["poly.codeRunner.enabled"].order, 0);
-  const codeLens = manifest.contributes.configuration.find((one: { title: string }) => one.title === "CodeLens");
-  assert.equal(group.order, codeLens.order + 1);
+test("Code Runner is off until switched on, and carries upstream's settings but telemetry", () => {
+  const keys = Object.keys(defaults);
+  assert.equal(defaultOf("enabled"), false);
   // Upstream's telemetry switch is not carried over; everything else is.
   assert.equal(keys.length, 23);
-  assert.ok(!keys.includes("poly.codeRunner.enableAppInsights"));
+  assert.ok(!keys.includes("enableAppInsights"));
 });
 
 test("Code Runner's commands show only when switched on and not standing aside", () => {

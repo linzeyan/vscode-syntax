@@ -50,7 +50,7 @@ const { runTests } = require(join(LSP, "node_modules", "@vscode", "test-electron
 const { render } = require("./report");
 
 /** In the order they were written, which is also the order they are cheapest. */
-const SETS = ["unicode", "format", "shell", "refview"].map((id) => require(`./sets/${id}.js`));
+const SETS = ["unicode", "format", "refview"].map((id) => require(`./sets/${id}.js`));
 
 const POLY_IDS = ["ricky.poly-lsp", "ricky.poly-syntax-highlight"];
 

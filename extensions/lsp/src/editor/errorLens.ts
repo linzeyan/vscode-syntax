@@ -1,6 +1,8 @@
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { affects, setPoly } from "../settings";
+
 /**
  * usernamehw.errorlens, vendored in ./errorLens and bundled to dist/errorLens:
  * each problem's message at the end of its line, the line tinted by severity,
@@ -12,7 +14,11 @@ const ORIGINAL = "usernamehw.errorlens";
 
 /** Upstream's own entry point, with poly's one addition (see ./errorLens/README.md). */
 interface ErrorLens {
-  activate(context: vscode.ExtensionContext, standAside: () => boolean): () => void;
+  activate(
+    context: vscode.ExtensionContext,
+    standAside: () => boolean,
+    writeSetting: (settingId: string, value: unknown) => Promise<void>,
+  ): () => void;
 }
 
 /** Sets Error Lens up to load once it is switched on or one of its commands is run. */
@@ -42,7 +48,11 @@ export function registerErrorLens(context: vscode.ExtensionContext): void {
   const load = () => {
     if (!refresh) {
       standIns.forEach((standIn) => standIn.dispose());
-      refresh = (require(path.join(__dirname, "errorLens", "extension.js")) as ErrorLens).activate(context, yielded);
+      refresh = (require(path.join(__dirname, "errorLens", "extension.js")) as ErrorLens).activate(
+        context,
+        yielded,
+        setPoly,
+      );
     }
   };
   // Once loaded, upstream follows its own settings; what it cannot see is the
@@ -60,7 +70,7 @@ export function registerErrorLens(context: vscode.ExtensionContext): void {
     ...standIns,
     vscode.extensions.onDidChange(update),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (!refresh && event.affectsConfiguration("poly.errorLens.enabled")) {
+      if (!refresh && affects(event, "poly.errorLens.enabled")) {
         update();
       }
     }),

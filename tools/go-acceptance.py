@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """End-to-end acceptance for poly's Go support.
 
-Go is the language poly does the most for: gofumpt formats it, golangci-lint
-lints it, gopls answers language requests through the proxy. Until this file
-existed no gate ever ran the first two against a real Go project -- the Rust
-tests only cover `gofumpt = "off"`, which is the path where nothing runs at all,
-and `make dogfood` has no Go in it to find. The proxy probe covers gopls; this
+Go is the language poly does the most for: gofumpt formats it and
+golangci-lint lints it. Until this file existed no gate ever ran either against
+a real Go project -- the Rust tests only cover `gofumpt = "off"`, which is the
+path where nothing runs at all, and `make dogfood` has no Go in it to find. This
 covers the two tools that are poly's own to drive, the module grouping that is
 Go-specific, and the one place the editor and the CLI disagree.
 
@@ -264,7 +263,6 @@ def editor_diagnostics(root, name, text, seconds=25):
                 "processId": None,
                 "rootUri": f"file://{root}",
                 "workspaceFolders": [{"uri": f"file://{root}", "name": "go"}],
-                "initializationOptions": {"languageServers": True},
                 "capabilities": {
                     "workspace": {"configuration": True},
                     "textDocument": {"publishDiagnostics": {}},
@@ -327,8 +325,7 @@ def editor_diagnostics(root, name, text, seconds=25):
 # daemon had only that path, Go was the one language where CI could go red over
 # something the editor never mentioned.
 #
-# Kept as an exact set rather than deleted, the same way the proxy probe records
-# a server that lies about its capabilities. It fails when the gap widens and it
+# Kept as an exact set rather than deleted. It fails when the gap widens and it
 # fails when it narrows, and an empty set is a claim worth defending: A4 says the
 # editor and CI must never give different answers, and this is the one gate that
 # measures it for Go.
@@ -338,23 +335,26 @@ EDITOR_NEVER_SEES = set()
 def editor_and_cli_agree():
     """The same file, asked twice: does Problems say what `poly check` says?
 
-    Not "does the editor say nothing" -- gopls has analyzers of its own and
-    catches some of this under its own names, which is exactly why the
-    comparison has to be by source rather than by count.
+    Compared by source rather than by count, so a tool that reaches Problems
+    under its own name is told apart from one that does not reach it at all.
 
-    The second half is the interference question. Three publishers speak about
-    this one file on three unrelated clocks: the per-file linters on save, gopls
-    whenever it finishes thinking, and golangci-lint whenever the module
-    finishes compiling. `publishDiagnostics` replaces the whole set for a uri, so
-    any of them sending only its own half would erase the other two -- and it
+    The second half is the interference question. Two publishers speak about
+    this one file on unrelated clocks: the per-file linters on save, and
+    golangci-lint whenever the module finishes compiling. `publishDiagnostics` replaces the whole set for a uri, so
+    either of them sending only its own half would erase the other -- and it
     would erase them intermittently, which is the kind of bug that survives a
     gate that only looks at the union.
     """
+    # A misspelling, so the per-file linters have something to publish too and
+    # the interference check has two publishers to tell apart.
+    text = UNUSED_AND_UNCHECKED.replace(
+        "func unusedHelper", "// unusedHelper would recieve nothing.\nfunc unusedHelper"
+    )
     root = fixture(
         "poly-go-a4-",
         {
             "go.mod": GO_MOD.format(name="example.com/a4case"),
-            "main.go": UNUSED_AND_UNCHECKED,
+            "main.go": text,
         },
     )
     _, output = poly("check", ".", cwd=root)
@@ -363,12 +363,12 @@ def editor_and_cli_agree():
         for line in output.splitlines()
         if "] " in line and "[" in line
     }
-    in_editor, still_there = editor_diagnostics(root, "main.go", UNUSED_AND_UNCHECKED)
+    in_editor, still_there = editor_diagnostics(root, "main.go", text)
     shutil.rmtree(root, ignore_errors=True)
     print(f"  poly check reports: {sorted(from_check)}")
     print(f"  the editor publishes: {sorted(in_editor)}")
     assert from_check, f"no findings from check at all; the fixture is stale:\n{output}"
-    assert in_editor, "the editor published nothing; gopls never answered"
+    assert in_editor, "the editor published nothing"
 
     missing = from_check - in_editor
     assert missing == EDITOR_NEVER_SEES, (
@@ -388,8 +388,8 @@ def editor_and_cli_agree():
     )
     assert still_there - {"golangci-lint"}, (
         f"only golangci-lint survived: the final publish for main.go was "
-        f"{sorted(still_there)}, so package lint erased what gopls and the "
-        "per-file linters had already put there."
+        f"{sorted(still_there)}, so package lint erased what the per-file "
+        "linters had already put there."
     )
     print("  every publisher's findings are in it, so none of them erases another")
 

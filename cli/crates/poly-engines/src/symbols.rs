@@ -2,8 +2,8 @@
 //! answers them for.
 //!
 //! Everywhere else poly counts answers somebody else produced: the reference
-//! lens asks the editor, and the editor asks gopls or lua-language-server
-//! through `poly lsp`'s proxy. GraphQL and nginx are the exception, taken on
+//! lens asks the editor, and the editor asks whichever language server the
+//! user installed for the language. GraphQL and nginx are the exception, taken on
 //! purpose on 2026-10-05: graphql-language-service-server never implemented
 //! `textDocument/references` and answers nothing at all without a
 //! graphql-config, and no nginx server answers references.

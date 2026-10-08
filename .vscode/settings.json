@@ -1,3 +1,5 @@
 {
-  "poly.serverPath": "cli/target/release/poly"
+  "poly": {
+    "serverPath": "cli/target/release/poly"
+  }
 }

@@ -1,6 +1,6 @@
 import { AbortController as AbortControllerShim } from 'abort-controller'
 import fetchPonyfill from 'fetch-ponyfill'
-import { TextDocument, Uri, workspace } from 'vscode'
+import { ConfigurationChangeEvent, TextDocument, Uri, workspace } from 'vscode'
 
 export const _fetchPonyfillInstance = fetchPonyfill()
 
@@ -47,6 +47,21 @@ export const fetch = (url: string, { timeout = 5000 }: FetchOption = {}) => {
 
 export const marpConfiguration = () =>
   workspace.getConfiguration('poly.marp')
+
+// poly: Poly's settings are one `poly` object, and the editor reports a change
+// anywhere in it as a change to `poly` alone, so `affectsConfiguration` cannot
+// tell `poly.marp.html` from any other key. This compares the section's value
+// with the one this caller saw last -- call it on every event.
+export const watchSetting = (section: string) => {
+  let last = JSON.stringify(workspace.getConfiguration().get(section))
+  return (e: ConfigurationChangeEvent) => {
+    if (!e.affectsConfiguration('poly')) return false
+    const now = JSON.stringify(workspace.getConfiguration().get(section))
+    const changed = now !== last
+    last = now
+    return changed
+  }
+}
 
 export const mathTypesettingConfiguration = () => {
   const conf = marpConfiguration().get<'off' | 'katex' | 'mathjax'>(

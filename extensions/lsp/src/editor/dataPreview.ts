@@ -12,6 +12,7 @@ import { existsSync, promises as fs, statSync } from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { affects } from "../settings";
 import type { Loaded } from "./dataPreviewData";
 
 const ROOT = path.join(__dirname, "data-preview");
@@ -436,7 +437,7 @@ export function registerDataPreview(context: vscode.ExtensionContext) {
     // same html, which the webview ignores, so a new theme showed only in a
     // new preview.
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.dataPreview.theme")) { for (const one of previews) one.retheme(); }
+      if (affects(event, "poly.dataPreview.theme")) { for (const one of previews) one.retheme(); }
     }),
   );
 }

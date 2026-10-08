@@ -27,6 +27,7 @@ const { tmpdir } = require("node:os");
 const { dirname, join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { gunzipSync } = require("node:zlib");
+const { settingsOf } = require("../ext-diff/settings");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
@@ -185,13 +186,11 @@ async function measure(side, executable, port) {
 function manifestRecord(contributes, prefix, command) {
   const settings = {};
   for (
-    const [key, spec] of Object.entries(
-      Object.assign({}, ...[contributes.configuration].flat().map((one) => one.properties)),
-    )
+    const [key, spec] of Object.entries(settingsOf(contributes))
   ) {
     if (!key.startsWith(prefix)) continue;
     settings[key.slice(prefix.length)] = Object.fromEntries(
-      ["type", "default", "enum", "minimum", "maximum", "scope"].map((field) => [field, spec[field] ?? null]),
+      ["type", "default", "enum", "minimum", "maximum"].map((field) => [field, spec[field] ?? null]),
     );
   }
   const binding = [contributes.keybindings].flat().find((one) => one.command === command) ?? {};

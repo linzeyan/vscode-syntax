@@ -28,7 +28,7 @@ Poly（poly-lsp）的話 Enter 由它接管**，兩者都有。
 
 poly 不帶配色：文法只替 token 取名（scope），顏色是主題給的。
 
-要改某個 scope 的顏色：裝了 Poly（poly-lsp）的話，設定畫面的 `poly.syntaxColors` 是一張
+要改某個 scope 的顏色：裝了 Poly（poly-lsp）的話，settings.json 的 `poly` 區塊裡 `syntaxColors` 是一張
 scope → 顏色的表，`Poly: Set Syntax Color` 從目前這個檔的全部 scope 挑一個寫進去。這個
 extension 本身不帶設定——它沒有執行期程式碼能把設定套到主題上——所以只裝它的話，用 VSCode
 本來就有的 `editor.tokenColorCustomizations.textMateRules`，scope 名稱用內建的

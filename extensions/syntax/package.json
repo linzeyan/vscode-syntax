@@ -16,22 +16,6 @@
     "onStartupFinished"
   ],
   "contributes": {
-    "configuration": {
-      "title": "%configuration.title%",
-      "properties": {
-        "poly.syntax.updateCheck.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "%config.updateCheck.enabled.description%"
-        },
-        "poly.syntax.updateCheck.intervalDays": {
-          "type": "number",
-          "default": 7,
-          "minimum": 0,
-          "description": "%config.updateCheck.intervalDays.description%"
-        }
-      }
-    },
     "languages": [
       {
         "id": "xml",

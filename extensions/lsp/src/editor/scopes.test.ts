@@ -168,8 +168,8 @@ test("the setting becomes rules named after it, after everything that was alread
 });
 
 test("an entry taken out of the setting takes its rule with it, and nothing else", () => {
-  // Removing a key is the only way the Settings editor has to say "back to
-  // the theme's", so the rule it made has to go -- by name, because the scope
+  // Removing a key is the only way the setting has to say "back to the
+  // theme's", so the rule it made has to go -- by name, because the scope
   // alone cannot tell it from the user's own rule for the same scope.
   const mine = { scope: "comment", settings: { foreground: "#FF0000" } };
   const before = {

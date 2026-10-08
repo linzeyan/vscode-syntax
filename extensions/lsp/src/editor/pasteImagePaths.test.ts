@@ -8,12 +8,7 @@ import { expand, imageFileName, imagePath, insertion, Settings } from "./pasteIm
 // The manifest's defaults, so that a default changed there is a default
 // changed here.
 const manifest = JSON.parse(readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8"));
-const DEFAULTS = Object.fromEntries(
-  (manifest.contributes.configuration as { properties: Record<string, { default: unknown }> }[])
-    .flatMap((category) => Object.entries(category.properties))
-    .filter(([key]) => key.startsWith("poly.pasteImage."))
-    .map(([key, { default: value }]) => [key.slice("poly.pasteImage.".length), value]),
-) as unknown as Settings;
+const DEFAULTS = manifest.contributes.configuration.properties.poly.default.pasteImage as Settings;
 
 const FILE = "/work/docs/guide.md";
 const ROOT = "/work";

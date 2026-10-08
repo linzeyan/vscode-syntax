@@ -23,6 +23,12 @@
 # replace rather than append, so a package that sets its own `exclude` drops the
 # repo-root list rather than adding to it.
 #
+# Under them all sits one global file, ~/.config/poly/poly.toml (under
+# $XDG_CONFIG_HOME when set, %APPDATA%\poly\poly.toml on Windows), which is
+# never taken for the project's root. The editor writes it out as this file
+# when it is missing, and again for each new version until a value in it is
+# changed.
+#
 # Both the CLI and the editor read this file. That is the point: a setting only
 # CI sees means the editor is working from a different picture of the project.
 
@@ -339,10 +345,9 @@ include-hidden = false
 # one exact rustc, and a downloaded one would disagree with the compiler that
 # builds the crate.
 #
-# buf does two jobs here -- it formats protobuf, and it is the language server
-# `poly lsp` starts for it -- so an entry here governs both at once, and "off"
-# turns both off. Lint used to be the third and is not any more: poly has its
-# own `.proto` rules, compiled in, and they run whether buf does or not. They
+# buf formats protobuf, so "off" turns that off. Lint used to be its second job
+# and is not any more: poly has its own `.proto` rules, compiled in, and they
+# run whether buf does or not. They
 # are silenced the way poly's Dockerfile and workflow rules are -- `[lint]
 # exclude`, `[lint.per-file-ignores]` and `# poly: ignore poly/proto-...`.
 #
@@ -379,13 +384,11 @@ include-hidden = false
 # `allow_comment_ignores` and v2's `disallow_comment_ignores` are read too, so
 # a project that turned them off keeps them off.
 #
-# The language servers `poly lsp` starts, and the whole-program analyses
-# `poly deadcode` runs, take the same two answers by the name poly runs them
-# under:
+# The whole-program analyses `poly deadcode` runs take the same two answers by
+# the name poly runs them under:
 #
-#   rust-analyzer = "off"                turn off one language's features
-#                                        without turning off the whole proxy
-#   rust-analyzer = "/opt/rust-glancer"  run a drop-in replacement instead
+#   knip = "off"                         turn off one language's analysis
+#   knip = "/opt/knip"                   run a drop-in replacement instead
 #
 # A version is not one of them: these come from the project's own toolchain and
 # poly never downloads them.

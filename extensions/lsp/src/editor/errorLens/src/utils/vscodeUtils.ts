@@ -1,6 +1,6 @@
 import { Constants, type ErrorLensSettings } from 'src/types';
 import { utils } from 'src/utils/utils';
-import { ConfigurationTarget, Range, Selection, StatusBarAlignment, StatusBarItem, TextEditorRevealType, Uri, commands, window, workspace, type TextDocument, type TextEditor } from 'vscode';
+import { Range, Selection, StatusBarAlignment, StatusBarItem, TextEditorRevealType, Uri, commands, window, workspace, type TextDocument, type TextEditor } from 'vscode';
 
 /** VSCode span accepts only #fff #fff0 #fffff #ffffff00 var(--vscode...) color formats. */
 type ColorFormat = `#${string}` | `var(--vscode-${string}`;
@@ -8,11 +8,15 @@ let tempStatusBarItem: StatusBarItem | undefined;
 
 export const vscodeUtils = {
 	/**
+	 * poly: Poly's writer for its `poly` settings block, handed in by `activate`.
+	 * The editor's own refuses `poly.errorLens.*`, which is not a registered key.
+	 */
+	writeSetting: undefined as ((settingId: string, newValue: unknown) => Promise<void>) | undefined,
+	/**
 	 * Update global settings.json file with the new setting value.
 	 */
 	async updateGlobalSetting(settingId: ErrorLensSettings, newValue: unknown): Promise<void> {
-		const vscodeConfig = workspace.getConfiguration();
-		await vscodeConfig.update(settingId, newValue, ConfigurationTarget.Global);
+		await vscodeUtils.writeSetting!(settingId, newValue);
 	},
 	/**
 	 * Update global settings.json file with the toggled boolean setting.

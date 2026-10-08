@@ -1,0 +1,6 @@
+# Tests read poly.toml through `Config::discover`, which also merges the user's
+# global file (`poly_core::global_config`). Pointed at an empty directory so a
+# customised ~/.config/poly/poly.toml cannot make the suite pass or fail on one
+# machine and not on CI. `cargo run` sees it too; the release binary does not.
+[env]
+XDG_CONFIG_HOME = { value = "cli/target/no-global-config", relative = true }

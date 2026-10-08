@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { affects } from "../settings";
 import type { MarkdownIt } from "./markdownIt";
 
 /**
@@ -60,7 +61,7 @@ export function registerMarp(context: vscode.ExtensionContext): (md: MarkdownIt)
     // Once loaded, Marp refreshes the preview on its own settings; before
     // that nobody is listening, and a switch turned on would show nothing.
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (!marp && event.affectsConfiguration("poly.marp.enabled")) {
+      if (!marp && affects(event, "poly.marp.enabled")) {
         void vscode.commands.executeCommand("markdown.preview.refresh");
       }
     }),

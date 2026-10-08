@@ -167,10 +167,10 @@ export const SYNTAX_COLORS_RULE = "poly.syntaxColors";
  * `customizations` with poly's rules rebuilt from `colors`, or `undefined`
  * when they already match and nothing needs writing.
  *
- * `poly.syntaxColors` exists because a colour has to be settable from the
- * Settings editor, and `editor.tokenColorCustomizations` can only be edited as
- * JSON. But the theme only reads the latter, and no API colours a token any
- * other way, so the setting is mirrored into it.
+ * `poly.syntaxColors` exists because a colour should be one line --
+ * `"comment": "#6A9955 italic"` -- where `editor.tokenColorCustomizations`
+ * wants a textMateRules entry for it. But the theme only reads the latter, and
+ * no API colours a token any other way, so the setting is mirrored into it.
  *
  * Everything not carrying `SYNTAX_COLORS_RULE` is carried over untouched: the
  * user's own rules, the shorthand keys (`comments`, `keywords`) and the

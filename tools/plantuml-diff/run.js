@@ -27,6 +27,7 @@ const { tmpdir } = require("node:os");
 const { dirname, join, relative, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { gunzipSync } = require("node:zlib");
+const { settingsOf } = require("../ext-diff/settings");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
@@ -278,21 +279,13 @@ function tree(dir) {
 }
 
 /**
- * jebbs's settings against poly's: type, default, allowed values and scope.
- * The scope is the part no run here can see -- both sides write the workspace,
- * where a window-scoped setting reads the same as a resource-scoped one, and
- * the difference only shows in a multi-root folder's own settings.
+ * jebbs's settings against poly's: type, default and allowed values.
  */
 function manifestProblems(extensions) {
   const dir = readdirSync(extensions).find((one) => one.startsWith("jebbs.plantuml-"));
   const theirs = JSON.parse(readFileSync(join(extensions, dir, "package.json"), "utf8"))
     .contributes.configuration.properties;
-  const ours = Object.assign(
-    {},
-    ...[JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes.configuration]
-      .flat()
-      .map((one) => one.properties),
-  );
+  const ours = settingsOf(JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes);
   // jebbs's misspelling is not carried over, and `jar` is poly.toml's [tools].
   // poly: ignore typos/typo
   const renamed = { exportIncludeFolderHeirarchy: "exportIncludeFolderHierarchy" };
@@ -308,7 +301,7 @@ function manifestProblems(extensions) {
       continue;
     }
     const expected = { ...spec, default: name in defaults ? defaults[name] : spec.default };
-    for (const field of ["type", "default", "enum", "scope"]) {
+    for (const field of ["type", "default", "enum"]) {
       if (JSON.stringify(expected[field]) !== JSON.stringify(mine[field])) {
         problems.push(
           `setting ${key} ${field}: jebbs ${JSON.stringify(expected[field])} poly ${JSON.stringify(mine[field])}`,

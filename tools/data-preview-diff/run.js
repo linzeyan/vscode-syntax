@@ -26,6 +26,7 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { gunzipSync } = require("node:zlib");
+const { settingsOf } = require("../ext-diff/settings");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
@@ -225,9 +226,7 @@ function manifestRecord(manifest, nls, prefix, commands, viewType) {
   const { contributes } = manifest;
   const settings = {};
   for (
-    const [key, spec] of Object.entries(
-      Object.assign({}, ...[contributes.configuration].flat().map((one) => one.properties)),
-    )
+    const [key, spec] of Object.entries(settingsOf(contributes))
   ) {
     if (!key.startsWith(prefix)) continue;
     settings[key.slice(prefix.length)] = Object.fromEntries(

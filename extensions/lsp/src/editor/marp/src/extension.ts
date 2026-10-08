@@ -19,19 +19,11 @@ import lineNumber from './plugins/line-number'
 import outline, { rule as outlineRule } from './plugins/outline'
 import { isOverflowTrackerEvent } from './preview/overflow-tracker'
 import themes, { Themes } from './themes'
-import { detectMarpFromMarkdown, marpConfiguration } from './utils'
+import { detectMarpFromMarkdown, marpConfiguration, watchSetting } from './utils'
 
-const shouldRefreshConfs = [
-  'poly.marp.enabled',
-  'poly.marp.breaks',
-  'poly.marp.diagnostics.slideContentOverflow',
-  'poly.marp.html',
-  'poly.marp.mathTypesetting',
-  'poly.marp.outlineExtension',
-  'poly.marp.themes',
-  'markdown.preview.breaks',
-  'markdown.preview.typographer',
-]
+// poly: every `poly.marp` key, through `watchSetting` (see utils.ts).
+const shouldRefreshConfs = ['markdown.preview.breaks', 'markdown.preview.typographer']
+const marpSettingsChanged = watchSetting('poly.marp')
 
 const applyRefreshedConfiguration = () => {
   clearMarpCoreOptionCache()
@@ -202,7 +194,7 @@ export const activate = ({ subscriptions }: ExtensionContext) => {
     ),
     themes,
     workspace.onDidChangeConfiguration((e) => {
-      if (shouldRefreshConfs.some((c) => e.affectsConfiguration(c))) {
+      if (marpSettingsChanged(e) || shouldRefreshConfs.some((c) => e.affectsConfiguration(c))) {
         applyRefreshedConfiguration()
       }
     }),

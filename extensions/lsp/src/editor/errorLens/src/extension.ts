@@ -6,6 +6,7 @@ import { StatusBarMessage } from 'src/statusBar/statusBarMessage';
 import { Constants, type ExtensionConfig } from 'src/types';
 import { extUtils } from 'src/utils/extUtils';
 import { Logger } from 'src/utils/logger';
+import { vscodeUtils } from 'src/utils/vscodeUtils';
 import { workspace, type ExtensionContext } from 'vscode';
 import { ErrorLensCodeLens } from './codeLens';
 
@@ -94,7 +95,12 @@ export abstract class $state {
 	};
 }
 
-export function activate(context: ExtensionContext, standAside: () => boolean): () => void {
+export function activate(
+	context: ExtensionContext,
+	standAside: () => boolean,
+	writeSetting: (settingId: string, newValue: unknown) => Promise<void>,
+): () => void {
+	vscodeUtils.writeSetting = writeSetting;
 	$state.logger = new Logger({
 		// isDev: context.extensionMode === ExtensionMode.Development,
 		isDev: false,
@@ -128,9 +134,15 @@ export function activate(context: ExtensionContext, standAside: () => boolean): 
 		forgetInlineMessagesViewportLimit(document.uri);
 	}));
 
+	// poly: Poly's settings are one `poly` object, and a change anywhere in it is
+	// reported as `poly` alone, so this section's value is compared instead.
+	let seenSettings = JSON.stringify(workspace.getConfiguration().get(Constants.SettingsPrefix));
 	context.subscriptions.push(workspace.onDidChangeConfiguration(e => {
+		const settings = JSON.stringify(workspace.getConfiguration().get(Constants.SettingsPrefix));
+		const ownChanged = settings !== seenSettings;
+		seenSettings = settings;
 		if (
-			!e.affectsConfiguration(Constants.SettingsPrefix) &&
+			!ownChanged &&
 			!e.affectsConfiguration('problems.visibility') &&
 			!e.affectsConfiguration('files.autoSave') &&
 			!e.affectsConfiguration('editor.fontSize')

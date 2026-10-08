@@ -10,6 +10,7 @@
 import { randomBytes } from "crypto";
 import * as vscode from "vscode";
 
+import { affects as affectsSetting, setPoly } from "../settings";
 import { BinaryDocument, BinaryEditorProvider } from "./binaryDocument";
 import { contentTypeOf, excalidrawHtml, imageParams, ImageSetting, isScene, LANGUAGES, sceneName } from "./excalidraw";
 
@@ -78,7 +79,7 @@ async function setUp(context: vscode.ExtensionContext, document: BinaryDocument,
   webview.options = { enableScripts: true };
   let library = libraryUri(document.uri);
   const affects = (event: vscode.ConfigurationChangeEvent, key: string) =>
-    event.affectsConfiguration(`${SETTINGS}.${key}`, document.uri);
+    affectsSetting(event, `${SETTINGS}.${key}`, document.uri);
 
   const render = async () => {
     const dist = vscode.Uri.joinPath(context.extensionUri, "dist", "excalidraw");
@@ -220,7 +221,7 @@ function pickTheme() {
     : inspect?.workspaceValue
     ? vscode.ConfigurationTarget.Workspace
     : vscode.ConfigurationTarget.Global;
-  const set = (theme: string | undefined) => config.update("theme", theme, target);
+  const set = (theme: string | undefined) => setPoly(`${SETTINGS}.theme`, theme, target);
 
   const pick = vscode.window.createQuickPick();
   pick.items = [

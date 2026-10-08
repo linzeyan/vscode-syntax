@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { affects, setPoly } from "../settings";
 import { registerAutocorrect } from "./autocorrectEditor";
 import { nextChangedFile } from "./changes";
 import type { Conversion } from "./chinese";
@@ -62,13 +63,9 @@ import { ReferenceTree, registerReferenceTree } from "./referenceTree";
 import { cacheDir, RefStore } from "./refStore";
 import { entryLine, entryPoints, findsEntryInText } from "./runnable";
 import { colorSheet, parseStyle, scopesIn, styleText, withSyntaxColors } from "./scopes";
-import { offerMessage, serverToOffer } from "./servers";
 import { registerSwaggerViewer } from "./swaggerViewer";
 import { registerTodoTree } from "./todoTree";
 import { drawsNothing, explain, findSuspects, label, Level, levelOf, Suspect, SUSPECTS } from "./unicode";
-
-/** Languages already offered a server this session — see `offerServer`. */
-const offered = new Set<string>();
 
 /**
  * The editor features' own log, "Poly Editor" in the Output panel -- apart
@@ -81,39 +78,6 @@ const offered = new Set<string>();
  * a missing lens turns them on with "Developer: Set Log Level".
  */
 let log: vscode.LogOutputChannel | undefined;
-
-/**
- * Say why a lens that is switched on is drawing nothing, once.
- *
- * Called only where a provider has already been asked and come back empty, so
- * this never fires for someone whose official extension is answering happily.
- * Silent unless `poly.languageServers` is off: it is the only setting this can
- * offer, and offering to change one that is already on would be advice that
- * does nothing.
- */
-async function offerServer(what: string, languageId: string): Promise<void> {
-  const server = serverToOffer(languageId, offered);
-  if (!server) {
-    return;
-  }
-  const config = vscode.workspace.getConfiguration("poly");
-  if (config.get<boolean>("languageServers", false)) {
-    return;
-  }
-  offered.add(languageId);
-  const pick = await vscode.window.showInformationMessage(
-    offerMessage(what, languageId, server),
-    "Enable and Reload",
-    "Not now",
-  );
-  if (pick === "Enable and Reload") {
-    // The daemon reads this when it spawns, so a running one keeps the answer
-    // it started with -- which is why the offer says "and reload" rather than
-    // leaving the user to discover that it changed nothing.
-    await config.update("languageServers", true, vscode.ConfigurationTarget.Global);
-    await vscode.commands.executeCommand("workbench.action.reloadWindow");
-  }
-}
 
 /**
  * A `path:line` reference, in the shape poly's diagnostics already print.
@@ -666,7 +630,7 @@ function tintIndentation(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.indentTint")) {
+      if (affects(event, "poly.indentTint")) {
         repaintAll();
       }
     }),
@@ -774,7 +738,7 @@ function highlightUnicode(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.unicodeHighlight")) {
+      if (affects(event, "poly.unicodeHighlight")) {
         repaintAll();
       }
     }),
@@ -944,7 +908,7 @@ function previewImages(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.imagePreview")) {
+      if (affects(event, "poly.imagePreview")) {
         repaintAll();
       }
     }),
@@ -1226,7 +1190,7 @@ async function showSyntaxColors(editor: vscode.TextEditor): Promise<void> {
  * file is exactly what was asked for -- and the editor recolours on the spot,
  * which is the preview. Into the setting rather than straight into
  * `editor.tokenColorCustomizations`, so that every colour poly set is in the
- * one list the Settings editor shows and can take back out.
+ * one list, the `poly` block's `syntaxColors`, and can be taken back out there.
  */
 async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
   const languageId = editor.document.languageId;
@@ -1235,7 +1199,7 @@ async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
     return;
   }
   const config = vscode.workspace.getConfiguration("poly");
-  const colors = { ...config.get<Record<string, string>>("syntaxColors", {}) };
+  const colors = { ...config.inspect<Record<string, string>>("syntaxColors")?.globalValue };
   const picked = await vscode.window.showQuickPick(
     found.scopes.map((scope) => ({ label: scope, description: colors[scope] ?? "" })),
     { placeHolder: `The ${languageId} scope to colour -- type to filter, e.g. comment or keyword` },
@@ -1264,7 +1228,7 @@ async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
   } else {
     delete colors[picked.label];
   }
-  await config.update("syntaxColors", colors, vscode.ConfigurationTarget.Global);
+  await setPoly("syntaxColors", colors);
 }
 
 /**
@@ -1272,13 +1236,14 @@ async function setSyntaxColor(editor: vscode.TextEditor): Promise<void> {
  *
  * On activation as well as on change, because settings.json can be edited, or
  * synced in, while no window is open to see it happen. Every window does this
- * and they agree: the setting is application-scoped, so all of them read the
- * same value, and `withSyntaxColors` says there is nothing to write once one
- * of them has.
+ * and they agree: each reads the user's value alone, never a workspace's --
+ * that one would differ per window, and be written into the user's settings
+ * -- so `withSyntaxColors` says there is nothing to write once one has.
  */
 function mirrorSyntaxColors(context: vscode.ExtensionContext): void {
   const mirror = async () => {
-    const colors = vscode.workspace.getConfiguration("poly").get<Record<string, unknown>>("syntaxColors", {});
+    const colors = vscode.workspace.getConfiguration("poly").inspect<Record<string, unknown>>("syntaxColors")
+      ?.globalValue ?? {};
     const editor = vscode.workspace.getConfiguration("editor");
     const next = withSyntaxColors(editor.inspect("tokenColorCustomizations")?.globalValue, colors);
     if (next) {
@@ -1288,7 +1253,7 @@ function mirrorSyntaxColors(context: vscode.ExtensionContext): void {
   void mirror();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.syntaxColors")) {
+      if (affects(event, "poly.syntaxColors")) {
         void mirror();
       }
     }),
@@ -1478,7 +1443,7 @@ async function answersImplementations(
  *
  * The counts come from `vscode.executeReferenceProvider` and
  * `vscode.executeImplementationProvider`, which is to say from whichever
- * providers are registered — for Go that is poly-lsp's proxy in front of gopls,
+ * providers are registered — for Go that is gopls via the Go extension,
  * for TypeScript the built-in server, for Python whatever the user installed.
  * poly analyses nothing here; see `references.ts`.
  *
@@ -1614,7 +1579,6 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
       // No symbol provider, or one that has not finished loading the project.
       // Either way there is nothing to hang a count on yet.
       if (!symbols) {
-        void offerServer("the outline", document.languageId);
         askAgainLater(document.uri, "no outline");
         return [];
       }
@@ -1653,10 +1617,7 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         if (token.isCancellationRequested) {
           return [];
         }
-        // There are declarations and nothing will say who uses them. For a
-        // shell function that is the whole feature missing, and it was
-        // reported as one.
-        void offerServer("references", document.languageId);
+        // There are declarations and nothing will say who uses them.
         askAgainLater(document.uri, "no reference provider answered");
         return [];
       }
@@ -1779,7 +1740,7 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
     // stale the moment it changed.
     vscode.languages.registerCodeLensProvider({ scheme: "file" }, provider),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.referencesCodeLens")) {
+      if (affects(event, "poly.referencesCodeLens")) {
         changed.fire();
       }
     }),
@@ -1847,7 +1808,7 @@ function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager
     vscode.commands.registerCommand("poly.runFile", (uri?: vscode.Uri) => codeRunner.run(null, uri, true)),
     vscode.workspace.onDidChangeConfiguration((event) => {
       // The executor maps decide where `run` appears.
-      if (event.affectsConfiguration("poly.runCodeLens") || event.affectsConfiguration("poly.codeRunner")) {
+      if (affects(event, "poly.runCodeLens") || affects(event, "poly.codeRunner")) {
         changed.fire();
       }
     }),
@@ -1925,12 +1886,9 @@ function linkGeneratedGo(context: vscode.ExtensionContext): void {
       const symbols = await vscode.commands.executeCommand<
         vscode.DocumentSymbol[]
       >("vscode.executeDocumentSymbolProvider", document.uri);
-      // The generated Go is right there and the .proto side is blank, which
-      // means nothing is reading the .proto. This is the one place that can
-      // tell the difference between "not generated yet" -- handled above, by
-      // returning early -- and "generated, but poly is not running buf".
+      // The generated Go is right there and the .proto side is blank: nothing
+      // installed reads a .proto outline (the Buf extension does).
       if (!symbols || symbols.length === 0) {
-        void offerServer("the .proto outline", document.languageId);
         return [];
       }
       const pkg = protoPackage(document.getText());
@@ -1979,7 +1937,7 @@ function linkGeneratedGo(context: vscode.ExtensionContext): void {
     changed,
     vscode.languages.registerCodeLensProvider({ language: "protobuf" }, provider),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.protobufCodeLens")) {
+      if (affects(event, "poly.protobufCodeLens")) {
         changed.fire();
       }
     }),
@@ -2364,7 +2322,7 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         ["poly.markdownMermaid", "poly.markdownDiagrams", "poly.markdownGithubStyle"].some((section) =>
-          event.affectsConfiguration(section)
+          affects(event, section)
         )
       ) {
         void vscode.commands.executeCommand("markdown.preview.refresh");

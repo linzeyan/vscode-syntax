@@ -317,8 +317,6 @@ jobs:
       # Was `@latest`, which made the analyser under test a different program on
       # different days and gave the cache nothing to key on.
       DEADCODE_VERSION: v0.49.0
-      TERRAFORM_LS_VERSION: 0.39.0
-      LUA_LS_VERSION: 3.19.1
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -333,7 +331,7 @@ jobs:
           save-if: false
           cache-on-failure: true
       # As in the cli job, for this job's set: golangci-lint, tflint, and the
-      # arity and buf the proxy probe starts.
+      # buf the lens probe asks.
       - name: Cache poly's downloaded tools
         uses: actions/cache@v4
         with:
@@ -343,95 +341,40 @@ jobs:
       # gopls` compiles a large Go program from source, and it did so on every
       # push. Everything here is content-addressed by version, so the only miss
       # is a bump.
-      #
-      # They install under $HOME rather than /usr/local and /opt because a cache
-      # cannot restore what it needed sudo to write.
       - name: Cache the pinned servers and analysers
         id: servers
         uses: actions/cache@v4
         with:
-          path: |
-            ~/go/bin
-            ~/ci-tools
-          key: servers-${{ runner.os }}-gopls${{ env.GOPLS_VERSION }}-deadcode${{ env.DEADCODE_VERSION }}-tfls${{ env.TERRAFORM_LS_VERSION }}-lua${{ env.LUA_LS_VERSION }}
+          path: ~/go/bin
+          key: servers-${{ runner.os }}-gopls${{ env.GOPLS_VERSION }}-deadcode${{ env.DEADCODE_VERSION }}
       - name: Install the pinned servers and analysers
         if: steps.servers.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/ci-tools/bin"
           go install "golang.org/x/tools/gopls@$GOPLS_VERSION"
           # Not part of the Go toolchain: deadcode lives in golang.org/x/tools,
           # and without it the cross-module section of the Go gate would be the
           # one thing here nobody measures.
           go install "golang.org/x/tools/cmd/deadcode@$DEADCODE_VERSION"
-          # terraform-ls is the only server whose binary is not itself the
-          # language server (`terraform-ls serve`), so it is the only thing
-          # exercising the LAUNCH table. Without it that path is untested here.
-          curl -sSLo /tmp/terraform-ls.zip \
-            "https://releases.hashicorp.com/terraform-ls/${TERRAFORM_LS_VERSION}/terraform-ls_${TERRAFORM_LS_VERSION}_linux_amd64.zip"
-          unzip -q -o -d "$HOME/ci-tools/bin" /tmp/terraform-ls.zip
-          # lua carries the probe's only merged-diagnostics case: it is the one
-          # language here where poly runs a linter of its own (selene) while a
-          # server is also publishing, so it is the only thing proving the two
-          # sets are merged rather than one erasing the other.
-          #
-          # The tarball has no top-level directory and the binary needs the
-          # meta/ and script/ trees beside it, so it gets its own prefix rather
-          # than being unpacked next to the loose binaries.
-          curl -sSLo /tmp/lua-ls.tar.gz \
-            "https://github.com/LuaLS/lua-language-server/releases/download/${LUA_LS_VERSION}/lua-language-server-${LUA_LS_VERSION}-linux-x64.tar.gz"
-          mkdir -p "$HOME/ci-tools/lua-language-server"
-          tar xzf /tmp/lua-ls.tar.gz -C "$HOME/ci-tools/lua-language-server"
       # Runs whether or not the cache hit -- PATH does not survive in a cache.
       - name: Put them on PATH
-        run: |
-          {
-            echo "$(go env GOPATH)/bin"
-            echo "$HOME/ci-tools/bin"
-            echo "$HOME/ci-tools/lua-language-server/bin"
-          } >> "$GITHUB_PATH"
-      # The three that are not worth caching: each comes from a package manager
-      # already on the runner, and none is compiled here.
-      - name: Install clangd, rust-analyzer and bash-language-server
-        run: |
-          sudo apt-get install -y clangd
-          rustup component add rust-analyzer
-          npm install -g bash-language-server
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # Not worth caching: it comes from a package manager already on the
+      # runner, and nothing is compiled.
+      - name: Install bash-language-server
+        run: npm install -g bash-language-server
       - name: Build poly
         run: cargo build --release --manifest-path cli/Cargo.toml
-      - name: Language server proxy probe
-        run: |
-          # The probe skips a language when its server is missing, which is
-          # right on a developer's machine and wrong here: a gate that silently
-          # turns into a no-op is worse than no gate. Assert each one is
-          # present before running it. Since the servers are cached, this is
-          # also what catches a cache that restored something unusable.
-          #
-          # swift is the one language left out: there is no Swift toolchain on
-          # these runners. It stays verified locally on macOS, and the probe
-          # prints the skip rather than passing quietly.
-          #
-          # buf is absent from this list on purpose, not by oversight: poly
-          # downloads it rather than finding it on PATH, so PATH has nothing to
-          # assert. Its case runs unconditionally for the same reason -- if buf
-          # does not come up, that is the finding.
-          gopls version
-          rust-analyzer --version
-          clangd --version
-          terraform-ls version
-          lua-language-server --version
-          bash-language-server --version
-          python tools/lsp-proxy-probe.py cli/target/release/poly
       - name: Lens probe
         run: |
-          # What poly's lenses route to, asked of gopls and buf directly.
+          # What poly's lenses ask for, asked of gopls and buf directly.
           # `--require` turns its skip into a failure: the tools are right here
-          # -- gopls is asserted above and buf is poly's own download -- so a
+          # -- gopls is installed above and buf is poly's own download -- so a
           # skip in this job means something broke, not that a machine is thin.
           #
-          # It is separate from the step above because it is the only thing
-          # standing behind `make ref-lens`'s protobuf and shell sections, which
-          # are deliberately blind to a server changing shape.
+          # It is the only thing standing behind `make ref-lens`'s protobuf
+          # and shell sections, which are deliberately blind to a server
+          # changing shape.
           python tools/lens-probe.py cli/target/release/poly --require
       # The other half of Go, and the half no gate touched until it was written:
       # gofumpt and golangci-lint are poly's own to drive, and the Rust tests

@@ -3,9 +3,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { findNodeAtLocation, parseTree } from "jsonc-parser";
 import * as vscode from "vscode";
 
 import { cacheDir, RefStore } from "../../editor/refStore";
+import { rewrite, withValue, WORDS } from "../../editor/settingsBlock";
 import { commonRoot, useLines } from "../../gowork";
 import { knownNewer, revalidates, updateDue } from "../../update";
 
@@ -39,6 +41,20 @@ async function eventually<T>(
     assert.ok(Date.now() < deadline, `timed out waiting for ${what}`);
     await new Promise((done) => setTimeout(done, 250));
   }
+}
+
+/// Set a key inside `poly` at one scope, or unset it with `undefined`. `poly`
+/// is a single object setting, so the editor's writer takes the whole object at
+/// that scope -- as a hand edit of settings.json would leave it.
+async function setPoly(key: string, value: unknown, target: vscode.ConfigurationTarget): Promise<void> {
+  const config = vscode.workspace.getConfiguration();
+  const seen = config.inspect("poly");
+  const current = target === vscode.ConfigurationTarget.Global
+    ? seen?.globalValue
+    : target === vscode.ConfigurationTarget.Workspace
+    ? seen?.workspaceValue
+    : seen?.workspaceFolderValue;
+  await config.update("poly", withValue(current, key.split("."), value), target);
 }
 
 /// Format through the editor and return the resulting text. Asserting on the
@@ -110,6 +126,12 @@ suite("poly-lsp in a real editor", () => {
       ),
     );
     await eventually("the extension to activate", () => extension.isActive || undefined);
+    // Activation finds the user's settings.json by opening it, which a test
+    // that opens a file of its own meanwhile could be caught up in.
+    await eventually(
+      "the poly block in the user's settings.json",
+      () => vscode.workspace.getConfiguration().inspect("poly")?.globalValue !== undefined || undefined,
+    );
   });
 
   // The VSIX ships one binary with one extension and versions them together,
@@ -348,6 +370,59 @@ suite("poly-lsp in a real editor", () => {
     assert.strictEqual(await formatted(document.uri), "# Title\n\ntext\n");
   });
 
+  // The user's settings.json is `vscode-userdata:`, and `[jsonc]` names poly
+  // as its formatter -- so before this, the one JSONC file everybody edits had
+  // no formatter at all. Comments and the trailing comma are the claim: a JSON
+  // formatter that dropped either would ruin the file it was asked to tidy.
+  test("formats the user's settings.json, comments and all", async () => {
+    await vscode.commands.executeCommand("workbench.action.openSettingsJson");
+    const editor = await eventually("the user settings editor", () => {
+      const active = vscode.window.activeTextEditor;
+      return active?.document.uri.scheme === "vscode-userdata" ? active : undefined;
+    });
+    try {
+      const { document } = editor;
+      const whole = new vscode.Range(0, 0, document.lineCount, 0);
+      await editor.edit((edit) => edit.replace(whole, "{\n    // kept\n  \"a\":   1,\n}\n"));
+      assert.strictEqual(await formatted(document.uri), "{\n  // kept\n  \"a\": 1,\n}\n");
+    } finally {
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    }
+  });
+
+  // The block's text is unit-tested; what only a host shows is that poly finds
+  // the file at all -- no API says where it is -- and that a switch written
+  // into it keeps the comments, where the editor's own writer re-serialises the
+  // whole object without them.
+  test("the user's settings.json carries the poly block, and a switch keeps its comments", async () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const schema = extension.packageJSON.contributes.configuration.properties.poly;
+    const strings = JSON.parse(readFileSync(join(extension.extensionPath, "package.nls.json"), "utf8"));
+    const blockIn = (text: string) => {
+      const node = findNodeAtLocation(parseTree(text)!, ["poly"]);
+      assert.ok(node, "no poly block in the user's settings.json");
+      return text.slice(node.offset, node.offset + node.length);
+    };
+    const written = (text: string, change?: { key: string; value: unknown }) =>
+      blockIn(rewrite(text, schema, strings, WORDS.en, change));
+    await vscode.commands.executeCommand("workbench.action.openSettingsJson");
+    const editor = await eventually("the user settings editor", () => {
+      const active = vscode.window.activeTextEditor;
+      return active?.document.uri.scheme === "vscode-userdata" ? active : undefined;
+    });
+    try {
+      const before = editor.document.getText();
+      assert.strictEqual(blockIn(before), written(before), "the block is not the one this version writes");
+      await vscode.commands.executeCommand("poly.toggleFormat");
+      assert.strictEqual(blockIn(editor.document.getText()), written(before, { key: "format.enabled", value: false }));
+      await vscode.commands.executeCommand("poly.toggleFormat");
+      assert.strictEqual(blockIn(editor.document.getText()), blockIn(before), "the way back left the block changed");
+    } finally {
+      await switchedOn("poly.toggleFormat", "poly.format.enabled");
+      await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    }
+  });
+
   // The suspend switch lives in the client's middleware, so nothing in the
   // protocol tests can see it: the daemon is asked the same question and gives
   // the same answer, and the whole feature is the client deciding not to ask.
@@ -358,10 +433,9 @@ suite("poly-lsp in a real editor", () => {
   // broken switch.
   test("suspending formatting stops poly rewriting a file", async () => {
     const messy = "select a,b from t\n";
-    const config = vscode.workspace.getConfiguration("poly");
     assert.strictEqual(await formatted(writeFile("resumed.sql", messy)), "select a, b from t\n");
 
-    await config.update("format.enabled", false, vscode.ConfigurationTarget.Workspace);
+    await setPoly("format.enabled", false, vscode.ConfigurationTarget.Workspace);
     try {
       const uri = writeFile("suspended.sql", messy);
       await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
@@ -372,7 +446,7 @@ suite("poly-lsp in a real editor", () => {
       );
       assert.deepStrictEqual(edits ?? [], [], "poly formatted a file while suspended");
     } finally {
-      await config.update("format.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+      await setPoly("format.enabled", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 
@@ -383,8 +457,7 @@ suite("poly-lsp in a real editor", () => {
   // test above holds down.
   test("the format shortcut formats a file while formatting is stopped", async () => {
     const messy = "select a,b from t\n";
-    const config = vscode.workspace.getConfiguration("poly");
-    await config.update("format.enabled", false, vscode.ConfigurationTarget.Workspace);
+    await setPoly("format.enabled", false, vscode.ConfigurationTarget.Workspace);
     try {
       const document = await vscode.workspace.openTextDocument(writeFile("shortcut.sql", messy));
       await vscode.window.showTextDocument(document);
@@ -394,7 +467,7 @@ suite("poly-lsp in a real editor", () => {
       });
       assert.strictEqual(text, "select a, b from t\n");
     } finally {
-      await config.update("format.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+      await setPoly("format.enabled", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 
@@ -402,8 +475,7 @@ suite("poly-lsp in a real editor", () => {
   // rules cannot do: a file type they are never sent, and a character nobody
   // has saved yet.
   test("the unicode highlight names a character typed into a plain-text file", async () => {
-    const config = vscode.workspace.getConfiguration("poly");
-    await config.update("unicodeHighlight.enabled", true, vscode.ConfigurationTarget.Workspace);
+    await setPoly("unicodeHighlight.enabled", true, vscode.ConfigurationTarget.Workspace);
     try {
       const document = await vscode.workspace.openTextDocument(writeFile("gremlin.txt", "plain line\n"));
       const editor = await vscode.window.showTextDocument(document);
@@ -424,7 +496,7 @@ suite("poly-lsp in a real editor", () => {
       assert.ok(document.isDirty, "the file was saved, so this no longer shows the unsaved case");
     } finally {
       await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
-      await config.update("unicodeHighlight.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+      await setPoly("unicodeHighlight.enabled", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 
@@ -437,8 +509,7 @@ suite("poly-lsp in a real editor", () => {
     const store = new RefStore(cacheDir());
     store.set(folder, "kept.ts", `refs|${vscode.SymbolKind.Function}:kept#0`, 42);
     store.save();
-    const config = vscode.workspace.getConfiguration("poly");
-    await config.update("referencesCodeLens.enabled", true, vscode.ConfigurationTarget.Workspace);
+    await setPoly("referencesCodeLens.enabled", true, vscode.ConfigurationTarget.Workspace);
     try {
       await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
       const titles = async () => {
@@ -459,7 +530,7 @@ suite("poly-lsp in a real editor", () => {
       });
       assert.deepStrictEqual(corrected, ["no refs"]);
     } finally {
-      await config.update("referencesCodeLens.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+      await setPoly("referencesCodeLens.enabled", undefined, vscode.ConfigurationTarget.Workspace);
       rmSync(store.fileFor(folder), { force: true });
     }
   });
@@ -477,9 +548,7 @@ suite("poly-lsp in a real editor", () => {
       const written = vscode.workspace.getConfiguration("poly").inspect<boolean>("format.enabled");
       assert.strictEqual(written?.globalValue, undefined, "toggling back left a user setting behind");
     } finally {
-      await vscode.workspace
-        .getConfiguration("poly")
-        .update("format.enabled", undefined, vscode.ConfigurationTarget.Global);
+      await setPoly("format.enabled", undefined, vscode.ConfigurationTarget.Global);
     }
   });
 
@@ -564,6 +633,31 @@ suite("poly-lsp in a real editor", () => {
     } finally {
       await switchedOn("poly.toggleFormat", "poly.format.enabled");
       await root().update("files.trimTrailingWhitespace", undefined, Global);
+    }
+  });
+
+  // The other half of the rule above, and the one that left a user's synced
+  // settings.json full of `"never"`: a value that is still off is poly's, even
+  // when something reshaped it while stopped, and resuming has to take it back.
+  test("a value still off when formatting resumes is put back, whatever its shape", async () => {
+    await root().update("editor.codeActionsOnSave", { "source.fixAll": "always" }, Global);
+    try {
+      await vscode.commands.executeCommand("poly.toggleFormat");
+      assert.deepStrictEqual(root().inspect("editor.codeActionsOnSave")?.globalValue, { "source.fixAll": "never" });
+      await root().update(
+        "editor.codeActionsOnSave",
+        { "source.fixAll": "never", "source.organizeImports": "never" },
+        Global,
+      );
+      await vscode.commands.executeCommand("poly.toggleFormat");
+      assert.deepStrictEqual(
+        root().inspect("editor.codeActionsOnSave")?.globalValue,
+        { "source.fixAll": "always" },
+        "resuming left an off value behind",
+      );
+    } finally {
+      await switchedOn("poly.toggleFormat", "poly.format.enabled");
+      await root().update("editor.codeActionsOnSave", undefined, Global);
     }
   });
 
@@ -710,55 +804,6 @@ suite("poly-lsp in a real editor", () => {
     assert.ok(text.includes("Best practice"), `not the rule docs: ${text}`);
   });
 
-  // poly declares no definition provider at initialize -- it cannot, because an
-  // LSP capability is server-wide and poly speaks for 29 languages while gopls
-  // answers for one. It registers dynamically once gopls is up, scoped to Go,
-  // and whether VSCode acts on a registration that arrives after initialize is
-  // precisely what no protocol test can tell us.
-  test("routes go-to-definition for Go to gopls", async function() {
-    this.timeout(60_000);
-    try {
-      execFileSync("gopls", ["version"], { stdio: "ignore" });
-    } catch {
-      // Loudly, not silently: poly never installs a language server, so a
-      // machine without one genuinely cannot run this.
-      console.log("      skipped: gopls is not on PATH");
-      this.skip();
-    }
-    const uri = writeFile(
-      "greet.go",
-      `package main
-
-func Greet(name string) string {
-\treturn "hello " + name
-}
-
-func main() {
-\tprintln(Greet("world"))
-}
-`,
-    );
-    await vscode.window.showTextDocument(
-      await vscode.workspace.openTextDocument(uri),
-    );
-    // Position is inside `Greet` at the call site on line 8; the definition is
-    // on line 3. gopls needs a moment to load the package, so poll.
-    const locations = await eventually("gopls to resolve the definition", async () => {
-      const found = await vscode.commands.executeCommand<vscode.Location[]>(
-        "vscode.executeDefinitionProvider",
-        uri,
-        new vscode.Position(7, 10),
-      );
-      return found?.length ? found : undefined;
-    });
-    assert.strictEqual(
-      locations[0].range.start.line,
-      2,
-      "definition did not land on the declaration",
-    );
-    assert.ok(locations[0].uri.fsPath.endsWith("greet.go"), locations[0].uri.fsPath);
-  });
-
   // A parse failure used to come back as an LSP error, which VSCode shows as a
   // toast that names no line and cannot be clicked. Only the real editor can
   // prove it now lands in Problems instead.
@@ -862,28 +907,26 @@ func main() {
     assert.match(readFileSync(target, "utf8"), /CREATE TABLE "users"/);
   });
 
-  // What only a host shows: that a colour set from the Settings editor reaches
-  // the one setting a theme reads. The merge is unit-tested; this is the write
-  // from an application-scoped setting into the user's settings.json, which
-  // fails silently if either half has the wrong scope or target.
+  // What only a host shows: that a colour set in poly.syntaxColors reaches the
+  // one setting a theme reads. The merge is unit-tested; this is the write into
+  // the user's settings.json, which fails silently with the wrong target.
   test("a syntax colour set in poly.syntaxColors reaches the theme, and goes when the entry does", async () => {
-    const poly = () => vscode.workspace.getConfiguration("poly");
     const rules = () =>
       (vscode.workspace.getConfiguration("editor").inspect<{ textMateRules?: unknown[] }>(
         "tokenColorCustomizations",
       )?.globalValue?.textMateRules ?? []) as { name?: string; scope?: string; settings?: object }[];
     try {
-      await poly().update("syntaxColors", { comment: "#6A9955 italic" }, vscode.ConfigurationTarget.Global);
+      await setPoly("syntaxColors", { comment: "#6A9955 italic" }, vscode.ConfigurationTarget.Global);
       const rule = await eventually("the mirrored rule", () => rules().find((one) => one.name === "poly.syntaxColors"));
       assert.deepStrictEqual(rule, {
         name: "poly.syntaxColors",
         scope: "comment",
         settings: { foreground: "#6A9955", fontStyle: "italic" },
       });
-      await poly().update("syntaxColors", undefined, vscode.ConfigurationTarget.Global);
+      await setPoly("syntaxColors", undefined, vscode.ConfigurationTarget.Global);
       await eventually("the rule to go", () => rules().length === 0 ? true : undefined);
     } finally {
-      await poly().update("syntaxColors", undefined, vscode.ConfigurationTarget.Global);
+      await setPoly("syntaxColors", undefined, vscode.ConfigurationTarget.Global);
       await vscode.workspace
         .getConfiguration("editor")
         .update("tokenColorCustomizations", undefined, vscode.ConfigurationTarget.Global);
@@ -914,13 +957,12 @@ func main() {
   // second way is the one the extension got wrong -- its engine only merges a
   // configuration in, so a rule taken back out stayed off until a reload.
   test("AutoCorrect reports, fixes, corrects on save, and follows .autocorrectrc both ways", async () => {
-    const poly = () => vscode.workspace.getConfiguration("poly");
     const rc = join(workspaceRoot(), ".autocorrectrc");
     const uri = writeFile("autocorrect.md", "测试test文本\n第二行hello世界\n");
     const findings = () => vscode.languages.getDiagnostics(uri).filter((one) => one.source === "AutoCorrect");
     const said = (message: string) => () => findings().some((one) => one.message === message) ? true : undefined;
     try {
-      await poly().update("autocorrect.enabled", true, vscode.ConfigurationTarget.Global);
+      await setPoly("autocorrect.enabled", true, vscode.ConfigurationTarget.Global);
       const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
       await eventually("a finding on each line", () => findings().length === 2 ? true : undefined);
 
@@ -949,20 +991,18 @@ func main() {
       await eventually("space-word back on", said("测试 test 文本，中文"));
     } finally {
       rmSync(rc, { force: true });
-      await poly().update("autocorrect.enabled", undefined, vscode.ConfigurationTarget.Global);
+      await setPoly("autocorrect.enabled", undefined, vscode.ConfigurationTarget.Global);
       await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
     }
   });
 
   // What it draws is upstream's and unit-tested against a stub; what only a
-  // host shows is the wiring. Off by default and first in its group; hidden
-  // from the palette only while usernamehw.errorlens runs instead; a command
-  // run while it is off loading the bundle beside dist/extension.js and acting;
-  // and drawing on a real editor without throwing once switched on.
+  // host shows is the wiring. Off by default; hidden from the palette only
+  // while usernamehw.errorlens runs instead; a command run while it is off
+  // loading the bundle beside dist/extension.js and acting; and drawing on a
+  // real editor without throwing once switched on.
   test("Error Lens is off until switched on, and its commands work either way", async () => {
     const pkg = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON;
-    const group = pkg.contributes.configuration.find((one: { title: string }) => one.title === "Error Lens");
-    assert.strictEqual(Object.keys(group.properties)[0], "poly.errorLens.enabled");
     const errorLens = () => vscode.workspace.getConfiguration("poly.errorLens");
     assert.strictEqual(errorLens().inspect("enabled")?.defaultValue, false);
     const commands = (pkg.contributes.commands as { command: string }[])
@@ -999,7 +1039,7 @@ func main() {
       await eventually("Error Lens switched off", () => errorLens().get("enabled") === false || undefined);
     } finally {
       planted.dispose();
-      await errorLens().update("enabled", undefined, vscode.ConfigurationTarget.Global);
+      await setPoly("errorLens.enabled", undefined, vscode.ConfigurationTarget.Global);
       await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
     }
   });
@@ -1020,15 +1060,14 @@ func main() {
     });
     writeFileSync(join(root, "fake-plantuml.jar"), "not a jar");
     writeFileSync(join(root, "poly.toml"), "[tools]\nplantuml = \"./fake-plantuml.jar\"\n");
-    const config = vscode.workspace.getConfiguration();
     const settings: [string, unknown][] = [
-      ["poly.plantuml.java", java],
-      ["poly.plantuml.exportFormat", "svg"],
-      ["poly.markdownDiagrams.enabled", true],
+      ["plantuml.java", java],
+      ["plantuml.exportFormat", "svg"],
+      ["markdownDiagrams.enabled", true],
     ];
     try {
       for (const [key, value] of settings) {
-        await config.update(key, value, vscode.ConfigurationTarget.Workspace);
+        await setPoly(key, value, vscode.ConfigurationTarget.Workspace);
       }
       const uri = writeFile("flow.puml", "@startuml flow\nA -> B\n@enduml\n");
       await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
@@ -1062,7 +1101,7 @@ func main() {
       });
     } finally {
       for (const [key] of settings) {
-        await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
+        await setPoly(key, undefined, vscode.ConfigurationTarget.Workspace);
       }
       rmSync(join(root, "poly.toml"), { force: true });
     }
@@ -1130,16 +1169,15 @@ func main() {
   // Upstream converts whichever editor is in front when anything is saved, so
   // Save All or a save from the explorer exports the wrong file.
   test("convert-on-save exports the file saved, not the one in front", async () => {
-    const config = vscode.workspace.getConfiguration();
     const settings: [string, unknown][] = [
-      ["poly.markdownPdf.convertOnSave", true],
-      ["poly.markdownPdf.type", ["html"]],
+      ["markdownPdf.convertOnSave", true],
+      ["markdownPdf.type", ["html"]],
     ];
     const saved = join(workspaceRoot(), "saved.md");
     const front = join(workspaceRoot(), "front.md");
     try {
       for (const [key, value] of settings) {
-        await config.update(key, value, vscode.ConfigurationTarget.Workspace);
+        await setPoly(key, value, vscode.ConfigurationTarget.Workspace);
       }
       writeFileSync(saved, "# Saved\n");
       writeFileSync(front, "# Front\n");
@@ -1167,7 +1205,7 @@ func main() {
       assert.throws(() => readFileSync(front.replace(/\.md$/, ".html")), "the editor in front was exported");
     } finally {
       for (const [key] of settings) {
-        await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
+        await setPoly(key, undefined, vscode.ConfigurationTarget.Workspace);
       }
     }
   });
@@ -1451,7 +1489,7 @@ func main() {
     await vscode.commands.executeCommand("poly.codeRunner.run");
     await notRun(marker, "Run Code ran with Code Runner switched off");
 
-    await config.update("codeRunner.enabled", true, vscode.ConfigurationTarget.Workspace);
+    await setPoly("codeRunner.enabled", true, vscode.ConfigurationTarget.Workspace);
     try {
       await vscode.commands.executeCommand("poly.codeRunner.run");
       await eventually("the script to run", () => existsSync(marker) || undefined);
@@ -1461,7 +1499,7 @@ func main() {
       // Finished, so the lens test below is not told "Code is already running!".
       await eventually("the run to end", () => outputSaying("[Done] exited with code=0"));
     } finally {
-      await config.update("codeRunner.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+      await setPoly("codeRunner.enabled", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 
@@ -1471,7 +1509,7 @@ func main() {
   test("the run lens runs its file through Code Runner, with Code Runner switched off", async () => {
     const config = vscode.workspace.getConfiguration("poly");
     assert.strictEqual(config.get("codeRunner.enabled"), false);
-    await config.update("runCodeLens.enabled", true, vscode.ConfigurationTarget.Workspace);
+    await setPoly("runCodeLens.enabled", true, vscode.ConfigurationTarget.Workspace);
     try {
       const marker = join(workspaceRoot(), "run-lens.ran");
       const script = runnable("run-lens.sh", marker, "poly-run-lens-says-hello");
@@ -1480,7 +1518,7 @@ func main() {
       await eventually("the script to run", () => existsSync(marker) || undefined);
       await eventually("the run in the output panel", () => outputSaying("poly-run-lens-says-hello"));
     } finally {
-      await config.update("runCodeLens.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+      await setPoly("runCodeLens.enabled", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 

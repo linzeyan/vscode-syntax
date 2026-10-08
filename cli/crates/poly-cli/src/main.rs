@@ -9,7 +9,6 @@ mod fmt;
 mod git;
 mod lsp;
 mod navigate;
-mod proxy;
 mod report;
 mod settings;
 mod usage;

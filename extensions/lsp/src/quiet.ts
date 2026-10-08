@@ -33,6 +33,8 @@ import { isDeepStrictEqual } from "node:util";
 
 import * as vscode from "vscode";
 
+import { setPoly } from "./settings";
+
 export type Quiet = "format" | "lint";
 
 /** `editor.codeActionsOnSave` is off when every kind in it is `never`. */
@@ -124,6 +126,15 @@ function installed(setting: Setting): boolean {
   return setting.extension === undefined || vscode.extensions.getExtension(setting.extension) !== undefined;
 }
 
+/** A user-scope write. poly's own keys live in the `poly` block; see settings.ts. */
+async function put(key: string, value: unknown, language?: string): Promise<void> {
+  if (key.startsWith("poly.")) {
+    await setPoly(key, value);
+  } else {
+    await scoped(language).update(key, value, vscode.ConfigurationTarget.Global, language !== undefined);
+  }
+}
+
 function scoped(language?: string): vscode.WorkspaceConfiguration {
   return language === undefined
     ? vscode.workspace.getConfiguration()
@@ -156,7 +167,7 @@ async function stop(which: Quiet, state: vscode.Memento, log: (line: string) => 
   const written: Written[] = [];
   const write = async (setting: Setting, language: string | undefined, had: unknown, wrote: unknown) => {
     try {
-      await scoped(language).update(setting.key, wrote, vscode.ConfigurationTarget.Global, language !== undefined);
+      await put(setting.key, wrote, language);
       written.push({ key: setting.key, language, had, wrote });
     } catch (err) {
       // One extension refusing a value is not a reason to leave the rest on.
@@ -193,8 +204,13 @@ async function stop(which: Quiet, state: vscode.Memento, log: (line: string) => 
 /**
  * Put back what `stop` wrote.
  *
- * A value that is no longer what was written was changed by somebody while
- * the switch was off, and that later decision wins over the snapshot.
+ * Whatever is still off goes back, even when it is no longer byte for byte
+ * what was written: an off value left behind is a `"never"` the user did not
+ * write and cannot tell from one they did. Equality was the old test, and a
+ * `[go]` block that had picked up a kind elsewhere stayed `never` for good.
+ * Only a value somebody turned back on while the switch was off -- or removed,
+ * which is turning it back to the default -- is a later decision, and that
+ * one wins over the snapshot.
  */
 async function resume(which: Quiet, state: vscode.Memento, log: (line: string) => void): Promise<void> {
   const written = state.get<Written[]>(stateKey(which)) ?? [];
@@ -202,17 +218,13 @@ async function resume(which: Quiet, state: vscode.Memento, log: (line: string) =
   for (const one of written) {
     const seen = scoped(one.language).inspect(one.key);
     const now = one.language === undefined ? seen?.globalValue : seen?.globalLanguageValue;
-    if (!isDeepStrictEqual(now, one.wrote)) {
+    const setting = SETTINGS[which].find((s) => s.key === one.key);
+    if (now === undefined || (setting !== undefined && !isOff(setting, now))) {
       kept.push(label(one.key, one.language));
       continue;
     }
     try {
-      await scoped(one.language).update(
-        one.key,
-        one.had,
-        vscode.ConfigurationTarget.Global,
-        one.language !== undefined,
-      );
+      await put(one.key, one.had, one.language);
     } catch (err) {
       log(`[quiet] could not restore ${label(one.key, one.language)}: ${err}`);
     }
@@ -220,7 +232,7 @@ async function resume(which: Quiet, state: vscode.Memento, log: (line: string) =
   // Off with no snapshot: set by hand, or by poly before these switches
   // reached other extensions. On is on either way.
   if (scoped().get(OWN[which]) === false) {
-    await scoped().update(OWN[which], undefined, vscode.ConfigurationTarget.Global);
+    await put(OWN[which], undefined);
   }
   await state.update(stateKey(which), undefined);
   log(
@@ -262,6 +274,17 @@ export function stillOn(which: Quiet): string[] {
 
 function label(key: string, language?: string): string {
   return language === undefined ? key : `[${language}] ${key}`;
+}
+
+/**
+ * Let the snapshots travel with Settings Sync.
+ *
+ * The switch's state is a setting, so it syncs; the snapshot was machine-local
+ * memento, so stopping on one machine and resuming on another found nothing to
+ * put back and left every `never` in the synced file.
+ */
+export function syncSnapshots(state: vscode.Memento & { setKeysForSync(keys: readonly string[]): void }): void {
+  state.setKeysForSync([stateKey("format"), stateKey("lint")]);
 }
 
 /** The command behind a switch: stop if on, resume if off. */

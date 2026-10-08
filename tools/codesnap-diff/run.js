@@ -12,7 +12,7 @@
 //   * what the page shows before the shutter: the code as pasted, the
 //     window's frame and title, and the style variables the settings set;
 //   * where the save dialog starts, first and after a save;
-//   * the settings: type, default, allowed values and scope.
+//   * the settings: type, default and allowed values.
 //
 // Scenarios cover the defaults, every setting changed, a language's own
 // settings block, tab-indented and indented code, and the page following the
@@ -34,6 +34,7 @@ const { tmpdir } = require("node:os");
 const { join, relative, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { gunzipSync } = require("node:zlib");
+const { settingsOf } = require("../ext-diff/settings");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
@@ -181,12 +182,12 @@ async function measure(side, executable, port) {
   return report;
 }
 
-/** upstream's settings against poly's: type, default, allowed values and scope. */
+/** upstream's settings against poly's: type, default and allowed values. */
 function manifestProblems(extensions) {
   const dir = readdirSync(extensions).find((one) => one.startsWith("adpyke.codesnap-"));
   const theirs = JSON.parse(readFileSync(join(extensions, dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
-  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
+  const polySettings = settingsOf(ours);
   const problems = [];
   const mine = Object.keys(polySettings).filter((key) => key.startsWith("poly.codeSnap."));
   if (mine.length !== Object.keys(theirs.configuration.properties).length) {
@@ -198,7 +199,7 @@ function manifestProblems(extensions) {
       problems.push(`setting ${key}: poly has none`);
       continue;
     }
-    for (const field of ["type", "default", "enum", "scope"]) {
+    for (const field of ["type", "default", "enum"]) {
       if (JSON.stringify(spec[field]) !== JSON.stringify(own[field])) {
         problems.push(
           `setting ${key} ${field}: upstream ${JSON.stringify(spec[field])} poly ${JSON.stringify(own[field])}`,

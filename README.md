@@ -48,34 +48,8 @@
 - **規則說明**：滑鼠移到 SQL 的波浪線上會顯示 sqruff 該條規則的 anti-pattern／
   best-practice 全文。sqruff 沒有文件站可連，那份說明編在 binary 裡，版本精確、
   離線可讀。其他工具有自己的規則頁，走規則代碼上的超連結。
-- **語言伺服器（預設關閉）**：`poly.languageServers` 打開後，poly 會啟動專案自己
-  toolchain 裡的 language server，把 hover、go-to-definition、declaration、type
-  definition、implementation、references、outline、completion、signature help、
-  symbol highlight、folding、expand selection、rename、code action 路由給它。目前九個：
-  gopls（Go）、rust-analyzer（Rust）、clangd（C／C++）、sourcekit-lsp（Swift）、terraform-ls
-  （Terraform）、lua-language-server（Lua）、bash-language-server（Shell）、buf（Protobuf）、
-  arity（R）。poly **不實作**這些功能，
-  server 一律從 PATH 找，找不到就說一聲——所以品質就是那支 server 的品質。
-  **buf 與 arity 是例外**，poly 會代抓：其他 server 都得配合建置專案的 toolchain（gopls 讀
-  go.mod 的 Go 版本、rust-analyzer 要編譯該 crate 的 rustc），而 `.proto` 與 `.R` 背後沒有建置，
-  這兩支也早就是 poly 釘死版本代抓的 formatter／linter，所以 protobuf 與 R 不必先裝
-  任何東西。實際能用
-  哪幾項由 server 自己宣告，十四項裡：clangd 與 rust-analyzer 給滿 14、gopls 13、
-  sourcekit-lsp 12、lua-language-server 12、arity 11、buf 10、terraform-ls 只有 7。有兩個例外值得知道：
-  Swift 的 Go to Declaration 會失敗，Go to Definition 正常；arity 的 hover 讀的是
-  `arity index` 從機器上已安裝的 R 套件收集來的說明，沒裝 R 就是空的（其餘十項照常）。**code action 只給燈泡那
-  些**：`editor.codeActionsOnSave` 跑的 `source.*` 一律不轉，否則會跟 poly 的格式化在
-  同一次存檔搶同一段程式碼；代價是 gopls 的「Source Action…」選單在 poly 下是空的。
-  **poly 自己的 lint 不會因此消失**：server 的診斷是跟 poly 的合併，不是取代，所以
-  lua 的 selene 與 swift 的 swiftlint 照常回報。預設關閉是因為它會跟你八成已經裝了
-  的官方 extension 重疊，要用請先移除那個 extension。改完要重新載入視窗。
-- **`poly.languageServerLogs`（預設開啟）**：把 language server 自己的 stderr 轉進
-  Poly 輸出面板。clangd 與 terraform-ls 每個請求寫一行，嫌吵就關掉——關掉是整份丟棄，
-  不是去叫各家 server 安靜（有些根本沒這種旗標）。poly 自己的訊息（server 不在 PATH、
-  啟動就掛）不受影響。
 - **`poly.memoryLog`（預設關閉）**：每開一個檔、關一個檔，寫一行 daemon 現在握著什麼：
-  常駐記憶體、幾份文件與多少位元組、lint 與整包快取、各來源留著幾筆診斷、哪些 language
-  server 在跑。RSS 只有一個數字，而 poly 有六個地方放東西——這一行的用處是讓漲上去的
+  常駐記憶體、幾份文件與多少位元組、lint 與整包快取、各來源留著幾筆診斷。RSS 只有一個數字，而 poly 有六個地方放東西——這一行的用處是讓漲上去的
   數字歸到某一個快取頭上。`tools/lsp-smoke.py` 的 soak 也讀它：120 輪開關之後，poly
   握著的每一項都必須跟第 1 輪一樣多（實測把 `lint_hashes` 的清除拿掉，RSS 只漂
   +0.2 MB 照樣綠，而這條直接指名 hashes 12 → 488）。
@@ -252,7 +226,7 @@
 - **TODOs 檢視**：檔案總管多一個面板，列出整個 workspace 的 `TODO`／`FIXME`／`HACK`／
   `XXX`／`BUG`。只在面板顯示時才掃描，排除規則沿用 `files.exclude`／`search.exclude`，
   而且掃描上限會寫在標題上——「清單很短」跟「清單被截斷」不該長得一樣。
-- **語法顏色設定 `poly.syntaxColors`**：設定畫面（Poly › 編輯與檢視）裡一張表，項目是
+- **語法顏色設定 `poly.syntaxColors`**：使用者 settings.json 的 `poly` 區塊裡一張表，項目是
   TextMate scope、值是顏色加選用樣式，例如 `comment` → `#6A9955 italic`。改完畫面當場重新上色，
   刪掉那一項就回到 theme 的顏色。一個 scope 也套到它底下更長的 scope，`comment` 涵蓋每一種註解。
   主題只讀 `editor.tokenColorCustomizations`，所以 poly 把這張表複製進去，成為名為
@@ -286,8 +260,8 @@
   包含 poly 認不出語言的那些。
 - **外部工具**（受管下載）：shellcheck、shfmt、actionlint、
   tflint、gofumpt、golangci-lint、swiftlint、buf
-  （Protobuf 的格式化，同一支 binary 也是上面那個 language server）、
-  arity（R 的格式化與 lint，同樣也是上面那個 language server）、
+  （Protobuf 的格式化）、
+  arity（R 的格式化與 lint）、
   jsonnetfmt（Jsonnet 的格式化，`.jsonnet`／`.libsonnet`，用它的預設值，不另設旗標）、
   PlantUML（MIT 版的 jar，給編輯器的預覽與匯出用，不做 lint；Java 要自己裝）。PATH 上
   已經有同一個工具就直接用它，版本不同沒關係，只要主版號跟 poly 釘的一樣（golangci-lint
@@ -441,6 +415,13 @@ code --install-extension poly-lsp-darwin-arm64-0.18.20.vsix
 
 Extensions 面板齒輪選單裡的「自動更新」勾選框管不到 poly：那是 VSCode 從 Marketplace 更新用的，
 poly 不在 Marketplace 上，勾了也沒有東西可以更新，而且每次從 VSIX 安裝都會被 VSCode 重設。
+
+### 從 0.18.20 以前升上來
+
+設定從一項一行（`"poly.format.enabled": false`）改成一個 `poly` 區塊（見[設定](#設定)）。
+升上來之後，把舊的那幾行的值填進區塊裡對應的項目，再刪掉舊的；poly 不會替你搬。
+`poly.languageServers` 與 `poly.languageServerLogs` 已經拿掉：poly 只做格式化與 lint，
+跳到定義、補全這些語言功能交給各語言自己的 extension（Go 是 golang.go），舊的設定直接刪掉。
 
 ### 從 0.18.2 以前升上來
 
@@ -863,31 +844,39 @@ code frame），`fix` 是跟終端機、編輯器一字不差的同一句話，`
 
 ## 設定
 
-### 要自己在 `settings.json` 設的
+### VSCode：`settings.json` 的 `poly` 區塊
 
-poly **不寫使用者的 `settings.json`**（A8），所以下面這些必須自己來。少了它們，功能是
-接好的，只是畫面上什麼都不會出現：
+poly-lsp 的設定全部在一個 `poly` 物件裡，extension 啟用時把它整個寫進使用者的
+`settings.json`：每一項上面的註解寫用途、可選的值與預設值（照編輯器的語言，英文或正體中文），
+沒設的項目是註解掉的預設值。要改哪一項就取消註解再改值。每次啟用都會依裝的版本重寫註解與
+預設值，你設過的值原樣保留，poly 不認得的鍵也留著並註明。
 
 ```jsonc
-{
-  // 語言功能（definition／references／inlay hints／call hierarchy…）預設是關的。
-  "poly.languageServers": true,
-  // gopls 出貨時 inlay hint 全關，而且開關是它跟 client 要的（workspace/configuration
-  // 的 gopls 區段）。rust-analyzer 與 clangd 預設就開，不必動。
-  "gopls": {
-    "hints": {
-      "assignVariableTypes": true,
-      "compositeLiteralFields": true,
-      "constantValues": true,
-      "parameterNames": true,
-      "rangeVariableTypes": true
-    }
+"poly": {
+  "format": {
+    // 用途：允許 poly 改寫檔案：Format Document、存檔時格式化、Format Selection……
+    // 可選：true｜false；預設：true
+    "enabled": false,
   },
-  // 編輯器自己的 Find All References 開 peek 還是開內建的 References 面板。預設 "peek"；
-  // 設成 "view" 會和 poly 的 `N refs` CodeLens 一樣留著清單不跑掉——但兩邊是不同的樹，
-  // 帶行號與符號欄位的是 poly 那棵。
-  "references.preferredLocation": "view"
+  …
 }
+```
+
+這份 README 寫 `poly.format.enabled` 的地方，指的就是 `"poly": { "format": { "enabled": … } }`。
+設定畫面裡 poly 只有一項「在 settings.json 內編輯」，逐項要在檔案裡改。Format／Lint 開關與
+`Poly: Set Syntax Color` 直接改這個區塊，註解不會掉；`settings.json` 有沒存檔的修改時它們會請你
+先存檔，啟用時的重寫則等下一次。工作區的 `.vscode/settings.json` 用同樣的巢狀寫法，只寫要覆蓋的
+那幾項。
+
+### 要自己在 `settings.json` 設的
+
+這項是 VSCode 自己的，poly 不改它：
+
+```jsonc
+// 編輯器自己的 Find All References 開 peek 還是開內建的 References 面板。預設 "peek"；
+// 設成 "view" 會和 poly 的 `N refs` CodeLens 一樣留著清單不跑掉——但兩邊是不同的樹，
+// 帶行號與符號欄位的是 poly 那棵。
+"references.preferredLocation": "view"
 ```
 
 ### `poly.toml`
@@ -1008,31 +997,21 @@ per-file-ignores 一條路。註釋裡寫了 poly 讀不懂的代碼會以 `poly
 這是遷移提示不是相容層：講一次，讓你把註釋換掉然後刪了它。把 hadolint 開回來
 （`[tools] hadolint = "on"`）的話這行註釋照常有效，poly 也就不再提。
 
-「要不要開語言伺服器」只認 VSCode settings 的 `poly.languageServers`，不進
-`poly.toml`——那是「這台機器上我要不要讓 poly 接管 Go」的個人偏好，CI 根本不跑
-`poly lsp`，寫進專案設定只會讓兩邊看到一個對方不在乎的鍵。server 一律從 PATH 找，poly
-永遠不代裝：它必須跟蓋出這個專案的 toolchain 對得上，poly 選版本就是 poly 選錯版本。
-找不到會在 `Poly` 輸出頻道說一聲，不會靜默沒作用。
-
-**「用哪一支」則是專案的事，寫在 `[tools]` 裡**，用 poly 啟動它的那個名字
-（`gopls`、`rust-analyzer`、`clangd`、`sourcekit-lsp`、`terraform-ls`、
-`lua-language-server`、`buf`）：`rust-analyzer = "off"` 只關掉 Rust 的語言功能而不動
-其他語言，`rust-analyzer = "/opt/rust-glancer"` 換成別的實作。版本號不是這裡的合法值
-——這些跟著專案 toolchain 走，poly 不下載。
-
 **用 VSCode 的話，`[tools]` 這張表改寫在 settings.json 的 `poly.tools`**，鍵與值都一樣
 （`"off"`、`"on"`、版本號、路徑；路徑請寫絕對路徑），不必為了釘一個版本在 repo 裡多放一個
 `poly.toml`：
 
 ```jsonc
-"poly.tools": {
-  "shellcheck": "off",
-  "tflint": "0.53.0"
+"poly": {
+  "tools": {
+    "shellcheck": "off",
+    "tflint": "0.53.0",
+  },
 }
 ```
 
-extension 啟動的每個 poly 都會套用：語言伺服器、PlantUML 的 jar、終端機裡的 `poly check`
-與 dead code 分析；改了會自動重啟語言伺服器。同一個工具兩邊都有寫時以 settings 為準，其他
+extension 啟動的每個 poly 都會套用：daemon（`poly lsp`）、PlantUML 的 jar、終端機裡的 `poly check`
+與 dead code 分析；改了會自動重啟 daemon。同一個工具兩邊都有寫時以 settings 為準，其他
 工具照 `poly.toml`。純命令列（包括 CI）不讀 settings，只讀 `poly.toml`——要讓 CI 也用同一個
 版本，就寫在 `poly.toml`。
 
@@ -1052,6 +1031,11 @@ poly 壞了。走外部工具的語言不經過這條路，那些工具自己就
 編輯器那半也一併沿用：打字時的 tab 寬度、存檔時的行尾空白與檔尾換行、行尾字元，
 連 poly 不格式化的檔案（`.ini`、Makefile……）都算。`charset` 與 `max_line_length`
 不處理。
+
+專案之外還有一份全域的：`~/.config/poly/poly.toml`（設了 `XDG_CONFIG_HOME` 就在它底下；
+Windows 是 `%APPDATA%\poly\poly.toml`），命令列與編輯器都讀。它在最底層，專案裡的 `poly.toml`
+逐鍵壓過它，而且它永遠不算專案根目錄。`poly lsp` 啟動時發現它不存在，就用 `poly config export`
+寫一份完整的；之後只要裡面的值都還是預設值，就跟著新版重寫，改過任何一個值就不再動它。
 
 完整的鍵、可填的值、每個引擎的預設值都寫在
 [poly.example.toml](poly.example.toml) 裡。那份檔案是 `poly config export` 產生

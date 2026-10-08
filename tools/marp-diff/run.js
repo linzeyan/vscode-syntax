@@ -31,6 +31,7 @@ const { tmpdir } = require("node:os");
 const { dirname, join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { gunzipSync } = require("node:zlib");
+const { settingsOf } = require("../ext-diff/settings");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
@@ -219,7 +220,7 @@ function manifestProblems(extensions) {
   const dir = join(extensions, readdirSync(extensions).find((one) => one.startsWith("marp-team.marp-vscode-")));
   const theirs = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
-  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
+  const polySettings = settingsOf(ours);
   const problems = [];
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const mine = Object.keys(polySettings).filter((key) => key.startsWith("poly.marp."));
@@ -236,7 +237,7 @@ function manifestProblems(extensions) {
       problems.push(`setting ${key}: poly has none`);
       continue;
     }
-    for (const field of ["type", "default", "enum", "items", "tags", "scope", "minimum", "maximum"]) {
+    for (const field of ["type", "default", "enum", "items", "minimum", "maximum"]) {
       if (!same(spec[field], setting[field])) {
         problems.push(
           `setting ${key} ${field}: upstream ${JSON.stringify(spec[field])} poly ${JSON.stringify(setting[field])}`,

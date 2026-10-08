@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Do gopls and buf still answer what poly's lenses and commands route to?
+"""Do gopls and buf still answer what poly's lenses and commands ask for?
 
 What it holds down is the half of the lenses that is not poly's code at all:
 seven features are wired to particular code action kinds, to
@@ -18,9 +18,9 @@ sections. Those supply providers shaped like what was measured here, so they
 pin poly's wiring and are deliberately blind to a server changing shape. This
 is what sees that.
 
-It asks each server directly rather than through poly's proxy, because the
-question is what the server has to give. If the answer here is no, no amount of
-wiring in the extension produces it.
+It asks each server directly, the way the editor's own extensions run them,
+because the question is what the server has to give. If the answer here is no,
+no amount of wiring in the extension produces it.
 
 Measured 2026-09-21 against gopls v0.23.0. Three findings shaped the code it
 guards, and all three are asserted below:
@@ -165,7 +165,7 @@ BUF_YAML = "version: v2\nmodules:\n  - path: .\n"
 
 # A shell function, defined once and called twice. The reference lens over a
 # `.sh` was reported missing, and it was: poly counts an answer somebody else
-# produced, and with poly.languageServers off nothing answers for shellscript
+# produced, and without the Bash IDE extension nothing answers for shellscript
 # at all. What this fixture pins down is the other half -- that once
 # bash-language-server is running there is something to count, in a shape poly
 # counts. Two calls rather than one, because `elsewhere` drops the declaration
@@ -393,7 +393,7 @@ def flatten(symbols, depth=0):
 
 
 def probe_buf(check, buf):
-    """The .proto half: what `buf lsp serve` reports, which poly routes .proto to.
+    """The .proto half: what `buf lsp serve` reports, which the Buf extension runs.
 
     Three of poly's decisions rest on this and on nothing else. The
     `go type` / `go server` / `go client` lenses read buf's symbol kinds; the
@@ -554,7 +554,7 @@ def probe_bash(check):
     """The `.sh` half: does anything answer, and in a shape poly's lens counts?
 
     "bash function still has no ref" was reported twice. The cause was never
-    here -- poly.languageServers ships off, so nothing answers for shellscript
+    here -- without the Bash IDE extension nothing answers for shellscript
     and a lens that counts other people's answers correctly draws nothing. But
     nothing measured the other half either, so "the feature is off" and "the
     feature does not work" looked identical from outside. These three facts are
@@ -846,7 +846,7 @@ def main():
         for problem in problems:
             print(f"  {problem}")
         return 1
-    print("every question poly routes to a server still has an answer")
+    print("every question poly asks a server still has an answer")
     return 0
 
 

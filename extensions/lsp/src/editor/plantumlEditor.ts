@@ -16,6 +16,7 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { affects } from "../settings";
 import { escapeHtml } from "./mermaid";
 import {
   Diagram,
@@ -1065,7 +1066,7 @@ function registerLanguage(context: vscode.ExtensionContext, renderer: Renderer):
     vscode.workspace.onDidChangeTextDocument((event) => diagnose(event.document)),
     vscode.workspace.onDidCloseTextDocument((document) => diagnostics.delete(document.uri)),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.plantuml")) {
+      if (affects(event, "poly.plantuml")) {
         words = undefined;
         vscode.workspace.textDocuments.forEach(diagnose);
       }
@@ -1195,7 +1196,7 @@ export function registerPlantuml(
     vscode.commands.registerCommand("poly.plantumlUrlDocument", withEditor((editor) => exporter.url(editor, true))),
     vscode.commands.registerCommand("poly.plantumlExtractSource", () => exporter.extractSource()),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("poly.plantuml") || event.affectsConfiguration("poly.tools")) {
+      if (affects(event, "poly.plantuml") || affects(event, "poly.tools")) {
         renderer.forget();
         fences.forget();
         void vscode.commands.executeCommand("markdown.preview.refresh");

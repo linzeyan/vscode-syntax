@@ -139,9 +139,6 @@ def published(root, name, language="rust", seconds=90):
                 "processId": None,
                 "rootUri": f"file://{root}",
                 "workspaceFolders": [{"uri": f"file://{root}", "name": "rs"}],
-                # Off: rust-analyzer would be a second publisher to wait out,
-                # and it is not what this file is measuring.
-                "initializationOptions": {"languageServers": False},
                 "capabilities": {
                     "workspace": {"configuration": True},
                     "textDocument": {"publishDiagnostics": {}},

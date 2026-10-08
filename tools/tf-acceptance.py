@@ -17,8 +17,8 @@ modules in subdirectories is several runs, and they must not clear each other's
 findings.
 
 The transport below is deliberately its own copy rather than shared with
-go-acceptance.py or the proxy probe: each of those asks the daemon a different
-question and collects a different shape, and the framing is twenty lines.
+go-acceptance.py: each asks the daemon a different question and collects a
+different shape, and the framing is twenty lines.
 
 Usage: tools/tf-acceptance.py [path-to-poly-binary]
 """
@@ -131,10 +131,6 @@ def published(root, opens, seconds=25):
                 "processId": None,
                 "rootUri": f"file://{root}",
                 "workspaceFolders": [{"uri": f"file://{root}", "name": "tf"}],
-                # Off: terraform-ls has nothing to say about a module that was
-                # never `terraform init`ed, and starting it only adds a second
-                # publisher to wait out.
-                "initializationOptions": {"languageServers": False},
                 "capabilities": {
                     "workspace": {"configuration": True},
                     "textDocument": {"publishDiagnostics": {}},

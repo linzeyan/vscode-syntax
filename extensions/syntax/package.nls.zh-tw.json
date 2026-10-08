@@ -1,7 +1,4 @@
 {
   "extension.displayName": "Poly Syntax Highlight",
-  "extension.description": "統一的語法高亮套件：VSCode 所有內建文法，外加補充的文法，全部同步自釘版的上游來源。",
-  "configuration.title": "Poly Syntax Highlight",
-  "config.updateCheck.enabled.description": "定期檢查 GitHub Releases 上的新版 poly-syntax-highlight，有新版就直接下載安裝，只留重新載入視窗給你決定。有裝 Poly（poly-lsp）的話更新時一起裝；同一個視窗裡兩者之一已經裝過的版本不會再裝一次。",
-  "config.updateCheck.intervalDays.description": "這個 extension 自動檢查更新的間隔天數；設為 0 表示每次啟動都檢查。跟 Poly 自己的 poly.updateCheck.intervalDays 各自獨立。"
+  "extension.description": "統一的語法高亮套件：VSCode 所有內建文法，外加補充的文法，全部同步自釘版的上游來源。"
 }

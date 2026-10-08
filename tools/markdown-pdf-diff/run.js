@@ -14,7 +14,7 @@
 //     fixtures at 2.2.0 plus poly's, exported once with the defaults and twice
 //     more with every setting that shows in the output changed;
 //   * convert-on-save, with a file its exclusion skips;
-//   * the settings: type, default, allowed values and scope.
+//   * the settings: type, default and allowed values.
 //
 // Emoji are poly's one intended difference in what a page shows: upstream
 // draws each as a picture, poly as the character. The HTML is compared with
@@ -39,6 +39,7 @@ const { tmpdir } = require("node:os");
 const { dirname, join, relative, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { gunzipSync } = require("node:zlib");
+const { settingsOf } = require("../ext-diff/settings");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
@@ -290,12 +291,12 @@ function digest(file, bytes, side) {
   return createHash("sha256").update(bytes).digest("hex").slice(0, 16);
 }
 
-/** yzane's settings against poly's: type, default, allowed values and scope. */
+/** yzane's settings against poly's: type, default and allowed values. */
 function manifestProblems(extensions) {
   const dir = readdirSync(extensions).find((one) => one.startsWith("yzane.markdown-pdf-"));
   const theirs = JSON.parse(readFileSync(join(extensions, dir, "package.json"), "utf8")).contributes;
   const ours = JSON.parse(readFileSync(join(LSP, "package.json"), "utf8")).contributes;
-  const polySettings = Object.assign({}, ...ours.configuration.map((one) => one.properties));
+  const polySettings = settingsOf(ours);
   const problems = [];
   for (const [key, spec] of Object.entries(theirs.configuration.properties)) {
     const mine = polySettings[`poly.${key.replace(/^markdown-pdf\./, "markdownPdf.")}`];
@@ -303,7 +304,7 @@ function manifestProblems(extensions) {
       problems.push(`setting ${key}: poly has none`);
       continue;
     }
-    for (const field of ["type", "default", "enum", "scope", "items", "additionalProperties"]) {
+    for (const field of ["type", "default", "enum", "items", "additionalProperties"]) {
       if (JSON.stringify(spec[field]) !== JSON.stringify(mine[field])) {
         problems.push(
           `setting ${key} ${field}: yzane ${JSON.stringify(spec[field])} poly ${JSON.stringify(mine[field])}`,
