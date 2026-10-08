@@ -15,6 +15,8 @@ export interface Schema {
   description?: string;
   markdownDescription?: string;
   enum?: unknown[];
+  enumDescriptions?: string[];
+  markdownEnumDescriptions?: string[];
   minimum?: number;
   maximum?: number;
   properties?: Record<string, Schema>;
@@ -58,6 +60,20 @@ export interface Words {
   sep: string;
   or: string;
   types: Record<string, string>;
+  // Poly: Settings (settings.ts).
+  menuTitle: string;
+  menuFilter: string;
+  general: string;
+  set: string;
+  workspace: string;
+  current: string;
+  byDefault: string;
+  reset: string;
+  show: string;
+  notNumber: string;
+  notInteger: string;
+  atLeast: (min: number) => string;
+  atMost: (max: number) => string;
 }
 
 export const WORDS: Record<"en" | "zh", Words> = {
@@ -73,6 +89,19 @@ export const WORDS: Record<"en" | "zh", Words> = {
     sep: " | ",
     or: " or ",
     types: { string: "string", number: "number", integer: "integer", array: "array", object: "object" },
+    menuTitle: "Poly: Settings",
+    menuFilter: "Filter by key, value or what it does",
+    general: "general",
+    set: "set",
+    workspace: "the workspace sets it too",
+    current: "current",
+    byDefault: "default",
+    reset: "Reset to default",
+    show: "Show in settings.json",
+    notNumber: "Not a number",
+    notInteger: "Not a whole number",
+    atLeast: (min) => `At least ${min}`,
+    atMost: (max) => `At most ${max}`,
   },
   zh: {
     header: "這個區塊由 Poly 維護：每次啟用都依安裝的版本重寫註解與預設值。被註解掉的鍵是沒設定，"
@@ -85,6 +114,19 @@ export const WORDS: Record<"en" | "zh", Words> = {
     sep: "｜",
     or: "或",
     types: { string: "字串", number: "數字", integer: "整數", array: "陣列", object: "物件" },
+    menuTitle: "Poly：設定",
+    menuFilter: "依鍵名、值或用途篩選",
+    general: "一般",
+    set: "已設定",
+    workspace: "工作區另有設定",
+    current: "目前",
+    byDefault: "預設",
+    reset: "還原預設",
+    show: "在 settings.json 中顯示",
+    notNumber: "不是數字",
+    notInteger: "不是整數",
+    atLeast: (min) => `至少 ${min}`,
+    atMost: (max) => `至多 ${max}`,
   },
 };
 
@@ -168,15 +210,13 @@ function entries(
       );
       continue;
     }
-    const described = ctx.strings[ref(node.markdownDescription ?? node.description ?? "")]
-      ?? node.markdownDescription ?? node.description ?? "";
     // A long default (`codeRunner.executorMap` is 2 KB) is shown once, as the
     // commented-out value, rather than squeezed into the line above it -- and
     // shown even when the key is set, or nothing would say what it was.
     const short = fallback === undefined || columns(compact(fallback)) <= SHORT;
     const shown = fallback === undefined ? ctx.words.unset : short ? compact(fallback) : ctx.words.below;
     lines.push(
-      ...comment(ctx.words.purpose + plain(described), pad),
+      ...comment(ctx.words.purpose + prose(node.markdownDescription ?? node.description ?? "", ctx.strings), pad),
       ...comment(ctx.words.choices(allowed(node, ctx.words), shown), pad),
       ...(mine === undefined || !short ? valueLines(name, fallback, pad, "// ", ctx) : []),
       ...(mine !== undefined ? valueLines(name, mine, pad, "", ctx) : []),
@@ -239,6 +279,11 @@ function compact(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
+/** A manifest string (`%key%` or literal) as plain text in the user's language. */
+export function prose(text: string, strings: Record<string, string>): string {
+  return plain(strings[ref(text)] ?? text);
+}
+
 /** A manifest description as comment prose: setting links and markdown links unwrapped. */
 function plain(text: string): string {
   return text
@@ -282,6 +327,74 @@ function columns(text: string): number {
       : 1;
   }
   return width;
+}
+
+// ── Poly: Settings ────────────────────────────────────────────────────────
+// The menu settings.ts draws over the block: a key is picked from a list,
+// typed into a box, or -- an array or an object -- edited in the file itself.
+
+/** The values a key is picked from, or undefined for one that is typed or edited in the file. */
+export function choicesOf(node: Schema): unknown[] | undefined {
+  return node.enum ?? ([node.type].flat().join() === "boolean" ? [true, false] : undefined);
+}
+
+/** A key whose value is typed: text or a number, nothing with a shape. */
+export function isTyped(node: Schema): boolean {
+  return [node.type ?? "object"].flat().every((type) => ["string", "number", "integer", "null"].includes(type));
+}
+
+/**
+ * What was typed for a key, as its value, or why it is not one. An empty box
+ * is the empty string for text, and for a number it is no value at all: the
+ * default.
+ */
+export function parseTyped(node: Schema, text: string, words: Words): { value: unknown } | string {
+  const types = [node.type].flat();
+  if (!types.includes("number") && !types.includes("integer")) {
+    return { value: text };
+  }
+  if (text.trim() === "") {
+    return { value: undefined };
+  }
+  const value = Number(text);
+  if (!Number.isFinite(value)) {
+    return types.includes("string") ? { value: text } : words.notNumber;
+  }
+  if (!types.includes("number") && !Number.isInteger(value)) {
+    return words.notInteger;
+  }
+  if (node.minimum !== undefined && value < node.minimum) {
+    return words.atLeast(node.minimum);
+  }
+  if (node.maximum !== undefined && value > node.maximum) {
+    return words.atMost(node.maximum);
+  }
+  return { value };
+}
+
+/** A value as the menu shows it: text bare, everything else as JSON on one line. */
+export function shown(value: unknown): string {
+  const text = typeof value === "string" && value !== "" ? value : compact(value);
+  return text.length > 60 ? `${text.slice(0, 59)}…` : text;
+}
+
+/**
+ * The line `key` is written on in a file holding the block, set or commented
+ * out. Found inside its group at exactly its depth, since a name like
+ * `enabled` recurs in the groups nested below it.
+ */
+export function lineOf(text: string, key: string): number | undefined {
+  const path = key.split(".");
+  const tree = parseTree(text);
+  const group = tree ? findNodeAtLocation(tree, ["poly", ...path.slice(0, -1)]) : undefined;
+  if (!group) {
+    return undefined;
+  }
+  const unit = /\n([ \t]+)"/.exec(text)?.[1] ?? "  ";
+  const name = JSON.stringify(path[path.length - 1]).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const entry = new RegExp(`^${unit.repeat(path.length + 1)}(?:// )?${name}: `);
+  const at = text.slice(group.offset, group.offset + group.length).split("\n").findIndex((line) => entry.test(line));
+  return at < 0 ? undefined : text.slice(0, group.offset).split("\n").length - 1 + at;
 }
 
 export function withValue(current: unknown, path: string[], value: unknown): Record<string, unknown> {

@@ -14,6 +14,7 @@
   "command.toggleLint.title": "Poly: Toggle Linting",
   "command.checkForUpdates.title": "Poly: Check for Updates",
   "command.showOutput.title": "Poly: Show Log",
+  "command.openSettings.title": "Poly: Settings",
   "command.createGoWork.title": "Poly: Create go.work for the Open Go Modules",
   "config.serverPath.description": "Path to the poly binary. Relative paths resolve against the first workspace folder; empty uses the bundled binary, then `poly` from PATH.",
   "config.tools.description": "Where poly gets each external tool, by tool name: the `[tools]` table of poly.toml, for the editor. Without an entry poly uses the tool on PATH when its major version matches poly's pin, and downloads its own otherwise. A value is `\"off\"`, `\"on\"`, a version to download instead (PATH is then skipped), or the absolute path of a binary, for example `{ \"shellcheck\": \"off\", \"tflint\": \"0.53.0\" }`. Applies to poly's language server, the PlantUML jar, and `poly check` and dead-code analysis in the terminal. A tool named here overrides the same tool in poly.toml, which still applies to every other tool and is all the command line reads. Changing this restarts the language server.",
@@ -549,5 +550,5 @@
   "color.errorLens.statusBarHintForeground.description": "Error Lens: color of a hint message in the status bar, with `poly.errorLens.statusBarColorsEnabled` on.",
   "config.syntax.updateCheck.enabled.description": "Periodically check GitHub Releases for a new poly-syntax-highlight, and install a new one without asking; only the window reload is left to you. An update also installs Poly (poly-lsp) when it is installed, and a release one of the two already installed in this window is not installed again.",
   "config.syntax.updateCheck.intervalDays.description": "Days between this extension's automatic update checks; 0 checks on every startup. Separate from Poly's own poly.updateCheck.intervalDays.",
-  "config.poly.description": "All of Poly's settings, as one object. Poly keeps this block in your user settings.json: every key is listed with what it does, its allowed values and its default, and a key you have not set stays commented out. Uncomment a line to change it."
+  "config.poly.description": "All of Poly's settings, as one object. Poly keeps this block in your user settings.json: every key is listed with what it does, its allowed values and its default, and a key you have not set stays commented out. Uncomment a line to change it, or pick values from a menu with [Poly: Settings](command:poly.openSettings)."
 }

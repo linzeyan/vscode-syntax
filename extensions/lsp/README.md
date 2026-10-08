@@ -496,6 +496,7 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 
 markdown 的 Enter／Tab／粗體斜體與 `Copy Path with Line Numbers`、重構命令沒有開關：它們
 只在你按下去時才做事。每一項的完整說明在 settings.json 的 `poly` 區塊裡，就在那一項上方（英文或正體中文，照編輯器的語言）。
+要逐項挑值不必開檔：命令 **Poly: Settings** 一列一項，從清單挑或輸入，寫回的就是那個區塊。
 
 外部工具的版本、路徑與開關寫在 `poly.tools`，跟 `poly.toml` 的 `[tools]` 同一套鍵與值：
 

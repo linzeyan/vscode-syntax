@@ -14,7 +14,7 @@ import { activate as activateEditor } from "./editor/extension";
 import { toolsEnv } from "./editor/toolsEnv";
 import { commonRoot, useLines } from "./gowork";
 import { isOn, type Quiet, stillOn, syncSnapshots, toggler } from "./quiet";
-import { affects, initSettings, keepBlock } from "./settings";
+import { affects, initSettings, keepBlock, openSettingsMenu } from "./settings";
 import { checkForUpdates, scheduleUpdateCheck } from "./update";
 
 // Everything the extension does goes through the daemon, so a daemon that
@@ -935,6 +935,7 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     }),
     vscode.commands.registerCommand("poly.showOutput", () => client?.outputChannel.show()),
+    vscode.commands.registerCommand("poly.openSettings", openSettingsMenu),
     // Global scope: a switch is "I am not in the mood for this right now",
     // which is about the person and not about the project. Writing it at
     // workspace scope would leave lines in somebody's .vscode/settings.json

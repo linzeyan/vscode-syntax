@@ -863,7 +863,10 @@ poly-lsp 的設定全部在一個 `poly` 物件裡，extension 啟用時把它�
 ```
 
 這份 README 寫 `poly.format.enabled` 的地方，指的就是 `"poly": { "format": { "enabled": … } }`。
-設定畫面裡 poly 只有一項「在 settings.json 內編輯」，逐項要在檔案裡改。Format／Lint 開關與
+設定畫面裡 poly 只有一項「在 settings.json 內編輯」；要逐項挑值，用命令 **Poly: Settings**
+（設定畫面那一項的說明裡也有連結）：每一列是一項與它目前的值，可以用鍵名、值或用途篩選；
+選了就從清單挑值或輸入，挑回預設值等於取消設定，陣列與物件則跳到 `settings.json` 的那一行。
+它寫的就是這個區塊。Format／Lint 開關與
 `Poly: Set Syntax Color` 直接改這個區塊，註解不會掉；`settings.json` 有沒存檔的修改時它們會請你
 先存檔，啟用時的重寫則等下一次。工作區的 `.vscode/settings.json` 用同樣的巢狀寫法，只寫要覆蓋的
 那幾項。

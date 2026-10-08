@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import { parse, type ParseError } from "jsonc-parser";
 
-import { PolySchema, rewrite, settingsOf, WORDS } from "./settingsBlock";
+import { choicesOf, isTyped, lineOf, parseTyped, PolySchema, rewrite, settingsOf, WORDS } from "./settingsBlock";
 
 // The real manifest and its Chinese strings: the block is generated from them,
 // so a key added there is a key these tests generate.
@@ -117,6 +117,42 @@ test("a file with nothing indented yet takes the indentation it is given", () =>
   assert.ok(out.startsWith("{\n    \"poly\": {\n        // "), out.slice(0, 80));
   // A file that shows its indentation keeps it, whatever the editor says.
   assert.ok(rewrite(USER, POLY, STRINGS, WORDS.zh, undefined, "    ").includes("\n  \"poly\": {\n    // "));
+});
+
+test("the menu offers a list exactly where the schema names every value", () => {
+  assert.deepEqual(choicesOf({ type: "boolean" }), [true, false]);
+  assert.deepEqual(choicesOf({ type: "string", enum: ["save", "copy"] }), ["save", "copy"]);
+  // Free text, and a shape, are not picked from anything.
+  assert.equal(choicesOf({ type: "string" }), undefined);
+  assert.equal(choicesOf({ type: "array" }), undefined);
+  assert.ok(isTyped({ type: ["number", "null"] }));
+  assert.ok(!isTyped({ type: "object" }));
+});
+
+test("a typed value is refused for what the schema would refuse, and an empty number is the default", () => {
+  const port = { type: "integer", minimum: 1, maximum: 65535 };
+  assert.deepEqual(parseTyped(port, "18600", WORDS.en), { value: 18600 });
+  assert.equal(parseTyped(port, "18.5", WORDS.en), WORDS.en.notInteger);
+  assert.equal(parseTyped(port, "port", WORDS.en), WORDS.en.notNumber);
+  assert.equal(parseTyped(port, "0", WORDS.en), WORDS.en.atLeast(1));
+  assert.equal(parseTyped(port, "70000", WORDS.en), WORDS.en.atMost(65535));
+  assert.deepEqual(parseTyped(port, " ", WORDS.en), { value: undefined });
+  // Text is the user's to the last space: a command line or a path.
+  assert.deepEqual(parseTyped({ type: "string" }, " cd $dir ", WORDS.en), { value: " cd $dir " });
+});
+
+test("show in settings.json lands on the key itself, not on a namesake in a nested group", () => {
+  const set = write(write(USER), { key: "format.enabled", value: false });
+  const lines = set.split("\n");
+  // markdownPdf.math.enabled is inside markdownPdf, below markdownPdf.enabled.
+  const outer = lineOf(set, "markdownPdf.enabled")!;
+  const inner = lineOf(set, "markdownPdf.math.enabled")!;
+  assert.notEqual(outer, inner);
+  assert.match(lines[outer], /^ {6}\/\/ "enabled": /);
+  assert.match(lines[inner], /^ {8}\/\/ "enabled": /);
+  // A key that is set is found on its live line.
+  assert.match(lines[lineOf(set, "format.enabled")!], /^ {6}"enabled": false,$/);
+  assert.equal(lineOf(USER, "format.enabled"), undefined);
 });
 
 test("a Windows file stays CRLF", () => {

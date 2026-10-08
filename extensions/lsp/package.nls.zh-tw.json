@@ -14,6 +14,7 @@
   "command.toggleLint.title": "Poly：切換 Lint 開關",
   "command.checkForUpdates.title": "Poly：檢查更新",
   "command.showOutput.title": "Poly：顯示記錄",
+  "command.openSettings.title": "Poly：設定",
   "command.createGoWork.title": "Poly：為已開啟的 Go 模組建立 go.work",
   "config.serverPath.description": "poly 執行檔的路徑。相對路徑以第一個工作區資料夾為基準；留空則使用內建的執行檔，其次是 PATH 上的 `poly`。",
   "config.tools.description": "poly 從哪裡取得各個外部工具，以工具名稱為鍵：就是 poly.toml 的 `[tools]` 表，給編輯器用。沒寫的工具先用 PATH 上主版號跟 poly 釘的相同的那支，沒有才下載。值可以是 `\"off\"`、`\"on\"`、要改下載的版本（取代 poly 釘的版本，此時不看 PATH），或執行檔的絕對路徑，例如 `{ \"shellcheck\": \"off\", \"tflint\": \"0.53.0\" }`。套用到 poly 的 language server、PlantUML 的 jar，以及在終端機執行的 `poly check` 與 dead code 分析。這裡列出的工具會蓋過 poly.toml 裡的同一項，其他工具仍照 poly.toml，而命令列只讀 poly.toml。改了會重新啟動 language server。",
@@ -549,5 +550,5 @@
   "color.errorLens.statusBarHintForeground.description": "Error Lens：狀態列裡提示訊息的顏色（`poly.errorLens.statusBarColorsEnabled` 開啟時）。",
   "config.syntax.updateCheck.enabled.description": "定期檢查 GitHub Releases 上的新版 poly-syntax-highlight，有新版就直接下載安裝，只留重新載入視窗給你決定。有裝 Poly（poly-lsp）的話更新時一起裝；同一個視窗裡兩者之一已經裝過的版本不會再裝一次。",
   "config.syntax.updateCheck.intervalDays.description": "這個 extension 自動檢查更新的間隔天數；設為 0 表示每次啟動都檢查。跟 Poly 自己的 poly.updateCheck.intervalDays 各自獨立。",
-  "config.poly.description": "Poly 的所有設定集中在這一個物件。Poly 會在使用者 settings.json 裡維護這個區塊：每個鍵都附上用途、可選值與預設值，沒設定的鍵保持註解。要改設定就把那一行取消註解再改值。"
+  "config.poly.description": "Poly 的所有設定集中在這一個物件。Poly 會在使用者 settings.json 裡維護這個區塊：每個鍵都附上用途、可選值與預設值，沒設定的鍵保持註解。要改設定就把那一行取消註解再改值，或用 [Poly：設定](command:poly.openSettings) 從選單挑值。"
 }

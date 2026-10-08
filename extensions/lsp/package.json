@@ -180,6 +180,10 @@
         "title": "%command.showOutput.title%"
       },
       {
+        "command": "poly.openSettings",
+        "title": "%command.openSettings.title%"
+      },
+      {
         "command": "poly.createGoWork",
         "title": "%command.createGoWork.title%"
       },

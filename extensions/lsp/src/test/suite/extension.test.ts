@@ -7,7 +7,7 @@ import { findNodeAtLocation, parseTree } from "jsonc-parser";
 import * as vscode from "vscode";
 
 import { cacheDir, RefStore } from "../../editor/refStore";
-import { rewrite, withValue, WORDS } from "../../editor/settingsBlock";
+import { lineOf, rewrite, withValue, WORDS } from "../../editor/settingsBlock";
 import { commonRoot, useLines } from "../../gowork";
 import { knownNewer, revalidates, updateDue } from "../../update";
 
@@ -420,6 +420,76 @@ suite("poly-lsp in a real editor", () => {
     } finally {
       await switchedOn("poly.toggleFormat", "poly.format.enabled");
       await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    }
+  });
+
+  // The Settings UI's row per key, for the object setting it cannot draw. The
+  // list is the real one, its row selected and poly's accept handler run --
+  // not Enter, which reaches the list only while this window has the
+  // foreground. The value is answered in place of the box. What only a host
+  // shows: the choice lands in the block as poly writes it, comments kept, and
+  // choosing the default takes the line out again rather than pinning a value
+  // the next release cannot change.
+  test("Poly: Settings sets a key from a list or a box, and choosing its default unsets it", async () => {
+    type Row = vscode.QuickPickItem & { key?: string };
+    const window = vscode.window as unknown as Record<string, unknown>;
+    const { createQuickPick, showQuickPick, showInputBox } = vscode.window;
+    const lists: { pick: vscode.QuickPick<Row>; accept: () => void }[] = [];
+    const answers: unknown[] = [];
+    window.createQuickPick = () => {
+      const pick = createQuickPick<Row>();
+      const list = { pick, accept: () => {} };
+      const onDidAccept = pick.onDidAccept;
+      Object.defineProperty(pick, "onDidAccept", {
+        value: (listener: () => void) => {
+          list.accept = listener;
+          return onDidAccept(listener);
+        },
+      });
+      lists.push(list);
+      return pick;
+    };
+    window.showQuickPick = async (items: Thenable<{ choice: unknown }[]> | { choice: unknown }[]) => {
+      const answer = answers.shift();
+      return (await items).find((item) => item.choice === answer);
+    };
+    window.showInputBox = () => Promise.resolve(answers.shift());
+    const user = (key: string) => vscode.workspace.getConfiguration("poly").inspect(key)?.globalValue;
+    let used = 0;
+    const nextList = () =>
+      eventually("the settings list", () => (lists[used]?.pick.items.length ? lists[used++] : undefined));
+    const choose = async (key: string, answer: unknown) => {
+      const { pick, accept } = await nextList();
+      answers.push(answer);
+      pick.selectedItems = pick.items.filter((item) => item.key === key);
+      accept();
+    };
+    const menu = vscode.commands.executeCommand("poly.openSettings");
+    try {
+      await choose("codeSnap.shutterAction", "copy");
+      await eventually("the chosen value", () => user("codeSnap.shutterAction") === "copy" || undefined);
+      await choose("swaggerViewer.defaultPort", "18600");
+      await eventually("the typed value", () => user("swaggerViewer.defaultPort") === 18600 || undefined);
+      const settings = vscode.workspace.textDocuments.find((doc) =>
+        doc.uri.scheme === "vscode-userdata" && doc.uri.path.endsWith("/settings.json")
+      )!;
+      const text = settings.getText();
+      assert.ok(text.includes(WORDS.en.header.slice(0, 40)), "the block lost its comments");
+      assert.match(text.split("\n")[lineOf(text, "codeSnap.shutterAction")!], /^\s+"shutterAction": "copy",$/);
+      await choose("codeSnap.shutterAction", "save");
+      await choose("swaggerViewer.defaultPort", "");
+      await eventually(
+        "both keys unset",
+        () =>
+          user("codeSnap.shutterAction") === undefined && user("swaggerViewer.defaultPort") === undefined || undefined,
+      );
+      assert.match(settings.getText().split("\n")[lineOf(settings.getText(), "codeSnap.shutterAction")!], /^\s+\/\/ /);
+      await nextList();
+      await vscode.commands.executeCommand("workbench.action.closeQuickOpen");
+      await menu;
+    } finally {
+      Object.assign(window, { createQuickPick, showQuickPick, showInputBox });
+      await vscode.commands.executeCommand("workbench.action.closeQuickOpen");
     }
   });
 

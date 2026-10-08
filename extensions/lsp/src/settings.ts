@@ -15,7 +15,21 @@ import { isDeepStrictEqual } from "node:util";
 
 import * as vscode from "vscode";
 
-import { PolySchema, rewrite, withValue, WORDS, Words } from "./editor/settingsBlock";
+import {
+  choicesOf,
+  isTyped,
+  lineOf,
+  parseTyped,
+  PolySchema,
+  prose,
+  rewrite,
+  Schema,
+  settingsOf,
+  shown,
+  withValue,
+  WORDS,
+  Words,
+} from "./editor/settingsBlock";
 
 let context: vscode.ExtensionContext | undefined;
 let log: (line: string) => void = () => {};
@@ -228,27 +242,179 @@ async function locate(): Promise<vscode.Uri | undefined> {
     vscode.window.tabGroups.all
       .flatMap((group) => group.tabs)
       .filter((tab) => tab.input instanceof vscode.TabInputText);
-  const uriOf = (tab: vscode.Tab) => (tab.input as vscode.TabInputText).uri.toString();
-  const open = new Set(tabs().map(uriOf));
+  const uriOf = (tab: vscode.Tab) => (tab.input as vscode.TabInputText).uri;
+  const open = new Set(tabs().map((tab) => uriOf(tab).toString()));
   await vscode.commands.executeCommand("workbench.action.openSettingsJson");
   for (let waited = 0; waited < 3000; waited += 50) {
-    const document = vscode.window.activeTextEditor?.document;
-    // The scheme, not the name: a workspace's .vscode/settings.json that was
-    // active a moment ago is also called settings.json.
-    if (document?.uri.scheme === "vscode-userdata") {
-      const uri = document.uri.toString();
-      // Its own tab, not the active one: whatever the user opened since is
-      // not poly's to close.
-      const tab = open.has(uri) ? undefined : tabs().find((one) => uriOf(one) === uri);
-      if (tab) {
+    // Its tab, not the active editor: a file opened meanwhile -- an editor
+    // restored at startup, the one that activated poly -- can take the focus
+    // back before this looks. The scheme as well as the name: a workspace's
+    // .vscode/settings.json is also called settings.json.
+    const tab = tabs().find((one) =>
+      uriOf(one).scheme === "vscode-userdata" && uriOf(one).path.endsWith("/settings.json")
+    );
+    if (tab) {
+      // Closed only if this opened it: one the user had open stays theirs.
+      if (!open.has(uriOf(tab).toString())) {
         await vscode.window.tabGroups.close(tab);
       }
-      return document.uri;
+      return uriOf(tab);
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   log("[settings] could not find the user settings.json");
   return undefined;
+}
+
+// ── Poly: Settings ─────────────────────────────────────────────────────────
+
+type Picked = { key: string; action: "edit" | "reset" | "show" };
+
+/**
+ * A row per key with its value, picked from a list or typed, which the
+ * Settings UI cannot draw for an object setting this deep. Written through
+ * `setPoly`, so the block keeps its comments; an array or an object is edited
+ * in the file, where the block already shows its shape. Back to the list after
+ * each change, as the Settings UI stays open.
+ */
+export async function openSettingsMenu(): Promise<void> {
+  const all = settingsOf(schema());
+  let focus: string | undefined;
+  for (;;) {
+    const picked = await pickSetting(all, focus);
+    if (picked === undefined) {
+      return;
+    }
+    focus = picked.key;
+    const { schema: node, default: fallback } = all.get(picked.key)!;
+    try {
+      if (picked.action === "reset") {
+        await setPoly(picked.key, undefined);
+      } else if (picked.action === "show" || !(choicesOf(node) || isTyped(node))) {
+        return await showInFile(picked.key);
+      } else {
+        await editValue(picked.key, node, fallback);
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Poly: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}
+
+function pickSetting(
+  all: Map<string, { schema: Schema }>,
+  focus: string | undefined,
+): Promise<Picked | undefined> {
+  const w = words();
+  const text = strings();
+  const config = vscode.workspace.getConfiguration("poly");
+  const reset = { iconPath: new vscode.ThemeIcon("discard"), tooltip: w.reset };
+  const show = { iconPath: new vscode.ThemeIcon("go-to-file"), tooltip: w.show };
+  type Item = vscode.QuickPickItem & { key?: string };
+  const items: Item[] = [];
+  let group: string | undefined;
+  // Keys outside any group first, under one heading of their own.
+  for (
+    const [key, { schema: node }] of [...all].sort(([a], [b]) => Number(a.includes(".")) - Number(b.includes(".")))
+  ) {
+    const heading = key.includes(".") ? key.slice(0, key.indexOf(".")) : w.general;
+    if (heading !== group) {
+      items.push({ label: heading, kind: vscode.QuickPickItemKind.Separator });
+      group = heading;
+    }
+    const seen = config.inspect(key);
+    const set = seen?.globalValue !== undefined;
+    const elsewhere = seen?.workspaceValue !== undefined || seen?.workspaceFolderValue !== undefined;
+    items.push({
+      key,
+      label: key,
+      description: [shown(config.get(key)), set ? w.set : "", elsewhere ? w.workspace : ""].filter(Boolean).join(" · "),
+      detail: prose(node.markdownDescription ?? node.description ?? "", text).replace(/\s+/g, " "),
+      buttons: set ? [reset, show] : [show],
+    });
+  }
+  return new Promise((resolve) => {
+    const pick = vscode.window.createQuickPick<Item>();
+    pick.title = w.menuTitle;
+    pick.placeholder = w.menuFilter;
+    pick.matchOnDescription = true;
+    pick.matchOnDetail = true;
+    pick.items = items;
+    pick.activeItems = items.filter((item) => item.key === focus);
+    pick.onDidAccept(() => {
+      const key = pick.selectedItems[0]?.key;
+      if (key) {
+        resolve({ key, action: "edit" });
+      }
+      pick.hide();
+    });
+    pick.onDidTriggerItemButton(({ item, button }) => {
+      resolve({ key: item.key!, action: button === reset ? "reset" : "show" });
+      pick.hide();
+    });
+    pick.onDidHide(() => {
+      pick.dispose();
+      resolve(undefined);
+    });
+    pick.show();
+  });
+}
+
+/** One key's value, from its choices or typed. Picking the default unsets the key. */
+async function editValue(key: string, node: Schema, fallback: unknown): Promise<void> {
+  const w = words();
+  const text = strings();
+  const now = vscode.workspace.getConfiguration("poly").get(key);
+  const purpose = prose(node.markdownDescription ?? node.description ?? "", text);
+  let value: unknown;
+  const choices = choicesOf(node);
+  if (choices) {
+    const notes = node.markdownEnumDescriptions ?? node.enumDescriptions ?? [];
+    const picked = await vscode.window.showQuickPick(
+      choices.map((choice, i) => ({
+        choice,
+        label: shown(choice),
+        description: [
+          isDeepStrictEqual(choice, now) ? w.current : "",
+          isDeepStrictEqual(choice, fallback) ? w.byDefault : "",
+        ].filter(Boolean).join(" · "),
+        detail: notes[i] === undefined ? undefined : prose(notes[i], text),
+      })),
+      { title: key, placeHolder: purpose },
+    );
+    if (picked === undefined) {
+      return;
+    }
+    value = picked.choice;
+  } else {
+    const typed = await vscode.window.showInputBox({
+      title: key,
+      prompt: purpose,
+      value: now === undefined || now === null ? "" : String(now),
+      placeHolder: fallback === undefined || fallback === null ? undefined : String(fallback),
+      validateInput: (input) => {
+        const parsed = parseTyped(node, input, w);
+        return typeof parsed === "string" ? parsed : undefined;
+      },
+    });
+    if (typed === undefined) {
+      return;
+    }
+    value = (parseTyped(node, typed, w) as { value: unknown }).value;
+  }
+  await setPoly(key, isDeepStrictEqual(value, fallback) ? undefined : value);
+}
+
+/** The user's settings.json at `key`'s line. */
+async function showInFile(key: string): Promise<void> {
+  const document = await settingsDocument();
+  if (document === undefined) {
+    await vscode.commands.executeCommand("workbench.action.openSettingsJson");
+    return;
+  }
+  const line = lineOf(document.getText(), key) ?? 0;
+  const at = new vscode.Position(line, document.lineAt(line).firstNonWhitespaceCharacterIndex);
+  await vscode.window.showTextDocument(document, { selection: new vscode.Range(at, at) });
 }
 
 function schema(): PolySchema {
