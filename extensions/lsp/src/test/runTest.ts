@@ -4,7 +4,7 @@
 // contributed commands all live outside the protocol, and both times we broke
 // them the protocol tests stayed green.
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -106,6 +106,10 @@ async function main(): Promise<void> {
   writeFileSync(join(workspace, "go.mod"), "module polye2e\n\ngo 1.21\n");
   // Its own, so that the log test finds this run's files and no other's.
   const logs = mkdtempSync(join(tmpdir(), "poly-e2e-logs-"));
+  // The suite waits for activation to write the poly block before it touches
+  // the user's settings.json. The last run's block, which its tests rewrote
+  // without comments, would end that wait at once and race the rewrite.
+  rmSync(join(userDataDir(repo), "User", "settings.json"), { force: true });
 
   await runTests({
     // The second one ships only a language default; see its description.

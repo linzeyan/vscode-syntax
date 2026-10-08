@@ -110,6 +110,15 @@ test("uncommenting any one-line default gives valid settings that set exactly th
   assert.ok(tried > 200, `only ${tried} commented-out keys found`);
 });
 
+test("a file with nothing indented yet takes the indentation it is given", () => {
+  // The caller passes the editor's own: its writer indents what it adds later
+  // by its tab size, and a block of another width leaves those keys misplaced.
+  const out = rewrite("{\n}\n", POLY, STRINGS, WORDS.zh, undefined, "    ");
+  assert.ok(out.startsWith("{\n    \"poly\": {\n        // "), out.slice(0, 80));
+  // A file that shows its indentation keeps it, whatever the editor says.
+  assert.ok(rewrite(USER, POLY, STRINGS, WORDS.zh, undefined, "    ").includes("\n  \"poly\": {\n    // "));
+});
+
 test("a Windows file stays CRLF", () => {
   const out = write(USER.replace(/\n/g, "\r\n"));
   assert.ok(!/[^\r]\n/.test(out), "a bare LF was mixed in");

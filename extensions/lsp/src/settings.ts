@@ -91,7 +91,7 @@ export async function keepBlock(): Promise<void> {
     log("[settings] settings.json has unsaved changes; the poly block is rewritten next time");
     return;
   }
-  await edit(document, rewrite(document.getText(), schema(), strings(), words()));
+  await edit(document, rewrite(document.getText(), schema(), strings(), words(), undefined, indentOf(document)));
 }
 
 /**
@@ -127,7 +127,10 @@ export async function setPoly(
       vscode.ConfigurationTarget.Global,
     );
   } else {
-    await edit(document, rewrite(document.getText(), schema(), strings(), words(), { key: name, value }));
+    await edit(
+      document,
+      rewrite(document.getText(), schema(), strings(), words(), { key: name, value }, indentOf(document)),
+    );
   }
   await settled(name, value);
 }
@@ -152,6 +155,17 @@ async function settled(name: string, value: unknown): Promise<void> {
       }
     });
   });
+}
+
+/**
+ * The indentation the editor's own writer uses in this file when the file has
+ * none to detect: its settings for it. That writer counts levels in its tab
+ * size, so a two-space block under a tab size of four has every key it adds
+ * afterwards -- a Settings UI change, the format switch -- land at the margin.
+ */
+function indentOf(document: vscode.TextDocument): string {
+  const editor = vscode.workspace.getConfiguration("editor", document);
+  return editor.get<boolean>("insertSpaces", true) ? " ".repeat(editor.get<number>("tabSize", 4)) : "\t";
 }
 
 /** Replace only what differs, so an open editor keeps its cursor and undo history. */

@@ -8,6 +8,7 @@ const { join } = require("node:path");
 const vscode = require("vscode");
 
 const { connect } = require("../ext-diff/cdp");
+const { update } = require("../ext-diff/settings");
 
 const SIDE = process.env.POLY_SWAGGER_SIDE;
 const PORT = Number(process.env.POLY_SWAGGER_PORT);
@@ -224,7 +225,6 @@ module.exports.run = async function() {
   const report = { side: SIDE, seen: {}, errors: [] };
   const seen = report.seen;
   const desk = await connect(PORT);
-  const config = () => vscode.workspace.getConfiguration();
   const target = vscode.ConfigurationTarget.Workspace;
   const remote = http.createServer((_request, response) => response.end(REMOTE)).listen(REMOTE_PORT, "127.0.0.1");
   const step = async (name, act) => {
@@ -350,8 +350,8 @@ module.exports.run = async function() {
     });
 
     await step("settings", async () => {
-      await config().update(`${PREFIX}.showOnlyFileName`, true, target);
-      await config().update(`${PREFIX}.zoomLevel`, 150, target);
+      await update(vscode, `${PREFIX}.showOnlyFileName`, true, target);
+      await update(vscode, `${PREFIX}.zoomLevel`, 150, target);
       try {
         await vscode.window.showTextDocument(editor.document, vscode.ViewColumn.One);
         const before = await ids();
@@ -362,8 +362,8 @@ module.exports.run = async function() {
         view.close();
         return found;
       } finally {
-        await config().update(`${PREFIX}.showOnlyFileName`, undefined, target);
-        await config().update(`${PREFIX}.zoomLevel`, undefined, target);
+        await update(vscode, `${PREFIX}.showOnlyFileName`, undefined, target);
+        await update(vscode, `${PREFIX}.zoomLevel`, undefined, target);
       }
     });
 
@@ -384,7 +384,7 @@ module.exports.run = async function() {
     });
 
     await step("restart", async () => {
-      await config().update(`${PREFIX}.defaultPort`, 18600, target);
+      await update(vscode, `${PREFIX}.defaultPort`, 18600, target);
       try {
         await vscode.window.showTextDocument(editor.document, vscode.ViewColumn.One);
         const before = await ids();
@@ -402,7 +402,7 @@ module.exports.run = async function() {
         await desk.evaluate(STOP);
         return found;
       } finally {
-        await config().update(`${PREFIX}.defaultPort`, undefined, target);
+        await update(vscode, `${PREFIX}.defaultPort`, undefined, target);
       }
     });
 

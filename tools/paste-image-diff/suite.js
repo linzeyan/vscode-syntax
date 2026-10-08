@@ -9,6 +9,7 @@ const { join, relative } = require("node:path");
 const vscode = require("vscode");
 
 const { connect } = require("../ext-diff/cdp");
+const { update } = require("../ext-diff/settings");
 
 const SIDE = process.env.POLY_PASTE_SIDE;
 const PORT = Number(process.env.POLY_PASTE_PORT);
@@ -101,11 +102,10 @@ module.exports.run = async function() {
   async function scenario(name, options) {
     const { open = "docs/guide.md", select, settings = {}, image = true, chord = false, answer, existing } = options;
     const pastes = options.pastes ?? true;
-    const config = vscode.workspace.getConfiguration();
     let editor;
     let before = tree();
     try {
-      for (const [key, value] of Object.entries(settings)) await config.update(`${PREFIX}.${key}`, value, target);
+      for (const [key, value] of Object.entries(settings)) await update(vscode, `${PREFIX}.${key}`, value, target);
       if (image) imageOnClipboard();
       else textOnClipboard();
       if (existing) {
@@ -182,7 +182,7 @@ module.exports.run = async function() {
         rmSync(join(folder(), path), { recursive: true, force: true });
       }
       if (existing) rmSync(join(folder(), existing), { force: true });
-      for (const key of Object.keys(settings)) await config.update(`${PREFIX}.${key}`, undefined, target);
+      for (const key of Object.keys(settings)) await update(vscode, `${PREFIX}.${key}`, undefined, target);
       await vscode.commands.executeCommand("notifications.clearAll");
     }
   }

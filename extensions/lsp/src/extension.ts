@@ -701,7 +701,9 @@ async function createGoWork(): Promise<void> {
   const written = await new Promise<boolean>((resolve) => {
     execFile(
       "go",
-      ["work", existing ? "use" : "init", ...dirs],
+      // The dialog's relative lines, not `dirs`: go writes absolute paths as
+      // given, and a go.work naming one machine's folders breaks on the next.
+      ["work", existing ? "use" : "init", ...useLines(root, dirs)],
       { cwd: root },
       (error, _stdout, stderr) => {
         if (error) {

@@ -9,6 +9,7 @@ const { constants, inflateSync } = require("node:zlib");
 const vscode = require("vscode");
 
 const { connect } = require("../ext-diff/cdp");
+const { update } = require("../ext-diff/settings");
 
 const SIDE = process.env.POLY_MARP_SIDE;
 const PORT = Number(process.env.POLY_MARP_PORT);
@@ -307,7 +308,7 @@ module.exports.run = async function() {
   const config = () => vscode.workspace.getConfiguration();
   const target = vscode.ConfigurationTarget.Workspace;
   const set = async (key, value) => {
-    await config().update(`${PREFIX}.${key}`, value, target);
+    await update(vscode, `${PREFIX}.${key}`, value, target);
     // Upstream drops its cached options when it hears of the change, which is
     // after `update` settles.
     await sleep(500);

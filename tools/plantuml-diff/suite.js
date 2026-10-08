@@ -7,6 +7,7 @@ const { existsSync, readdirSync, statSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const vscode = require("vscode");
+const { update } = require("../ext-diff/settings");
 
 const SIDE = process.env.POLY_PLANTUML_SIDE;
 const PREFIX = SIDE === "jebbs" ? "plantuml" : "poly.plantuml";
@@ -34,7 +35,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Workspace-wide, except the settings both extensions scope to the application. */
 async function setting(key, value) {
   const target = key === "urlFormat" ? vscode.ConfigurationTarget.Global : vscode.ConfigurationTarget.Workspace;
-  await vscode.workspace.getConfiguration().update(`${PREFIX}.${key}`, value, target);
+  await update(vscode, `${PREFIX}.${key}`, value, target);
 }
 
 async function show(file, line = 0) {

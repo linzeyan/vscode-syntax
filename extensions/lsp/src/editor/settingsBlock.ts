@@ -106,7 +106,8 @@ interface Context {
  * added when there is none. Everything outside it is left byte for byte.
  *
  * `change` sets one dotted key (`format.enabled`) first; `undefined` unsets it,
- * which writes it back as a commented-out default.
+ * which writes it back as a commented-out default. `indent` is for a file with
+ * nothing indented to follow yet.
  */
 export function rewrite(
   text: string,
@@ -114,12 +115,13 @@ export function rewrite(
   strings: Record<string, string>,
   words: Words,
   change?: { key: string; value: unknown },
+  indent = "  ",
 ): string {
   const tree = parseTree(text);
   const node = tree ? findNodeAtLocation(tree, ["poly"]) : undefined;
   const current: unknown = node ? getNodeValue(node) : undefined;
   const user = change ? withValue(current, change.key.split("."), change.value) : current;
-  const unit = /\n([ \t]+)"/.exec(text)?.[1] ?? "  ";
+  const unit = /\n([ \t]+)"/.exec(text)?.[1] ?? indent;
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   const block = blockText(poly, user, { unit, eol, words, strings });
   if (node) {

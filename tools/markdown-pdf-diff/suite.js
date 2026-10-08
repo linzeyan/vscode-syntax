@@ -7,6 +7,7 @@ const { existsSync, readdirSync, statSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const vscode = require("vscode");
+const { update } = require("../ext-diff/settings");
 
 const SIDE = process.env.POLY_MDPDF_SIDE;
 const PREFIX = SIDE === "yzane" ? "markdown-pdf" : "poly.markdownPdf";
@@ -131,9 +132,8 @@ async function exportFile(type, file) {
  */
 async function configure(settings) {
   await show("poly/extra.css");
-  const config = vscode.workspace.getConfiguration();
   for (const [key, value] of Object.entries(settings)) {
-    await config.update(`${PREFIX}.${key}`, value, vscode.ConfigurationTarget.Workspace);
+    await update(vscode, `${PREFIX}.${key}`, value, vscode.ConfigurationTarget.Workspace);
   }
 }
 

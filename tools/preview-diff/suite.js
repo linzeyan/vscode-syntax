@@ -15,6 +15,7 @@ const { join } = require("node:path");
 const vscode = require("vscode");
 
 const { diagramCases, INFO_CASES, STYLE_DOC } = require("./cases.js");
+const { update } = require("../ext-diff/settings");
 
 const BIERNER = "bierner.markdown-preview-github-styles";
 const POLY = "ricky.poly-lsp";
@@ -55,10 +56,10 @@ async function render(markdown) {
  */
 async function applyStyle(combo, polyEnabled, bierner) {
   const config = vscode.workspace.getConfiguration();
-  await config.update("poly.markdownGithubStyle.enabled", polyEnabled, GLOBAL);
+  await update(vscode, "poly.markdownGithubStyle.enabled", polyEnabled, GLOBAL);
   const values = { colorTheme: combo.mode, lightTheme: combo.light, darkTheme: combo.dark };
   for (const [key, value] of Object.entries(values)) {
-    await config.update(`poly.markdownGithubStyle.${key}`, value, GLOBAL);
+    await update(vscode, `poly.markdownGithubStyle.${key}`, value, GLOBAL);
     if (bierner) {
       await config.update(`markdown-preview-github-styles.${key}`, value, GLOBAL);
     }
@@ -328,7 +329,7 @@ exports.run = async function run() {
   }
 
   if (side === "poly") {
-    await vscode.workspace.getConfiguration().update("poly.markdownDiagrams.enabled", true, GLOBAL);
+    await update(vscode, "poly.markdownDiagrams.enabled", true, GLOBAL);
     for (const one of INFO_CASES) {
       const html = await render(one.markdown);
       report.info[one.name] = { claimed: one.claimed, emitted: html.includes("poly-diagram") };

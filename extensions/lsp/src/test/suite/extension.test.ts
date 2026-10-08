@@ -535,6 +535,54 @@ suite("poly-lsp in a real editor", () => {
     }
   });
 
+  // R's symbols came from arity through poly's relay, which is gone: the lens
+  // now stands on whatever R extension answers, and none is installed here.
+  // So nothing is drawn until something answers, and then the count is drawn
+  // over the first assignment -- the test plays the R extension.
+  test("an R file gets reference lenses from whichever extension answers for R", async () => {
+    const uri = writeFile("lens.R", "add <- function(a, b) a + b\nadd(1, 2)\n");
+    const document = await vscode.workspace.openTextDocument(uri);
+    assert.strictEqual(document.languageId, "r");
+    await setPoly("referencesCodeLens.enabled", true, vscode.ConfigurationTarget.Workspace);
+    const subscriptions: vscode.Disposable[] = [];
+    const titles = async () => {
+      const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", uri, 10);
+      return lenses.flatMap((lens) => lens.command?.title ?? []).filter((title) => / refs?$/.test(title));
+    };
+    try {
+      await vscode.window.showTextDocument(document);
+      assert.deepStrictEqual(await titles(), [], "a lens over R with nothing answering for R");
+      const declared = new vscode.Range(0, 0, 0, 3);
+      subscriptions.push(
+        vscode.languages.registerDocumentSymbolProvider({ language: "r" }, {
+          provideDocumentSymbols: () => [
+            new vscode.DocumentSymbol(
+              "add",
+              "",
+              vscode.SymbolKind.Function,
+              new vscode.Range(0, 0, 0, 27),
+              declared,
+            ),
+          ],
+        }),
+        vscode.languages.registerReferenceProvider({ language: "r" }, {
+          provideReferences: () => [
+            new vscode.Location(uri, declared),
+            new vscode.Location(uri, new vscode.Range(1, 0, 1, 3)),
+          ],
+        }),
+      );
+      const drawn = await eventually("the R lens", async () => {
+        const said = await titles();
+        return said.length > 0 && !said.includes("no refs") ? said : undefined;
+      });
+      assert.deepStrictEqual(drawn, ["1 ref"]);
+    } finally {
+      subscriptions.forEach((one) => one.dispose());
+      await setPoly("referencesCodeLens.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
   test("the toggle command flips the switch both ways", async () => {
     const value = () => vscode.workspace.getConfiguration("poly").get<boolean>("format.enabled");
     assert.strictEqual(value(), true, "the switch did not start on");
@@ -569,6 +617,8 @@ suite("poly-lsp in a real editor", () => {
   // The case that made a global-only toggle useless: golang.go ships `[go]`
   // format-on-save as a language default, and a language default outranks a
   // global `false`. The fixture extension ships the same shape for `[bat]`.
+  // `[json]` is the other way a language gets its own value: the user's block,
+  // here with an `explicit` organizeImports, which still runs on every Cmd+S.
   test("stopping formatting reaches a language's own default, and resuming puts back exactly what was there", async () => {
     assert.strictEqual(
       inLanguage("bat").get("editor.formatOnSave"),
@@ -578,6 +628,8 @@ suite("poly-lsp in a real editor", () => {
     await root().update("editor.formatOnType", true, Global);
     await inLanguage("json").update("editor.formatOnPaste", true, Global, true);
     await root().update("editor.codeActionsOnSave", { "source.fixAll": "always" }, Global);
+    const explicit = { "source.organizeImports": "explicit" };
+    await inLanguage("json").update("editor.codeActionsOnSave", explicit, Global, true);
     try {
       await vscode.commands.executeCommand("poly.toggleFormat");
       assert.strictEqual(root().get("poly.format.enabled"), false);
@@ -592,7 +644,7 @@ suite("poly-lsp in a real editor", () => {
         false,
         "a user's [json] block outranked the switch",
       );
-      for (const scope of [root(), inLanguage("bat")]) {
+      for (const scope of [root(), inLanguage("bat"), inLanguage("json")]) {
         const actions = scope.get<Record<string, unknown>>("editor.codeActionsOnSave") ?? {};
         assert.ok(Object.values(actions).every((one) => one === "never"), JSON.stringify(actions));
       }
@@ -608,11 +660,18 @@ suite("poly-lsp in a real editor", () => {
       assert.strictEqual(root().inspect("editor.formatOnType")?.globalValue, true);
       assert.strictEqual(inLanguage("json").inspect("editor.formatOnPaste")?.globalLanguageValue, true);
       assert.deepStrictEqual(root().inspect("editor.codeActionsOnSave")?.globalValue, { "source.fixAll": "always" });
+      assert.strictEqual(
+        inLanguage("bat").inspect("editor.codeActionsOnSave")?.globalLanguageValue,
+        undefined,
+        "resuming left a [bat] organizeImports line in settings.json",
+      );
+      assert.deepStrictEqual(inLanguage("json").inspect("editor.codeActionsOnSave")?.globalLanguageValue, explicit);
     } finally {
       await switchedOn("poly.toggleFormat", "poly.format.enabled");
       await root().update("editor.formatOnType", undefined, Global);
       await inLanguage("json").update("editor.formatOnPaste", undefined, Global, true);
       await root().update("editor.codeActionsOnSave", undefined, Global);
+      await inLanguage("json").update("editor.codeActionsOnSave", undefined, Global, true);
     }
   });
 

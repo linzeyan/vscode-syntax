@@ -8,6 +8,7 @@ const { join } = require("node:path");
 const vscode = require("vscode");
 
 const { connect } = require("../ext-diff/cdp");
+const { update } = require("../ext-diff/settings");
 
 const SIDE = process.env.POLY_CODESNAP_SIDE;
 const PORT = Number(process.env.POLY_CODESNAP_PORT);
@@ -209,7 +210,7 @@ async function scenario(known, { file, select, lines, settings = {}, language, t
   const own = (key) => key.startsWith("editor.") ? key : `${PREFIX}.${key}`;
   let snap;
   try {
-    for (const [name, value] of Object.entries(settings)) await config.update(own(name), value, target);
+    for (const [name, value] of Object.entries(settings)) await update(vscode, own(name), value, target);
     if (language) {
       await config.update(
         `[${document.languageId}]`,
@@ -235,7 +236,7 @@ async function scenario(known, { file, select, lines, settings = {}, language, t
   } finally {
     snap?.close();
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    for (const name of Object.keys(settings)) await config.update(own(name), undefined, target);
+    for (const name of Object.keys(settings)) await update(vscode, own(name), undefined, target);
     if (language) await config.update(`[${document.languageId}]`, undefined, target);
   }
 }

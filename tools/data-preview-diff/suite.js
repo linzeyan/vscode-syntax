@@ -14,6 +14,7 @@ const SIDE = process.env.POLY_DATA_SIDE;
 const PORT = Number(process.env.POLY_DATA_PORT);
 const REMOTE = process.env.POLY_DATA_REMOTE;
 const xlsx = require(join(process.env.POLY_DATA_LSP, "node_modules", "xlsx"));
+const { update } = require("../ext-diff/settings");
 const { command: COMMAND, remote: REMOTE_COMMAND, prefix: PREFIX, extension: EXTENSION } = {
   upstream: {
     command: "data.preview",
@@ -184,7 +185,6 @@ module.exports.run = async function() {
   const report = { side: SIDE, seen: {}, errors: [], problems: {} };
   const desk = await connect(PORT);
   const target = vscode.ConfigurationTarget.Workspace;
-  const config = () => vscode.workspace.getConfiguration();
 
   // Every message either extension's preview posts to its page goes through
   // the one webview class the extension host hands out, so a wrapper on it
@@ -261,7 +261,7 @@ module.exports.run = async function() {
     const pages = await ids();
     let page;
     try {
-      for (const [key, value] of Object.entries(settings)) await config().update(`${PREFIX}.${key}`, value, target);
+      for (const [key, value] of Object.entries(settings)) await update(vscode, `${PREFIX}.${key}`, value, target);
       await vscode.commands.executeCommand("notifications.clearAll");
       posted.length = 0;
       const uri = open.startsWith("http") ? vscode.Uri.parse(open) : file(open);
@@ -300,7 +300,7 @@ module.exports.run = async function() {
           writeFileSync(join(folder(), path), text.replaceAll("(workspace)", folder()));
         }
       }
-      for (const key of Object.keys(settings)) await config().update(`${PREFIX}.${key}`, undefined, target);
+      for (const key of Object.keys(settings)) await update(vscode, `${PREFIX}.${key}`, undefined, target);
       await vscode.commands.executeCommand("notifications.clearAll");
       await sleep(300);
       report.seen[name] = found;
@@ -492,10 +492,10 @@ module.exports.run = async function() {
       open: "rows.csv",
       act: async ({ found }) => {
         const from = posted.length;
-        await config().update(`${PREFIX}.theme`, "vaporwave", target);
+        await update(vscode, `${PREFIX}.theme`, "vaporwave", target);
         await sleep(4000);
         found.changed = { messages: messages(from) };
-        await config().update(`${PREFIX}.theme`, undefined, target);
+        await update(vscode, `${PREFIX}.theme`, undefined, target);
       },
     });
   } finally {

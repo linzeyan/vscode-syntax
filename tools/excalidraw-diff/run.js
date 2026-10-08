@@ -260,15 +260,19 @@ function manifestProblems(extensions) {
   const show = (value) => JSON.stringify(value);
 
   const settings = Object.assign({}, ...[theirs.configuration].flat().map((one) => one.properties));
+  // A setting with no default reads as its type's empty value, which VSCode
+  // fills in for pomdtr's and poly's one `poly` object has to spell out.
+  const EMPTY = { string: "", object: {}, array: [], boolean: false, number: 0, integer: 0 };
   for (const [key, spec] of Object.entries(settings)) {
     const mine = polySettings[`poly.${key}`];
     if (!mine) {
       problems.push(`setting ${key}: poly has none`);
       continue;
     }
+    const read = { ...spec, default: spec.default ?? EMPTY[[spec.type].flat()[0]] ?? null };
     for (const field of ["type", "default"]) {
-      if (show(spec[field]) !== show(mine[field])) {
-        problems.push(`setting ${key} ${field}: pomdtr ${show(spec[field])} poly ${show(mine[field])}`);
+      if (show(read[field]) !== show(mine[field])) {
+        problems.push(`setting ${key} ${field}: pomdtr ${show(read[field])} poly ${show(mine[field])}`);
       }
     }
     // poly offers Excalidraw 0.18.1's whole language menu; pomdtr's is older.
