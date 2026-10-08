@@ -329,6 +329,12 @@ function load() {
     external: ["vscode"],
     format: "cjs",
     platform: "node",
+    // The product build's alias: jsonc-parser's default entry is a UMD build
+    // whose require("./impl/format") esbuild cannot follow. An alias resolves
+    // from the working directory, so that has to be the extension's, as it is
+    // for `pnpm run build`.
+    alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
+    absWorkingDir: LSP,
   });
   const real = Module._load;
   Module._load = function(request, ...rest) {
