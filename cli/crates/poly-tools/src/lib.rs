@@ -144,7 +144,7 @@ pub const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "shfmt",
-        version: "3.13.1",
+        version: "3.14.1",
         // Also `zsh`, which the field cannot say: shfmt's `-ln=auto` parses
         // that dialect and shellcheck has no mode for it, which is why the two
         // ids exist. The one named here is the one they share.
@@ -190,7 +190,7 @@ pub const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "gofumpt",
-        version: "0.11.0",
+        version: "0.12.0",
         language: Some("go"),
         asset: |v, p| {
             let suffix = match p {
@@ -237,7 +237,7 @@ pub const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "golangci-lint",
-        version: "2.13.2",
+        version: "2.14.0",
         language: Some("go"),
         asset: |v, p| {
             let (suffix, kind) = match p {
@@ -285,7 +285,7 @@ pub const TOOLS: &[Tool] = &[
     // already ran `brew install buf`.
     Tool {
         name: "buf",
-        version: "1.72.0",
+        version: "1.73.0",
         language: Some("protobuf"),
         // Bare binaries on every platform poly knows, Windows included.
         asset: |v, p| {
@@ -312,7 +312,7 @@ pub const TOOLS: &[Tool] = &[
     // R packages that need an R installation poly cannot assume.
     Tool {
         name: "arity",
-        version: "0.22.0",
+        version: "0.24.0",
         language: Some("r"),
         // musl on Linux, not gnu, though upstream ships both. Every other
         // managed binary here is Go or Haskell and statically linked, so the
