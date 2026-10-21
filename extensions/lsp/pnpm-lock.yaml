@@ -111,8 +111,8 @@ importers:
         specifier: 4.0.8
         version: 4.0.8
       markdown-it:
-        specifier: 14.3.2
-        version: 14.3.2
+        specifier: 14.3.3
+        version: 14.3.3
       markdown-it-container:
         specifier: 4.0.0
         version: 4.0.0
@@ -291,6 +291,10 @@ packages:
 
   '@babel/helper-validator-identifier@7.29.7':
     resolution: {integrity: sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/runtime@7.29.10':
+    resolution: {integrity: sha512-NpugTzbKgGrNe45Ui32cN8vCFFMxVtP/9rtfwv0nP5FRDAjvYBxJcLVpYA9mr1jxP6cnIT7x9LUzuDTbWYYNRA==}
     engines: {node: '>=6.9.0'}
 
   '@babel/runtime@7.29.7':
@@ -2408,8 +2412,8 @@ packages:
   markdown-it-sup@2.0.0:
     resolution: {integrity: sha512-5VgmdKlkBd8sgXuoDoxMpiU+BiEt3I49GItBzzw7Mxq9CxvnhE/k09HFli09zgfFDRixDQDfDxi0mgBCXtaTvA==}
 
-  markdown-it@14.3.2:
-    resolution: {integrity: sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==}
+  markdown-it@14.3.3:
+    resolution: {integrity: sha512-L//tDAkjTjJCU6pBUSBTgs3Kg4InVaZuUZog/b6V12UKhcDQ7S78877ibbCanRExwPuYP1CZD7Gd2dxSy1GXRg==}
     hasBin: true
 
   marked@16.4.2:
@@ -3621,6 +3625,8 @@ snapshots:
 
   '@babel/helper-validator-identifier@7.29.7': {}
 
+  '@babel/runtime@7.29.10': {}
+
   '@babel/runtime@7.29.7': {}
 
   '@braintree/sanitize-url@6.0.2': {}
@@ -3826,7 +3832,7 @@ snapshots:
 
   '@gera2ld/jsx-dom@2.2.2':
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
 
   '@hackmd/js-sequence-diagrams@0.0.1-alpha.3(jquery@4.0.0)(raphael@2.3.0)':
     dependencies:
@@ -3884,7 +3890,7 @@ snapshots:
       cssesc: 3.0.0
       js-yaml: 5.4.2
       lodash.kebabcase: 4.1.1
-      markdown-it: 14.3.2
+      markdown-it: 14.3.3
       markdown-it-front-matter: 0.2.4
       postcss: 8.5.28
       postcss-nesting: 13.0.2(postcss@8.5.28)
@@ -5761,7 +5767,7 @@ snapshots:
 
   markdown-it-sup@2.0.0: {}
 
-  markdown-it@14.3.2:
+  markdown-it@14.3.3:
     dependencies:
       argparse: 2.0.1
       entities: 4.5.0
@@ -5774,7 +5780,7 @@ snapshots:
 
   markmap-common@0.18.9:
     dependencies:
-      '@babel/runtime': 7.29.7
+      '@babel/runtime': 7.29.10
       '@gera2ld/jsx-dom': 2.2.2
       npm2url: 0.2.4
 
@@ -5790,7 +5796,7 @@ snapshots:
       '@vscode/markdown-it-katex': 1.1.2
       highlight.js: 11.12.0
       katex: 0.16.47
-      markdown-it: 14.3.2
+      markdown-it: 14.3.3
       markdown-it-ins: 4.0.0
       markdown-it-mark: 4.0.0
       markdown-it-sub: 2.0.0
