@@ -916,12 +916,12 @@
         },
         {
           "command": "poly.gitGraph.viewFileHistory",
-          "when": "!explorerResourceIsFolder && resourceScheme == file && !poly.gitGraph.noGit",
+          "when": "!explorerResourceIsFolder && resourceScheme =~ /^(file|vscode-remote)$/ && !poly.gitGraph.noGit",
           "group": "4_timeline@10"
         },
         {
           "command": "poly.gitGraph.viewFolderHistory",
-          "when": "explorerResourceIsFolder && resourceScheme == file && !poly.gitGraph.noGit",
+          "when": "explorerResourceIsFolder && resourceScheme =~ /^(file|vscode-remote)$/ && !poly.gitGraph.noGit",
           "group": "4_timeline@10"
         }
       ],
@@ -1142,11 +1142,11 @@
         },
         {
           "command": "poly.gitGraph.viewFileHistory",
-          "when": "resourceScheme == file && !poly.gitGraph.noGit"
+          "when": "resourceScheme =~ /^(file|vscode-remote)$/ && !poly.gitGraph.noGit"
         },
         {
           "command": "poly.gitGraph.viewFolderHistory",
-          "when": "resourceScheme == file && !poly.gitGraph.noGit"
+          "when": "resourceScheme =~ /^(file|vscode-remote)$/ && !poly.gitGraph.noGit"
         },
         {
           "command": "poly.gitGraph.addTag",
@@ -1541,7 +1541,7 @@
         },
         {
           "command": "poly.gitGraph.viewFileHistory",
-          "when": "resourceScheme == file && !poly.gitGraph.noGit",
+          "when": "resourceScheme =~ /^(file|vscode-remote)$/ && !poly.gitGraph.noGit",
           "group": "4_timeline@10"
         }
       ],

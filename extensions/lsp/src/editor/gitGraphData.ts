@@ -15,8 +15,10 @@ import {
   type ChangeType,
   type CommitDetails,
   type FileChange,
+  type FilePatch,
   type Graph,
   type GraphCommit,
+  type PatchCommit,
   type Remote,
   type TagDetails,
   UNCOMMITTED,
@@ -333,6 +335,150 @@ export async function uncommittedChanges(run: Git, scope = ""): Promise<FileChan
 /** What changed from one commit to another, or to the working tree (untracked files aside). */
 export function comparison(run: Git, from: string, to: string, scope = ""): Promise<FileChange[]> {
   return changedFiles(run, ["diff", from, ...to === UNCOMMITTED ? [] : [to]], scope);
+}
+
+/** Per file, what a page is sent of its diff; the rest is a click away in the diff editor. */
+export const PATCH_LINES = 500;
+
+/** A path as git quotes one with a `"`, `\` or control character in it: C escapes, octal for raw bytes. */
+function unquote(text: string): string {
+  if (!text.startsWith("\"")) return text;
+  const bytes: number[] = [];
+  const escapes: Record<string, number> = { a: 7, b: 8, f: 12, n: 10, r: 13, t: 9, v: 11, "\"": 34, "\\": 92 };
+  for (let i = 1; i < text.length - 1; i++) {
+    if (text[i] !== "\\") {
+      bytes.push(...Buffer.from(text[i]));
+    } else if (/[0-7]/.test(text[i + 1])) {
+      bytes.push(parseInt(text.slice(i + 1, i + 4), 8));
+      i += 3;
+    } else {
+      bytes.push(escapes[text[++i]] ?? text.charCodeAt(i));
+    }
+  }
+  return Buffer.from(bytes).toString("utf8");
+}
+
+/**
+ * The two paths of a `diff --git a/X b/Y` line. Unquoted, a space may be in
+ * either name, so the line is only split where both halves agree -- as they
+ * do for all but a rename, whose names come from its `rename` lines instead.
+ */
+function diffPaths(line: string): [string, string] {
+  const rest = line.slice("diff --git ".length);
+  if (rest.startsWith("\"")) {
+    const [, a, b] = /^("(?:[^"\\]|\\.)*") (.*)$/.exec(rest) ?? [];
+    return [unquote(a ?? rest).slice(2), unquote(b ?? rest).slice(2)];
+  }
+  const half = (rest.length - 1) / 2;
+  return [rest.slice(2, half), rest.slice(half + 3)];
+}
+
+/** The files of a `-p` diff, each with its hunks; `-M` renames and binary files included. */
+function parsePatch(text: string): FilePatch[] {
+  const files: FilePatch[] = [];
+  let file: FilePatch | undefined;
+  let inHunks = false;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      const [oldPath, newPath] = diffPaths(line);
+      file = { oldPath, newPath, type: "M", additions: 0, deletions: 0, lines: [], omitted: 0 };
+      files.push(file);
+      inHunks = false;
+    } else if (!file || line === "") {
+      continue;
+    } else if (inHunks || line.startsWith("@@")) {
+      inHunks = true;
+      if (line[0] === "+") file.additions!++;
+      else if (line[0] === "-") file.deletions!++;
+      if (file.lines.length < PATCH_LINES) file.lines.push(line);
+      else file.omitted++;
+    } else if (line.startsWith("new file mode")) {
+      file.type = "A";
+    } else if (line.startsWith("deleted file mode")) {
+      file.type = "D";
+    } else if (line.startsWith("rename from ")) {
+      file.type = "R";
+      file.oldPath = unquote(line.slice("rename from ".length));
+    } else if (line.startsWith("rename to ")) {
+      file.newPath = unquote(line.slice("rename to ".length));
+    } else if (line.startsWith("Binary files ")) {
+      file.additions = null;
+      file.deletions = null;
+    }
+  }
+  return files;
+}
+
+/**
+ * `git log -p` of HEAD under `scope`, `max` commits after the first `skip`:
+ * the Changes tab, which reads the history as patches rather than as a graph.
+ * `follow` carries one file's history on past its renames. Merges are left
+ * out, as `git log -p` prints no diff for them.
+ */
+export async function pathPatches(
+  run: Git,
+  scope: string,
+  follow: boolean,
+  skip: number,
+  max: number,
+): Promise<{ commits: PatchCommit[]; more: boolean }> {
+  // A repository with no commits yet has no history to read; git's words for
+  // that differ by command and version, so it is asked rather than parsed.
+  const head = await run(["rev-parse", "--verify", "-q", "HEAD"]).then((out) => out.trim(), () => "");
+  if (!head) return { commits: [], more: false };
+  const out = await run([
+    // Unquoted, a name with CJK or accented letters reads as itself.
+    "-c",
+    "core.quotePath=false",
+    "log",
+    `--format=\x1e%H${F}%P${F}%an${F}%ae${F}%at${F}%s`,
+    "-p",
+    "-M",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    `--skip=${skip}`,
+    `--max-count=${max + 1}`,
+    ...follow && scope ? ["--follow"] : [],
+    "HEAD",
+    "--",
+    ...within(scope).slice(1),
+  ]);
+  const records = out.split("\x1e").slice(1);
+  const commits: PatchCommit[] = [];
+  for (const record of records.slice(0, max)) {
+    const newline = record.indexOf("\n");
+    const [hash, parents, author, email, date, subject] = (newline === -1 ? record : record.slice(0, newline)).split(F);
+    const files = newline === -1 ? [] : parsePatch(record.slice(newline + 1));
+    if (files.length === 0) continue;
+    commits.push({
+      hash,
+      parents: parents ? parents.split(" ") : [],
+      author,
+      email,
+      date: Number(date),
+      subject,
+      files,
+    });
+  }
+  return { commits, more: records.length > max };
+}
+
+/** The working tree against HEAD under `scope`, as patches; untracked files are not in it. */
+export async function uncommittedPatches(run: Git, scope = ""): Promise<FilePatch[]> {
+  const out = await run([
+    "-c",
+    "core.quotePath=false",
+    "diff",
+    "-p",
+    "-M",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    "HEAD",
+    ...within(scope),
+  ]).catch(() => "");
+  return parsePatch(out);
 }
 
 /** An annotated tag's tagger and message. */

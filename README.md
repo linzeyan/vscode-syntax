@@ -146,7 +146,9 @@
   換到同一個 commit 的上／下一個檔案；可搜尋、只看某些分支。commit、分支、tag、stash 與
   檔案的右鍵選單做簽出、merge、rebase、cherry-pick、reset、push、刪除等操作，remote 在工具列管理。
   檔案總管對檔案或資料夾按右鍵的 `View File History`／`View Folder History`（命令面板也有，作用在目前的檔案
-  與它所在的資料夾）只列改過它的 commit，展開的 commit 只列它底下的檔案；工具列的 ✕ 回到整個 repository。功能
+  與它所在的資料夾）只列改過它的 commit，展開的 commit 只列它底下的檔案；工具列的 ✕ 回到整個 repository。
+  `Changes` 分頁把同一個路徑的歷史攤成連續的 patch（同 `git log -p -- <路徑>`），可以挑檔案或資料夾，
+  或讓它跟著編輯器裡的檔案走。功能
   照它的行為做；圖的畫法移植自 VSCode 的原始檔控制圖（Source Control Graph，MIT），顏色是它的
   `scmGraph.*` 佈景主題色。沒有它的 `git-graph.*` 設定。兩個都裝著時 poly 讓出 status bar 與原始檔控制的按鈕。
   電腦上沒有 git 時改由 poly 讀 repository，圖、commit 細節、比較與 diff 照常，但只能看：會改動

@@ -25,10 +25,12 @@ import {
   GitError,
   gitIn,
   loadGraph,
+  pathPatches,
   remotesOf,
   stashDetails,
   tagDetails,
   uncommittedChanges,
+  uncommittedPatches,
 } from "./gitGraphData";
 import {
   type CommitDetails,
@@ -44,6 +46,10 @@ import { mayRun } from "./trust";
 const VIEW_TYPE = "poly.gitGraph";
 const INITIAL = 300;
 const MORE = 100;
+/** Commits of patches per page on the Changes tab: each can run to hundreds of lines. */
+const PAGE = 20;
+
+type Tab = "graph" | "changes";
 
 /** As much of the built-in git extension's API as the panel uses. */
 interface Repository {
@@ -219,6 +225,12 @@ class GraphPanel {
   /** Not kept with the view options: a file's history is a question asked once, not how the repository is read. */
   scope: Scope | undefined;
   private count = INITIAL;
+  private patchCount = PAGE;
+  private tab: Tab;
+  /** Whether the path follows the editor; any path chosen by hand turns it off. */
+  private follow: boolean;
+  /** The last file shown in a text editor: focus on this page leaves no active editor to ask. */
+  private lastFile = vscode.window.activeTextEditor?.document.uri;
   private stale = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private watching = new Map<string, vscode.Disposable>();
@@ -256,8 +268,39 @@ class GraphPanel {
       }),
       api!.onDidOpenRepository(() => this.watch()),
       api!.onDidCloseRepository(() => this.watch()),
+      vscode.window.onDidChangeActiveTextEditor((editor) => this.editorChanged(editor?.document.uri)),
     );
+    this.tab = context.workspaceState.get<Tab>("poly.gitGraph.tab", "graph");
+    this.follow = context.workspaceState.get("poly.gitGraph.follow", false);
     this.watch();
+  }
+
+  /**
+   * Narrows to the file now in the editor while following. A diff Git History
+   * opened shows `poly-git:` revisions, never followed; an uncommitted one's
+   * right side is the working file, which is.
+   */
+  private editorChanged(uri: vscode.Uri | undefined): void {
+    if (uri?.scheme !== "file") return;
+    this.lastFile = uri;
+    if (!this.follow) return;
+    const repo = repoOf(uri.fsPath);
+    if (!repo) return;
+    const relative = path.relative(repo, uri.fsPath).split(path.sep).join("/");
+    if (repo === this.repo && this.scope?.path === relative) return;
+    this.open(repo, { path: relative, folder: false });
+  }
+
+  setFollow(on: boolean): void {
+    if (on === this.follow) return;
+    this.follow = on;
+    void this.context.workspaceState.update("poly.gitGraph.follow", on);
+    void this.post({ type: "follow", on });
+    if (on) {
+      this.editorChanged(
+        this.lastFile ?? vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === "file")?.document.uri,
+      );
+    }
   }
 
   /** Follows every repository's state, so a commit or checkout made anywhere shows here. */
@@ -313,13 +356,17 @@ class GraphPanel {
     if (chosen !== this.repo) {
       this.repo = chosen;
       this.count = INITIAL;
+      this.patchCount = PAGE;
       if (chosen) void this.context.workspaceState.update("poly.gitGraph.repo", chosen);
     }
     this.narrow(scope);
   }
 
   narrow(scope: Scope | undefined): void {
-    if (scope?.path !== this.scope?.path) this.count = INITIAL;
+    if (scope?.path !== this.scope?.path) {
+      this.count = INITIAL;
+      this.patchCount = PAGE;
+    }
     this.scope = scope;
     this.panel.title = scope ? `Git History: ${path.posix.basename(scope.path)}` : "Git History";
     void this.load();
@@ -365,11 +412,71 @@ class GraphPanel {
         remotes: remotes.map((remote) => ({ name: remote.name, pr: act.pullRequestUrl(remote, "") !== undefined })),
         diffTool,
         git: !readOnly,
+        // Patches need a pathspec, which `poly git` does not read.
+        tab: readOnly ? "graph" : this.tab,
+        follow: this.follow,
         columns: this.context.globalState.get("poly.gitGraph.columns"),
       });
+      if (this.tab === "changes" && !readOnly) await this.patches(0, this.patchCount);
     } catch (error) {
       await this.post({ type: "error", message: String(error instanceof Error ? error.message : error) });
     }
+  }
+
+  /** A page of the Changes tab: from the top, the uncommitted changes come with it. */
+  private async patches(skip: number, max: number): Promise<void> {
+    const repo = this.repo;
+    const scope = this.scope;
+    if (!repo) return;
+    const git = gitAt(repo);
+    const at = scope?.path ?? "";
+    try {
+      const [page, uncommitted, head] = await Promise.all([
+        pathPatches(git, at, scope !== undefined && !scope.folder, skip, max),
+        skip === 0 && this.view(repo).showUncommitted ? uncommittedPatches(git, at) : Promise.resolve([]),
+        git(["rev-parse", "--verify", "-q", "HEAD"]).then((out) => out.trim(), () => ""),
+      ]);
+      if (repo !== this.repo || scope !== this.scope) return;
+      await this.post({
+        type: "patches",
+        skip,
+        head,
+        uncommitted,
+        commits: page.commits,
+        subjects: page.commits.map((commit) => md.renderInline(commit.subject)),
+        more: page.more,
+      });
+    } catch (error) {
+      await this.post({ type: "patches", skip, error: String(error instanceof Error ? error.message : error) });
+    }
+  }
+
+  /** Any file or folder git tracks in the repository, or all of it; a path chosen here stops the following. */
+  private async pickPath(): Promise<void> {
+    const repo = this.repo;
+    if (!repo) return;
+    const files = (await gitAt(repo)(["ls-files", "-z"])).split("\0").filter(Boolean);
+    const folders = new Set<string>();
+    for (const file of files) {
+      for (let at = file.lastIndexOf("/"); at > 0; at = file.lastIndexOf("/", at - 1)) folders.add(file.slice(0, at));
+    }
+    const mark = (at: string | undefined) => (at === this.scope?.path ? "shown now" : undefined);
+    const chosen = await pick<{ scope?: Scope }>("Show the History of", [
+      { label: "$(repo) Whole Repository", description: mark(undefined), value: {} },
+      ...[...folders].sort().map((folder) => ({
+        label: `$(folder) ${folder}/`,
+        description: mark(folder),
+        value: { scope: { path: folder, folder: true } },
+      })),
+      ...files.map((file) => ({
+        label: `$(file) ${file}`,
+        description: mark(file),
+        value: { scope: { path: file, folder: false } },
+      })),
+    ]);
+    if (!chosen || repo !== this.repo) return;
+    this.setFollow(false);
+    this.narrow(chosen.scope);
   }
 
   private async receive(message: { type: string; [key: string]: unknown }): Promise<void> {
@@ -380,7 +487,22 @@ class GraphPanel {
       case "repo":
         return this.open(message.repo as string);
       case "scope":
+        this.setFollow(false);
         return this.narrow(undefined);
+      case "tab":
+        this.tab = message.tab as Tab;
+        void this.context.workspaceState.update("poly.gitGraph.tab", this.tab);
+        if (this.tab === "changes") await this.patches(0, this.patchCount);
+        return;
+      case "pickPath":
+        return this.pickPath();
+      case "follow":
+        return this.setFollow(message.on as boolean);
+      case "morePatches": {
+        const skip = this.patchCount;
+        this.patchCount += PAGE;
+        return this.patches(skip, PAGE);
+      }
       case "view":
         return this.setView(message.view as ViewOptions);
       case "more":
@@ -514,10 +636,7 @@ async function viewHistory(target: unknown, context: vscode.ExtensionContext, of
     return;
   }
   const file = uri.fsPath;
-  const repo = api!.repositories
-    .map((repository) => repository.rootUri.fsPath)
-    .filter((root) => file === root || file.startsWith(root + path.sep))
-    .sort((a, b) => b.length - a.length)[0];
+  const repo = repoOf(file);
   if (!repo) {
     void vscode.window.showWarningMessage(`Git History: ${path.basename(file)} is not in a Git repository`);
     return;
@@ -529,6 +648,15 @@ async function viewHistory(target: unknown, context: vscode.ExtensionContext, of
     () => false,
   );
   await show(context, repo, relative ? { path: relative, folder } : undefined);
+  GraphPanel.current?.setFollow(false);
+}
+
+/** The innermost repository holding `file`. */
+function repoOf(file: string): string | undefined {
+  return api!.repositories
+    .map((repository) => repository.rootUri.fsPath)
+    .filter((root) => file === root || file.startsWith(root + path.sep))
+    .sort((a, b) => b.length - a.length)[0];
 }
 
 const refreshAfter = () => GraphPanel.current?.refresh();

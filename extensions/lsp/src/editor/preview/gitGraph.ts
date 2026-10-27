@@ -1,7 +1,8 @@
 /**
  * The Git History page: the toolbar, the table of commits with the graph
  * drawn in its first column, a commit's details opened under its row, find,
- * and the `data-vscode-context` that VSCode's own context menus key on.
+ * the Changes tab's patches, and the `data-vscode-context` that VSCode's own
+ * context menus key on.
  *
  * It holds no git of its own. Everything it shows comes from the host
  * (gitGraphPanel.ts), and everything it does beyond drawing is a message back.
@@ -19,8 +20,10 @@ import {
 import {
   type CommitDetails,
   type FileChange,
+  type FilePatch,
   type Graph,
   type GraphCommit,
+  type PatchCommit,
   type Scope,
   UNCOMMITTED,
   type ViewOptions,
@@ -51,6 +54,8 @@ interface Remote {
   pr: boolean;
 }
 type FileEntry = FileChange & { from: string; to: string };
+type PatchEntry = FilePatch & { from: string; to: string };
+type Tab = "graph" | "changes";
 
 interface State {
   repos: string[];
@@ -79,6 +84,19 @@ interface State {
   columns: Columns;
   find: { query: string; caseSensitive: boolean; regex: boolean; matches: number[]; current: number };
   waitingForMore: boolean;
+  tab: Tab;
+  /** Whether the path follows the file in the editor. */
+  follow: boolean;
+  /** The Changes tab's pages so far; absent until the first arrives for this path. */
+  patches?: {
+    head: string;
+    uncommitted: FilePatch[];
+    commits: PatchCommit[];
+    subjects: string[];
+    more: boolean;
+    error?: string;
+  };
+  waitingForPatches: boolean;
 }
 
 const state: State = {
@@ -90,6 +108,9 @@ const state: State = {
   columns: { widths: {}, hidden: [], muteMerges: true, fileView: "tree" },
   find: { query: "", caseSensitive: false, regex: false, matches: [], current: -1 },
   waitingForMore: false,
+  tab: "graph",
+  follow: false,
+  waitingForPatches: false,
 };
 
 // ---------------------------------------------------------------- elements
@@ -119,6 +140,13 @@ function button(id: string, codicon: string, title: string): HTMLButtonElement {
 }
 
 const toolbar = el("header", { class: "toolbar" });
+const graphTab = el("button", { class: "tab", role: "tab", title: "The commits as a graph" }, "Graph");
+const changesTab = el(
+  "button",
+  { class: "tab", role: "tab", title: "What each commit changed, as patches" },
+  "Changes",
+);
+const tabs = el("div", { class: "tabs", role: "tablist", "aria-label": "View" }, graphTab, changesTab);
 const repoSelect = el("select", { id: "repo", title: "Repository", "aria-label": "Repository" });
 const branchButton = el("button", {
   id: "branches",
@@ -129,6 +157,14 @@ const branchButton = el("button", {
 const remoteToggle = el("input", { type: "checkbox", id: "show-remotes" });
 const scopeLabel = el("span", { class: "scope", hidden: "" });
 const scopeClear = button("scope-clear", "close", "Show the Whole Repository");
+const pickButton = button("pick-path", "go-to-file", "Show the History of a File or Folder…");
+const followButton = button("follow", "link", "Follow the Active Editor");
+const remoteLabel = el(
+  "label",
+  { class: "check", for: "show-remotes", title: "Show remote-tracking branches" },
+  remoteToggle,
+  el("span", {}, "Remote Branches"),
+);
 const findInput = el("input", {
   id: "find",
   type: "text",
@@ -137,6 +173,7 @@ const findInput = el("input", {
   "aria-label": "Find commits",
 });
 const findCount = el("span", { class: "find-count", "aria-live": "polite" });
+const findBox = el("div", { class: "find", role: "search" });
 const caseToggle = button("find-case", "case-sensitive", "Match Case");
 const regexToggle = button("find-regex", "regex", "Use Regular Expression");
 const findPrevious = button("find-previous", "arrow-up", "Previous Match (Shift+Enter)");
@@ -152,39 +189,32 @@ const colgroup = el("colgroup");
 const head = el("thead");
 const rows = el("tbody");
 const footer = el("div", { class: "footer" });
+const changes = el("main", { id: "changes", tabindex: "-1", hidden: "" });
+const changesList = el("div", { class: "patches" });
+const changesFooter = el("div", { class: "footer" });
 const notice = el("div", { class: "notice", hidden: "" });
 const popover = el("div", { class: "popover", hidden: "", role: "dialog" });
 
+findBox.append(icon("search"), findInput, findCount, caseToggle, regexToggle, findPrevious, findNext);
 toolbar.append(
   el(
     "div",
     { class: "toolbar-group" },
+    tabs,
     repoSelect,
     branchButton,
     scopeLabel,
-    el(
-      "label",
-      { class: "check", for: "show-remotes", title: "Show remote-tracking branches" },
-      remoteToggle,
-      el("span", {}, "Remote Branches"),
-    ),
+    pickButton,
+    followButton,
+    remoteLabel,
   ),
-  el(
-    "div",
-    { class: "find", role: "search" },
-    icon("search"),
-    findInput,
-    findCount,
-    caseToggle,
-    regexToggle,
-    findPrevious,
-    findNext,
-  ),
+  findBox,
   el("div", { class: "toolbar-group end" }, optionsButton, fetchButton, remotesButton, refreshButton),
 );
 table.append(colgroup, head, rows);
 scroller.append(table, footer);
-document.body.append(toolbar, progress, scroller, notice, popover);
+changes.append(changesList, changesFooter);
+document.body.append(toolbar, progress, scroller, changes, notice, popover);
 
 // ---------------------------------------------------------------- columns
 
@@ -848,6 +878,267 @@ function request(): void {
   }
 }
 
+// ---------------------------------------------------------------- changes
+
+/** Commits (by hash) and files (by hash and path) folded shut; a new path starts with all open. */
+const folded = new Set<string>();
+
+/** What a file's diff is opened with, the same as a commit's file list sends. */
+const entryOf = ({ lines: _lines, omitted: _omitted, ...file }: PatchEntry): FileEntry => file;
+
+/**
+ * A diff's lines with the line numbers each side gives them, read off the
+ * hunk headers: what `git log -p` prints, laid out as the diff editor would.
+ */
+function hunkLines(lines: string[]): HTMLElement {
+  const body = el("div", { class: "hunks" });
+  let before = 0;
+  let after = 0;
+  for (const line of lines) {
+    let kind = "context";
+    let left = "";
+    let right = "";
+    if (line.startsWith("@@")) {
+      const found = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+      if (found) [before, after] = [Number(found[1]), Number(found[2])];
+      kind = "hunk";
+    } else if (line[0] === "+") {
+      kind = "add";
+      right = String(after++);
+    } else if (line[0] === "-") {
+      kind = "del";
+      left = String(before++);
+    } else if (line[0] === "\\") {
+      kind = "meta";
+    } else {
+      left = String(before++);
+      right = String(after++);
+    }
+    body.append(el(
+      "div",
+      { class: `line ${kind}` },
+      el("span", { class: "ln" }, left),
+      el("span", { class: "ln" }, right),
+      el("span", { class: "code" }, kind === "hunk" || kind === "meta" ? line : line.slice(1)),
+    ));
+  }
+  return body;
+}
+
+function filePatch(key: string, files: PatchEntry[], index: number): HTMLElement {
+  const file = files[index];
+  const id = `${key}\n${file.newPath}`;
+  const open = !folded.has(id);
+  const openDiff = () => post({ type: "open", files: files.map(entryOf), index });
+  const diffButton = button("", "diff", "Open Changes");
+  diffButton.removeAttribute("id");
+  diffButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openDiff();
+  });
+  const header = el(
+    "div",
+    {
+      class: `patch-file-header type-${file.type}`,
+      role: "button",
+      tabindex: "0",
+      "aria-expanded": String(open),
+      title: `${TYPE_TITLES[file.type]}: ${file.newPath}`,
+      "data-vscode-context": context({
+        webviewSection: "file",
+        path: file.newPath,
+        oldPath: file.oldPath,
+        type: file.type,
+        from: file.from,
+        to: file.to,
+        polyDeleted: file.type === "D",
+      }),
+    },
+    icon(open ? "chevron-down" : "chevron-right"),
+    el("span", { class: "badge" }, file.type),
+    el("span", { class: "file-name" }, file.newPath),
+    file.type === "R" ? el("span", { class: "renamed-from", title: file.oldPath }, `← ${file.oldPath}`) : undefined,
+    file.additions === null
+      ? el("span", { class: "stats binary" }, "binary")
+      : el(
+        "span",
+        { class: "stats" },
+        el("span", { class: "added" }, `+${file.additions}`),
+        el("span", { class: "deleted" }, `−${file.deletions}`),
+      ),
+    diffButton,
+  );
+  const node = el("div", { class: "patch-file" }, header);
+  const toggle = () => {
+    if (folded.has(id)) folded.delete(id);
+    else folded.add(id);
+    node.replaceWith(filePatch(key, files, index));
+  };
+  header.addEventListener("click", toggle);
+  header.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggle();
+    }
+  });
+  if (!open) return node;
+  if (file.lines.length > 0) {
+    node.append(hunkLines(file.lines));
+  } else {
+    node.append(el(
+      "p",
+      { class: "patch-note" },
+      file.additions === null ? "Binary file" : file.type === "R" ? "Renamed, content unchanged" : "Mode changed only",
+    ));
+  }
+  if (file.omitted > 0) {
+    const rest = el("button", { class: "text-button" }, `${file.omitted} more lines — Open Changes`);
+    rest.addEventListener("click", openDiff);
+    node.append(el("div", { class: "patch-note" }, rest));
+  }
+  return node;
+}
+
+/** One commit, or the uncommitted changes, with each of its files' diffs under it. */
+function patchSection(
+  key: string,
+  title: Node,
+  meta: Node[],
+  menu: Record<string, unknown>,
+  files: PatchEntry[],
+): HTMLElement {
+  const open = !folded.has(key);
+  const header = el(
+    "div",
+    {
+      class: "patch-commit-header",
+      role: "button",
+      tabindex: "0",
+      "aria-expanded": String(open),
+      "data-vscode-context": context(menu),
+    },
+    icon(open ? "chevron-down" : "chevron-right"),
+    title,
+    el("span", { class: "spacer" }),
+    ...meta,
+  );
+  const section = el("section", { class: "patch-commit" }, header);
+  const toggle = () => {
+    if (folded.has(key)) folded.delete(key);
+    else folded.add(key);
+    section.replaceWith(patchSection(key, title, meta, menu, files));
+  };
+  header.addEventListener("click", (event) => {
+    if (!(event.target as HTMLElement).closest("a, .selectable")) toggle();
+  });
+  header.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggle();
+    }
+  });
+  if (open) files.forEach((_, index) => section.append(filePatch(key, files, index)));
+  return section;
+}
+
+function commitPatches(commit: PatchCommit, subject: string, head: string): HTMLElement {
+  const date = new Date(commit.date * 1000);
+  const title = el("span", { class: "subject" });
+  title.innerHTML = subject;
+  return patchSection(
+    commit.hash,
+    title,
+    [
+      el("span", { class: "person", title: `${commit.author} <${commit.email}>` }, commit.author),
+      el(
+        "span",
+        { class: "when", title: `${FULL_DATE.format(date)} (${relative(commit.date)})` },
+        DATE_FORMAT.format(date),
+      ),
+      el("code", { class: "selectable", title: commit.hash }, short(commit.hash)),
+    ],
+    // Only HEAD's history is read here, so every commit is one HEAD reaches.
+    {
+      webviewSection: "commit",
+      hash: commit.hash,
+      subject: commit.subject,
+      parents: commit.parents,
+      polyMerge: commit.parents.length > 1,
+      polyRoot: commit.parents.length === 0,
+      polyHead: commit.hash === head,
+      polyAncestor: true,
+    },
+    commit.files.map((file) => ({ ...file, from: commit.parents[0] ?? "", to: commit.hash })),
+  );
+}
+
+let morePatches: IntersectionObserver | undefined;
+
+/** The Changes tab, all of it, or with `from` only the commits after those already drawn. */
+function renderChanges(from = 0): void {
+  const patches = state.patches;
+  morePatches?.disconnect();
+  changesFooter.replaceChildren();
+  if (from === 0) changesList.replaceChildren();
+  if (!patches) {
+    changesList.append(el("div", { class: "notice" }, icon("loading"), el("span", {}, "Loading…")));
+    return;
+  }
+  if (patches.error) {
+    changesList.append(el("div", { class: "notice error" }, icon("error"), el("span", {}, patches.error)));
+    return;
+  }
+  if (from === 0 && patches.uncommitted.length > 0) {
+    changesList.append(patchSection(
+      UNCOMMITTED,
+      el("span", { class: "subject uncommitted" }, "Uncommitted Changes"),
+      [],
+      { webviewSection: "uncommitted" },
+      patches.uncommitted.map((file) => ({ ...file, from: file.type === "A" ? "" : "HEAD", to: UNCOMMITTED })),
+    ));
+  }
+  for (let i = from; i < patches.commits.length; i++) {
+    changesList.append(commitPatches(patches.commits[i], patches.subjects[i] ?? "", patches.head));
+  }
+  if (patches.commits.length === 0 && patches.uncommitted.length === 0) {
+    changesList.append(el(
+      "div",
+      { class: "notice" },
+      icon("info"),
+      el("span", {}, state.scope ? `No commits change ${state.scope.path}.` : "No commits yet."),
+    ));
+  }
+  if (!patches.more) return;
+  const load = el("button", { class: "text-button" }, "Load More Commits");
+  load.addEventListener("click", () => requestMorePatches());
+  changesFooter.append(load);
+  morePatches = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) requestMorePatches();
+  }, { root: changes, rootMargin: "400px" });
+  morePatches.observe(changesFooter);
+}
+
+function requestMorePatches(): void {
+  if (state.waitingForPatches) return;
+  state.waitingForPatches = true;
+  changesFooter.replaceChildren(el("span", { class: "loading-more" }, icon("loading"), " Loading more commits…"));
+  post({ type: "morePatches" });
+}
+
+function showTab(tab: Tab): void {
+  if (tab === state.tab) return;
+  state.tab = tab;
+  closePopover();
+  post({ type: "tab", tab });
+  arrange();
+  if (tab === "changes") renderChanges();
+}
+
+graphTab.addEventListener("click", () => showTab("graph"));
+changesTab.addEventListener("click", () => showTab("changes"));
+pickButton.addEventListener("click", () => post({ type: "pickPath" }));
+followButton.addEventListener("click", () => post({ type: "follow", on: !state.follow }));
+
 // ---------------------------------------------------------------- find
 
 function findMatches(): void {
@@ -1127,13 +1418,20 @@ rows.addEventListener("dblclick", (event) => {
 document.addEventListener("keydown", (event) => {
   const mod = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
+  if (mod && key === "r") {
+    event.preventDefault();
+    post({ type: "refresh" });
+    return;
+  }
+  // The rest move about the graph, which the Changes tab does not show.
+  if (state.tab !== "graph") {
+    if (event.key === "Escape") closePopover();
+    return;
+  }
   if (mod && key === "f") {
     event.preventDefault();
     findInput.focus();
     findInput.select();
-  } else if (mod && key === "r") {
-    event.preventDefault();
-    post({ type: "refresh" });
   } else if (mod && key === "h") {
     event.preventDefault();
     const head = state.graph?.head;
@@ -1182,11 +1480,35 @@ function requestMore(): void {
   post({ type: "more" });
 }
 
+let shownNotice: { text: string; error: boolean } | undefined;
+
 function showNotice(text: string | undefined, error = false): void {
-  notice.hidden = text === undefined;
-  notice.classList.toggle("error", error);
-  notice.replaceChildren(...text === undefined ? [] : [icon(error ? "error" : "info"), el("span", {}, text)]);
-  scroller.hidden = text !== undefined && !state.graph?.commits.length;
+  shownNotice = text === undefined ? undefined : { text, error };
+  arrange();
+}
+
+/**
+ * Which tab shows, and the toolbar for it: the branch filter, find and the
+ * view options only shape the graph. The Changes tab draws its own empty
+ * state, so it shows only the notices that are errors.
+ */
+function arrange(): void {
+  const onGraph = state.tab === "graph";
+  const shown = shownNotice && (onGraph || shownNotice.error) ? shownNotice : undefined;
+  notice.hidden = !shown;
+  notice.classList.toggle("error", shown?.error ?? false);
+  notice.replaceChildren(...shown ? [icon(shown.error ? "error" : "info"), el("span", {}, shown.text)] : []);
+  scroller.hidden = !onGraph || (shown !== undefined && !state.graph?.commits.length);
+  changes.hidden = onGraph || shown !== undefined;
+  for (const node of [branchButton, remoteLabel, findBox, optionsButton]) node.hidden = !onGraph;
+  // A pathspec is what `poly git` cannot read, so none of this shows without git.
+  for (const node of [tabs, pickButton, followButton]) node.hidden = !state.git;
+  for (const [node, tab] of [[graphTab, "graph"], [changesTab, "changes"]] as const) {
+    node.classList.toggle("selected", state.tab === tab);
+    node.setAttribute("aria-selected", String(state.tab === tab));
+  }
+  followButton.classList.toggle("on", state.follow);
+  followButton.setAttribute("aria-pressed", String(state.follow));
 }
 
 // ---------------------------------------------------------------- messages
@@ -1229,6 +1551,15 @@ window.addEventListener("message", (event: MessageEvent) => {
       state.remotes = message.remotes as Remote[];
       state.diffTool = message.diffTool as boolean;
       state.git = message.git as boolean;
+      state.tab = message.tab as Tab;
+      state.follow = message.follow as boolean;
+      if (changedRepo) {
+        state.patches = undefined;
+        state.waitingForPatches = false;
+        folded.clear();
+        changes.scrollTop = 0;
+        if (state.tab === "changes") renderChanges();
+      }
       if (message.columns) state.columns = { ...state.columns, ...message.columns as Partial<Columns> };
       state.layout = layout(state.graph.commits, state.view.firstParent, state.graph.head);
       if (changedRepo || !state.graph.commits.some((c) => c.hash === state.open)) {
@@ -1259,6 +1590,46 @@ window.addEventListener("message", (event: MessageEvent) => {
       if (state.open) request();
       return;
     }
+    case "patches": {
+      const skip = message.skip as number;
+      state.waitingForPatches = false;
+      if (message.error) {
+        state.patches = {
+          head: "",
+          uncommitted: [],
+          commits: [],
+          subjects: [],
+          more: false,
+          error: message.error as string,
+        };
+        renderChanges();
+        return;
+      }
+      const page = {
+        head: message.head as string,
+        uncommitted: message.uncommitted as FilePatch[],
+        commits: message.commits as PatchCommit[],
+        subjects: message.subjects as string[],
+        more: message.more as boolean,
+      };
+      // A later page adds to what is drawn; the first, as after a refresh, replaces it.
+      const kept = skip > 0 && state.patches && !state.patches.error ? state.patches : undefined;
+      if (kept) {
+        const from = kept.commits.length;
+        kept.commits.push(...page.commits);
+        kept.subjects.push(...page.subjects);
+        kept.more = page.more;
+        renderChanges(from);
+      } else {
+        state.patches = page;
+        renderChanges();
+      }
+      return;
+    }
+    case "follow":
+      state.follow = message.on as boolean;
+      arrange();
+      return;
     case "details":
     case "compare": {
       // Replies to requests since overtaken are dropped.

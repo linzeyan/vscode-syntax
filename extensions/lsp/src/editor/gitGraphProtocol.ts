@@ -72,6 +72,25 @@ export interface Remote {
   pushUrl?: string;
 }
 
+/** One file's part of a diff, as `git log -p` prints it. */
+export interface FilePatch extends FileChange {
+  /** From the first `@@` on, as git printed them; empty for a binary file or a mode change. */
+  lines: string[];
+  /** Lines left out after the first ones, sent only up to a size a page can draw at once. */
+  omitted: number;
+}
+
+/** A commit and what it changed under the path, for the Changes tab. */
+export interface PatchCommit {
+  hash: string;
+  parents: string[];
+  author: string;
+  email: string;
+  date: number;
+  subject: string;
+  files: FilePatch[];
+}
+
 /** A file or folder the history is narrowed to; `path` is relative to the root, with `/`. */
 export interface Scope {
   path: string;

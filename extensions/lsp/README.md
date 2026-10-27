@@ -305,6 +305,11 @@ VSCode 自己的原始檔控制圖（Source Control Graph，MIT），顏色是�
 - **`View File History`／`View Folder History`**：檔案總管對檔案或資料夾按右鍵，或編輯器分頁的右鍵選單、
   命令面板（作用在目前的檔案與它所在的資料夾）。圖只留改過它的 commit，仍連成一張圖；展開的 commit、比較與未提交的變更只列它底下的
   檔案；stash 不顯示。工具列顯示目前的路徑，按 ✕ 回到整個 repository。需要 git。
+- **Changes 分頁**：工具列的 `Graph`／`Changes` 切換。`Changes` 把目前路徑的歷史攤成一路往下捲的 patch，
+  同 `git log -p -- <路徑>`（只看 HEAD；單一檔案跟著改名往前接），未提交的變更在最上面；每個 commit、
+  每個檔案可收合，右邊的按鈕開 diff，一個檔案超過 500 行的部分要開 diff 看。路徑旁的按鈕從 repository
+  的檔案與資料夾挑一個；鏈結圖示的按鈕讓路徑跟著編輯器裡的檔案走（把面板拉到編輯器旁邊用），手動選了路徑就關掉。
+  檔案總管的選取 VSCode 不讓 extension 讀，所以跟的是開著的檔案，資料夾要用右鍵或挑選。需要 git。
 - **圖**：點一下 commit 在它下面展開作者、日期、父 commit、訊息與變更的檔案（樹狀或清單），點檔案開 diff；
   上下鍵換到相鄰的 commit，`Esc` 收起。按住 `cmd`／`ctrl` 再點另一個 commit 是比較兩者。分支標籤雙擊即簽出。
 - **diff**：標題列的 ← →（`cmd+alt+a`／`cmd+alt+z`，Windows、Linux 是 `ctrl`）照清單的順序換到同一個 commit

@@ -68,8 +68,12 @@ input[type="radio"] {
 
 .toolbar-group {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  /* In a panel split beside an editor the group is wider than the page: it
+     wraps rather than pushing the path and its buttons out of sight. */
+  min-width: 0;
 }
 
 .toolbar-group.end {
@@ -99,6 +103,48 @@ select,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The groups' own display would otherwise win over the attribute. */
+.toolbar [hidden] {
+  display: none;
+}
+
+.tabs {
+  display: inline-flex;
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid
+    var(--vscode-dropdown-border, var(--vscode-panel-border, transparent));
+  border-radius: 4px;
+}
+
+.tab {
+  padding: 0 10px;
+  border: none;
+  background: none;
+  color: var(--vscode-foreground);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.tab + .tab {
+  border-left: 1px solid
+    var(--vscode-dropdown-border, var(--vscode-panel-border, transparent));
+}
+
+.tab:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  opacity: 1;
+}
+
+.tab.selected {
+  background: var(
+    --vscode-inputOption-activeBackground,
+    var(--vscode-toolbar-activeBackground)
+  );
+  color: var(--vscode-inputOption-activeForeground, var(--vscode-foreground));
+  opacity: 1;
 }
 
 .scope {
@@ -896,6 +942,158 @@ tr.commit.selected td.graph > svg.graph > path:last-of-type {
 .empty {
   margin: 0;
   padding: 8px 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ------------------------------------------------------------ changes */
+
+#changes {
+  flex: 1;
+  overflow: auto;
+}
+
+#changes[hidden] {
+  display: none;
+}
+
+.patches {
+  padding: 8px 12px 0;
+}
+
+.patch-commit {
+  margin-bottom: 12px;
+  border: 1px solid
+    var(--vscode-panel-border, var(--vscode-widget-border, transparent));
+  border-radius: 6px;
+}
+
+/* Both headers stay in view while their diff scrolls under them, so a long
+   patch never leaves you wondering whose it is. */
+.patch-commit-header,
+.patch-file-header {
+  position: sticky;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.patch-commit-header {
+  top: 0;
+  z-index: 3;
+  height: 30px;
+  border-radius: 6px 6px 0 0;
+  background: var(--vscode-editorWidget-background);
+  font-weight: 600;
+}
+
+.patch-commit-header .subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.patch-commit-header .subject.uncommitted {
+  font-style: italic;
+}
+
+.patch-commit-header .person,
+.patch-commit-header .when,
+.patch-commit-header code {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.patch-commit-header code {
+  font-family: var(--vscode-editor-font-family);
+}
+
+.patch-file-header {
+  top: 30px;
+  z-index: 2;
+  height: 26px;
+  border-top: 1px solid var(--vscode-panel-border, transparent);
+  background: var(--vscode-editor-background);
+}
+
+.patch-commit-header:hover,
+.patch-file-header:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.patch-file-header .stats {
+  margin-left: auto;
+}
+
+.hunks {
+  overflow-x: auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  line-height: 1.45;
+}
+
+.line {
+  display: flex;
+  min-width: max-content;
+}
+
+.line .ln {
+  flex: none;
+  width: 4.5ch;
+  padding-right: 1ch;
+  color: var(--vscode-editorLineNumber-foreground);
+  text-align: right;
+  user-select: none;
+}
+
+.line .code {
+  padding: 0 12px 0 1ch;
+  white-space: pre;
+}
+
+.line.add {
+  background: var(
+    --vscode-diffEditor-insertedLineBackground,
+    var(--vscode-diffEditor-insertedTextBackground)
+  );
+}
+
+.line.del {
+  background: var(
+    --vscode-diffEditor-removedLineBackground,
+    var(--vscode-diffEditor-removedTextBackground)
+  );
+}
+
+.line.add .code::before,
+.line.del .code::before {
+  margin-left: -1ch;
+}
+
+.line.add .code::before {
+  content: "+";
+}
+
+.line.del .code::before {
+  content: "−";
+}
+
+.line.hunk {
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-descriptionForeground);
+}
+
+.line.meta {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+.patch-note {
+  margin: 0;
+  padding: 6px 12px;
   color: var(--vscode-descriptionForeground);
 }
 
