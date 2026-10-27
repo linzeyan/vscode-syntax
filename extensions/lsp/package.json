@@ -5794,7 +5794,7 @@
     "avsc": "5.4.22",
     "color-string": "2.1.4",
     "dedent": "1.7.2",
-    "dompurify": "^3.4.16",
+    "dompurify": "^3.4.17",
     "express": "5.2.1",
     "fetch-ponyfill": "7.1.0",
     "flowchart.js": "^1.18.0",
