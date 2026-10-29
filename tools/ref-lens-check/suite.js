@@ -150,6 +150,47 @@ async function observeUpward(lensesFor) {
   return said.sort();
 }
 
+/**
+ * Two functions, and a reference provider that answers for only one of them.
+ *
+ * What a server says over a declaration it cannot place: gopls over a file its
+ * build does not include, or one still loading behind a count kept from an
+ * earlier session. The lens used to resolve without a command there, which the
+ * editor draws as `no commands` over an ordinary function -- so the unanswered
+ * one must carry no lens at all, and the answered one its count. Same `log`
+ * language as `observeUpward`, whose providers are gone by now.
+ */
+async function observeUnanswered(lensesFor) {
+  const file = join(vscode.workspace.workspaceFolders[0].uri.fsPath, "unanswered.log");
+  writeFileSync(file, "answer\n\nsilent\n\ncalled here\n");
+  const uri = vscode.Uri.file(file);
+  const selector = { scheme: "file", language: "log" };
+  const word = (line) => new vscode.Range(line, 0, line, 6);
+  const disposables = [
+    vscode.languages.registerDocumentSymbolProvider(selector, {
+      provideDocumentSymbols() {
+        return [
+          new vscode.DocumentSymbol("answer", "", vscode.SymbolKind.Function, word(0), word(0)),
+          new vscode.DocumentSymbol("silent", "", vscode.SymbolKind.Function, word(2), word(2)),
+        ];
+      },
+    }),
+    vscode.languages.registerReferenceProvider(selector, {
+      provideReferences(_document, position) {
+        return position.line === 0 ? [new vscode.Location(uri, word(0)), new vscode.Location(uri, word(4))] : [];
+      },
+    }),
+  ];
+  await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+  const said = (await lensesFor(uri)).map((lens) =>
+    `${lens.range.start.line}:${lens.command?.title ?? "(unresolved)"}`
+  );
+  for (const disposable of disposables) {
+    disposable.dispose();
+  }
+  return said.sort();
+}
+
 exports.run = async function run() {
   await vscode.extensions.getExtension("ricky.poly-lsp").activate();
 
@@ -178,6 +219,7 @@ exports.run = async function run() {
     disposable.dispose();
   }
   const upward = await observeUpward(lensesFor);
+  const unanswered = await observeUnanswered(lensesFor);
 
   const uri = vscode.Uri.file(process.env.POLY_LENS_FIXTURE);
   const document = await vscode.workspace.openTextDocument(uri);
@@ -243,7 +285,18 @@ exports.run = async function run() {
     process.env.POLY_LENS_OUT,
     `${
       JSON.stringify(
-        { vscode: vscode.version, lenses: lines, flat, flatSymbols, upward, outline, proto, navigate, markdown },
+        {
+          vscode: vscode.version,
+          lenses: lines,
+          flat,
+          flatSymbols,
+          upward,
+          unanswered,
+          outline,
+          proto,
+          navigate,
+          markdown,
+        },
         null,
         2,
       )

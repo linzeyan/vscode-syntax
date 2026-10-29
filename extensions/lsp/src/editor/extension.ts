@@ -1548,9 +1548,21 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
     },
   });
 
+  /**
+   * Per document, the refs lenses that asked and got no answer at all.
+   *
+   * A lens has to resolve to a command: the editor draws one that comes back
+   * without as `no commands` and logs it as an invalid lens, so "left
+   * unresolved" was never the silence it was meant to be. These are left out of
+   * the next drawing instead and asked for behind it, the way an upward count
+   * of zero is, and drawn again once something answers.
+   */
+  const unanswered = new Map<string, Set<string>>();
+
   /** An answer: reused for `REUSE_MS`, and kept for the next session. */
   const settle = (at: vscode.Uri, id: string, count: number) => {
     counted.set(at.toString(), id, count);
+    unanswered.get(at.toString())?.delete(id);
     retried.delete(at.toString());
     const place = placeOf(at);
     if (place) {
@@ -1577,8 +1589,11 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
           return;
         }
         const count = others?.length ?? 0;
+        // Read before `settle` clears it: a lens left out for want of an
+        // answer is not on screen, whatever `shown` says.
+        const hidden = unanswered.get(at.toString())?.has(id) ?? false;
         settle(at, id, count);
-        if (count !== shown) {
+        if (hidden || count !== shown) {
           redrawSoon();
         }
       }, () => undefined)
@@ -1697,9 +1712,13 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         // Until then the refs lens asks for it, which keeps the question to
         // declarations on screen, and a yes redraws.
         const up = direction === "up" && answers.up ? known(document.uri, `up|${target.key}`) : undefined;
-        const lenses: vscode.CodeLens[] = [
-          new ReferenceLens(document.uri, "refs", target.key, range, up),
-        ];
+        const lenses: vscode.CodeLens[] = [];
+        const refsId = `refs|${target.key}`;
+        if (unanswered.get(document.uri.toString())?.has(refsId)) {
+          refresh(document.uri, range.start, "refs", refsId, known(document.uri, refsId));
+        } else {
+          lenses.push(new ReferenceLens(document.uri, "refs", target.key, range, up));
+        }
         if (direction === "down" && answers.down) {
           lenses.push(new ReferenceLens(document.uri, "down", target.key, range));
         }
@@ -1757,9 +1776,14 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         }
         const others = await answerAt(at, start, counts);
         // Nothing answered: not a count, and not worth a `no refs` that the
-        // store would then keep. Left unresolved, and asked again shortly.
+        // store would then keep. Blank rather than unresolved -- see
+        // `unanswered` -- until the redraw leaves it out.
         if (!others && counts === "refs") {
+          const hidden = unanswered.get(at.toString()) ?? new Set<string>();
+          unanswered.set(at.toString(), hidden.add(id));
           askAgainLater(at, "no reference provider answered");
+          redrawSoon();
+          lens.command = { title: "", command: "" };
           return lens;
         }
         count = others?.length ?? 0;
@@ -1800,6 +1824,7 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
     }),
     vscode.workspace.onDidCloseTextDocument((document) => {
       counted.forget(document.uri.toString());
+      unanswered.delete(document.uri.toString());
       retried.delete(document.uri.toString());
     }),
   );

@@ -226,6 +226,16 @@ async function main() {
     );
   }
 
+  // A declaration nothing answered for -- see `observeUnanswered`. Before the
+  // fix it read `2:(unresolved)`, the editor's `no commands`.
+  const wantUnanswered = ["0:1 ref"];
+  if ((report.unanswered ?? []).join() !== wantUnanswered.join()) {
+    problems.push(
+      `a declaration nothing answered for: expected ${JSON.stringify(wantUnanswered)}, `
+        + `got ${JSON.stringify(report.unanswered)}`,
+    );
+  }
+
   const titles = new Map(report.lenses.map((one) => [one.text, one.poly]));
   for (const [text, said] of Object.entries(IMPLS)) {
     if (!(titles.get(text) ?? []).includes(said)) {
