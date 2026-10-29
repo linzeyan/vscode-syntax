@@ -15,6 +15,7 @@ import type { FromSql, ToSql } from "./dbml";
 import { registerErrorLens } from "./errorLens";
 import { registerExcalidraw } from "./excalidrawEditor";
 import { registerGitGraph, stepHistoryDiff } from "./gitGraph";
+import { goTests } from "./goTests";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import {
@@ -1830,6 +1831,9 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
   );
 }
 
+/** Owner of the `go.test.cursor` family the Go test lens hands over to. */
+const GOLANG_GO = "golang.go";
+
 /**
  * `run | debug` over a program's entry point.
  *
@@ -1845,6 +1849,13 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
  * table, so the lens and Run Code cannot disagree about what a file is run
  * with. A language they do not cover gets `debug` alone rather than a button
  * that would only report it cannot.
+ *
+ * A Go test file also gets golang.go's `run test | debug test` (and the
+ * benchmark pair) over each function `go test` would run, judged by
+ * `goTests.ts` and handed to golang.go's own commands -- titles, ids and
+ * arguments exactly as golang.go draws them, so with its name-only lens off the
+ * only difference a user sees is which functions carry the buttons. Only while
+ * golang.go is installed: without it those commands do not exist.
  */
 function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager): void {
   const changed = new vscode.EventEmitter<void>();
@@ -1858,6 +1869,21 @@ function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager
       if (!on) {
         return [];
       }
+      const tests = document.languageId === "go" && vscode.extensions.getExtension(GOLANG_GO)
+        ? goTests(document.fileName, document.getText()).flatMap(({ name, kind, line }) => {
+          // Fuzz targets and examples are tests to golang.go; only a
+          // benchmark gets a command and titles of its own.
+          const [command, what] = kind === "benchmark"
+            ? ["go.benchmark.cursor", "benchmark"]
+            : ["go.test.cursor", "test"];
+          const range = document.lineAt(line).range;
+          const args = [{ functionName: name }];
+          return [
+            new vscode.CodeLens(range, { title: `run ${what}`, command, arguments: args }),
+            new vscode.CodeLens(range, { title: `debug ${what}`, command: "go.debug.cursor", arguments: args }),
+          ];
+        })
+        : [];
       const runs = executorFor(document) !== undefined;
       const buttons = (range: vscode.Range) =>
         [
@@ -1872,12 +1898,12 @@ function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager
         return line === undefined ? [] : buttons(document.lineAt(line).range);
       }
       if (!canHoldEntry(document.languageId, document.getText())) {
-        return [];
+        return tests;
       }
       const symbols = await vscode.commands.executeCommand<
         vscode.DocumentSymbol[]
       >("vscode.executeDocumentSymbolProvider", document.uri);
-      return entryPoints(symbols ?? []).flatMap((symbol) => buttons(symbol.selectionRange));
+      return [...tests, ...entryPoints(symbols ?? []).flatMap((symbol) => buttons(symbol.selectionRange))];
     },
   };
 
@@ -1894,6 +1920,8 @@ function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager
         changed.fire();
       }
     }),
+    // golang.go installed or removed decides whether a Go test has buttons.
+    vscode.extensions.onDidChange(() => changed.fire()),
   );
 }
 

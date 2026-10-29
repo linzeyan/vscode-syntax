@@ -214,6 +214,12 @@
   Python 直譯器／shebang 指定的直譯器），結果在輸出面板的 Code Runner，不經過 debugger；那些設定
   有這個檔的命令就有 `run`，Code Runner 關著也一樣。poly 沒有 debugger，`debug` 是交給你已經裝的
   debug extension。
+  Go 的 `_test.go` 裡，`go test` 真的會跑的函式上方是 `run test | debug test`（benchmark 是
+  `run benchmark | debug benchmark`），標題、命令與 golang.go 的一樣，執行與除錯也是交給 golang.go，
+  所以要裝了 golang.go 才有。golang.go 只看名字，poly 還看簽名：`Test`／`Benchmark`／`Fuzz` 開頭（後面
+  不能接小寫字母）的頂層函式，剛好一個 `*testing.T`／`*testing.B`／`*testing.F` 參數、沒有回傳值
+  （`testing` 用別名或 `.` import 也認得）；`Example` 開頭的不收參數、沒有回傳值。`TestFoo(x int)`、
+  `TestFoo(t testing.T)`、`Testfoo`、method 與 `TestMain(m *testing.M)` 都沒有按鈕。
   `poly.runCodeLens.enabled` 可關。
 - **protobuf → 生成的 Go**：`.proto` 的 `message`／`enum` 上方 `go type`，`service` 上方
   `go server`／`go client`，跳到 protoc 生出來的宣告；`rpc` 上方 `N impls`，跳到寫在 Go 裡的
@@ -896,13 +902,17 @@ poly-lsp 的設定全部在一個 `poly` 物件裡，extension 啟用時把它�
 
 ### 要自己在 `settings.json` 設的
 
-這項是 VSCode 自己的，poly 不改它：
+這兩項是 VSCode 與 golang.go 自己的，poly 不改它們：
 
 ```jsonc
 // 編輯器自己的 Find All References 開 peek 還是開內建的 References 面板。預設 "peek"；
 // 設成 "view" 會和 poly 的 `N refs` CodeLens 一樣留著清單不跑掉——但兩邊是不同的樹，
 // 帶行號與符號欄位的是 poly 那棵。
-"references.preferredLocation": "view"
+"references.preferredLocation": "view",
+// golang.go 自己的 `run test | debug test` 只看函式名字，`TestFoo(x int)` 也有按鈕；
+// 開了 poly.runCodeLens.enabled 時 poly 畫的是看過簽名的同一組按鈕，關掉這個才不會
+// 每個測試上方各有兩組。golang.go 的 `run package tests | run file tests` 也會一起消失。
+"go.enableCodeLens": { "runtest": false }
 ```
 
 ### `poly.toml`

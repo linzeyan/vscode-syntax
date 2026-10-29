@@ -11,6 +11,7 @@
 // Five files rather than one, because the rule is per language and the claims
 // worth pinning are about a language having exactly one of the two routes --
 // or neither, which is the answer for most of the files in either language.
+// Two more for Go's tests, whose buttons are golang.go's -- see `GO_FIXTURES`.
 const { createHash } = require("node:crypto");
 const { readFileSync, rmSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
@@ -134,6 +135,90 @@ echo "poly"
 ];
 
 /**
+ * What golang.go draws over a function `go test` runs, and what poly must draw
+ * in its place: the same titles, the same commands, `{ functionName }`.
+ * Spelled out for the same reason as `RUNS`.
+ */
+const GO_BUTTONS = {
+  test: { "run test": "go.test.cursor", "debug test": "go.debug.cursor" },
+  benchmark: { "run benchmark": "go.benchmark.cursor", "debug benchmark": "go.debug.cursor" },
+};
+
+/**
+ * Go test files, and the functions in them that must carry golang.go's pair.
+ *
+ * Every other `func` line in the file must carry none: each is a name golang.go
+ * would draw a button over and a signature `go test` would not run. `testing`
+ * is imported under another name so the rule is seen reading the import, not
+ * the word. The plain `.go` file holds a valid test and must stay silent; it is
+ * opened after the test file so the provider is known to answer for Go.
+ *
+ * The host has no golang.go, and poly draws these only while it is installed,
+ * so run.js loads a stand-in with its id (fixture-golang-go). Without one every
+ * silent half here would pass for the wrong reason -- see `checkGo`.
+ */
+const GO_FIXTURES = [
+  {
+    file: "thing_test.go",
+    tests: [
+      { line: "func TestSigned(t *tt.T) {}", name: "TestSigned", kind: "test" },
+      { line: "func BenchmarkSigned(b *tt.B) {}", name: "BenchmarkSigned", kind: "benchmark" },
+      { line: "func FuzzSigned(f *tt.F) {}", name: "FuzzSigned", kind: "test" },
+      { line: "func ExampleSigned() {", name: "ExampleSigned", kind: "test" },
+    ],
+    text: `package thing
+
+import (
+	"fmt"
+	tt "testing"
+)
+
+func TestSigned(t *tt.T) {}
+
+func TestUnsigned(x int) {}
+
+func TestTwo(a, b *tt.T) {}
+
+func TestValue(t tt.T) {}
+
+func Testlower(t *tt.T) {}
+
+func TestReturns(t *tt.T) error { return nil }
+
+func TestUnimported(t *testing.T) {}
+
+type S struct{}
+
+func (s *S) TestMethod(t *tt.T) {}
+
+func TestMain(m *tt.M) {}
+
+func BenchmarkSigned(b *tt.B) {}
+
+func BenchmarkCrossed(t *tt.T) {}
+
+func FuzzSigned(f *tt.F) {}
+
+func ExampleSigned() {
+	fmt.Println("poly")
+}
+
+func ExampleTakes(t *tt.T) {}
+`,
+  },
+  {
+    file: "thing.go",
+    tests: [],
+    text: `package thing
+
+import "testing"
+
+func TestSigned(t *testing.T) {}
+`,
+  },
+];
+
+/**
  * A `def main` that a symbol provider really reports.
  *
  * Measured 2026-09-21: a bare host answers `executeDocumentSymbolProvider` with
@@ -173,7 +258,7 @@ exports.collect = async function collect(lensesFor) {
   const folder = vscode.workspace.workspaceFolders[0].uri;
   const disposable = fakePythonSymbols(vscode);
   const seen = [];
-  for (const fixture of FIXTURES) {
+  for (const fixture of [...FIXTURES, ...GO_FIXTURES]) {
     const uri = vscode.Uri.joinPath(folder, fixture.file);
     writeFileSync(uri.fsPath, fixture.text);
     const document = await vscode.workspace.openTextDocument(uri);
@@ -183,7 +268,10 @@ exports.collect = async function collect(lensesFor) {
     // stays zero instead of one that stops growing. What keeps that honest is
     // the order above: a file of the same language has already answered, so
     // the provider is known to be alive and asked about this language.
-    const lenses = await lensesFor(uri, fixture.entry === null ? 0 : 1);
+    const lenses = await lensesFor(
+      uri,
+      fixture.tests ? fixture.tests.length * 2 : fixture.entry === null ? 0 : 1,
+    );
     const symbols = await vscode.commands.executeCommand(
       "vscode.executeDocumentSymbolProvider",
       uri,
@@ -196,19 +284,73 @@ exports.collect = async function collect(lensesFor) {
         line: lens.range.start.line,
         title: lens.command?.title ?? "(unresolved)",
         command: lens.command?.command ?? "(none)",
+        arguments: lens.command?.arguments ?? [],
         text: document.lineAt(lens.range.start.line).text.trim(),
       })),
     });
   }
   disposable.dispose();
 
-  writeFileSync(OUT, `${JSON.stringify(seen, null, 2)}\n`);
+  const golangGo = vscode.extensions.getExtension("golang.go") !== undefined;
+  writeFileSync(OUT, `${JSON.stringify({ golangGo, seen }, null, 2)}\n`);
   console.log(`run-lens: ${seen.length} fixtures opened`);
 };
 
+/** The Go test half of `check`: golang.go's pair, over exactly the runnable functions. */
+function checkGo(seen, golangGo) {
+  const problems = [];
+  // The control. With no golang.go poly draws no test lens at all, so every
+  // silent function below would pass and say nothing about the signature rule.
+  if (!golangGo) {
+    problems.push("golang.go's stand-in is not installed, so the Go test lens was never drawn");
+  }
+  const titles = new Set(Object.values(GO_BUTTONS).flatMap((pair) => Object.keys(pair)));
+  for (const fixture of GO_FIXTURES) {
+    const one = seen.find((each) => each.file === fixture.file);
+    if (!one) {
+      problems.push(`the host never opened ${fixture.file}`);
+      continue;
+    }
+    const buttons = one.lenses.filter((lens) => titles.has(lens.title));
+    console.log(`\n  ${fixture.file} (${one.language})`);
+    for (const lens of buttons) {
+      console.log(`    ${lens.line + 1}: ${lens.title} -> ${lens.command} ${JSON.stringify(lens.arguments)}`);
+    }
+    for (const lens of buttons) {
+      if (!fixture.tests.some((test) => test.line === lens.text)) {
+        problems.push(`${fixture.file} carries "${lens.title}" on a function go test would not run: ${lens.text}`);
+      }
+    }
+    for (const test of fixture.tests) {
+      const here = buttons.filter((lens) => lens.text === test.line);
+      const wanted = GO_BUTTONS[test.kind];
+      const said = here.map((lens) => lens.title).sort();
+      if (said.join() !== Object.keys(wanted).sort().join()) {
+        problems.push(
+          `${fixture.file}: ${test.line} carries ${JSON.stringify(said)}, not ${JSON.stringify(Object.keys(wanted))}`,
+        );
+        continue;
+      }
+      // golang.go's commands find the function by this argument alone, so a
+      // wrong one runs some other test, or none, without saying so.
+      for (const lens of here) {
+        const args = JSON.stringify(lens.arguments);
+        const want = JSON.stringify([{ functionName: test.name }]);
+        if (lens.command !== wanted[lens.title] || args !== want) {
+          problems.push(
+            `${fixture.file}: "${lens.title}" on ${test.line} runs ${lens.command} ${args}, `
+              + `not ${wanted[lens.title]} ${want}`,
+          );
+        }
+      }
+    }
+  }
+  return problems;
+}
+
 /** What the host saw, printed; what is wrong with it, returned. */
 exports.check = function check() {
-  const seen = JSON.parse(readFileSync(OUT, "utf8"));
+  const { golangGo, seen } = JSON.parse(readFileSync(OUT, "utf8"));
   // Read once, then taken away. A check that reads a file it did not watch
   // being written can pass on the last run's answer, which is how a gate goes
   // quietly dead: if the host ever stops calling `collect`, this throws.
@@ -311,5 +453,6 @@ exports.check = function check() {
         + `${row.said.padEnd(11)} ${row.where}`,
     );
   }
+  problems.push(...checkGo(seen, golangGo));
   return problems;
 };

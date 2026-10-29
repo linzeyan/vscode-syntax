@@ -173,8 +173,10 @@ async function main() {
 
   await runTests({
     // poly-syntax alongside, because it is what gives a .proto the `protobuf`
-    // language id poly's lens is registered for -- see proto.js.
-    extensionDevelopmentPath: [LSP, proto.SYNTAX],
+    // language id poly's lens is registered for -- see proto.js. And a stand-in
+    // with golang.go's id, without which poly draws no Go test lens -- see
+    // runnable.js.
+    extensionDevelopmentPath: [LSP, proto.SYNTAX, resolve(__dirname, "fixture-golang-go")],
     extensionTestsPath: resolve(__dirname, "suite.js"),
     extensionTestsEnv: {
       POLY_LENS_FIXTURE: fixture,

@@ -404,6 +404,11 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
   Code Runner，`poly.codeRunner.runInTerminal` 打開則在終端機；不經過 debugger。那些設定
   有這個檔的命令就有 `run`，`poly.codeRunner.enabled` 關著也一樣。poly 沒有 debugger，
   `debug` 交給你已經裝的 debug extension。
+  Go 的 `_test.go` 裡，`go test` 真的會跑的函式上方是 `run test | debug test`（benchmark 是
+  `run benchmark | debug benchmark`），跟 golang.go 的同一組命令，所以要裝了 golang.go 才有。
+  看的是簽名而不只是名字：頂層的 `Test`／`Benchmark`／`Fuzz` 函式要剛好一個
+  `*testing.T`／`*testing.B`／`*testing.F` 參數、沒有回傳值，`Example` 不收參數也不回傳。
+  golang.go 自己那組只看名字，在 settings.json 設 `"go.enableCodeLens": { "runtest": false }` 關掉。
 - **protobuf → 生成的 Go**（設定）：`.proto` 的 `message`／`enum` 上方 `go type`，
   `service` 上方 `go server`／`go client`，`rpc` 上方 `N impls`。點下去跟引用 lens 一樣：
   一筆直接跳、多筆開 **References** 面板，編輯器停在 `.proto` 上。認 protoc-gen-go 與
@@ -504,7 +509,7 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 | `poly.unicodeHighlight.enabled`    | `false`   | 不可見與冒充 ASCII 的字元（gremlins 的替代）                                          |
 | `poly.referencesCodeLens.enabled`  | `false`   | `N refs`／`N impls`／`N methods`                                                      |
 | `poly.protobufCodeLens.enabled`    | `false`   | `.proto` → 生成的 Go                                                                  |
-| `poly.runCodeLens.enabled`         | `false`   | `run \| debug`                                                                        |
+| `poly.runCodeLens.enabled`         | `false`   | `run \| debug`；Go 測試的 `run test \| debug test`                                    |
 | `poly.markdownMermaid.enabled`     | `false`   | preview 裡畫 mermaid                                                                  |
 | `poly.markdownDiagrams.enabled`    | `false`   | preview 裡畫 nomnoml／flowchart／sequence／vega／markmap／excalidraw／plantuml        |
 | `poly.markdownGithubStyle.enabled` | `false`   | preview 套 GitHub 樣式；`.colorTheme`／`.lightTheme`／`.darkTheme` 選配色             |

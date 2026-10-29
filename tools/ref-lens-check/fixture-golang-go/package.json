@@ -1,0 +1,10 @@
+{
+  "name": "go",
+  "displayName": "poly ref-lens: a stand-in for golang.go",
+  "description": "Loaded beside poly-lsp in the ref-lens host and nowhere else. It has golang.go's id and nothing else, which is all poly looks at to decide that golang.go's test commands exist and draw its Go test lens.",
+  "publisher": "golang",
+  "version": "0.0.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  }
+}
