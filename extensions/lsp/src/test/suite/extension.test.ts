@@ -1178,7 +1178,7 @@ suite("poly-lsp in a real editor", () => {
   });
 
   test("Convert Document To opens the converted text as a new document in its language", async () => {
-    const uri = writeFile("toolbox-convert.json", '{"name": "poly", "tags": ["a", "b"]}\n');
+    const uri = writeFile("toolbox-convert.json", "{\"name\": \"poly\", \"tags\": [\"a\", \"b\"]}\n");
     await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
     await vscode.commands.executeCommand("poly.toolbox.convertDocument", "YAML");
     const converted = await eventually("the converted document", () => {

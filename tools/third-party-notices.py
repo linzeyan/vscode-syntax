@@ -338,8 +338,17 @@ def transform_source() -> Path:
     if not (checkout / "wasm_core" / "Cargo.lock").exists():
         shutil.rmtree(checkout, ignore_errors=True)
         subprocess.run(
-            ["git", "clone", "--quiet", "--depth", "1", "--branch", tag,
-             "https://github.com/linzeyan/transform", str(checkout)],
+            [
+                "git",
+                "clone",
+                "--quiet",
+                "--depth",
+                "1",
+                "--branch",
+                tag,
+                "https://github.com/linzeyan/transform",
+                str(checkout),
+            ],
             check=True,
         )
     return checkout / "wasm_core"
@@ -368,7 +377,9 @@ def collect_transform() -> tuple[str, list]:
     )
 
 
-def collect_crates(cwd: Path, filters: list[str], header: list[str]) -> tuple[str, list]:
+def collect_crates(
+    cwd: Path, filters: list[str], header: list[str]
+) -> tuple[str, list]:
     meta = json.loads(
         subprocess.run(
             ["cargo", "metadata", "--format-version", "1", "--locked", *filters],

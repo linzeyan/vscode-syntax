@@ -14,7 +14,16 @@
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { convertedName, entries, fileKind, labelOf, numberBase, TEXT_FORMATS, textFormatOf, timestampSource } from "./toolboxOps";
+import {
+  convertedName,
+  entries,
+  fileKind,
+  labelOf,
+  numberBase,
+  TEXT_FORMATS,
+  textFormatOf,
+  timestampSource,
+} from "./toolboxOps";
 
 let engine: typeof import("./transformEngine") | undefined;
 const load = () => engine ??= require(path.join(__dirname, "transformEngine.js")) as typeof import("./transformEngine");
@@ -26,13 +35,43 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 
 const OPERATIONS = [
   { id: "encode", en: "Encode", zh: "編碼", enHint: "Base16, 32, 64, 85, 91", zhHint: "Base16、32、64、85、91" },
-  { id: "decode", en: "Decode", zh: "解碼", enHint: "Every Base encoding the text is valid in", zhHint: "列出文字能成立的每一種 Base 編碼" },
-  { id: "hash", en: "Hash", zh: "雜湊", enHint: "MD5, SHA-1, SHA-2, SHA-3, CRC", zhHint: "MD5、SHA-1、SHA-2、SHA-3、CRC" },
+  {
+    id: "decode",
+    en: "Decode",
+    zh: "解碼",
+    enHint: "Every Base encoding the text is valid in",
+    zhHint: "列出文字能成立的每一種 Base 編碼",
+  },
+  {
+    id: "hash",
+    en: "Hash",
+    zh: "雜湊",
+    enHint: "MD5, SHA-1, SHA-2, SHA-3, CRC",
+    zhHint: "MD5、SHA-1、SHA-2、SHA-3、CRC",
+  },
   { id: "urlEncode", en: "URL Encode", zh: "URL 編碼", enHint: "Percent-encoding", zhHint: "百分比編碼" },
   { id: "urlDecode", en: "URL Decode", zh: "URL 解碼", enHint: "Percent-encoding", zhHint: "百分比編碼" },
-  { id: "jwtDecode", en: "Decode JWT", zh: "解開 JWT", enHint: "Header and payload, as JSON", zhHint: "header 與 payload，以 JSON 開啟" },
-  { id: "timestamp", en: "Timestamp", zh: "時間戳", enHint: "An epoch or a date, in another format", zhHint: "epoch 或日期，換成其他格式" },
-  { id: "numberBase", en: "Number Base", zh: "進位", enHint: "Binary, octal, decimal, hex", zhHint: "二、八、十、十六進位" },
+  {
+    id: "jwtDecode",
+    en: "Decode JWT",
+    zh: "解開 JWT",
+    enHint: "Header and payload, as JSON",
+    zhHint: "header 與 payload，以 JSON 開啟",
+  },
+  {
+    id: "timestamp",
+    en: "Timestamp",
+    zh: "時間戳",
+    enHint: "An epoch or a date, in another format",
+    zhHint: "epoch 或日期，換成其他格式",
+  },
+  {
+    id: "numberBase",
+    en: "Number Base",
+    zh: "進位",
+    enHint: "Binary, octal, decimal, hex",
+    zhHint: "二、八、十、十六進位",
+  },
 ] as const;
 type Operation = (typeof OPERATIONS)[number]["id"];
 
@@ -66,7 +105,9 @@ function results(operation: Exclude<Operation, "jwtDecode">, text: string): [str
       return DECODINGS.flatMap((kind): [string, string][] => {
         try {
           const decoded = wasm.decode_content(kind, text);
-          // Lossy UTF-8 marks bytes that were not text with U+FFFD.
+          // Lossy UTF-8 marks bytes that were not text with U+FFFD, and the
+          // control characters are the other half of "not text".
+          // poly: ignore deno_lint/no-control-regex
           return decoded && !/[�\0-\x08\x0E-\x1F]/.test(decoded) ? [[kind, decoded]] : [];
         } catch {
           return [];
@@ -92,8 +133,8 @@ async function transformSelection(operation?: unknown, choice?: unknown) {
     void vscode.window.showInformationMessage(say("Select the text to transform first.", "請先選取要轉換的文字。"));
     return;
   }
-  const picked = OPERATIONS.find((one) => one.id === operation)?.id ??
-    (await vscode.window.showQuickPick(
+  const picked = OPERATIONS.find((one) => one.id === operation)?.id
+    ?? (await vscode.window.showQuickPick(
       OPERATIONS.map((one) => ({ label: zh() ? one.zh : one.en, detail: zh() ? one.zhHint : one.enHint, id: one.id })),
       { placeHolder: say("Transform the selection", "轉換選取範圍") },
     ))?.id;
@@ -128,7 +169,9 @@ async function transformSelection(operation?: unknown, choice?: unknown) {
         { placeHolder: say("Replace the selection with", "以此取代選取範圍"), matchOnDescription: true },
       ))?.name;
     if (!key) return;
-    const values = texts.map((text, index) => (index === 0 ? first : results(picked, text)).find(([name]) => name === key)?.[1]);
+    const values = texts.map((text, index) =>
+      (index === 0 ? first : results(picked, text)).find(([name]) => name === key)?.[1]
+    );
     await editor.edit((edit) => {
       selections.forEach((selection, index) => {
         if (values[index] !== undefined) edit.replace(selection, values[index]!);
@@ -137,7 +180,10 @@ async function transformSelection(operation?: unknown, choice?: unknown) {
     const skipped = values.filter((value) => value === undefined).length;
     if (skipped) {
       void vscode.window.showWarningMessage(
-        say(`${skipped} selection(s) had no ${key} result and were left as they were.`, `${skipped} 個選取範圍沒有 ${key} 的結果，保持原樣。`),
+        say(
+          `${skipped} selection(s) had no ${key} result and were left as they were.`,
+          `${skipped} 個選取範圍沒有 ${key} 的結果，保持原樣。`,
+        ),
       );
     }
   } catch (error) {
@@ -151,8 +197,8 @@ async function convertDocument(target?: unknown) {
   const selection = editor.selection;
   const text = editor.document.getText(selection.isEmpty ? undefined : selection);
   const readable = TEXT_FORMATS.filter((format) => format.from.length);
-  const from = textFormatOf(editor.document.languageId) ??
-    (await vscode.window.showQuickPick(readable.map((format) => format.id), {
+  const from = textFormatOf(editor.document.languageId)
+    ?? (await vscode.window.showQuickPick(readable.map((format) => format.id), {
       placeHolder: say("Read the document as", "將文件視為"),
     }));
   if (!from) return;
@@ -166,7 +212,9 @@ async function convertDocument(target?: unknown) {
   if (!format) return;
   try {
     const content = load().transform_format(from, format.id, text);
-    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ language: format.language, content }));
+    await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument({ language: format.language, content }),
+    );
   } catch (error) {
     void vscode.window.showErrorMessage(`Toolbox: ${message(error)}`);
   }
@@ -184,8 +232,8 @@ async function convertFile(resource?: unknown, target?: unknown) {
     );
     return;
   }
-  const chosen = kind.targets.find((one) => one.id === target) ??
-    (await vscode.window.showQuickPick(
+  const chosen = kind.targets.find((one) => one.id === target)
+    ?? (await vscode.window.showQuickPick(
       kind.targets.map((one) => ({ label: one.label, description: `.${one.extension}`, target: one })),
       { placeHolder: say(`Convert ${path.posix.basename(uri.path)} to`, `將 ${path.posix.basename(uri.path)} 轉換為`) },
     ))?.target;

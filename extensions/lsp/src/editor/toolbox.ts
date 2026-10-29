@@ -93,8 +93,11 @@ async function html(webview: vscode.Webview, tool: string): Promise<string> {
     window.acquireVsCodeApi = () => api;`;
   return (
     template
-      .replace("<html ", '<html class="embed" ')
-      .replace("<head>", `<head>\n<meta http-equiv="Content-Security-Policy" content="${csp}">\n<script nonce="${nonce}">${boot}</script>`)
+      .replace("<html ", "<html class=\"embed\" ")
+      .replace(
+        "<head>",
+        `<head>\n<meta http-equiv="Content-Security-Policy" content="${csp}">\n<script nonce="${nonce}">${boot}</script>`,
+      )
       // The page's own files, which it names relative to itself.
       .replace(/ (href|src)="(?!#|[a-z]+:)([^"]+)"/g, (_, attribute, file) => ` ${attribute}="${root}/${file}"`)
   );
@@ -143,7 +146,9 @@ function show(tool: string, panel?: vscode.WebviewPanel) {
       if (message?.type !== "transform.save") return;
       saving = saving
         .then(() => save(message))
-        .catch((error) => void vscode.window.showErrorMessage(`Toolbox: ${error instanceof Error ? error.message : error}`));
+        .catch((error) =>
+          void vscode.window.showErrorMessage(`Toolbox: ${error instanceof Error ? error.message : error}`)
+        );
     }),
   ];
   panel.onDidDispose(() => {
@@ -163,20 +168,25 @@ export function registerToolbox(context: vscode.ExtensionContext) {
       const picked = await vscode.window.showQuickPick(
         GROUPS.flatMap((group) => [
           { label: label(group), kind: vscode.QuickPickItemKind.Separator },
-          ...group.tools.map((one) => ({ label: `$(${one.icon}) ${label(one)}`, detail: zh() ? one.zhHint : one.enHint, id: one.id })),
+          ...group.tools.map((one) => ({
+            label: `$(${one.icon}) ${label(one)}`,
+            detail: zh() ? one.zhHint : one.enHint,
+            id: one.id,
+          })),
         ]),
         { matchOnDetail: true },
       );
       if (picked && "id" in picked) show(picked.id);
     }),
     vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
-      async deserializeWebviewPanel(panel: vscode.WebviewPanel, state?: State) {
+      deserializeWebviewPanel(panel: vscode.WebviewPanel, state?: State) {
         // Switched off, a restored tab would be the feature appearing anyway.
         if (!state?.tool || !vscode.workspace.getConfiguration("poly.toolbox").get("enabled", true)) {
           panel.dispose();
-          return;
+        } else {
+          show(state.tool, panel);
         }
-        show(state.tool, panel);
+        return Promise.resolve();
       },
     }),
   );
