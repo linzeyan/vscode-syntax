@@ -68,6 +68,7 @@
     "onLanguage:dockercompose",
     "onLanguage:github-actions-workflow",
     "onWebviewPanel:poly.dataPreview",
+    "onWebviewPanel:poly.toolbox",
     "workspaceContains:.editorconfig"
   ],
   "contributes": {
@@ -852,8 +853,37 @@
         "command": "poly.errorLens.updateEverything",
         "title": "%command.errorLens.updateEverything.title%",
         "category": "%command.category%"
+      },
+      {
+        "command": "poly.toolbox.open",
+        "title": "%command.toolboxOpen.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.toolbox.transformSelection",
+        "title": "%command.toolboxTransformSelection.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.toolbox.convertDocument",
+        "title": "%command.toolboxConvertDocument.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.toolbox.convertFile",
+        "title": "%command.toolboxConvertFile.title%",
+        "category": "%command.category%"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "poly-toolbox",
+          "title": "%viewsContainer.polyToolbox.title%",
+          "icon": "$(tools)"
+        }
+      ]
+    },
     "views": {
       "explorer": [
         {
@@ -870,6 +900,13 @@
           "id": "polySwaggerFiles",
           "name": "%view.polySwaggerFiles.name%",
           "when": "!poly.yield.swaggerViewer && config.poly.swaggerViewer.enabled"
+        }
+      ],
+      "poly-toolbox": [
+        {
+          "id": "polyToolbox",
+          "name": "%view.polyToolbox.name%",
+          "when": "config.poly.toolbox.enabled"
         }
       ]
     },
@@ -923,6 +960,11 @@
           "command": "poly.gitGraph.viewFolderHistory",
           "when": "explorerResourceIsFolder && resourceScheme =~ /^(file|vscode-remote)$/ && !poly.gitGraph.noGit",
           "group": "4_timeline@10"
+        },
+        {
+          "command": "poly.toolbox.convertFile",
+          "group": "7_modification@20",
+          "when": "!explorerResourceIsFolder && resourceFilename =~ /\\.(csv|tsv|json|jsonl|ndjson|parquet|avro|arrow|feather|png|jpe?g|webp)$/i && config.poly.toolbox.enabled"
         }
       ],
       "editor/context": [
@@ -998,6 +1040,16 @@
           "command": "poly.codeRunner.stop",
           "when": "inOutput && poly.codeRunner.codeRunning",
           "group": "stop-code-run"
+        },
+        {
+          "command": "poly.toolbox.transformSelection",
+          "group": "poly_toolbox@1",
+          "when": "editorHasSelection && config.poly.toolbox.enabled"
+        },
+        {
+          "command": "poly.toolbox.convertDocument",
+          "group": "poly_toolbox@2",
+          "when": "editorLangId =~ /^(json|jsonc|yaml|dockercompose|github-actions-workflow|toml|xml|graphql|protobuf|proto3)$/ && config.poly.toolbox.enabled"
         }
       ],
       "view/title": [
@@ -1459,6 +1511,22 @@
         {
           "command": "poly.errorLens.updateEverything",
           "when": "!poly.yield.errorLens"
+        },
+        {
+          "command": "poly.toolbox.open",
+          "when": "config.poly.toolbox.enabled"
+        },
+        {
+          "command": "poly.toolbox.transformSelection",
+          "when": "editorHasSelection && config.poly.toolbox.enabled"
+        },
+        {
+          "command": "poly.toolbox.convertDocument",
+          "when": "editorIsOpen && config.poly.toolbox.enabled"
+        },
+        {
+          "command": "poly.toolbox.convertFile",
+          "when": "resourceFilename =~ /\\.(csv|tsv|json|jsonl|ndjson|parquet|avro|arrow|feather|png|jpe?g|webp)$/i && config.poly.toolbox.enabled"
         }
       ],
       "editor/title": [
@@ -2465,6 +2533,9 @@
                 "XXX",
                 "BUG"
               ]
+            },
+            "toolbox": {
+              "enabled": true
             },
             "tools": {},
             "unicodeHighlight": {
@@ -5184,6 +5255,16 @@
                 }
               }
             },
+            "toolbox": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "markdownDescription": "%config.toolbox.enabled.description%"
+                }
+              }
+            },
             "tools": {
               "type": "object",
               "additionalProperties": {
@@ -5771,7 +5852,7 @@
   },
   "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/opencc-js', {recursive: true, force: true}); for (const f of ['LICENSE', 'LICENSES', 'THIRD_PARTY_LICENSES.md']) fs.cpSync('node_modules/opencc-js/' + f, 'dist/opencc-js/' + f, {recursive: true})\" && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/code-runner', {recursive: true, force: true}); fs.mkdirSync('dist/code-runner', {recursive: true}); for (const f of ['LICENSE.txt', 'code-runner-output.tmLanguage']) fs.cpSync('src/editor/codeRunner/' + f, 'dist/code-runner/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && esbuild src/editor/gitGraphPanel.ts --bundle --outfile=dist/gitGraph.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/gitGraph.ts --bundle --outdir=dist/git-graph --format=iife --platform=browser --minify --loader:.ttf=file --asset-names=\"[name]\" && node -e \"for (const f of ['LICENSE', 'LICENSE-CODE']) require('fs').cpSync('node_modules/@vscode/codicons/' + f, 'dist/git-graph/' + f); require('fs').cpSync('src/editor/preview/LICENSE-vscode.txt', 'dist/git-graph/LICENSE-vscode.txt')\" && node -e \"const fs = require('fs'); fs.rmSync('dist/errorLens', {recursive: true, force: true}); fs.mkdirSync('dist/errorLens', {recursive: true}); fs.cpSync('src/editor/errorLens/LICENSE.txt', 'dist/errorLens/LICENSE.txt')\" && esbuild src/editor/errorLens/src/extension.ts --bundle --outfile=dist/errorLens/extension.js --external:vscode --format=cjs --platform=node --minify --alias:src=./src/editor/errorLens/src --alias:lodash=lodash-es && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true}); require('fs').cpSync('media/excalidraw/FONTS.md', 'dist/excalidraw/FONTS.md')\"",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/preview/mermaid.ts --bundle --outfile=dist/preview.js --format=iife --platform=browser --minify && esbuild src/editor/dbml.ts --bundle --outfile=dist/dbml.js --format=cjs --platform=node --minify && esbuild src/editor/chinese.ts --bundle --outfile=dist/chinese.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/opencc-js', {recursive: true, force: true}); for (const f of ['LICENSE', 'LICENSES', 'THIRD_PARTY_LICENSES.md']) fs.cpSync('node_modules/opencc-js/' + f, 'dist/opencc-js/' + f, {recursive: true})\" && esbuild src/editor/autocorrectEngine.ts --bundle --outfile=dist/autocorrect.js --format=cjs --platform=node --minify && node -e \"require('fs').cpSync('node_modules/@huacnlee/autocorrect/autocorrect_bg.wasm', 'dist/autocorrect_bg.wasm')\" && esbuild src/editor/markdownPdf.ts --bundle --outfile=dist/markdownPdf.js --external:vscode --format=cjs --platform=node --minify && node ../../tools/markdown-pdf-assets.js && node -e \"const fs = require('fs'); fs.rmSync('dist/codesnap', {recursive: true, force: true}); fs.cpSync('src/editor/codeSnap', 'dist/codesnap', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/paste-image', {recursive: true, force: true}); fs.cpSync('src/editor/pasteImage', 'dist/paste-image', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node -e \"const fs = require('fs'); fs.rmSync('dist/code-runner', {recursive: true, force: true}); fs.mkdirSync('dist/code-runner', {recursive: true}); for (const f of ['LICENSE.txt', 'code-runner-output.tmLanguage']) fs.cpSync('src/editor/codeRunner/' + f, 'dist/code-runner/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/data-preview', {recursive: true, force: true}); fs.cpSync('src/editor/dataPreview', 'dist/data-preview', {recursive: true, filter: (f) => !f.endsWith('README.md')})\" && node ../../tools/perspective-assets.js && node ../../tools/transform-assets.js && esbuild src/editor/transformEngine.ts --bundle --outfile=dist/transformEngine.js --format=cjs --platform=node --minify --log-override:empty-import-meta=silent && esbuild src/editor/dataPreviewData.ts --bundle --outfile=dist/dataPreview.js --format=cjs --platform=node --minify --alias:jsonc-parser=jsonc-parser/lib/esm/main.js && esbuild src/editor/swaggerPreview.ts --bundle --outfile=dist/swaggerPreview.js --format=cjs --platform=node --minify && node -e \"const fs = require('fs'); fs.rmSync('dist/swagger', {recursive: true, force: true}); fs.cpSync('src/editor/swaggerViewer', 'dist/swagger', {recursive: true, filter: (f) => !f.endsWith('README.md')}); for (const f of ['LICENSE', 'NOTICE', 'favicon-16x16.png', 'favicon-32x32.png', 'swagger-ui-bundle.js', 'swagger-ui-bundle.js.LICENSE.txt', 'swagger-ui-standalone-preset.js', 'swagger-ui-standalone-preset.js.LICENSE.txt', 'swagger-ui.css']) fs.cpSync('node_modules/swagger-ui-dist/' + f, 'dist/swagger/swagger-ui-dist/' + f)\" && node -e \"const fs = require('fs'); fs.rmSync('dist/marp', {recursive: true, force: true}); fs.mkdirSync('dist/marp', {recursive: true}); for (const f of ['LICENSE.txt', 'marp-vscode.css', 'images/icon.woff']) fs.cpSync('src/editor/marp/' + f, 'dist/marp/' + f.split('/').pop()); for (const f of ['bespoke.js', 'bespoke.js.LICENSE.txt']) fs.cpSync('node_modules/@marp-team/marp-cli/lib/' + f, 'dist/marp/' + f)\" && esbuild src/editor/marp/src/extension.ts --bundle --outfile=dist/marp/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild node_modules/@marp-team/marp-cli/lib/index.js --bundle --outfile=dist/marp/cli.js --format=cjs --platform=node --minify --external:emitter && esbuild src/editor/marp/preview.js --bundle --outfile=dist/marp/preview.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagrams.ts --bundle --outfile=dist/diagrams.js --format=iife --platform=browser --minify && esbuild src/editor/preview/diagram/nomnoml.ts src/editor/preview/diagram/flowchart.ts src/editor/preview/diagram/sequence.ts src/editor/preview/diagram/vega.ts src/editor/preview/diagram/markmap.ts --bundle --outdir=dist/diagram --format=iife --platform=browser --minify --external:fs --external:path --external:argparse --alias:@babel/polyfill=./src/editor/preview/diagram/empty.ts && esbuild src/editor/gitGraphPanel.ts --bundle --outfile=dist/gitGraph.js --external:vscode --format=cjs --platform=node --minify && esbuild src/editor/preview/gitGraph.ts --bundle --outdir=dist/git-graph --format=iife --platform=browser --minify --loader:.ttf=file --asset-names=\"[name]\" && node -e \"for (const f of ['LICENSE', 'LICENSE-CODE']) require('fs').cpSync('node_modules/@vscode/codicons/' + f, 'dist/git-graph/' + f); require('fs').cpSync('src/editor/preview/LICENSE-vscode.txt', 'dist/git-graph/LICENSE-vscode.txt')\" && node -e \"const fs = require('fs'); fs.rmSync('dist/errorLens', {recursive: true, force: true}); fs.mkdirSync('dist/errorLens', {recursive: true}); fs.cpSync('src/editor/errorLens/LICENSE.txt', 'dist/errorLens/LICENSE.txt')\" && esbuild src/editor/errorLens/src/extension.ts --bundle --outfile=dist/errorLens/extension.js --external:vscode --format=cjs --platform=node --minify --alias:src=./src/editor/errorLens/src --alias:lodash=lodash-es && node -e \"require('fs').rmSync('dist/excalidraw', {recursive: true, force: true})\" && esbuild main=src/editor/preview/excalidraw/main.tsx fence=src/editor/preview/diagram/excalidraw.ts --bundle --splitting --format=esm --outdir=dist/excalidraw --platform=browser --minify --jsx=automatic --conditions=production --loader:.woff2=file && node -e \"for (const f of ['Cascadia', 'ComicShanns', 'Excalifont', 'Lilita', 'Nunito', 'Virgil']) require('fs').cpSync('node_modules/@excalidraw/excalidraw/dist/prod/fonts/' + f, 'dist/excalidraw/fonts/' + f, {recursive: true}); require('fs').cpSync('media/excalidraw/FONTS.md', 'dist/excalidraw/FONTS.md')\"",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.preview.json --noEmit && tsc -p tsconfig.marp.json --noEmit && tsc -p tsconfig.errorLens.json --noEmit",
     "unit": "tsc -p tsconfig.test.json && node --test out/editor/*.test.js",
     "test:build": "pnpm run build && tsc -p tsconfig.test.json",

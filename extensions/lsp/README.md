@@ -248,6 +248,27 @@ RandomFractalsInc.vscode-data-preview 的替代：資料檔開成可排序、篩
 所以不附，`charts.plugin` 與 `log.level` 兩項設定沒有；頁面只能開預覽或檔案，不能叫任意命令；讀不了的二進位
 檔會說，它則一聲不吭；不在網址旁寫檔。兩者都裝著時，poly 的按鈕、選單與命令讓出來。
 
+### 工具箱
+
+[transform](https://github.com/linzeyan/transform) 的工具，類似 DevToys：活動列上的工具箱列出轉換、編碼、產生器三組，
+點一下在編輯器分頁裡開那個工具。分頁裡是 transform 網站的同一套頁面，配色跟著 VSCode 的主題；頁面與它的 wasm
+隨擴充一起出貨，不連網路。設定是 `poly.toolbox.enabled`。
+
+- **工具**：格式轉換（JSON、YAML、TOML、XML、JSON Schema、Go struct、GraphQL、Protobuf、TOON、MsgPack，另有
+  CSV、Parquet、Avro、Arrow 資料檔互轉）、圖片轉換、HTML ↔ Markdown、進位、單位、時間戳、IP；Base 編碼與解碼、
+  雜湊、URL、JWT、bcrypt／Argon2、加解密、憑證檢視；UUID／ULID、隨機字串、TOTP、QR Code 產生與讀取、ASCII 藝術字、
+  User-Agent、SQL INSERT。命令面板的 **`Open Toolbox Tool`** 也能挑工具。
+- 同一個工具再點一次會回到已開的分頁。頁面上的下載會跳出存檔對話框；重新載入視窗後，開著的工具分頁會還原。
+- **`Transform Selection`**（選取文字後的右鍵選單）：把選取範圍就地編碼、解碼、雜湊、URL 編碼或解碼，或把時間戳、
+  數字換成另一種寫法；多個游標一次處理。解碼只列出文字真的解得開的編碼；JWT 解開後另開一份 JSON。
+- **`Convert Document To Another Format`**（JSON、YAML、TOML、XML、GraphQL、Protobuf 檔的右鍵選單）：整份文件或
+  選取範圍轉成另一種格式，開成新的未存檔文件。
+- **`Convert File To Another Format`**（檔案總管的右鍵選單）：CSV、TSV、JSON、Parquet、Avro、Arrow 檔互轉，PNG、
+  JPEG、WebP 圖片轉成其他圖片格式（含 AVIF），寫在原檔旁邊，同名檔已存在時先問。
+
+transform 網站上的 Browser Fingerprint 與 Text Diff 不在工具箱裡：前者在這裡量到的是 VSCode 本身，後者 VSCode
+內建的比較已經有了。
+
 ### Swagger 預覽
 
 arjun.swagger-viewer 的替代：Swagger 2.0 與 OpenAPI 3.0／3.1 的 JSON、YAML 檔以 Swagger UI 預覽，邊打邊更新。

@@ -28,6 +28,8 @@ const { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require("
 const { dirname, join, resolve } = require("node:path");
 const { gunzipSync } = require("node:zlib");
 
+const untar = require("./untar");
+
 const ROOT = resolve(__dirname, "..");
 const LSP = join(ROOT, "extensions", "lsp");
 const OUT = join(LSP, "dist", "data-preview");
@@ -84,25 +86,6 @@ async function tarball(name, integrity) {
     throw new Error(`@finos/${name} 0.4.0: ${digest}, pinned ${integrity}`);
   }
   return bytes;
-}
-
-/** The regular files of a tar archive, by name. npm's are plain ustar. */
-function untar(bytes) {
-  const files = new Map();
-  for (let at = 0; at + 512 <= bytes.length;) {
-    const header = bytes.subarray(at, at + 512);
-    const field = (start, length) => header.subarray(start, start + length).toString("latin1").replace(/\0.*$/s, "");
-    const name = field(0, 100);
-    if (!name) break;
-    const size = parseInt(field(124, 12).trim(), 8);
-    const prefix = field(345, 155);
-    const type = field(156, 1);
-    if (type === "0" || type === "") {
-      files.set(prefix ? `${prefix}/${name}` : name, bytes.subarray(at + 512, at + 512 + size));
-    }
-    at += 512 + Math.ceil(size / 512) * 512;
-  }
-  return files;
 }
 
 async function main() {

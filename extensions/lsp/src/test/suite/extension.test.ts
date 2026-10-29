@@ -1140,6 +1140,68 @@ suite("poly-lsp in a real editor", () => {
     assert.match(readFileSync(target, "utf8"), /CREATE TABLE "users"/);
   });
 
+  // The Toolbox is an activity bar entry of its own, and a tool is one tab: a
+  // second click on it brings that tab forward rather than starting the page,
+  // and its wasm, over again beside it. What the page does inside the tab is
+  // checked by eye in a VM (docs 12-transform.md); a host cannot see in.
+  test("a Toolbox tool opens in one tab, and opening it again reuses that tab", async () => {
+    assert.ok(
+      (await vscode.commands.getCommands(true)).includes("workbench.view.extension.poly-toolbox"),
+      "the Toolbox has no activity bar entry",
+    );
+    const tabs = () =>
+      vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .filter((tab) => tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("poly.toolbox"));
+    await vscode.commands.executeCommand("poly.toolbox.open", "coder-encode");
+    await eventually("the tool's tab", () => (tabs().length === 1 ? true : undefined));
+    await vscode.commands.executeCommand("poly.toolbox.open", "coder-encode");
+    await new Promise((done) => setTimeout(done, 500));
+    assert.deepStrictEqual(tabs().map((tab) => tab.label), ["Base Encoders"]);
+    await vscode.window.tabGroups.close(tabs());
+  });
+
+  // The Toolbox's editor commands run transform's wasm in the extension host,
+  // which nothing else here loads: these are what prove the bundle, its glue
+  // and the wasm beside it agree. Choices are passed as arguments, as a
+  // keybinding would, so no quick pick is involved.
+  test("Transform Selection rewrites every selection, each from its own text", async () => {
+    const uri = writeFile("toolbox-selection.txt", "aGVsbG8=\n0xff 0x10\n");
+    const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    editor.selection = new vscode.Selection(0, 0, 0, 8);
+    await vscode.commands.executeCommand("poly.toolbox.transformSelection", "decode", "base64_standard");
+    // Two cursors, one choice: each number keeps its own value.
+    editor.selections = [new vscode.Selection(1, 0, 1, 4), new vscode.Selection(1, 5, 1, 9)];
+    await vscode.commands.executeCommand("poly.toolbox.transformSelection", "numberBase", "decimal");
+    assert.strictEqual(editor.document.getText(), "hello\n255 16\n");
+    await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+  });
+
+  test("Convert Document To opens the converted text as a new document in its language", async () => {
+    const uri = writeFile("toolbox-convert.json", '{"name": "poly", "tags": ["a", "b"]}\n');
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    await vscode.commands.executeCommand("poly.toolbox.convertDocument", "YAML");
+    const converted = await eventually("the converted document", () => {
+      const document = vscode.window.activeTextEditor?.document;
+      return document?.isUntitled ? document : undefined;
+    });
+    assert.strictEqual(converted.languageId, "yaml");
+    assert.strictEqual(converted.getText(), "name: poly\ntags:\n- a\n- b\n");
+    await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+  });
+
+  test("Convert File To writes the converted file beside its source", async () => {
+    const source = writeFile("toolbox-report.csv", "id,name\n1,poly\n2,toolbox\n");
+    const target = join(workspaceRoot(), "toolbox-report.parquet");
+    rmSync(target, { force: true });
+    await vscode.commands.executeCommand("poly.toolbox.convertFile", source, "parquet");
+    // Parquet opens and closes with its magic; a truncated write has no footer.
+    const bytes = readFileSync(target);
+    assert.strictEqual(bytes.subarray(0, 4).toString(), "PAR1");
+    assert.strictEqual(bytes.subarray(-4).toString(), "PAR1");
+  });
+
   // What only a host shows: that a colour set in poly.syntaxColors reaches the
   // one setting a theme reads. The merge is unit-tested; this is the write into
   // the user's settings.json, which fails silently with the wrong target.

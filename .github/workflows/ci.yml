@@ -220,13 +220,15 @@ jobs:
               sed -E 's/^test (.+) \.\.\. FAILED$/::error::cargo test: \1/' || true
           fi
           exit $status
-      # Only the binary's half here: the other artifact is the extension's own
-      # bundled scripts, whose tree only pnpm can resolve, and this job has no node. It
-      # is checked in `extensions`, next to the install that makes it readable.
+      # The binary's half and the Toolbox wasm's, both read with cargo: the
+      # other artifact is the extension's own bundled scripts, whose tree only
+      # pnpm can resolve, and this job has no node. It is checked in
+      # `extensions`, next to the install that makes it readable.
       - name: Third-party notices are current (A9)
         run: |
           python3 tools/third-party-notices.py --self-test
           python3 tools/third-party-notices.py --check --scope cargo
+          python3 tools/third-party-notices.py --check --scope transform
       # Offline on purpose: it compares the lock against the registry, nothing
       # upstream. A hand-edited version bump that skips tool-sync.py leaves
       # every platform but the editor's on trust-on-first-use, which looks

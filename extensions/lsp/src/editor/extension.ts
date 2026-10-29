@@ -66,6 +66,7 @@ import { canHoldEntry, entryLine, entryPoints, findsEntryInText } from "./runnab
 import { colorSheet, parseStyle, scopesIn, styleText, withSyntaxColors } from "./scopes";
 import { registerSwaggerViewer } from "./swaggerViewer";
 import { registerTodoTree } from "./todoTree";
+import { registerToolbox } from "./toolbox";
 import { drawsNothing, explain, findSuspects, label, Level, levelOf, Suspect, SUSPECTS } from "./unicode";
 
 /**
@@ -2368,6 +2369,7 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   registerCodeSnap(context);
   registerPasteImage(context, (id) => MARKDOWN_LANGUAGES.has(id));
   registerDataPreview(context);
+  registerToolbox(context);
   registerSwaggerViewer(context);
   marpPlugin = registerMarp(context);
   mirrorSyntaxColors(context);

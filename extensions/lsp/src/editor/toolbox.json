@@ -1,0 +1,43 @@
+[
+  {
+    "en": "Converters",
+    "zh": "轉換",
+    "tools": [
+      { "id": "format", "icon": "json", "en": "Format Converter", "zh": "格式轉換", "enHint": "JSON, YAML, TOML, XML and more, both ways", "zhHint": "JSON、YAML、TOML、XML 等格式互轉" },
+      { "id": "converter-image", "icon": "file-media", "en": "Image Converter", "zh": "圖片轉換", "enHint": "JPG, PNG, WebP and AVIF, keeping transparency", "zhHint": "JPG、PNG、WebP、AVIF 互轉，保留透明" },
+      { "id": "converter-html-md", "icon": "markdown", "en": "HTML ↔ Markdown", "zh": "HTML ↔ Markdown", "enHint": "Markdown to HTML and back", "zhHint": "Markdown 與 HTML 互轉" },
+      { "id": "converter-number-bases", "icon": "symbol-numeric", "en": "Number Bases", "zh": "進位轉換", "enHint": "Binary, octal, decimal and hex", "zhHint": "二、八、十、十六進位" },
+      { "id": "converter-units", "icon": "symbol-ruler", "en": "Unit Converter", "zh": "單位換算", "enHint": "Bits, bytes and their binary multiples", "zhHint": "bit、byte 與二進位倍數" },
+      { "id": "converter-timestamp", "icon": "calendar", "en": "Timestamp Converter", "zh": "時間戳轉換", "enHint": "Unix timestamps and date formats", "zhHint": "Unix 時間戳與日期格式" },
+      { "id": "converter-ipv4", "icon": "globe", "en": "IP Tools", "zh": "IP 工具", "enHint": "IPv4 and IPv6 CIDR, ranges and formats", "zhHint": "IPv4／IPv6 的 CIDR、範圍與格式" }
+    ]
+  },
+  {
+    "en": "Encoders",
+    "zh": "編碼",
+    "tools": [
+      { "id": "coder-encode", "icon": "file-binary", "en": "Base Encoders", "zh": "Base 編碼", "enHint": "Base16, 32, 64, 85 and 91", "zhHint": "Base16、32、64、85、91" },
+      { "id": "coder-decode", "icon": "file-binary", "en": "Base Decoders", "zh": "Base 解碼", "enHint": "Any of the Base encodings back to text", "zhHint": "把 Base 編碼還原成文字" },
+      { "id": "coder-hash", "icon": "key", "en": "Hash", "zh": "雜湊", "enHint": "MD5, SHA and more, with HMAC", "zhHint": "MD5、SHA 等，含 HMAC" },
+      { "id": "coder-url", "icon": "link", "en": "URL Encode/Decode", "zh": "URL 編碼／解碼", "enHint": "Percent-encoding, both ways", "zhHint": "百分比編碼互轉" },
+      { "id": "coder-jwt", "icon": "shield", "en": "JWT", "zh": "JWT", "enHint": "Sign a payload or inspect a token", "zhHint": "簽發或檢視 token" },
+      { "id": "coder-kdf", "icon": "lock", "en": "Password Hashers", "zh": "密碼雜湊", "enHint": "bcrypt and Argon2: generate and verify", "zhHint": "bcrypt 與 Argon2：產生與驗證" },
+      { "id": "security-crypto", "icon": "lock", "en": "Encrypt / Decrypt", "zh": "加密／解密", "enHint": "AES-GCM and (X)ChaCha20, text or files", "zhHint": "AES-GCM 與 (X)ChaCha20，文字或檔案" },
+      { "id": "security-ssl", "icon": "workspace-trusted", "en": "Certificate Inspector", "zh": "憑證檢視", "enHint": "A PEM certificate or a whole chain", "zhHint": "PEM 憑證或整條憑證鏈" }
+    ]
+  },
+  {
+    "en": "Generators",
+    "zh": "產生器",
+    "tools": [
+      { "id": "generator-uuid", "icon": "symbol-constant", "en": "UUID / ULID", "zh": "UUID／ULID", "enHint": "UUID v1 to v8, GUID and ULID", "zhHint": "UUID v1–v8、GUID 與 ULID" },
+      { "id": "generator-random", "icon": "symbol-string", "en": "Random Strings", "zh": "隨機字串", "enHint": "From the characters you choose", "zhHint": "從指定的字元集產生" },
+      { "id": "generator-totp", "icon": "watch", "en": "TOTP", "zh": "TOTP", "enHint": "Time-based one-time passwords", "zhHint": "以時間為準的一次性密碼" },
+      { "id": "generator-qr", "icon": "symbol-namespace", "en": "QR Code", "zh": "QR Code", "enHint": "For a one-time password, Wi-Fi or any text", "zhHint": "一次性密碼、Wi-Fi 或任意文字" },
+      { "id": "generator-qr-parse", "icon": "device-camera", "en": "QR Code Reader", "zh": "QR Code 讀取", "enHint": "Decode the QR codes in an image", "zhHint": "解出圖片裡的 QR Code" },
+      { "id": "generator-ascii", "icon": "text-size", "en": "ASCII Art", "zh": "ASCII 藝術字", "enHint": "Text as ASCII art", "zhHint": "把文字畫成 ASCII 藝術字" },
+      { "id": "generator-useragent", "icon": "browser", "en": "User-Agent", "zh": "User-Agent", "enHint": "Realistic browser user agents", "zhHint": "擬真的瀏覽器 User-Agent" },
+      { "id": "generator-sql", "icon": "database", "en": "SQL Inserts", "zh": "SQL INSERT", "enHint": "INSERT statements from a MySQL schema", "zhHint": "依 MySQL schema 產生 INSERT 語句" }
+    ]
+  }
+]
