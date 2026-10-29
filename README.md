@@ -130,7 +130,8 @@
   poly 的按鈕與選單讓出來。
 - **工具箱**：[transform](https://github.com/linzeyan/transform) 的工具，類似 DevToys。活動列上列出格式轉換、
   圖片轉換、Base 編碼／解碼、雜湊、URL、JWT、時間戳、進位、UUID、QR Code 等二十多個工具，各自開在編輯器分頁，
-  配色跟著主題，不連網路。選取文字的右鍵 `Transform Selection` 就地編碼、解碼、雜湊或換寫法；
+  配色跟著主題，不連網路。選取文字的右鍵 `Open Selection In Toolbox` 帶著文字開工具，結果可以寫回原處；
+  `Transform Selection` 就地編碼、解碼、雜湊或換寫法；
   `Convert Document To Another Format` 把 JSON、YAML、TOML、XML 等轉成另一種格式；檔案總管的
   `Convert File To Another Format` 讓 CSV、Parquet、Avro、Arrow 與圖片互轉。設定是 `poly.toolbox.enabled`。
 - **Swagger 預覽**：取代 arjun.swagger-viewer。在 Swagger 2.0 或 OpenAPI 3 的 JSON／YAML 檔按

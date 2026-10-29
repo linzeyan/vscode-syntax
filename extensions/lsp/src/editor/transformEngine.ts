@@ -8,6 +8,7 @@
  * glue is wasm-bindgen's `--target web` ES module, which esbuild turns into
  * CommonJS; `initSync` takes the bytes, so its `fetch` path never runs.
  */
+import { webcrypto } from "node:crypto";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
 
@@ -27,6 +28,10 @@ const glue = require("../../dist/transform/pkg/wasm_core.js") as {
   convert_tabular_format(from: string, to: string, data: Uint8Array): { bytes: Uint8Array; row_count: bigint };
   convert_image_format(from: string, to: string, bytes: Uint8Array, options: object): { data_base64: string };
 };
+
+// The wasm's getrandom 0.3/0.4 only ask globalThis.crypto, which the Node 18 of
+// VSCode 1.85-1.89 lacks without a flag; Avro's sync marker then panics.
+globalThis.crypto ??= webcrypto as Crypto;
 
 glue.initSync({ module: readFileSync(path.join(__dirname, "transform", "pkg", "wasm_core_bg.wasm")) });
 

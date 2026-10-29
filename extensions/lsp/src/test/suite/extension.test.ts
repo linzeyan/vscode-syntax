@@ -1161,6 +1161,24 @@ suite("poly-lsp in a real editor", () => {
     await vscode.window.tabGroups.close(tabs());
   });
 
+  // What the page does with the text happens inside the webview, which no API
+  // reads; this pins down the half the extension owns: the tool opens beside
+  // the selection it may write back to, not over it.
+  test("Open Selection In Toolbox opens the tool beside the text", async () => {
+    const uri = writeFile("toolbox-open-selection.json", "{\"name\": \"poly\"}\n");
+    const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    editor.selection = new vscode.Selection(0, 0, 0, 16);
+    await vscode.commands.executeCommand("poly.toolbox.openSelection", "format");
+    const tab = await eventually("the tool's tab", () =>
+      vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .find((one) => one.input instanceof vscode.TabInputWebview && one.input.viewType.endsWith("poly.toolbox")));
+    assert.strictEqual(tab.label, "Format Converter");
+    assert.notStrictEqual(tab.group.viewColumn, editor.viewColumn, "the tool covered the text it was opened with");
+    await vscode.window.tabGroups.close(tab);
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+  });
+
   // The Toolbox's editor commands run transform's wasm in the extension host,
   // which nothing else here loads: these are what prove the bundle, its glue
   // and the wasm beside it agree. Choices are passed as arguments, as a

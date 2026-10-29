@@ -860,6 +860,11 @@
         "category": "%command.category%"
       },
       {
+        "command": "poly.toolbox.openSelection",
+        "title": "%command.toolboxOpenSelection.title%",
+        "category": "%command.category%"
+      },
+      {
         "command": "poly.toolbox.transformSelection",
         "title": "%command.toolboxTransformSelection.title%",
         "category": "%command.category%"
@@ -1040,6 +1045,11 @@
           "command": "poly.codeRunner.stop",
           "when": "inOutput && poly.codeRunner.codeRunning",
           "group": "stop-code-run"
+        },
+        {
+          "command": "poly.toolbox.openSelection",
+          "group": "poly_toolbox@0",
+          "when": "editorHasSelection && config.poly.toolbox.enabled"
         },
         {
           "command": "poly.toolbox.transformSelection",
@@ -1515,6 +1525,10 @@
         {
           "command": "poly.toolbox.open",
           "when": "config.poly.toolbox.enabled"
+        },
+        {
+          "command": "poly.toolbox.openSelection",
+          "when": "editorHasSelection && config.poly.toolbox.enabled"
         },
         {
           "command": "poly.toolbox.transformSelection",

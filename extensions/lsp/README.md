@@ -259,6 +259,9 @@ RandomFractalsInc.vscode-data-preview 的替代：資料檔開成可排序、篩
   雜湊、URL、JWT、bcrypt／Argon2、加解密、憑證檢視；UUID／ULID、隨機字串、TOTP、QR Code 產生與讀取、ASCII 藝術字、
   User-Agent、SQL INSERT。命令面板的 **`Open Toolbox Tool`** 也能挑工具。
 - 同一個工具再點一次會回到已開的分頁。頁面上的下載會跳出存檔對話框；重新載入視窗後，開著的工具分頁會還原。
+- **`Open Selection In Toolbox`**（選取文字後的右鍵選單）：挑一個工具，在旁邊的分頁開啟，選取的文字已經填進去；
+  格式轉換會照文件的語言選好來源格式。格式轉換、HTML ↔ Markdown、URL、ASCII 藝術字的結果旁有
+  **Replace Selection**，按下去把結果寫回原本的選取範圍；之後檔案改過的話，會請你重新選取。
 - **`Transform Selection`**（選取文字後的右鍵選單）：把選取範圍就地編碼、解碼、雜湊、URL 編碼或解碼，或把時間戳、
   數字換成另一種寫法；多個游標一次處理。解碼只列出文字真的解得開的編碼；JWT 解開後另開一份 JSON。
 - **`Convert Document To Another Format`**（JSON、YAML、TOML、XML、GraphQL、Protobuf 檔的右鍵選單）：整份文件或

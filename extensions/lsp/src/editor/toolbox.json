@@ -9,7 +9,8 @@
         "en": "Format Converter",
         "zh": "格式轉換",
         "enHint": "JSON, YAML, TOML, XML and more, both ways",
-        "zhHint": "JSON、YAML、TOML、XML 等格式互轉"
+        "zhHint": "JSON、YAML、TOML、XML 等格式互轉",
+        "input": true
       },
       {
         "id": "converter-image",
@@ -25,7 +26,8 @@
         "en": "HTML ↔ Markdown",
         "zh": "HTML ↔ Markdown",
         "enHint": "Markdown to HTML and back",
-        "zhHint": "Markdown 與 HTML 互轉"
+        "zhHint": "Markdown 與 HTML 互轉",
+        "input": true
       },
       {
         "id": "converter-number-bases",
@@ -57,7 +59,8 @@
         "en": "IP Tools",
         "zh": "IP 工具",
         "enHint": "IPv4 and IPv6 CIDR, ranges and formats",
-        "zhHint": "IPv4／IPv6 的 CIDR、範圍與格式"
+        "zhHint": "IPv4／IPv6 的 CIDR、範圍與格式",
+        "input": true
       }
     ]
   },
@@ -71,7 +74,8 @@
         "en": "Base Encoders",
         "zh": "Base 編碼",
         "enHint": "Base16, 32, 64, 85 and 91",
-        "zhHint": "Base16、32、64、85、91"
+        "zhHint": "Base16、32、64、85、91",
+        "input": true
       },
       {
         "id": "coder-decode",
@@ -79,7 +83,8 @@
         "en": "Base Decoders",
         "zh": "Base 解碼",
         "enHint": "Any of the Base encodings back to text",
-        "zhHint": "把 Base 編碼還原成文字"
+        "zhHint": "把 Base 編碼還原成文字",
+        "input": true
       },
       {
         "id": "coder-hash",
@@ -87,7 +92,8 @@
         "en": "Hash",
         "zh": "雜湊",
         "enHint": "MD5, SHA and more, with HMAC",
-        "zhHint": "MD5、SHA 等，含 HMAC"
+        "zhHint": "MD5、SHA 等，含 HMAC",
+        "input": true
       },
       {
         "id": "coder-url",
@@ -95,7 +101,8 @@
         "en": "URL Encode/Decode",
         "zh": "URL 編碼／解碼",
         "enHint": "Percent-encoding, both ways",
-        "zhHint": "百分比編碼互轉"
+        "zhHint": "百分比編碼互轉",
+        "input": true
       },
       {
         "id": "coder-jwt",
@@ -103,7 +110,8 @@
         "en": "JWT",
         "zh": "JWT",
         "enHint": "Sign a payload or inspect a token",
-        "zhHint": "簽發或檢視 token"
+        "zhHint": "簽發或檢視 token",
+        "input": true
       },
       {
         "id": "coder-kdf",
@@ -127,7 +135,8 @@
         "en": "Certificate Inspector",
         "zh": "憑證檢視",
         "enHint": "A PEM certificate or a whole chain",
-        "zhHint": "PEM 憑證或整條憑證鏈"
+        "zhHint": "PEM 憑證或整條憑證鏈",
+        "input": true
       }
     ]
   },
@@ -181,7 +190,8 @@
         "en": "ASCII Art",
         "zh": "ASCII 藝術字",
         "enHint": "Text as ASCII art",
-        "zhHint": "把文字畫成 ASCII 藝術字"
+        "zhHint": "把文字畫成 ASCII 藝術字",
+        "input": true
       },
       {
         "id": "generator-useragent",
@@ -197,7 +207,8 @@
         "en": "SQL Inserts",
         "zh": "SQL INSERT",
         "enHint": "INSERT statements from a MySQL schema",
-        "zhHint": "依 MySQL schema 產生 INSERT 語句"
+        "zhHint": "依 MySQL schema 產生 INSERT 語句",
+        "input": true
       }
     ]
   }

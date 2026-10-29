@@ -249,6 +249,7 @@
   "command.dataPreviewOnSide.title": "在側邊預覽資料",
   "command.dataPreviewRemote.title": "預覽遠端資料",
   "command.toolboxOpen.title": "開啟工具箱的工具",
+  "command.toolboxOpenSelection.title": "在工具箱開啟選取範圍",
   "command.toolboxTransformSelection.title": "轉換選取範圍",
   "command.toolboxConvertDocument.title": "將文件轉換成其他格式",
   "command.toolboxConvertFile.title": "將檔案轉換成其他格式",

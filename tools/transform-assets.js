@@ -65,12 +65,22 @@ async function main() {
   // The Toolbox's tree names tools by the page's route ids. A route the page
   // dropped or renamed opens its default tool under the old label instead,
   // which nobody would notice from a passing build.
-  const routes = /const implementedTools = new Set\(\[([^\]]*)\]\)/.exec(readFileSync(join(OUT, "main.js"), "utf8"));
+  const page = readFileSync(join(OUT, "main.js"), "utf8");
+  const routes = /const implementedTools = new Set\(\[([^\]]*)\]\)/.exec(page);
   if (!routes) throw new Error(`transform ${tag}: main.js no longer lists implementedTools`);
   const known = new Set([...routes[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
   const tools = JSON.parse(readFileSync(join(LSP, "src", "editor", "toolbox.json"), "utf8")).flatMap((g) => g.tools);
   const stale = tools.map((t) => t.id).filter((id) => !known.has(id));
   if (stale.length) throw new Error(`transform ${tag} has no tool ${stale.join(", ")}; see src/editor/toolbox.json`);
+  // Likewise the tools Open Selection in Toolbox offers: one the page cannot
+  // fill would open empty, with the selection silently dropped.
+  const fields = /const embedFields = \{\n([\s\S]*?)\n\};/.exec(page);
+  if (!fields) throw new Error(`transform ${tag}: main.js no longer lists embedFields`);
+  const fillable = new Set([...fields[1].matchAll(/^ {4}'?([\w-]+)'?:/gm)].map((m) => m[1]));
+  const unfilled = tools.filter((t) => t.input && !fillable.has(t.id)).map((t) => t.id);
+  if (unfilled.length) {
+    throw new Error(`transform ${tag} cannot fill ${unfilled.join(", ")}; see "input" in src/editor/toolbox.json`);
+  }
   console.log(`transform ${tag}: ${files.size} files in ${OUT}`);
 }
 

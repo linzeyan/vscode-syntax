@@ -249,6 +249,7 @@
   "command.dataPreviewOnSide.title": "Preview Data on Side",
   "command.dataPreviewRemote.title": "Preview Remote Data",
   "command.toolboxOpen.title": "Open Toolbox Tool",
+  "command.toolboxOpenSelection.title": "Open Selection In Toolbox",
   "command.toolboxTransformSelection.title": "Transform Selection",
   "command.toolboxConvertDocument.title": "Convert Document To Another Format",
   "command.toolboxConvertFile.title": "Convert File To Another Format",
