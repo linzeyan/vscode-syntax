@@ -12,6 +12,8 @@ import { webcrypto } from "node:crypto";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
 
+import type { Reading, Written } from "./toolboxOps";
+
 // `require` with a type written here: the glue is generated, ships without
 // its typings, and only exists once tools/transform-assets.js has run.
 const glue = require("../../dist/transform/pkg/wasm_core.js") as {
@@ -23,7 +25,8 @@ const glue = require("../../dist/transform/pkg/wasm_core.js") as {
   url_decode(input: string): string;
   jwt_decode(token: string): unknown;
   convert_number_base(base: string, value: string): unknown;
-  convert_timestamp(source: string, value: string): unknown;
+  read_timestamp(input: string, format: string, pattern: string): Reading;
+  format_timestamp(seconds: string, nanos: number, offsetSeconds: number, patterns: string[]): Written;
   transform_format(from: string, to: string, input: string): string;
   convert_tabular_format(from: string, to: string, data: Uint8Array): { bytes: Uint8Array; row_count: bigint };
   convert_image_format(from: string, to: string, bytes: Uint8Array, options: object): { data_base64: string };
@@ -43,7 +46,8 @@ export const {
   url_decode,
   jwt_decode,
   convert_number_base,
-  convert_timestamp,
+  read_timestamp,
+  format_timestamp,
   transform_format,
   convert_tabular_format,
   convert_image_format,

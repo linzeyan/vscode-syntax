@@ -22,7 +22,8 @@ import {
   numberBase,
   TEXT_FORMATS,
   textFormatOf,
-  timestampSource,
+  placeLocally,
+  timestampEntries,
 } from "./toolboxOps";
 
 let engine: typeof import("./transformEngine") | undefined;
@@ -119,8 +120,11 @@ function results(operation: Exclude<Operation, "jwtDecode">, text: string): [str
       return [["url", wasm.url_encode(text)]];
     case "urlDecode":
       return [["url", wasm.url_decode(text)]];
-    case "timestamp":
-      return entries(wasm.convert_timestamp(timestampSource(text), text));
+    case "timestamp": {
+      const reading = wasm.read_timestamp(text, "auto", "");
+      const { seconds, offset } = placeLocally(reading);
+      return timestampEntries(wasm.format_timestamp(seconds, reading.nanos, offset, []));
+    }
     case "numberBase":
       return entries(wasm.convert_number_base(numberBase(text), text));
   }

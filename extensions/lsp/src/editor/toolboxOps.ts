@@ -21,21 +21,53 @@ export function numberBase(text: string): Base {
   return "decimal";
 }
 
+/** What transform's `read_timestamp` made of a text (wasm_core/src/timestamp.rs). */
+export interface Reading {
+  label: string;
+  /** False when the text named no offset: `seconds` is then its wall-clock time counted as UTC. */
+  zoned: boolean;
+  /** An i64 as text: a JS number loses precision past 2^53. */
+  seconds: string;
+  nanos: number;
+  relative: boolean;
+}
+
+type Text = Record<"iso8601" | "rfc3339" | "rfc2822" | "iso9075" | "sql_datetime" | "sql_date", string>;
+
+/** What transform's `format_timestamp` writes an instant as. */
+export interface Written {
+  unix: Record<"seconds" | "milliseconds" | "microseconds" | "nanoseconds", string>;
+  utc: Text;
+  http: string;
+  local: Text;
+}
+
 /**
- * transform's name for how a timestamp is written. An epoch's unit is read off
- * its length -- seconds have had 10 digits since 2001 and will until 2286,
- * and each finer unit adds three -- with one digit of slack either side.
- * Anything else goes to transform's text parser, which tries the usual date
- * formats in turn.
+ * The instant a reading names, and the editor's UTC offset at that instant.
+ * Zones by name are left to the host's Intl, which the wasm does not carry, so
+ * text without an offset is a wall-clock time here in the local zone; the
+ * second guess settles the hours around a daylight-saving change.
  */
-export function timestampSource(text: string): string {
-  const value = text.trim();
-  if (!/^-?\d+$/.test(value)) return "text";
-  const digits = value.replace("-", "").length;
-  if (digits <= 11) return "timestamp_seconds";
-  if (digits <= 14) return "timestamp_milliseconds";
-  if (digits <= 17) return "timestamp_microseconds";
-  return "timestamp_nanoseconds";
+export function placeLocally(reading: Reading): { seconds: string; offset: number } {
+  const offsetAt = (ms: number) => {
+    const minutes = new Date(ms).getTimezoneOffset();
+    // Past Date's ±275,760 years there is no zone data: write it as UTC.
+    return Number.isFinite(minutes) ? -minutes * 60 : 0;
+  };
+  const wall = Number(reading.seconds) * 1000;
+  if (reading.zoned) return { seconds: reading.seconds, offset: offsetAt(wall) };
+  const offset = offsetAt(wall - offsetAt(wall) * 1000);
+  return { seconds: (BigInt(reading.seconds) - BigInt(offset)).toString(), offset };
+}
+
+/** Every form an instant is written in, named for labelOf. */
+export function timestampEntries(written: Written): [string, string][] {
+  return [
+    ...Object.entries(written.unix).map(([key, value]): [string, string] => [`unix_${key}`, value]),
+    ...Object.entries(written.utc).map(([key, value]): [string, string] => [`utc_${key}`, value]),
+    ["http_date", written.http],
+    ...Object.entries(written.local).map(([key, value]): [string, string] => [`local_${key}`, value]),
+  ];
 }
 
 /** transform's text formats, and the language a result in each opens as. */
@@ -134,17 +166,12 @@ const ENCODINGS: Record<string, string> = {
   hex_upper: "Hex",
 };
 
-/**
- * How a result's name reads in a list: transform's keys are identifiers
- * (`sha512_256`, `browser_rfc2822`), and "browser" there means the local time
- * zone, which is what it is in an editor.
- */
+/** How a result's name reads in a list: transform's keys are identifiers (`sha512_256`, `local_rfc2822`). */
 export function labelOf(key: string): string {
   if (ENCODINGS[key]) return ENCODINGS[key];
   const sha = /^sha(3_)?(\d+)(?:_(\d+))?$/.exec(key);
   if (sha) return `SHA${sha[1] ? "3" : ""}-${sha[2]}${sha[3] ? `/${sha[3]}` : ""}`;
   return key
-    .replace(/^browser_/, "local ")
     .replace(/_/g, " ")
-    .replace(/\b(md|crc|fnv|adler|iso|rfc|sql)(\d*)/g, (word) => word.toUpperCase());
+    .replace(/\b(md|crc|fnv|adler|iso|rfc|sql|utc|http)(\d*)\b/g, (word) => word.toUpperCase());
 }

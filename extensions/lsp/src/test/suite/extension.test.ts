@@ -1193,6 +1193,17 @@ suite("poly-lsp in a real editor", () => {
     await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
   });
 
+  // The timestamp operation reads the wasm's own types (read_timestamp, then
+  // format_timestamp), so a renamed export or field fails here, not in a user's editor.
+  test("Transform Selection writes a selected epoch as a date", async () => {
+    const uri = writeFile("toolbox-timestamp.txt", "1767323045\n");
+    const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    editor.selection = new vscode.Selection(0, 0, 0, 10);
+    await vscode.commands.executeCommand("poly.toolbox.transformSelection", "timestamp", "utc_iso8601");
+    assert.strictEqual(editor.document.getText(), "2026-01-02T03:04:05Z\n");
+    await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+  });
+
   test("Convert Document To opens the converted text as a new document in its language", async () => {
     const uri = writeFile("toolbox-convert.json", "{\"name\": \"poly\", \"tags\": [\"a\", \"b\"]}\n");
     await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
