@@ -2049,65 +2049,61 @@ mod tests {
     ///
     /// Some associations are ours to add: `.bats` and `.azcli` are shell that
     /// VSCode's built-in shellscript does not claim, `.mdx` is markdown that
-    /// nothing built-in claims. Both extensions have to declare them.
-    /// poly-syntax-highlight owns language declarations, but the three
-    /// extensions are independent, and someone running only poly-lsp would
-    /// otherwise get a plain-text file with no formatter bound to it. Two
-    /// manifests saying the same thing is the cost, and this is what stops them
-    /// drifting -- an extension added to one and not the other formats or does
-    /// not depending on what is installed.
+    /// nothing built-in claims. grammars/sources.json declares them on the
+    /// entries that refine a built-in language, and the manifest's languages
+    /// are generated from it -- so what is checked here is that the generated
+    /// manifest still carries them, and that each is what poly itself detects,
+    /// or the editor names a language the CLI would not have picked.
     ///
-    /// Keyed off whatever poly-lsp declares rather than a list written here:
-    /// the next association to be added is covered without anyone remembering
-    /// to widen this test, which is the failure mode a hard-coded list has.
-    ///
-    /// Only one of the two manifests is edited by hand.
-    /// extensions/syntax/package.json is generated from grammars/sources.json,
-    /// and CI regenerates it and fails on any diff -- a hand edit there
-    /// survives `make gates` and dies in the grammars job.
+    /// Keyed off sources.json rather than a list written here: the next
+    /// association to be added is covered without anyone remembering to widen
+    /// this test, which is the failure mode a hard-coded list has.
     #[test]
-    fn both_manifests_teach_the_editor_the_same_extensions() {
-        let declared = |extension: &str, id: &str| -> Vec<String> {
-            let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join(format!("../../../extensions/{extension}/package.json"));
-            let text = std::fs::read_to_string(&manifest).expect("the extension manifest");
-            let package: serde_json::Value =
-                serde_json::from_str(&text).expect("valid package.json");
+    fn the_editor_and_poly_detect_the_same_added_extensions() {
+        let read = |path: &str| -> serde_json::Value {
+            let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
+            serde_json::from_str(&std::fs::read_to_string(&file).expect("readable"))
+                .expect("valid JSON")
+        };
+        let strings = |value: &serde_json::Value| -> Vec<String> {
+            value
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|e| e.as_str().map(str::to_string))
+                .collect()
+        };
+        let sources = read("../../../grammars/sources.json");
+        let package = read("../../../extensions/lsp/package.json");
+        let declared = |id: &str| -> Vec<String> {
             package["contributes"]["languages"]
                 .as_array()
                 .expect("contributes.languages")
                 .iter()
                 .filter(|l| l["id"] == id)
-                .flat_map(|l| l["extensions"].as_array().cloned().unwrap_or_default())
-                .filter_map(|e| e.as_str().map(str::to_string))
-                .collect()
-        };
-        let ids = |extension: &str| -> Vec<String> {
-            let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join(format!("../../../extensions/{extension}/package.json"));
-            let text = std::fs::read_to_string(&manifest).expect("the extension manifest");
-            let package: serde_json::Value =
-                serde_json::from_str(&text).expect("valid package.json");
-            package["contributes"]["languages"]
-                .as_array()
-                .expect("contributes.languages")
-                .iter()
-                .filter_map(|l| l["id"].as_str().map(str::to_string))
+                .flat_map(|l| strings(&l["extensions"]))
                 .collect()
         };
 
-        let declaring = ids("lsp");
-        assert!(!declaring.is_empty(), "poly-lsp declares no languages");
-        for id in &declaring {
-            let lsp = declared("lsp", id);
-            assert_eq!(
-                lsp,
-                declared("syntax", id),
-                "{id}: the two manifests have drifted"
-            );
-            // And what they declare has to be what poly itself detects, or the
-            // editor names a language the CLI would not have picked.
-            for extension in &lsp {
+        let added: Vec<(String, Vec<String>)> = sources["languages"]
+            .as_array()
+            .expect("sources.json languages")
+            .iter()
+            .filter(|l| l["override"] == true)
+            .map(|l| {
+                let id = l["id"].as_str().expect("an id").to_string();
+                (id, strings(&l["language"]["extensions"]))
+            })
+            .filter(|(_, extensions)| !extensions.is_empty())
+            .collect();
+        for (id, extensions) in &added {
+            let manifest = declared(id);
+            for extension in extensions {
+                assert!(
+                    manifest.contains(extension),
+                    "{id}: sources.json adds {extension}, the manifest does not -- run tools/grammar-sync.py"
+                );
                 let name = format!("a{extension}");
                 // A diagram is named for the editor, which shows its source,
                 // and left alone by poly on purpose: the drawing's editor
@@ -2124,11 +2120,9 @@ mod tests {
         }
         // The two that motivated this, so the loop above cannot pass by
         // iterating over nothing.
-        assert!(
-            declaring.contains(&"shellscript".to_string()),
-            "{declaring:?}"
-        );
-        assert!(declaring.contains(&"markdown".to_string()), "{declaring:?}");
+        let ids: Vec<&str> = added.iter().map(|(id, _)| id.as_str()).collect();
+        assert!(ids.contains(&"shellscript"), "{ids:?}");
+        assert!(ids.contains(&"markdown"), "{ids:?}");
     }
 
     /// The extension asks for a file it may never have shown poly, so this has

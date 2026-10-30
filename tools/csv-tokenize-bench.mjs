@@ -19,7 +19,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const NM = process.argv[2];
 const EXT = process.argv[3]
-  ?? join(dirname(fileURLToPath(import.meta.url)), "..", "extensions", "syntax");
+  ?? join(dirname(fileURLToPath(import.meta.url)), "..", "extensions", "lsp");
 
 const vsctm = (await import(pathToFileURL(join(NM, "vscode-textmate", "release", "main.js")))).default;
 const oniguruma = (await import(pathToFileURL(join(NM, "vscode-oniguruma", "release", "main.js")))).default;

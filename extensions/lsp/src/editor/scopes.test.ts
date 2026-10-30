@@ -97,7 +97,7 @@ test("nothing recognisable is an empty sheet rather than a throw", () => {
 test("the sheet's placeholder is not a colour", () => {
   // Pasted unedited, every entry is ignored. That is the failure mode worth
   // having: the alternative is a default that quietly recolours something.
-  const sheet = colorSheet("solidity", "ricky.poly-syntax-highlight", [
+  const sheet = colorSheet("solidity", "ricky.poly-lsp", [
     "comment.block.solidity",
   ]);
   assert.ok(sheet.includes(`"comment.block.solidity": "#RRGGBB"`));
@@ -108,7 +108,7 @@ test("the sheet's placeholder is not a colour", () => {
 test("the sheet is a settings fragment, not prose about one", () => {
   // It is meant to be copied from. A JSON parse of the body is the only way to
   // find out that the entries were written wrong, since nothing else reads it.
-  const sheet = colorSheet("go", "ricky.poly-syntax-highlight", [
+  const sheet = colorSheet("go", "ricky.poly-lsp", [
     "keyword.control.go",
     "string.quoted.double.go",
   ]);

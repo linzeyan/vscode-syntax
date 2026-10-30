@@ -96,7 +96,7 @@ pub fn registrations() -> serde_json::Value {
 
 /// Does the editor give `path` this language id?
 ///
-/// For GraphQL and nginx, the rules poly-syntax-highlight's manifest declares,
+/// For GraphQL and nginx, the rules poly-lsp's manifest declares,
 /// which is where the editor gets them; `the_file_rules_are_the_manifests`
 /// holds the two together. A file outside them is invisible here even if it is
 /// nginx, because it is not nginx to the editor either and would never ask.
@@ -398,7 +398,7 @@ mod tests {
     #[test]
     fn the_file_rules_are_the_manifests() {
         let manifest =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../extensions/syntax/package.json");
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../extensions/lsp/package.json");
         let package: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(manifest).unwrap()).unwrap();
         let declared = |id: &str, field: &str| -> Vec<String> {

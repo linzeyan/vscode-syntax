@@ -15,7 +15,7 @@ import type { FromSql, ToSql } from "./dbml";
 import { registerErrorLens } from "./errorLens";
 import { registerExcalidraw } from "./excalidrawEditor";
 import { registerGitGraph, stepHistoryDiff } from "./gitGraph";
-import { goTests } from "./goTests";
+import { goPackageLine, goTests } from "./goTests";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import {
@@ -67,6 +67,7 @@ import { canHoldEntry, entryLine, entryPoints, findsEntryInText } from "./runnab
 import { colorSheet, parseStyle, scopesIn, styleText, withSyntaxColors } from "./scopes";
 import { registerSwaggerViewer } from "./swaggerViewer";
 import { registerTodoTree } from "./todoTree";
+import { registerPasteTypes } from "./pasteTypes";
 import { registerToolbox } from "./toolbox";
 import { drawsNothing, explain, findSuspects, label, Level, levelOf, Suspect, SUSPECTS } from "./unicode";
 
@@ -463,8 +464,8 @@ async function insertToc(editor: vscode.TextEditor): Promise<void> {
  * converts before asking where to save, so a parse error is reported before
  * anyone has picked a path for a file that will not be written.
  *
- * `.dbml` is matched by extension as well as by id: the id comes from
- * poly-syntax-highlight, and poly-lsp has to work installed on its own.
+ * `.dbml` is matched by extension as well as by id: the id used to come from
+ * a separate extension, poly-syntax-highlight, which poly-lsp now contains.
  */
 async function convertDbml(editor: vscode.TextEditor, to: "sql" | "dbml"): Promise<void> {
   const document = editor.document;
@@ -1178,7 +1179,7 @@ function grammarFor(languageId: string): { path: string; from: string } | undefi
       }
     }
   }
-  return found.find((one) => one.from === "ricky.poly-syntax-highlight") ?? found[0];
+  return found.find((one) => one.from === "ricky.poly-lsp") ?? found[0];
 }
 
 /**
@@ -1640,7 +1641,11 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         : MARKDOWN_LANGUAGES.has(document.languageId)
         ? markdownHeadings(symbols)
         : symbols;
-      const found = lensTargets(declared, MAX_LENSES);
+      // go test runs a test by name and nothing else refers to one, so its
+      // count is a permanent `no refs`. Helpers in the same file keep theirs:
+      // there an unused one is news.
+      const tests = new Set(goTests(document.fileName, document.getText()).map((test) => test.name));
+      const found = lensTargets(declared.filter((symbol) => !tests.has(symbol.name)), MAX_LENSES);
       const keys = declarationKeys(found.map((target) => target.symbol));
       const targets: Anchored[] = found.map((target, index) => ({
         ...target,
@@ -1850,12 +1855,10 @@ const GOLANG_GO = "golang.go";
  * with. A language they do not cover gets `debug` alone rather than a button
  * that would only report it cannot.
  *
- * A Go test file also gets golang.go's `run test | debug test` (and the
- * benchmark pair) over each function `go test` would run, judged by
- * `goTests.ts` and handed to golang.go's own commands -- titles, ids and
- * arguments exactly as golang.go draws them, so with its name-only lens off the
- * only difference a user sees is which functions carry the buttons. Only while
- * golang.go is installed: without it those commands do not exist.
+ * A Go test file gets golang.go's test lens drawn by poly instead -- see
+ * `goTestLenses`. That one is not behind `poly.runCodeLens.enabled`: it
+ * replaces a lens golang.go draws by default, so gating it would leave Go
+ * tests with no buttons at all.
  */
 function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager): void {
   const changed = new vscode.EventEmitter<void>();
@@ -1863,27 +1866,13 @@ function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager
     onDidChangeCodeLenses: changed.event,
 
     async provideCodeLenses(document) {
+      const tests = goTestLenses(document);
       const on = vscode.workspace
         .getConfiguration("poly")
         .get<boolean>("runCodeLens.enabled", false);
       if (!on) {
-        return [];
+        return tests;
       }
-      const tests = document.languageId === "go" && vscode.extensions.getExtension(GOLANG_GO)
-        ? goTests(document.fileName, document.getText()).flatMap(({ name, kind, line }) => {
-          // Fuzz targets and examples are tests to golang.go; only a
-          // benchmark gets a command and titles of its own.
-          const [command, what] = kind === "benchmark"
-            ? ["go.benchmark.cursor", "benchmark"]
-            : ["go.test.cursor", "test"];
-          const range = document.lineAt(line).range;
-          const args = [{ functionName: name }];
-          return [
-            new vscode.CodeLens(range, { title: `run ${what}`, command, arguments: args }),
-            new vscode.CodeLens(range, { title: `debug ${what}`, command: "go.debug.cursor", arguments: args }),
-          ];
-        })
-        : [];
       const runs = executorFor(document) !== undefined;
       const buttons = (range: vscode.Range) =>
         [
@@ -1915,14 +1904,72 @@ function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager
     // a lens cannot give.
     vscode.commands.registerCommand("poly.runFile", (uri?: vscode.Uri) => codeRunner.run(null, uri, true)),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      // The executor maps decide where `run` appears.
-      if (affects(event, "poly.runCodeLens") || affects(event, "poly.codeRunner")) {
+      // The executor maps decide where `run` appears, and golang.go's own
+      // switch decides which of the two draws the Go test lens.
+      if (["poly.runCodeLens", "poly.codeRunner", "go.enableCodeLens"].some((section) => affects(event, section))) {
         changed.fire();
       }
     }),
     // golang.go installed or removed decides whether a Go test has buttons.
     vscode.extensions.onDidChange(() => changed.fire()),
   );
+}
+
+/**
+ * golang.go's whole test lens, over the functions `go test` would run.
+ *
+ * golang.go draws `run test | debug test` over every function whose name
+ * starts right (`goTests.ts` says why that is wrong), plus `run package tests
+ * | run file tests` on the package clause and a pair on each `t.Run`. Two
+ * lenses over one function is worse than either, so exactly one of them draws:
+ * poly's package.json turns golang.go's `go.enableCodeLens.runtest` off by
+ * default -- a default, not a write to settings.json -- and poly draws only
+ * while it is off, so a user who turns it back on gets golang.go's alone.
+ * Everything golang.go drew is drawn here with its titles, command ids and
+ * arguments, because turning its lens off takes all of it away, not just the
+ * per-function pair. Running and debugging stay golang.go's, so nothing is
+ * drawn without it.
+ */
+function goTestLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+  if (
+    document.languageId !== "go" || !document.fileName.endsWith("_test.go") || !vscode.extensions.getExtension(GOLANG_GO)
+  ) {
+    return [];
+  }
+  const theirs = vscode.workspace.getConfiguration("go", document.uri).get<{ runtest?: boolean }>("enableCodeLens");
+  if (theirs?.runtest !== false) {
+    return [];
+  }
+  const text = document.getText();
+  const tests = goTests(document.fileName, text);
+  const lens = (line: number, title: string, command: string, args?: unknown[]) =>
+    new vscode.CodeLens(document.lineAt(line).range, { title, command, arguments: args });
+  const lenses: vscode.CodeLens[] = [];
+  const clause = goPackageLine(text);
+  if (clause !== undefined) {
+    lenses.push(lens(clause, "run package tests", "go.test.package"), lens(clause, "run file tests", "go.test.file"));
+    if (tests.some((test) => test.kind === "benchmark")) {
+      lenses.push(
+        lens(clause, "run package benchmarks", "go.benchmark.package"),
+        lens(clause, "run file benchmarks", "go.benchmark.file"),
+      );
+    }
+  }
+  for (const { name, kind, line, subtests } of tests) {
+    // Fuzz targets and examples are tests to golang.go; only a benchmark gets
+    // a command and titles of its own.
+    const [command, what] = kind === "benchmark" ? ["go.benchmark.cursor", "benchmark"] : ["go.test.cursor", "test"];
+    const args = [{ functionName: name }];
+    lenses.push(lens(line, `run ${what}`, command, args), lens(line, `debug ${what}`, "go.debug.cursor", args));
+    for (const sub of subtests) {
+      const subArgs = [{ functionName: name, subTestName: sub.name }];
+      lenses.push(
+        lens(sub.line, "run test", "go.subtest.cursor", subArgs),
+        lens(sub.line, "debug test", "go.debug.subtest.cursor", subArgs),
+      );
+    }
+  }
+  return lenses;
 }
 
 /**
@@ -2423,6 +2470,7 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   registerPasteImage(context, (id) => MARKDOWN_LANGUAGES.has(id));
   registerDataPreview(context);
   registerToolbox(context);
+  registerPasteTypes(context);
   registerSwaggerViewer(context);
   marpPlugin = registerMarp(context);
   mirrorSyntaxColors(context);

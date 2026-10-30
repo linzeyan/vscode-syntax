@@ -2,7 +2,7 @@
 // poly's PlantUML support against jebbs.plantuml, the extension it replaces.
 //
 // Two extension hosts over two copies of one workspace: one with jebbs 2.18.1
-// installed from the marketplace, one with poly-lsp and poly-syntax-highlight.
+// installed from the marketplace, one with poly-lsp.
 // Both run the same MIT jar (poly's managed download, which jebbs is pointed
 // at) with the same Java, so any difference is the extension's. Compared:
 //
@@ -31,7 +31,6 @@ const { settingsOf } = require("../ext-diff/settings");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
-const SYNTAX = join(ROOT, "extensions", "syntax");
 const POLY = process.env.POLY_BIN ?? join(ROOT, "cli", "target", "release", "poly");
 const testElectron = require(join(LSP, "node_modules", "@vscode", "test-electron"));
 
@@ -223,10 +222,10 @@ async function measure(side, executable, settings) {
   rmSync(logs, { recursive: true, force: true });
   await testElectron.runTests({
     vscodeExecutablePath: executable,
-    // jebbs's side loads poly-lsp too, to see it stand down; poly's side adds
-    // poly-syntax-highlight, which is where the `plantuml` language id and
-    // the snippets come from, as jebbs's own package brings them on its side.
-    extensionDevelopmentPath: side === "jebbs" ? [LSP] : [LSP, SYNTAX],
+    // jebbs's side loads poly-lsp too, to see it stand down. poly-lsp brings
+    // the `plantuml` language id and snippets on both sides, as it does for a
+    // user who has both installed.
+    extensionDevelopmentPath: [LSP],
     extensionTestsPath: resolve(__dirname, "suite.js"),
     extensionTestsEnv: {
       POLY_PLANTUML_OUT: out,

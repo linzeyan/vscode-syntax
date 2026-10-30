@@ -1,20 +1,17 @@
 # Poly
 
-用「兩個 VSCode extension ＋ 一個 CLI」取代為了各語言 highlight／lint／format 而
+用「一個 VSCode extension ＋ 一個 CLI」取代為了各語言 highlight／lint／format 而
 安裝的一大堆零散 extension。編輯器與 CI 共用同一個 binary、同一份設定，所以本機存
 檔跟 pipeline 的結果一定一致。
 
-| 產出物                  | 職責                                                         |
-| ----------------------- | ------------------------------------------------------------ |
-| `poly-syntax-highlight` | 多語言 syntax highlighting，**接管全部 VSCode 內建語言文法** |
-| `poly-lsp`              | 存檔即時 lint／format、批次命令、編輯器端便利功能            |
-| `poly`                  | 單一 binary CLI，供 CI、pre-commit、終端批次使用             |
-
-兩個 extension 同版號一起發版，但彼此不相依，各自可以單獨裝。
+| 產出物     | 職責                                                                                                |
+| ---------- | --------------------------------------------------------------------------------------------------- |
+| `poly-lsp` | 多語言 syntax highlighting（**接管全部 VSCode 內建語言文法**）、存檔即時 lint／format、編輯器便利功能 |
+| `poly`     | 單一 binary CLI，供 CI、pre-commit、終端批次使用                                                    |
 
 ## 功能
 
-### poly-syntax-highlight — highlighting
+### poly-lsp — highlighting
 
 - **156 個文法**：接管 49 個 VSCode 內建語言，另加 49 個內建沒有的語言
   （HCL／Terraform、nginx、zig、dotenv、protobuf、mermaid、caddyfile、systemd
@@ -30,7 +27,7 @@
   VSCode 內建沒有這個行為。同一份規則也套用在 `SKILL.md`、`*.prompt.md`、
   `*.instructions.md`、`.claude/agents/**`、`.claude/rules/**` 這些 VSCode 1.120 起
   不再算 `markdown` 的檔案上。有序清單接出來的是 `1.`（`poly fmt` 保留這種寫法）。
-- **零執行期程式碼**，不佔 extension host 資源。
+- 文法是靜態宣告，VSCode 開到哪個語言才載入哪份，不經過 extension 的程式碼。
 
 ### poly-lsp — 編輯器整合
 
@@ -58,9 +55,7 @@
   +0.2 MB 照樣綠，而這條直接指名 hashes 12 → 488）。
 - **專案內工具優先**：偵測到專案的 biome／prettier／eslint／rustfmt 就用它們，
   避免和團隊 CI 結果不一致。
-- 背景檢查 GitHub Releases（預設 7 天一次，可調可關），一鍵更新裝了的那幾個
-  extension——沒裝的不會被順手裝上，那不是更新。poly-syntax-highlight 也有自己的檢查與
-  間隔設定（`poly.syntax.updateCheck.*`），只裝它一個也收得到新版。
+- 背景檢查 GitHub Releases（預設 7 天一次，可調可關），有新版就下載安裝。
 
 ### poly-lsp — 編輯器便利功能
 
@@ -133,7 +128,10 @@
   配色跟著主題，不連網路。選取文字的右鍵 `Open Selection In Toolbox` 帶著文字開工具，結果可以寫回原處；
   `Transform Selection` 就地編碼、解碼、雜湊或換寫法；
   `Convert Document To Another Format` 把 JSON、YAML、TOML、XML 等轉成另一種格式；檔案總管的
-  `Convert File To Another Format` 讓 CSV、Parquet、Avro、Arrow 與圖片互轉。設定是 `poly.toolbox.enabled`。
+  `Convert File To Another Format` 讓 CSV、Parquet、Avro、Arrow 與圖片互轉。JSON、YAML、TOML 貼進 Go、
+  TypeScript、Rust、Python 等檔時，貼上小工具多出 `Paste as Go Types` 這類選項（取代 quicktype，輸出 27 種
+  語言；Go 的 import 會併進檔案原有的）；命令面板的 `Paste Clipboard as Types` 在任何檔都能用。設定是
+  `poly.toolbox.enabled`。
 - **Swagger 預覽**：取代 arjun.swagger-viewer。在 Swagger 2.0 或 OpenAPI 3 的 JSON／YAML 檔按
   `shift+alt+p`（或 `Preview Swagger`，檔案總管右鍵也有），旁邊開出 Swagger UI，打字時跟著更新；也能
   從網址預覽，檔案總管有工作區裡 spec 的清單。頁面與 Swagger UI 的版本同它的。JSON spec 照 schema
@@ -192,7 +190,8 @@
   server 是對著診斷提供那條修正的。
 - **引用與實作 CodeLens**：每個宣告一行 `11 refs`；interface 多一顆 `3 impls`，具體型別有滿足
   interface 才多一顆 `1 interface`，方法寫在型別外面的語言（Go）再多一顆 `4 methods`；
-  Markdown 有人連結的標題也有，數的是整個 workspace 連到它的 `#錨點` 連結。只有一筆就直接跳過去，多筆開檔案總管裡的 **References** 面板——那是 poly 自己的樹，每一列除了
+  Markdown 有人連結的標題也有，數的是整個 workspace 連到它的 `#錨點` 連結。Go 的測試函式沒有：
+  `go test` 照名字執行、沒有人引用，那裡永遠是 `no refs`；同檔的 helper 照樣有。只有一筆就直接跳過去，多筆開檔案總管裡的 **References** 面板——那是 poly 自己的樹，每一列除了
   原始碼還帶**行號**與
   **它落在哪個符號裡**（`method Handle`、`func main`），內建的 `references-view` 兩欄都沒有，
   而別人的樹加不了欄位。數字來自該語言已註冊的 provider，poly 只數與畫。**GraphQL、nginx 與
@@ -215,13 +214,17 @@
   Python 直譯器／shebang 指定的直譯器），結果在輸出面板的 Code Runner，不經過 debugger；那些設定
   有這個檔的命令就有 `run`，Code Runner 關著也一樣。poly 沒有 debugger，`debug` 是交給你已經裝的
   debug extension。
-  Go 的 `_test.go` 裡，`go test` 真的會跑的函式上方是 `run test | debug test`（benchmark 是
-  `run benchmark | debug benchmark`），標題、命令與 golang.go 的一樣，執行與除錯也是交給 golang.go，
-  所以要裝了 golang.go 才有。golang.go 只看名字，poly 還看簽名：`Test`／`Benchmark`／`Fuzz` 開頭（後面
+  `poly.runCodeLens.enabled` 可關。
+- **Go 測試的 CodeLens**：裝了 golang.go 時，`_test.go` 的測試按鈕改由 poly 畫，標題、命令與
+  golang.go 的一樣，執行與除錯也是交給 golang.go：`package` 那行 `run package tests | run file tests`
+  （有 benchmark 時再加 `run package benchmarks | run file benchmarks`），`go test` 真的會跑的函式上方
+  `run test | debug test`（benchmark 是 `run benchmark | debug benchmark`），函式裡每個
+  `t.Run("name", …)` 上方也有一組。golang.go 只看名字，poly 還看簽名：`Test`／`Benchmark`／`Fuzz` 開頭（後面
   不能接小寫字母）的頂層函式，剛好一個 `*testing.T`／`*testing.B`／`*testing.F` 參數、沒有回傳值
   （`testing` 用別名或 `.` import 也認得）；`Example` 開頭的不收參數、沒有回傳值。`TestFoo(x int)`、
   `TestFoo(t testing.T)`、`Testfoo`、method 與 `TestMain(m *testing.M)` 都沒有按鈕。
-  `poly.runCodeLens.enabled` 可關。
+  poly 把 golang.go 的 `go.enableCodeLens.runtest` 預設值改成 `false`（只改預設，不寫你的
+  settings.json），所以每個測試上方只有一組；你自己把它設回 `true` 時改由 golang.go 畫，poly 讓開。
 - **protobuf → 生成的 Go**：`.proto` 的 `message`／`enum` 上方 `go type`，`service` 上方
   `go server`／`go client`，跳到 protoc 生出來的宣告；`rpc` 上方 `N impls`，跳到寫在 Go 裡的
   handler。認 protoc-gen-go 與 protoc-gen-go-grpc 的命名規則；生成檔不在 workspace 裡就不畫。
@@ -426,25 +429,38 @@
 需要 VSCode 1.85 以上。從
 [Releases](https://github.com/linzeyan/vscode-syntax/releases/latest) 下載：
 
-1. `poly-syntax-highlight-<版本>.vsix` — 通用，不分平台。
-2. `poly-lsp-<平台>-<版本>.vsix` — **要挑對平台**，內含對應的 poly binary：
-   `darwin-arm64`（Apple Silicon）、`win32-x64`、`linux-x64`（WSL 也用這個）。其他平台沒有
-   poly-lsp，CLI 請用下方的獨立 binary。
+`poly-lsp-<平台>-<版本>.vsix`——**要挑對平台**，內含對應的 poly binary：
+`darwin-arm64`（Apple Silicon）、`win32-x64`、`linux-x64`（WSL 也用這個）。其他平台沒有
+poly-lsp，CLI 請用下方的獨立 binary。
 
 安裝方式：VSCode 側邊欄 Extensions → 右上角 `...` → **Install from VSIX...** →
 選檔案 → 重新載入視窗。或用命令列：
 
 ```sh
-code --install-extension poly-syntax-highlight-0.20.0.vsix
 code --install-extension poly-lsp-darwin-arm64-0.20.0.vsix
 ```
 
-之後的版本由 extension 自己下載安裝，裝好只問要不要重新載入視窗——兩個各自照自己的間隔檢查，
-哪個先發現就一起更新你已經裝了的那幾個。不想自動更新就關掉 `poly.updateCheck.enabled`
-（只裝 poly-syntax-highlight 的話是 `poly.syntax.updateCheck.enabled`）。
+之後的版本由 extension 自己下載安裝，裝好只問要不要重新載入視窗。不想自動更新就關掉
+`poly.updateCheck.enabled`。
 
 Extensions 面板齒輪選單裡的「自動更新」勾選框管不到 poly：那是 VSCode 從 Marketplace 更新用的，
 poly 不在 Marketplace 上，勾了也沒有東西可以更新，而且每次從 VSIX 安裝都會被 VSCode 重設。
+
+### 從 0.20.0 以前升上來
+
+`poly-syntax-highlight` 併進了 `poly-lsp`：文法、語言設定與 snippets 現在都在 poly-lsp 裡。
+舊的 **Poly Syntax Highlight** 要自己解除安裝，否則同一份文法會宣告兩次。
+
+0.20.0 以前的自動更新升不上來：它還會找 poly-syntax-highlight 的 VSIX，新版沒有這個檔，警告會說
+release has no asset `poly-syntax-highlight-0.20.0.vsix`。
+
+這段程式碼凍在已安裝的舊版裡，改不了。照上面[安裝](#安裝)的方式手動裝一次新版 poly-lsp，再：
+
+```sh
+code --uninstall-extension ricky.poly-syntax-highlight
+```
+
+之後的更新照常自動。
 
 ### 從 0.18.20 以前升上來
 
@@ -903,17 +919,13 @@ poly-lsp 的設定全部在一個 `poly` 物件裡，extension 啟用時把它�
 
 ### 要自己在 `settings.json` 設的
 
-這兩項是 VSCode 與 golang.go 自己的，poly 不改它們：
+這一項是 VSCode 自己的，poly 不改它：
 
 ```jsonc
 // 編輯器自己的 Find All References 開 peek 還是開內建的 References 面板。預設 "peek"；
 // 設成 "view" 會和 poly 的 `N refs` CodeLens 一樣留著清單不跑掉——但兩邊是不同的樹，
 // 帶行號與符號欄位的是 poly 那棵。
-"references.preferredLocation": "view",
-// golang.go 自己的 `run test | debug test` 只看函式名字，`TestFoo(x int)` 也有按鈕；
-// 開了 poly.runCodeLens.enabled 時 poly 畫的是看過簽名的同一組按鈕，關掉這個才不會
-// 每個測試上方各有兩組。golang.go 的 `run package tests | run file tests` 也會一起消失。
-"go.enableCodeLens": { "runtest": false }
+"references.preferredLocation": "view"
 ```
 
 ### `poly.toml`

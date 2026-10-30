@@ -1,10 +1,24 @@
 # Poly
 
-存檔即時 lint／format，背後是 `poly lsp` daemon；加上沒有 CI 對應物的編輯器便利功能。編輯器與
-CI 跑的是同一個 binary、同一份設定，所以本機存檔跟 pipeline 的結果一定一致。
+多語言 syntax highlighting；存檔即時 lint／format，背後是 `poly lsp` daemon；加上沒有 CI 對應物的
+編輯器便利功能。編輯器與 CI 跑的是同一個 binary、同一份設定，所以本機存檔跟 pipeline 的結果一定一致。
 
 編輯器便利功能不需要 daemon，binary 沒起來它們照樣能用。那些功能**預設全關**，一項一項在設定裡
 打開——裝了不會讓你的編輯器多出任何你沒要的東西。
+
+## 語法高亮
+
+- **接管 49 個 VSCode 內建語言的文法，另加 49 個內建沒有的語言**：HCL／Terraform、nginx、zig、toml、
+  go template、dotenv、protobuf、mermaid、svelte、graphql、jsonnet、just、nix、cabal、dune、ocaml、
+  elixir、erlang、haskell、scala、caddyfile、systemd unit、apacheconf、ssh_config、jinja 家族、
+  Solidity／Cairo／Vyper、DBML（含 snippets 與檔案圖示）、PlantUML（含 snippets），以及 csv／tsv 的
+  rainbow 欄位上色。rust 改用 dustypomerleau/rust-syntax，scope 比內建細。
+- 輸出標準 TextMate scope，任何 color theme 直接生效，不自帶配色；改某個 scope 的顏色用下面的
+  `poly.syntaxColors` 與 `Poly: Set Syntax Color`。
+- 文法一律以 pinned commit 從上游 repo／marketplace VSIX 同步，不手改；授權與各文法釘住的
+  commit 在 THIRD-PARTY-NOTICES-grammars.md。
+- **沒有「只關掉某一份文法」的開關**：VSCode 的文法是靜態註冊的，沒有任何 contribution point
+  能在執行期停用其中一份。
 
 ## 格式化與 lint
 
@@ -268,6 +282,13 @@ RandomFractalsInc.vscode-data-preview 的替代：資料檔開成可排序、篩
   選取範圍轉成另一種格式，開成新的未存檔文件。
 - **`Convert File To Another Format`**（檔案總管的右鍵選單）：CSV、TSV、JSON、Parquet、Avro、Arrow 檔互轉，PNG、
   JPEG、WebP 圖片轉成其他圖片格式（含 AVIF），寫在原檔旁邊，同名檔已存在時先問。
+- **貼上為型別**（取代 quicktype.quicktype，引擎就是 quicktype）：剪貼簿裡是 JSON、YAML 或 TOML 的物件或陣列時，
+  在 Go、TypeScript、Rust、Python、Java、Kotlin、C#、Swift、C++ 等檔裡照常 `cmd+v`，貼上後的小工具多出
+  `Paste as Go Types`／`Paste as Go Code`（TypeScript 另有 Zod、Effect Schema）；預設仍是貼文字。
+  JSON Schema 會被認出來、照 schema 產生。Go 不會貼出第二個 `package`，需要的 import 併進檔案原有的 import。
+  命令面板的 **`Paste Clipboard as Types`**／**`Paste Clipboard as Code`** 在任何檔都能用，
+  檔案的語言不在上面時從 quicktype 的 27 種輸出裡挑；VSCode 1.97 以前沒有貼上小工具，只有這兩個命令。
+  quicktype 原本的 Paste TypeScript as Code 沒有接過來。
 
 transform 網站上的 Browser Fingerprint 與 Text Diff 不在工具箱裡：前者在這裡量到的是 VSCode 本身，後者 VSCode
 內建的比較已經有了。
@@ -392,7 +413,8 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 - **引用與實作 CodeLens**（設定）：每個宣告一行 `11 refs`；interface 多一顆 `3 impls`，
   具體型別有滿足 interface 才多一顆 `1 interface`，方法寫在型別外面的語言（Go）再多一顆
   `4 methods`。Markdown 有人連結的標題也有一行，數的是整個 workspace 連到它的 `#錨點` 連結。
-  數字全部來自該語言已註冊的 provider，poly 只數與畫。
+  數字全部來自該語言已註冊的 provider，poly 只數與畫。Go 的測試函式沒有這一行：`go test`
+  照名字執行它、沒有人引用它，那裡永遠是 `no refs`；同一個 `_test.go` 裡的 helper 照樣有。
   - `N refs`、`N impls`、`N methods` 點下去都一樣：只有一筆就直接跳過去，多筆開檔案總管裡的
     **References** 面板。那是 poly 自己的樹，
     每一列除了原始碼還帶**行號**與**它落在哪個符號裡**（`method Handle`、`func main`）——
@@ -407,11 +429,12 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
   Code Runner，`poly.codeRunner.runInTerminal` 打開則在終端機；不經過 debugger。那些設定
   有這個檔的命令就有 `run`，`poly.codeRunner.enabled` 關著也一樣。poly 沒有 debugger，
   `debug` 交給你已經裝的 debug extension。
-  Go 的 `_test.go` 裡，`go test` 真的會跑的函式上方是 `run test | debug test`（benchmark 是
-  `run benchmark | debug benchmark`），跟 golang.go 的同一組命令，所以要裝了 golang.go 才有。
-  看的是簽名而不只是名字：頂層的 `Test`／`Benchmark`／`Fuzz` 函式要剛好一個
+- **Go 測試的 CodeLens**：裝了 golang.go 時由 poly 畫 golang.go 那一整組（`run package tests |
+  run file tests`、每個測試與 `t.Run` 上方的 `run test | debug test`），命令一樣是 golang.go 的，
+  但只畫在 `go test` 真的會跑的函式上：頂層的 `Test`／`Benchmark`／`Fuzz` 函式要剛好一個
   `*testing.T`／`*testing.B`／`*testing.F` 參數、沒有回傳值，`Example` 不收參數也不回傳。
-  golang.go 自己那組只看名字，在 settings.json 設 `"go.enableCodeLens": { "runtest": false }` 關掉。
+  poly 把 golang.go 的 `go.enableCodeLens.runtest` 預設改成 `false`，所以只有一組；你把它設回
+  `true` 就換 golang.go 自己畫（只看名字），poly 讓開。
 - **protobuf → 生成的 Go**（設定）：`.proto` 的 `message`／`enum` 上方 `go type`，
   `service` 上方 `go server`／`go client`，`rpc` 上方 `N impls`。點下去跟引用 lens 一樣：
   一筆直接跳、多筆開 **References** 面板，編輯器停在 `.proto` 上。認 protoc-gen-go 與
@@ -512,7 +535,7 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 | `poly.unicodeHighlight.enabled`    | `false`   | 不可見與冒充 ASCII 的字元（gremlins 的替代）                                          |
 | `poly.referencesCodeLens.enabled`  | `false`   | `N refs`／`N impls`／`N methods`                                                      |
 | `poly.protobufCodeLens.enabled`    | `false`   | `.proto` → 生成的 Go                                                                  |
-| `poly.runCodeLens.enabled`         | `false`   | `run \| debug`；Go 測試的 `run test \| debug test`                                    |
+| `poly.runCodeLens.enabled`         | `false`   | `run \| debug`                                                                        |
 | `poly.markdownMermaid.enabled`     | `false`   | preview 裡畫 mermaid                                                                  |
 | `poly.markdownDiagrams.enabled`    | `false`   | preview 裡畫 nomnoml／flowchart／sequence／vega／markmap／excalidraw／plantuml        |
 | `poly.markdownGithubStyle.enabled` | `false`   | preview 套 GitHub 樣式；`.colorTheme`／`.lightTheme`／`.darkTheme` 選配色             |

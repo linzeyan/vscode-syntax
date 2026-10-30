@@ -18,15 +18,13 @@ const REPO = "linzeyan/vscode-syntax";
 
 /**
  * Every poly extension, as the release asset it installs from and the id it
- * installs as. Grammars first, so a reload part-way through an install still
- * has a grammar and a client that match.
+ * installs as.
  *
  * Updated only when the user already has them: installing an extension
  * somebody deliberately does not have is not an update -- it is poly deciding
  * what belongs on their machine.
  */
 const PACKAGES: readonly [asset: (version: string) => string, id: string][] = [
-  [(version) => `poly-syntax-highlight-${version}.vsix`, "ricky.poly-syntax-highlight"],
   [(version) => `poly-lsp-${vsceTarget()}-${version}.vsix`, "ricky.poly-lsp"],
 ];
 const LAST_CHECK = "updateCheck.lastCheck";
@@ -259,9 +257,6 @@ export async function checkForUpdates(
     }
     return;
   }
-  if (quiet && !firstToInstall(release.tag)) {
-    return;
-  }
   try {
     await installUpdate(release);
   } catch (err) {
@@ -271,22 +266,6 @@ export async function checkForUpdates(
     log(`[update] installing ${release.tag} failed: ${err}`);
     vscode.window.showWarningMessage(`Poly: could not install ${release.tag}: ${err}`);
   }
-}
-
-/**
- * The release a background check in this extension host already took on,
- * whichever poly extension found it. Both run in one host, so a global is the
- * one thing they share without either depending on the other being installed.
- */
-const INSTALLING = Symbol.for("poly.updateCheck.installing");
-
-function firstToInstall(tag: string): boolean {
-  const host = globalThis as { [INSTALLING]?: string };
-  if (host[INSTALLING] === tag) {
-    return false;
-  }
-  host[INSTALLING] = tag;
-  return true;
 }
 
 /**
@@ -307,11 +286,7 @@ export function updateDue(
     || now - state.get<number>(LAST_CHECK, 0) >= days * 86_400_000;
 }
 
-/**
- * Deferred background check, governed by `<section>.updateCheck.enabled` and
- * `<section>.updateCheck.intervalDays` -- `poly` for Poly, `poly.syntax` for
- * poly-syntax-highlight.
- */
+/** Deferred background check, governed by `<section>.updateCheck.enabled` and `<section>.updateCheck.intervalDays`. */
 export function scheduleUpdateCheck(
   context: vscode.ExtensionContext,
   section: string,

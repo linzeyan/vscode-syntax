@@ -39,7 +39,6 @@ ROOT = Path(__file__).resolve().parent.parent
 CARGO = ROOT / "cli" / "Cargo.toml"
 MANIFESTS = [
     ROOT / "extensions" / "lsp" / "package.json",
-    ROOT / "extensions" / "syntax" / "package.json",
 ]
 # Listed explicitly rather than globbed: docs/ is a symlink to another repo and
 # its roadmap is full of old version numbers that are evidence of what was

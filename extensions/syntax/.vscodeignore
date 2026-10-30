@@ -1,8 +1,0 @@
-# The grammars ship as they are; the one script ships as its esbuild bundle,
-# so its sources, its toolchain and the configs that drive them stay out.
-src/**
-node_modules/**
-tsconfig*.json
-pnpm-lock.yaml
-pnpm-workspace.yaml
-*.vsix

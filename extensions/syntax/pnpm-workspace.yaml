@@ -1,6 +1,0 @@
-# Same decision as extensions/lsp: pnpm wants dependency lifecycle scripts
-# recorded rather than left implicit, and the only one here is esbuild's
-# postinstall, which fetches a platform binary its optional dependency already
-# provides. false rather than true, so an install runs no third-party code.
-allowBuilds:
-  esbuild: false

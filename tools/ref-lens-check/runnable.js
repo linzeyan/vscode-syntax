@@ -142,7 +142,28 @@ echo "poly"
 const GO_BUTTONS = {
   test: { "run test": "go.test.cursor", "debug test": "go.debug.cursor" },
   benchmark: { "run benchmark": "go.benchmark.cursor", "debug benchmark": "go.debug.cursor" },
+  subtest: { "run test": "go.subtest.cursor", "debug test": "go.debug.subtest.cursor" },
+  // On the package clause, and taken away with the rest when golang.go's own
+  // lens is off -- so poly draws them too, or turning it off loses them.
+  package: {
+    "run package tests": "go.test.package",
+    "run file tests": "go.test.file",
+    "run package benchmarks": "go.benchmark.package",
+    "run file benchmarks": "go.benchmark.file",
+  },
 };
+
+/** The arguments golang.go's command for `test` finds its target by. */
+function goArguments(test) {
+  if (test.kind === "package") return [];
+  if (test.kind === "subtest") return [{ functionName: test.name, subTestName: test.sub }];
+  return [{ functionName: test.name }];
+}
+
+/** How many lenses a Go fixture must end up with. */
+function goLensCount(fixture) {
+  return fixture.tests.reduce((sum, test) => sum + Object.keys(GO_BUTTONS[test.kind]).length, 0);
+}
 
 /**
  * Go test files, and the functions in them that must carry golang.go's pair.
@@ -161,11 +182,15 @@ const GO_FIXTURES = [
   {
     file: "thing_test.go",
     tests: [
-      { line: "func TestSigned(t *tt.T) {}", name: "TestSigned", kind: "test" },
+      { line: "package thing", kind: "package" },
+      { line: "func TestSigned(t *tt.T) {", name: "TestSigned", kind: "test" },
+      { line: 't.Run("case one", nil)', name: "TestSigned", sub: "case one", kind: "subtest" },
       { line: "func BenchmarkSigned(b *tt.B) {}", name: "BenchmarkSigned", kind: "benchmark" },
       { line: "func FuzzSigned(f *tt.F) {}", name: "FuzzSigned", kind: "test" },
       { line: "func ExampleSigned() {", name: "ExampleSigned", kind: "test" },
     ],
+    // A helper beside the tests keeps its reference count: unused, it is news.
+    counted: ["func helper() {}"],
     text: `package thing
 
 import (
@@ -173,7 +198,9 @@ import (
 	tt "testing"
 )
 
-func TestSigned(t *tt.T) {}
+func TestSigned(t *tt.T) {
+	t.Run("case one", nil)
+}
 
 func TestUnsigned(x int) {}
 
@@ -204,11 +231,15 @@ func ExampleSigned() {
 }
 
 func ExampleTakes(t *tt.T) {}
+
+func helper() {}
 `,
   },
   {
     file: "thing.go",
     tests: [],
+    // Named like a test, outside a _test.go file: ordinary code with a count.
+    counted: ["func TestSigned(t *testing.T) {}"],
     text: `package thing
 
 import "testing"
@@ -247,6 +278,44 @@ function fakePythonSymbols(vscode) {
   );
 }
 
+/**
+ * gopls's half of the reference lens, as little of it as the claim needs.
+ *
+ * The host has no gopls, and without a symbol and a reference provider for Go
+ * no Go function carries a count -- so "a test carries no `no refs`" would
+ * pass for the wrong reason. The `counted` lines are what make it falsifiable.
+ */
+function fakeGoReferences(vscode) {
+  const selector = { scheme: "file", language: "go" };
+  return vscode.Disposable.from(
+    vscode.languages.registerDocumentSymbolProvider(selector, {
+      provideDocumentSymbols(document) {
+        const symbols = [];
+        for (let line = 0; line < document.lineCount; line++) {
+          const text = document.lineAt(line).text;
+          const name = /^func (\w+)/.exec(text)?.[1];
+          if (name) {
+            const at = text.indexOf(name);
+            symbols.push(
+              new vscode.DocumentSymbol(
+                name,
+                "",
+                vscode.SymbolKind.Function,
+                document.lineAt(line).range,
+                new vscode.Range(line, at, line, at + name.length),
+              ),
+            );
+          }
+        }
+        return symbols;
+      },
+    }),
+    vscode.languages.registerReferenceProvider(selector, {
+      provideReferences: (document, position) => [new vscode.Location(document.uri, position)],
+    }),
+  );
+}
+
 exports.SCRATCH = SCRATCH;
 
 /** Open every fixture in the host and write down what carries a lens. */
@@ -256,7 +325,7 @@ exports.collect = async function collect(lensesFor) {
   const vscode = require("vscode");
 
   const folder = vscode.workspace.workspaceFolders[0].uri;
-  const disposable = fakePythonSymbols(vscode);
+  const disposable = vscode.Disposable.from(fakePythonSymbols(vscode), fakeGoReferences(vscode));
   const seen = [];
   for (const fixture of [...FIXTURES, ...GO_FIXTURES]) {
     const uri = vscode.Uri.joinPath(folder, fixture.file);
@@ -270,7 +339,7 @@ exports.collect = async function collect(lensesFor) {
     // the provider is known to be alive and asked about this language.
     const lenses = await lensesFor(
       uri,
-      fixture.tests ? fixture.tests.length * 2 : fixture.entry === null ? 0 : 1,
+      fixture.tests ? goLensCount(fixture) : fixture.entry === null ? 0 : 1,
     );
     const symbols = await vscode.commands.executeCommand(
       "vscode.executeDocumentSymbolProvider",
@@ -291,20 +360,39 @@ exports.collect = async function collect(lensesFor) {
   }
   disposable.dispose();
 
+  // poly's package.json turns golang.go's lens off by default. What the host
+  // resolves is the claim: a default for another extension's object setting
+  // is the part of this that VSCode could quietly ignore.
+  const go = vscode.workspace.getConfiguration("go");
+  const goDefault = go.inspect("enableCodeLens")?.defaultValue ?? null;
+  // Turned back on by the user, golang.go draws its own and poly must yield --
+  // or every test carries two pairs, which is what this lens set out to fix.
+  const testFile = vscode.Uri.joinPath(folder, GO_FIXTURES[0].file);
+  await go.update("enableCodeLens", { runtest: true }, vscode.ConfigurationTarget.Workspace);
+  const yielded = (await lensesFor(testFile, 0)).map((lens) => lens.command?.title ?? "(unresolved)");
+  await go.update("enableCodeLens", undefined, vscode.ConfigurationTarget.Workspace);
+
   const golangGo = vscode.extensions.getExtension("golang.go") !== undefined;
-  writeFileSync(OUT, `${JSON.stringify({ golangGo, seen }, null, 2)}\n`);
+  writeFileSync(OUT, `${JSON.stringify({ golangGo, goDefault, yielded, seen }, null, 2)}\n`);
   console.log(`run-lens: ${seen.length} fixtures opened`);
 };
 
 /** The Go test half of `check`: golang.go's pair, over exactly the runnable functions. */
-function checkGo(seen, golangGo) {
+function checkGo(seen, golangGo, goDefault, yielded) {
   const problems = [];
   // The control. With no golang.go poly draws no test lens at all, so every
   // silent function below would pass and say nothing about the signature rule.
   if (!golangGo) {
     problems.push("golang.go's stand-in is not installed, so the Go test lens was never drawn");
   }
+  if (goDefault?.runtest !== false) {
+    problems.push(`go.enableCodeLens defaults to ${JSON.stringify(goDefault)}, so golang.go draws its own lens too`);
+  }
   const titles = new Set(Object.values(GO_BUTTONS).flatMap((pair) => Object.keys(pair)));
+  const doubled = yielded.filter((title) => titles.has(title));
+  if (doubled.length > 0) {
+    problems.push(`with go.enableCodeLens.runtest on, poly still drew ${JSON.stringify(doubled)} beside golang.go's`);
+  }
   for (const fixture of GO_FIXTURES) {
     const one = seen.find((each) => each.file === fixture.file);
     if (!one) {
@@ -321,6 +409,18 @@ function checkGo(seen, golangGo) {
         problems.push(`${fixture.file} carries "${lens.title}" on a function go test would not run: ${lens.text}`);
       }
     }
+    // Everything that is not one of golang.go's buttons is the reference lens.
+    const counts = one.lenses.filter((lens) => !titles.has(lens.title));
+    for (const lens of counts) {
+      if (fixture.tests.some((test) => test.kind !== "package" && test.line === lens.text)) {
+        problems.push(`${fixture.file} carries a reference count on a test: ${lens.text}`);
+      }
+    }
+    for (const line of fixture.counted) {
+      if (!counts.some((lens) => lens.text === line)) {
+        problems.push(`${fixture.file} carries no reference count on ${line}`);
+      }
+    }
     for (const test of fixture.tests) {
       const here = buttons.filter((lens) => lens.text === test.line);
       const wanted = GO_BUTTONS[test.kind];
@@ -335,7 +435,7 @@ function checkGo(seen, golangGo) {
       // wrong one runs some other test, or none, without saying so.
       for (const lens of here) {
         const args = JSON.stringify(lens.arguments);
-        const want = JSON.stringify([{ functionName: test.name }]);
+        const want = JSON.stringify(goArguments(test));
         if (lens.command !== wanted[lens.title] || args !== want) {
           problems.push(
             `${fixture.file}: "${lens.title}" on ${test.line} runs ${lens.command} ${args}, `
@@ -350,7 +450,7 @@ function checkGo(seen, golangGo) {
 
 /** What the host saw, printed; what is wrong with it, returned. */
 exports.check = function check() {
-  const { golangGo, seen } = JSON.parse(readFileSync(OUT, "utf8"));
+  const { golangGo, goDefault, yielded, seen } = JSON.parse(readFileSync(OUT, "utf8"));
   // Read once, then taken away. A check that reads a file it did not watch
   // being written can pass on the last run's answer, which is how a gate goes
   // quietly dead: if the host ever stops calling `collect`, this throws.
@@ -453,6 +553,6 @@ exports.check = function check() {
         + `${row.said.padEnd(11)} ${row.where}`,
     );
   }
-  problems.push(...checkGo(seen, golangGo));
+  problems.push(...checkGo(seen, golangGo, goDefault, yielded));
   return problems;
 };

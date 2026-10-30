@@ -347,8 +347,7 @@ suite("poly-lsp in a real editor", () => {
   // every start -- and the one thing allowed to override it: a newer release
   // already on record that is not installed yet, which is an install that
   // failed and has to be retried at the next start rather than a week later.
-  // Both extensions ask this with their own section's numbers, so it is the
-  // whole of what poly.syntax.updateCheck.intervalDays means.
+  // It is the whole of what poly.updateCheck.intervalDays means.
   test("an update check is due by its own interval, sooner for a release not yet installed", () => {
     const day = 86_400_000;
     const now = 100 * day;
@@ -1117,8 +1116,7 @@ suite("poly-lsp in a real editor", () => {
   // around them -- the lazy bundle found beside dist/extension.js, and the
   // output landing where the save dialog said. The simple dialog turns the
   // native one into a quick input, so both prompts accept the same way: the
-  // first dialect, then the proposed path. The file is plaintext here (the
-  // host has no poly-syntax-highlight), which is the extension check's case.
+  // first dialect, then the proposed path.
   test("DBML to SQL writes the file the save dialog proposes", async () => {
     await vscode.workspace
       .getConfiguration("files")
@@ -2025,7 +2023,10 @@ suite("poly-lsp in a real editor", () => {
     const activated = (pkg.activationEvents as string[])
       .filter((event) => event.startsWith("onLanguage:"))
       .map((event) => event.slice("onLanguage:".length));
+    // Only the `[language]` sections: `go.enableCodeLens` is a plain default
+    // (golang.go's test lens off, poly's on), not a formatter claim.
     const declared = Object.keys(pkg.contributes.configurationDefaults)
+      .filter((section) => section.startsWith("["))
       .map((section) => section.slice(1, -1));
     assert.deepStrictEqual(
       activated.filter((language) => !declared.includes(language)),

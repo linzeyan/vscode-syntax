@@ -56,22 +56,6 @@ jobs:
           printf '{"name":"poly-tokdeps","private":true}\n' > /tmp/tokdeps/package.json
           pnpm --dir /tmp/tokdeps add vscode-textmate vscode-oniguruma
           node tools/tokenize-check.mjs /tmp/tokdeps/node_modules
-      # The update check is the one script here, shared with Poly's source, so
-      # the typecheck reads extensions/lsp/src as well -- through this
-      # extension's own @types, since nothing in this job installs Poly's.
-      - name: Package VSIX
-        working-directory: extensions/syntax
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm run typecheck
-          pnpm run build
-          pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository
-      # Every grammar the manifest declares is really inside the package. vsce
-      # packages what `.vscodeignore` leaves behind without reading
-      # `contributes`, so a grammar that failed to generate ships as a manifest
-      # entry pointing at nothing and the extension installs without a word.
-      - name: The package contains what the manifest declares
-        run: python3 tools/vsix-check.py extensions/syntax
 
   # release.yml publishes this image, but a Dockerfile only exercised when a
   # tag is pushed is a Dockerfile that breaks when a tag is pushed. Native

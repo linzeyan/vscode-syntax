@@ -34,7 +34,7 @@ export CARGO_PROFILE_RELEASE_LTO CARGO_PROFILE_RELEASE_CODEGEN_UNITS
 .DEFAULT_GOAL := help
 .PHONY: help build test lint notices pins config dogfood smoke e2e gates \
 	version grammars tokdeps grammar-diff grammar-fuzz grammar-corpus grammar-real editor-diff ext-diff mermaid-diff engine-diff \
-	lsp-fmt-diff ref-lens lens-probe toc-fuzz list-fuzz gutter-cache git-embed bump control clean syntax
+	lsp-fmt-diff ref-lens lens-probe toc-fuzz list-fuzz gutter-cache git-embed bump control clean
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -120,15 +120,6 @@ editor: ## Unit-test the editor features, then build and package the extension
 		pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository
 	python3 tools/vsix-check.py extensions/lsp
 
-# poly-syntax-highlight's one script, the update check it shares with Poly.
-# Packaged as well, so vsix-check sees the bundle `main` points at: the
-# grammars alone never needed a build, and a VSIX without it installs fine
-# and checks for nothing.
-syntax: ## Typecheck, build and package poly-syntax-highlight
-	cd extensions/syntax && pnpm install --frozen-lockfile && pnpm run typecheck && pnpm run build && \
-		pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository
-	python3 tools/vsix-check.py extensions/syntax
-
 # A gate and not an audit, unlike the *-diff targets: it asserts about poly
 # alone, and the only real provider it asks -- TypeScript's -- ships inside the
 # editor, so there is nothing to download but VSCode itself, which `e2e` already
@@ -193,8 +184,10 @@ git-embed: ## Git History reads the same through poly git as through git
 # pinned grammar, which needs the network and a token; what stays here is
 # everything downstream of that -- and it is where the failures actually are.
 # This target exists because it was missing: a hand edit to the generated
-# extensions/syntax/package.json passed a full green `make gates` twice and
-# failed in CI twice, which made this file's opening claim untrue.
+# grammar manifest (then extensions/syntax/package.json, now the languages,
+# grammars and snippets in extensions/lsp/package.json) passed a full green
+# `make gates` twice and failed in CI twice, which made this file's opening
+# claim untrue.
 #
 # The tokenizer deps go to /tmp rather than into the repo: they are two
 # packages this repo does not otherwise depend on, and pnpm has them cached
@@ -395,7 +388,7 @@ version: build ## Check every version string agrees, binary included
 # grammars, then extensions. CI runs them in parallel and a developer cannot, so
 # this is the serial reading of the same list rather than the same order; what
 # still holds is that a failure here lands on the gate CI would name.
-gates: lint test notices pins config nls smoke dogfood version lens-probe go tf rust deadcode grammars e2e editor syntax ref-lens gutter-cache git-embed toc-fuzz list-fuzz ## Everything above, grouped as CI's jobs are
+gates: lint test notices pins config nls smoke dogfood version lens-probe go tf rust deadcode grammars e2e editor ref-lens gutter-cache git-embed toc-fuzz list-fuzz ## Everything above, grouped as CI's jobs are
 	@echo "all gates passed"
 
 # make bump VERSION=0.8.0

@@ -26,7 +26,7 @@ import pathlib
 import re
 import sys
 
-EXTENSIONS = ("lsp", "syntax")
+EXTENSIONS = ("lsp",)
 
 # `%key%` and nothing else: a percent sign inside prose (`50% of`) has to stay
 # prose, so the whole value has to be the reference. That is also how VSCode

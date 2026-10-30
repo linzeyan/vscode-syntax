@@ -58,8 +58,8 @@ import { toolsEnv } from "./toolsEnv";
 const JEBBS = "jebbs.plantuml";
 
 /**
- * PlantUML files by name as well as by id: the id comes from
- * poly-syntax-highlight, and poly-lsp has to work installed on its own.
+ * PlantUML files by name as well as by id: the id used to come from a separate
+ * extension, poly-syntax-highlight, which poly-lsp now contains.
  */
 const EXTENSIONS = /\.(wsd|pu|puml|plantuml|iuml)$/i;
 const PATTERN = "**/*.{wsd,pu,puml,plantuml,iuml}";

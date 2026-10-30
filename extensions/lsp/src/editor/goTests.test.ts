@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { goTests } from "./goTests";
+import { goPackageLine, goTests } from "./goTests";
 
 /** What `go test` would run in `body`, by name, in a test file. */
 const found = (body: string, imports = `import "testing"\n`): string[] =>
@@ -181,4 +181,42 @@ test("the lens line is the func keyword's", () => {
   // A raw string's lines count too.
   const raw = "package x\n\nimport \"testing\"\n\nvar s = `\n\n\n`\n\nfunc TestFoo(t *testing.T) {}\n";
   assert.deepEqual(goTests("x_test.go", raw).map((one) => one.line), [9]);
+});
+
+test("a subtest is a Run call on the test's own parameter", () => {
+  // golang.go draws its own pair over each of these; with its lens off, these
+  // are the only buttons that run one subtest rather than the whole test.
+  const text = [
+    "package x",
+    "",
+    "import \"testing\"",
+    "",
+    "func TestFoo(tt *testing.T) {",
+    "\ttt.Run(\"first case\", func(tt *testing.T) {})",
+    "\tt.Run(\"not its parameter\", nil)",
+    "\ttt.Run(name, nil)",
+    "\ttt.Run(\"esc\\\"aped\", nil)",
+    "}",
+    "",
+    "func TestBar(t *testing.T) {",
+    "\tt.Run(\"second\", nil)",
+    "}",
+    "",
+    "func TestBlank(_ *testing.T) {}",
+    "",
+    "func BenchmarkFoo(b *testing.B) {",
+    "\tb.Run(\"size\", nil)",
+    "}",
+    "",
+  ].join("\n");
+  assert.deepEqual(
+    goTests("x_test.go", text).map((one) => [one.name, one.subtests.map((sub) => [sub.name, sub.line])]),
+    [["TestFoo", [["first case", 5]]], ["TestBar", [["second", 12]]], ["TestBlank", []], ["BenchmarkFoo", []]],
+  );
+});
+
+test("the package lens sits on the package clause, past any header comment", () => {
+  assert.equal(goPackageLine("// Copyright\n/* package fake */\n\npackage x\n"), 3);
+  assert.equal(goPackageLine("package x\n"), 0);
+  assert.equal(goPackageLine("func x() {}\n"), undefined);
 });

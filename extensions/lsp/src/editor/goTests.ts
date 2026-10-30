@@ -23,6 +23,13 @@ export interface GoTest {
   readonly kind: GoTestKind;
   /** Zero-based line of the `func` keyword, where golang.go draws its lens. */
   readonly line: number;
+  /** The `t.Run("name", ...)` calls in a test's body, which golang.go also gives a pair. */
+  readonly subtests: readonly GoSubtest[];
+}
+
+export interface GoSubtest {
+  readonly name: string;
+  readonly line: number;
 }
 
 /** Prefix, and the `testing` type its one parameter must point to. */
@@ -50,11 +57,11 @@ interface Token {
 const LEX =
   /(\s+|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|([\p{L}_][\p{L}\p{Decimal_Number}_]*)|("(?:[^"\\\n]|\\.)*"?|`[^`]*`?|'(?:[^'\\\n]|\\.)*'?)|([0-9][\w.]*|[\s\S])/uy;
 
-function tokenize(text: string): Token[] {
+function tokenize(text: string, limit = Infinity): Token[] {
   const tokens: Token[] = [];
   let line = 0;
   LEX.lastIndex = 0;
-  for (let m = LEX.exec(text); m && m[0] !== ""; m = LEX.exec(text)) {
+  for (let m = LEX.exec(text); m && m[0] !== "" && tokens.length < limit; m = LEX.exec(text)) {
     if (m[2] !== undefined) {
       tokens.push({ text: m[2], kind: "ident", line });
     } else if (m[3] !== undefined) {
@@ -136,6 +143,48 @@ function pointsTo(group: readonly Token[], want: string, testing: Testing): bool
   return testing.dot && text.length === 2 && text[0] === "*" && text[1] === want;
 }
 
+/** The index just past the `}` that closes the `{` at `at`, or the end of an unclosed body. */
+function bodyEnd(tokens: readonly Token[], at: number): number {
+  let depth = 0;
+  for (let i = at; i < tokens.length; i++) {
+    if (tokens[i].kind !== "other") continue;
+    if (tokens[i].text === "{") depth++;
+    else if (tokens[i].text === "}" && --depth === 0) return i + 1;
+  }
+  return tokens.length;
+}
+
+/**
+ * `<param>.Run("name",` in a test's body, as golang.go finds subtests.
+ *
+ * golang.go matches `t.Run("` by text whatever the parameter is called; this
+ * follows the parameter's own name instead, so `tt.Run` in `func TestX(tt
+ * *testing.T)` is found and an unrelated `t.Run` is not. An unnamed or blank
+ * parameter cannot call Run, so it has none. A name with an escape in it is
+ * left out: golang.go's pattern stops at the first quote, so it never had one.
+ */
+function subtests(tokens: readonly Token[], from: number, to: number, param: string | undefined): GoSubtest[] {
+  if (param === undefined || param === "_") return [];
+  const found: GoSubtest[] = [];
+  for (let i = from; i + 5 < to; i++) {
+    const [name, dot, run, open, label, comma] = tokens.slice(i, i + 6);
+    if (
+      name.kind === "ident" && name.text === param && dot.text === "." && run.text === "Run" && open.text === "("
+      && label.kind === "string" && /^"[^"\\]+"$/.test(label.text) && comma.text === ","
+    ) {
+      found.push({ name: label.text.slice(1, -1), line: name.line });
+    }
+  }
+  return found;
+}
+
+/** Zero-based line of the `package` clause, where golang.go draws its package and file lens. */
+export function goPackageLine(text: string): number | undefined {
+  // Comments are not tokens, so a well-formed file's first token is the clause.
+  const [first] = tokenize(text, 1);
+  return first?.text === "package" ? first.line : undefined;
+}
+
 /** `name` is `prefix`, or `prefix` and then anything but a lower-case letter. */
 function hasPrefix(name: string, prefix: string): boolean {
   return name.startsWith(prefix) && !/^\p{Ll}/u.test(name.slice(prefix.length));
@@ -148,7 +197,7 @@ export function goTests(fileName: string, text: string): GoTest[] {
   }
   const tokens = tokenize(text);
   const testing: Testing = { qualifiers: new Set(), dot: false };
-  const candidates: { name: string; line: number; params: Token[][] }[] = [];
+  const candidates: { name: string; line: number; params: Token[][]; body: [number, number] }[] = [];
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
@@ -176,18 +225,20 @@ export function goTests(fileName: string, text: string): GoTest[] {
     const [params, after] = list;
     // Straight into the body: anything else between `)` and `{` is a result.
     if (tokens[after]?.text !== "{") continue;
-    candidates.push({ name: name.text, line: token.line, params });
+    candidates.push({ name: name.text, line: token.line, params, body: [after, bodyEnd(tokens, after)] });
   }
 
   const found: GoTest[] = [];
-  for (const { name, line, params } of candidates) {
+  for (const { name, line, params, body } of candidates) {
     for (const [kind, prefix, want] of KINDS) {
       if (!hasPrefix(name, prefix)) continue;
       const fits = want === undefined
         ? params.length === 0
         : params.length === 1 && pointsTo(params[0], want, testing);
       if (fits) {
-        found.push({ name, kind, line });
+        // Named, its name comes before the type's `*` (see `pointsTo`).
+        const param = kind === "test" && params[0][0].kind === "ident" ? params[0][0].text : undefined;
+        found.push({ name, kind, line, subtests: subtests(tokens, body[0], body[1], param) });
       }
       break;
     }

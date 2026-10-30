@@ -26,7 +26,7 @@ The above covers poly's own code. Bundled third-party grammars and Rust
 dependencies keep their upstream licenses; the complete list, with the pinned
 version and license of every one, is generated into:
 
-  extensions/syntax/THIRD-PARTY-NOTICES.md   (grammars)
-  extensions/lsp/THIRD-PARTY-NOTICES.md     (crates)
+  extensions/lsp/THIRD-PARTY-NOTICES-grammars.md   (grammars)
+  extensions/lsp/THIRD-PARTY-NOTICES.md            (crates)
 
-Both ship inside their VSIX and are attached to every GitHub release.
+Both ship inside the poly-lsp VSIX and are attached to every GitHub release.

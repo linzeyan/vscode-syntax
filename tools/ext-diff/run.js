@@ -44,7 +44,6 @@ const { pathToFileURL } = require("node:url");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
-const SYNTAX = join(ROOT, "extensions", "syntax");
 const CACHE = join(LSP, ".vscode-test");
 const { runTests } = require(join(LSP, "node_modules", "@vscode", "test-electron"));
 const { render } = require("./report");
@@ -52,7 +51,7 @@ const { render } = require("./report");
 /** In the order they were written, which is also the order they are cheapest. */
 const SETS = ["unicode", "format", "refview"].map((id) => require(`./sets/${id}.js`));
 
-const POLY_IDS = ["ricky.poly-lsp", "ricky.poly-syntax-highlight"];
+const POLY_IDS = ["ricky.poly-lsp"];
 
 /**
  * Keyed by checkout, for the reason ref-lens-check/runnable.js gives: two
@@ -320,7 +319,7 @@ async function main() {
       let failure;
       try {
         await runTests({
-          extensionDevelopmentPath: side === "poly" ? [LSP, SYNTAX] : [harness()],
+          extensionDevelopmentPath: side === "poly" ? [LSP] : [harness()],
           extensionTestsPath: resolve(__dirname, "suite.js"),
           extensionTestsEnv: {
             POLY_EXT_DIFF_SET: set.id,

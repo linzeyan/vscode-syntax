@@ -17,18 +17,6 @@
 const { writeFileSync } = require("node:fs");
 const { basename, join, resolve } = require("node:path");
 
-/**
- * poly-syntax, loaded beside poly-lsp in the same host.
- *
- * Measured 2026-09-21: a bare VSCode has no `protobuf` language id at all --
- * a .proto opens as `plaintext` and `setTextDocumentLanguage` throws `Unknown
- * language id: protobuf`. poly's lens is registered for `protobuf`, so without
- * this the provider is never asked and every assertion below would be testing
- * silence. It is also the honest arrangement: poly-syntax is where a user's
- * .proto gets that id too.
- */
-exports.SYNTAX = resolve(__dirname, "..", "..", "extensions", "syntax");
-
 /** One of each declaration the lens has an opinion about, and two it must not. */
 const PROTO = `syntax = "proto3";
 

@@ -245,7 +245,7 @@ exports.checkNavigate = function checkNavigate(navigate) {
   for (const [file, lines] of Object.entries(EXPECTED)) {
     const language = (observed ?? []).find((one) => one.file === file)?.language;
     // Named apart from a missing lens, because the fix is somewhere else
-    // entirely: poly-syntax's manifest, not the daemon.
+    // entirely: the manifest's languages (grammars/sources.json), not the daemon.
     if (language && language !== languageOf(file)) {
       problems.push(`${file} opened as ${language}, so poly's registration never applied to it`);
     }

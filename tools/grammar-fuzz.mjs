@@ -35,7 +35,7 @@ const SEED = flag("--seed", 20260920);
 const ROUNDS = flag("--rounds", 24);
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const EXT = join(ROOT, "extensions", "syntax");
+const EXT = join(ROOT, "extensions", "lsp");
 const FIXTURES = join(ROOT, "grammars", "fixtures");
 const CACHE = join(ROOT, "extensions", "lsp", ".vscode-test");
 
@@ -163,6 +163,10 @@ function side(manifests) {
 
 const polyPkg = JSON.parse(readFileSync(join(EXT, "package.json"), "utf8"));
 const poly = side([{ dir: EXT, pkg: polyPkg }]);
+// The synced grammars. poly-lsp's manifest also carries Code Runner's output
+// grammar, which is poly's own and sits in dist/, built only with the rest of
+// the extension -- not what this fuzzes.
+const synced = polyPkg.contributes.grammars.filter((grammar) => grammar.path.startsWith("./syntaxes/"));
 
 const BUILTIN = builtinRoot();
 const builtinManifests = [];
@@ -365,7 +369,7 @@ let alone = 0;
 let tokenizedLines = 0;
 let derivedFrom = 0;
 
-for (const entry of polyPkg.contributes.grammars) {
+for (const entry of synced) {
   const mine = await poly.registry.loadGrammar(entry.scopeName);
   if (!mine) {
     problems.push(`${entry.scopeName}: declared in the manifest and not loadable`);
@@ -436,16 +440,16 @@ for (const entry of polyPkg.contributes.grammars) {
 // with no escaped punctuation is ordinary -- `source.csv` has none -- but a
 // corpus that quietly shrank back to the fixed list for everything would still
 // pass while having stopped asking the question.
-if (derivedFrom < polyPkg.contributes.grammars.length / 2) {
+if (derivedFrom < synced.length / 2) {
   problems.push(
-    `only ${derivedFrom} of ${polyPkg.contributes.grammars.length} grammars yielded any punctuation `
+    `only ${derivedFrom} of ${synced.length} grammars yielded any punctuation `
       + "of their own, so the corpus is no longer derived from what the grammars match",
   );
 }
 
 slow.sort((a, b) => b.ours - a.ours);
 console.log(
-  `\n${polyPkg.contributes.grammars.length} grammars, ${compared} compared against a built-in of the `
+  `\n${synced.length} grammars, ${compared} compared against a built-in of the `
     + `same name, ${alone} with none, ${tokenizedLines} lines each side, seed ${SEED}`,
 );
 console.log("\nslowest single line, poly against the built-in:");

@@ -21,7 +21,7 @@ extensions/lsp/out/
 # output grammar and licence are copies from src/editor/codeRunner. Error Lens
 # is usernamehw.errorlens's source in src/editor/errorLens, bundled. The
 # Toolbox's page is transform's release, 17 MB of it the wasm, and its editor
-# commands' engine that wasm's glue.
+# commands' engine that wasm's glue. Paste as Types is 1 MB of quicktype-core.
 extensions/lsp/dist/dbml.js
 extensions/lsp/dist/chinese.js
 extensions/lsp/dist/opencc-js/
@@ -42,6 +42,7 @@ extensions/lsp/dist/code-runner/
 extensions/lsp/dist/errorLens/
 extensions/lsp/dist/transform/
 extensions/lsp/dist/transformEngine.js
+extensions/lsp/dist/quicktype.js
 extensions/lsp/.vscode-test/
 # tools/*.py are scripts, never imported -- except that engine-diff's own
 # self-test imports it to tamper with its EXPECTED table, and that writes here.

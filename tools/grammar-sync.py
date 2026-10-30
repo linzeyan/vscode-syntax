@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Grammar sync pipeline: grammars/sources.json -> extensions/syntax/.
+"""Grammar sync pipeline: grammars/sources.json -> extensions/lsp/.
 
 - Downloads each grammar pinned to a per-repo commit sha (grammars/sources.lock.json);
   --update refreshes pins to upstream HEAD.
@@ -8,8 +8,10 @@
 - Copies the snippets an entry lists from the same pinned commit.
 - Copies each source's license files at the same commit into licenses/.
 - Regenerates package.json `contributes.languages/grammars/snippets` and
-  THIRD-PARTY-NOTICES.md from sources.json, so sources.json is the single
-  source of truth.
+  THIRD-PARTY-NOTICES-grammars.md from sources.json, so sources.json is the
+  single source of truth. The rest of poly-lsp's manifest is hand-written and
+  left alone; the language and grammar entries poly-lsp adds itself are in
+  sources.json's `extension` block for the same reason.
 
 Usage: tools/grammar-sync.py [--update] [--only id,id,...]
 """
@@ -31,7 +33,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "grammars" / "sources.json"
 LOCK = ROOT / "grammars" / "sources.lock.json"
-EXT = ROOT / "extensions" / "syntax"
+EXT = ROOT / "extensions" / "lsp"
+NOTICES = EXT / "THIRD-PARTY-NOTICES-grammars.md"
 SNIPPETS = EXT / "snippets"
 SYNTAXES = EXT / "syntaxes"
 UA = {"User-Agent": "poly-grammar-sync"}
@@ -367,6 +370,12 @@ def build_contributes(sources: dict, lock: dict) -> tuple[list, list]:
                 if value:
                     g[key] = value
             grammars.append(g)
+    # poly-lsp's own entries, verbatim: associations the grammars do not make
+    # and a grammar that is not a language's. Last, so a generated entry for
+    # the same id comes first, as it did when the two were separate manifests.
+    own = sources.get("extension", {})
+    languages += own.get("languages", [])
+    grammars += own.get("grammars", [])
     return languages, grammars
 
 
@@ -505,7 +514,7 @@ def license_texts(sources: dict, lock: dict) -> list[str]:
 
 def build_notices(sources: dict, lock: dict) -> str:
     lines = [
-        "# Third-party notices — poly-syntax-highlight",
+        "# Third-party notices — Poly grammars",
         "",
         "Bundled grammars retain their upstream licenses. Sources are pinned in",
         "grammars/sources.lock.json. Each source's license texts, taken at the",
@@ -591,8 +600,8 @@ def check_generated() -> int:
     CI runs the whole sync and diffs, which needs the network and a token. This
     asks the offline half of the same question: everything downstream of the
     fetch. It catches the failure that a full sync catches and nothing else
-    does -- somebody hand-editing extensions/syntax/package.json, which is a
-    generated file that looks exactly like a hand-written one.
+    does -- somebody hand-editing the grammar half of extensions/lsp/package.json,
+    which is generated and looks exactly like the hand-written rest.
 
     Not a replacement for the CI job: it cannot notice that an upstream grammar
     moved, because it never asks upstream. It is the part a developer can run.
@@ -612,9 +621,9 @@ def check_generated() -> int:
                 pkg["contributes"].get("snippets", []),
             ),
             (
-                "THIRD-PARTY-NOTICES.md",
+                NOTICES.name,
                 build_notices(sources, lock),
-                (EXT / "THIRD-PARTY-NOTICES.md").read_text(encoding="utf-8"),
+                NOTICES.read_text(encoding="utf-8"),
             ),
         )
         if generated != committed
@@ -819,9 +828,7 @@ def main() -> int:
     pkg["contributes"]["grammars"] = grammars
     pkg["contributes"]["snippets"] = build_snippets(sources)
     write_json(pkg_path, pkg)
-    (EXT / "THIRD-PARTY-NOTICES.md").write_text(
-        build_notices(sources, lock), encoding="utf-8"
-    )
+    NOTICES.write_text(build_notices(sources, lock), encoding="utf-8")
 
     print(f"\nlanguages: {len(languages)} contributed, grammars: {len(grammars)} files")
     return 0

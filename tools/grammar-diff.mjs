@@ -28,7 +28,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const NM = process.argv[2];
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const EXT = join(ROOT, "extensions", "syntax");
+const EXT = join(ROOT, "extensions", "lsp");
 const FIXTURES = join(ROOT, "grammars", "fixtures");
 const EDGE = join(FIXTURES, "edge");
 const BUILTIN = process.argv[3] || "/Applications/Visual Studio Code.app/Contents/Resources/app/extensions";
