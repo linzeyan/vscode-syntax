@@ -15,6 +15,7 @@ Skips loudly when the Go toolchain is absent; fails otherwise.
 import json
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,11 @@ import threading
 import time
 
 BIN = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "cli/target/release/poly")
+
+# `path:line:col: level [tool/rule] message`. poly's own notes share stderr and a
+# bracket (`[poly] downloading tflint ...` the first time a pin moves), so anything
+# looser counts the download as a finding.
+DIAGNOSTIC = re.compile(r"^\S+:\d+:\d+: \w+ \[([^/\]]+)/")
 
 # gofmt leaves a blank line at the top of a block alone; gofumpt removes it.
 # Chosen for exactly that: a fixture both tools rewrite would pass even if poly
@@ -359,9 +365,7 @@ def editor_and_cli_agree():
     )
     _, output = poly("check", ".", cwd=root)
     from_check = {
-        line.split("[", 1)[1].split("/", 1)[0]
-        for line in output.splitlines()
-        if "] " in line and "[" in line
+        match[1] for match in map(DIAGNOSTIC.match, output.splitlines()) if match
     }
     in_editor, still_there = editor_diagnostics(root, "main.go", text)
     shutil.rmtree(root, ignore_errors=True)

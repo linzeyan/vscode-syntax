@@ -26,6 +26,7 @@ Usage: tools/tf-acceptance.py [path-to-poly-binary]
 import json
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,11 @@ import threading
 import time
 
 BIN = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "cli/target/release/poly")
+
+# `path:line:col: level [tool/rule] message`. poly's own notes share stderr and a
+# bracket (`[poly] downloading tflint ...` the first time a pin moves), so anything
+# looser counts the download as a finding.
+DIAGNOSTIC = re.compile(r"^\S+:\d+:\d+: \w+ \[([^/\]]+)/")
 
 # Three default rules from tflint's bundled Terraform ruleset, which needs
 # neither `tflint --init` nor `terraform init` — the same thing `poly check`
@@ -206,9 +212,7 @@ def editor_and_cli_agree():
     root = fixture("poly-tf-a4-", {"main.tf": UNUSED_VARIABLE})
     output = poly("check", ".", cwd=root)
     from_check = {
-        line.split("[", 1)[1].split("/", 1)[0]
-        for line in output.splitlines()
-        if "] " in line and "[" in line
+        match[1] for match in map(DIAGNOSTIC.match, output.splitlines()) if match
     }
     final = published(root, ["main.tf"])
     in_editor = final.get(f"file://{root}/main.tf", set())
