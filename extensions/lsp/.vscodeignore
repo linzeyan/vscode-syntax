@@ -9,5 +9,7 @@ tsconfig*.json
 pnpm-lock.yaml
 pnpm-workspace.yaml
 *.vsix
+# The icon's source; the manifest names the PNG rendered from it.
+media/icon.svg
 out/**
 .vscode-test/**

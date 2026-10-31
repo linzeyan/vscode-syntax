@@ -5,6 +5,7 @@
   "version": "0.21.1",
   "publisher": "ricky",
   "license": "MIT",
+  "icon": "./media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },

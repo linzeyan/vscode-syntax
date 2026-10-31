@@ -1,0 +1,35 @@
+<!--
+  poly's extension icon. A pointy-top hexagon is the bowl of a lowercase "p"
+  and its left edge, carried down, is the descender: the polygon in the name.
+  The cube inside is that hexagon read as three faces. The glyph sits 2 units
+  right of centre because the descender puts its weight on the left.
+
+  The marketplace takes PNG only, so media/icon.png is rendered from this:
+    rsvg-convert -w 256 -h 256 media/icon.svg -o media/icon.png
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06B6D4" />
+      <stop offset=".6" stop-color="#4F46E5" />
+      <stop offset="1" stop-color="#7C3AED" />
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#tile)" />
+  <rect x="8.75"
+    y="8.75"
+    width="238.5"
+    height="238.5"
+    rx="55.25"
+    fill="none"
+    stroke="#fff"
+    stroke-opacity=".08"
+    stroke-width="1.5" />
+  <path d="M82.4,85.2 L130,57.8 L177.6,85.2 L130,112.8 Z" fill="#fff" fill-opacity=".26" />
+  <path d="M82.4,85.2 L130,112.8 L130,167.8 L82.4,140.2 Z" fill="#fff" fill-opacity=".13" />
+  <path d="M130,112.8 L177.6,85.2 L177.6,140.2 L130,167.8 Z" fill="#fff" fill-opacity=".04" />
+  <g fill="none" stroke="#fff" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M130,57.8 L177.6,85.2 L177.6,140.2 L130,167.8 L82.4,140.2 L82.4,85.2 Z" />
+    <path d="M82.4,85.2 L82.4,198.2" />
+  </g>
+</svg>
