@@ -1096,10 +1096,8 @@ fn unpack(body: &[u8], kind: Kind, name: &str, tmp: &Path) -> Result<()> {
                     file.map(|f| {
                         let base = f
                             .name()
-                            .rsplit(['/', '\\'])
-                            .next()
-                            .unwrap_or("")
-                            .to_string();
+                            .map(|n| n.rsplit(['/', '\\']).next().unwrap_or("").to_string())
+                            .unwrap_or_default();
                         exe_names.contains(&base)
                     })
                     .unwrap_or(false)

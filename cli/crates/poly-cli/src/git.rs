@@ -992,7 +992,8 @@ fn on_disk(
     workdir: &Path,
     path: &BStr,
 ) -> Result<Option<(ObjectId, EntryKind)>> {
-    let file = workdir.join(gix::path::from_bstr(path));
+    let relative = gix::path::from_bstr(path)?;
+    let file = workdir.join(&relative);
     let Ok(meta) = std::fs::symlink_metadata(&file) else {
         return Ok(None);
     };
@@ -1009,17 +1010,13 @@ fn on_disk(
     if meta.file_type().is_symlink() {
         let target = std::fs::read_link(&file)?;
         let id = repo
-            .write_blob(gix::path::into_bstr(target).as_ref())?
+            .write_blob(gix::path::into_bstr(target)?.as_ref())?
             .detach();
         return Ok(Some((id, EntryKind::Link)));
     }
     let mut data = Vec::new();
     let mut converted = pipeline
-        .convert_to_git(
-            std::fs::File::open(&file)?,
-            gix::path::from_bstr(path).as_ref(),
-            index,
-        )
+        .convert_to_git(std::fs::File::open(&file)?, &relative, index)
         .map_err(|error| anyhow!("{error:?}"))?;
     std::io::Read::read_to_end(&mut converted, &mut data)?;
     let id = repo.write_blob(&data)?.detach();

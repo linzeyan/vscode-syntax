@@ -75,10 +75,10 @@ full_moon = "2.2"
 # rather than libgit2: pure Rust, so the six release targets cross-compile with
 # no C or OpenSSL, and MIT/Apache rather than GPL-with-exception. Reads only --
 # no network, no worktree mutation -- so none of the transport features.
-gix = { version = "0.88", default-features = false, features = [
+gix = { version = "0.90", default-features = false, features = [
   "anyhow",
   "basic",
-  "max-performance-safe",
+  "max-performance",
   "sha1",
   "status",
 ] }

@@ -218,58 +218,58 @@ published from.
 - getrandom 0.3.4 (MIT OR Apache-2.0) — https://github.com/rust-random/getrandom
 - getrandom 0.4.3 (MIT OR Apache-2.0) — https://github.com/rust-random/getrandom
 - gimli 0.32.3 (MIT OR Apache-2.0) — https://github.com/gimli-rs/gimli
-- gix 0.88.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-actor 0.43.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-attributes 0.36.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-bitmap 0.5.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-chunk 0.9.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-command 0.11.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-commitgraph 0.40.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-config 0.61.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-config-value 0.20.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-date 0.17.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-diff 0.68.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-dir 0.30.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-discover 0.56.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-error 0.4.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-features 0.50.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-filter 0.35.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-fs 0.23.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-glob 0.28.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-hash 0.27.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-hashtable 0.17.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-ignore 0.23.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-imara-diff 0.3.0 (Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-index 0.56.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-lock 25.0.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix 0.90.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-actor 0.44.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-attributes 0.37.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-bitmap 0.6.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-chunk 0.10.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-command 0.12.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-commitgraph 0.42.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-config 0.62.2 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-config-value 0.21.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-date 0.18.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-diff 0.70.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-dir 0.32.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-discover 0.57.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-error 0.5.2 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-filter 0.36.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-fs 0.24.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-glob 0.29.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-hash 0.28.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-hashtable 0.18.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-ignore 0.24.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-imara-diff 0.3.3 (Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-index 0.58.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-lock 26.0.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
 - gix-macros 0.2.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-note 0.2.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-object 0.65.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-odb 0.85.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-pack 0.75.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-packetline 0.23.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-path 0.13.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-pathspec 0.21.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-protocol 0.66.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-quote 0.9.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-ref 0.68.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-refspec 0.46.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-revision 0.50.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-revwalk 0.36.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-sec 0.15.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-shallow 0.14.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-status 0.35.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-submodule 0.35.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-tempfile 25.0.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-trace 0.2.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-transport 0.60.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-traverse 0.62.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-url 0.39.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-utils 0.4.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-validate 0.12.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-worktree 0.57.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-worktree-stream 0.37.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
-- gix-zlib 0.2.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-note 0.3.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-object 0.66.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-odb 0.87.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-pack 0.77.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-packetline 0.24.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-parallel 0.50.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-path 0.14.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-pathspec 0.22.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-protocol 0.68.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-quote 0.10.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-ref 0.69.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-refspec 0.47.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-revision 0.52.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-revwalk 0.38.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-sec 0.16.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-shallow 0.15.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-status 0.37.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-submodule 0.36.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-tempfile 26.0.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-trace 0.3.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-transport 0.62.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-traverse 0.64.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-url 0.40.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-utils 0.5.2 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-validate 0.13.1 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-worktree 0.59.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-worktree-stream 0.39.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
+- gix-zlib 0.4.0 (MIT OR Apache-2.0) — https://github.com/GitoxideLabs/gitoxide
 - glob 0.3.4 (MIT OR Apache-2.0) — https://github.com/rust-lang/glob
 - globset 0.4.20 (Unlicense OR MIT) — https://github.com/BurntSushi/ripgrep/tree/master/crates/globset
 - hash32 0.3.1 (MIT OR Apache-2.0) — https://github.com/japaric/hash32
@@ -387,6 +387,7 @@ published from.
 - natord 1.0.9 (MIT) — https://github.com/lifthrasiir/rust-natord
 - new_debug_unreachable 1.0.6 (MIT) — https://github.com/mbrubeck/rust-debug-unreachable
 - newtype-uuid 1.4.0 (MIT OR Apache-2.0) — https://github.com/oxidecomputer/newtype-uuid
+- nix 0.31.3 (MIT) — https://github.com/nix-rust/nix
 - nohash-hasher 0.2.0 (Apache-2.0 OR MIT) — https://github.com/paritytech/nohash-hasher
 - nonempty 0.12.0 (MIT) — https://github.com/cloudhead/nonempty
 - nonmax 0.5.5 (MIT OR Apache-2.0) — https://github.com/LPGhatguy/nonmax
@@ -717,6 +718,7 @@ published from.
 - typed-builder 0.21.2 (MIT OR Apache-2.0) — https://github.com/idanarye/rust-typed-builder
 - typed-builder-macro 0.21.2 (MIT OR Apache-2.0) — https://github.com/idanarye/rust-typed-builder
 - typed-path 0.12.3 (MIT OR Apache-2.0) — https://github.com/chipsenkbeil/typed-path
+- typed-path 0.13.0 (MIT OR Apache-2.0) — https://github.com/chipsenkbeil/typed-path
 - typeid 1.0.3 (MIT OR Apache-2.0) — https://github.com/dtolnay/typeid
 - typenum 1.20.1 (MIT OR Apache-2.0) — https://github.com/paholg/typenum
 - typos 0.10.44 (MIT OR Apache-2.0) — https://github.com/crate-ci/typos
@@ -840,6 +842,7 @@ published from.
 - zerovec 0.11.8 (Unicode-3.0) — https://github.com/unicode-org/icu4x
 - zerovec-derive 0.11.6 (Unicode-3.0) — https://github.com/unicode-org/icu4x
 - zip 8.6.0 (MIT) — https://github.com/zip-rs/zip2
+- zip 9.1.3 (MIT) — https://github.com/zip-rs/zip2
 - zlib-rs 0.6.7 (Zlib) — https://github.com/trifectatechfoundation/zlib-rs
 - zmij 1.0.23 (MIT) — https://github.com/dtolnay/zmij
 - zopfli 0.8.3 (Apache-2.0) — https://github.com/zopfli-rs/zopfli
@@ -905,7 +908,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### addr2line 0.25.1, ahash 0.7.8, ahash 0.8.12, arc-swap 1.9.2, arrayvec 0.7.8, autocfg 1.5.1, backtrace 0.3.76, base64 0.22.1, base64 0.23.1, bit-set 0.8.0, bit-vec 0.8.0, bitflags 1.3.2, bitflags 2.13.1, block-buffer 0.10.4, bstr 1.13.1, bumpalo 3.19.0, bytes-str 0.2.8, camino 1.2.5, cc 1.4.4, cfg-if 1.0.4, chacha20 0.10.1, clap 3.2.25, clap_derive 3.2.25, clap_lex 0.2.4, codespan 0.11.1, codespan-reporting 0.11.1, codespan-reporting 0.13.1, common-path 1.0.0, content_inspector 0.2.4, countme 3.0.1, cpufeatures 0.2.17, cpufeatures 0.3.0, crossbeam-channel 0.5.16, crossbeam-deque 0.8.7, crossbeam-epoch 0.9.20, crossbeam-queue 0.3.13, crossbeam-utils 0.8.22, crypto-common 0.1.7, data-url 0.1.1, data-url 0.3.2, debugid 0.8.0, defmt 0.3.100, defmt 1.1.1, defmt-macros 1.1.1, defmt-parser 1.0.0, derive-where 1.6.1, digest 0.10.7, displaydoc 0.2.7, drop_bomb 0.1.5, ec4rs 1.2.0, either 1.18.0, embedded-io 0.4.0, embedded-io 0.6.1, encode_unicode 1.0.0, encoding_rs 0.8.35, equivalent 1.0.2, errno 0.3.14, fastrand 2.5.0, filetime 0.2.29, find-msvc-tools 0.1.11, flate2 1.1.9, fnv 1.0.7, form_urlencoded 1.2.2, fraction 0.17.0, getopts 0.2.24, gimli 0.32.3, gix-imara-diff 0.3.0, glob 0.3.4, hash32 0.3.1, hashbrown 0.12.3, hashbrown 0.14.5, hashbrown 0.15.5, hashbrown 0.16.1, hashbrown 0.17.1, hashlink 0.12.1, heapless 0.8.0, heck 0.4.1, heck 0.5.0, hermit-abi 0.1.19, hermit-abi 0.5.3, hipstr 0.6.0, hstr 3.0.6, httparse 1.10.1, id-arena 2.3.0, idna 1.1.0, idna_adapter 1.2.2, if_chain 1.0.3, indexmap 1.9.3, indexmap 2.14.0, intrusive-collections 0.10.3, is-macro 0.3.8, itertools 0.10.5, itertools 0.13.0, itertools 0.14.0, itertools 0.15.0, js-sys 0.3.104, lazy_static 1.5.0, linux-raw-sys 0.12.1, lock_api 0.4.14, log 0.4.34, miette 7.6.0, nohash-hasher 0.2.0, ntapi 0.4.3, num 0.4.3, num-bigint 0.4.8, num-complex 0.4.6, num-integer 0.1.47, num-iter 0.1.46, num-rational 0.4.2, num-traits 0.2.19, num_cpus 1.17.0, object 0.37.3, object 0.39.1, once_cell 1.21.4, ordermap 1.2.0, oxc-miette 2.7.1, par-core 2.0.0, parking_lot 0.12.5, parking_lot_core 0.9.12, percent-encoding 2.3.2, postcard 1.1.3, profiling 1.0.18, profiling-procmacros 1.0.18, prost 0.14.4, prost-derive 0.14.4, prost-types 0.14.4, protox-parse 0.9.0, psm 0.1.32, quick-junit 0.6.1, rayon 1.12.0, rayon-core 1.13.0, regex 1.13.1, regex-automata 0.4.18, regex-syntax 0.8.11, rowan 0.16.1, rustc-demangle 0.1.28, rustc-hash 1.1.0, rustc_version 0.4.1, rustix 1.1.4, rustls 0.23.46, salsa 0.28.2, salsa-macro-rules 0.28.2, salsa-macros 0.28.2, scoped-tls 1.0.1, scopeguard 1.2.0, self_cell 1.3.0, serde-content 0.1.2, servo_arc 0.4.3, sha1 0.10.7, sha1dc 0.1.5, sha2 0.10.9, shellexpand 3.1.2, similar 2.7.0, similar 3.2.0, smallvec 1.15.2, smol_str 0.3.6, stable_deref_trait 1.2.1, stacker 0.1.25, static_assertions 1.1.0, strip-ansi-escapes 0.2.1, syn 1.0.109, tar 0.4.46, tempfile 3.27.0, text-size 1.1.1, thread_local 1.1.10, threadpool 1.8.1, tikv-jemalloc-sys 0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7, tikv-jemallocator 0.6.1, tinyvec 1.12.0, triomphe 0.1.16, typed-builder 0.21.2, typed-builder-macro 0.21.2, unic-char-property 0.9.0, unic-char-range 0.9.0, unic-common 0.9.0, unic-ucd 0.9.0, unic-ucd-age 0.9.0, unic-ucd-bidi 0.9.0, unic-ucd-block 0.9.0, unic-ucd-case 0.9.0, unic-ucd-category 0.9.0, unic-ucd-common 0.9.0, unic-ucd-hangul 0.9.0, unic-ucd-ident 0.9.0, unic-ucd-name 0.9.0, unic-ucd-name_aliases 0.9.0, unic-ucd-normal 0.9.0, unic-ucd-segment 0.9.0, unic-ucd-version 0.9.0, unicase 2.9.0, unicode-linebreak 0.1.5, unicode-normalization 0.1.25, unicode-segmentation 1.13.3, unicode-width 0.1.14, unicode-width 0.2.2, unicode-xid 0.2.6, unicode_names2 1.3.0, unicode_names2_generator 1.3.0, ureq 3.4.0, ureq-proto 0.6.1, url 2.5.8, utf8_iter 1.0.4, uuid 1.25.0, version_check 0.9.5, vlq 0.5.1, wasi 0.11.1+wasi-snapshot-preview1, wasip2 1.0.4+wasi-0.2.12, wasm-bindgen 0.2.127, wasm-bindgen-macro 0.2.127, wasm-bindgen-macro-support 0.2.127, wasm-bindgen-shared 0.2.127, wit-bindgen 0.57.1, xattr 1.6.1, xmlem 0.5.0, zeroize 1.9.0
+### addr2line 0.25.1, ahash 0.7.8, ahash 0.8.12, arc-swap 1.9.2, arrayvec 0.7.8, autocfg 1.5.1, backtrace 0.3.76, base64 0.22.1, base64 0.23.1, bit-set 0.8.0, bit-vec 0.8.0, bitflags 1.3.2, bitflags 2.13.1, block-buffer 0.10.4, bstr 1.13.1, bumpalo 3.19.0, bytes-str 0.2.8, camino 1.2.5, cc 1.4.4, cfg-if 1.0.4, chacha20 0.10.1, clap 3.2.25, clap_derive 3.2.25, clap_lex 0.2.4, codespan 0.11.1, codespan-reporting 0.11.1, codespan-reporting 0.13.1, common-path 1.0.0, content_inspector 0.2.4, countme 3.0.1, cpufeatures 0.2.17, cpufeatures 0.3.0, crossbeam-channel 0.5.16, crossbeam-deque 0.8.7, crossbeam-epoch 0.9.20, crossbeam-queue 0.3.13, crossbeam-utils 0.8.22, crypto-common 0.1.7, data-url 0.1.1, data-url 0.3.2, debugid 0.8.0, defmt 0.3.100, defmt 1.1.1, defmt-macros 1.1.1, defmt-parser 1.0.0, derive-where 1.6.1, digest 0.10.7, displaydoc 0.2.7, drop_bomb 0.1.5, ec4rs 1.2.0, either 1.18.0, embedded-io 0.4.0, embedded-io 0.6.1, encode_unicode 1.0.0, encoding_rs 0.8.35, equivalent 1.0.2, errno 0.3.14, fastrand 2.5.0, filetime 0.2.29, find-msvc-tools 0.1.11, flate2 1.1.9, fnv 1.0.7, form_urlencoded 1.2.2, fraction 0.17.0, getopts 0.2.24, gimli 0.32.3, gix-imara-diff 0.3.3, glob 0.3.4, hash32 0.3.1, hashbrown 0.12.3, hashbrown 0.14.5, hashbrown 0.15.5, hashbrown 0.16.1, hashbrown 0.17.1, hashlink 0.12.1, heapless 0.8.0, heck 0.4.1, heck 0.5.0, hermit-abi 0.1.19, hermit-abi 0.5.3, hipstr 0.6.0, hstr 3.0.6, httparse 1.10.1, id-arena 2.3.0, idna 1.1.0, idna_adapter 1.2.2, if_chain 1.0.3, indexmap 1.9.3, indexmap 2.14.0, intrusive-collections 0.10.3, is-macro 0.3.8, itertools 0.10.5, itertools 0.13.0, itertools 0.14.0, itertools 0.15.0, js-sys 0.3.104, lazy_static 1.5.0, linux-raw-sys 0.12.1, lock_api 0.4.14, log 0.4.34, miette 7.6.0, nohash-hasher 0.2.0, ntapi 0.4.3, num 0.4.3, num-bigint 0.4.8, num-complex 0.4.6, num-integer 0.1.47, num-iter 0.1.46, num-rational 0.4.2, num-traits 0.2.19, num_cpus 1.17.0, object 0.37.3, object 0.39.1, once_cell 1.21.4, ordermap 1.2.0, oxc-miette 2.7.1, par-core 2.0.0, parking_lot 0.12.5, parking_lot_core 0.9.12, percent-encoding 2.3.2, postcard 1.1.3, profiling 1.0.18, profiling-procmacros 1.0.18, prost 0.14.4, prost-derive 0.14.4, prost-types 0.14.4, protox-parse 0.9.0, psm 0.1.32, quick-junit 0.6.1, rayon 1.12.0, rayon-core 1.13.0, regex 1.13.1, regex-automata 0.4.18, regex-syntax 0.8.11, rowan 0.16.1, rustc-demangle 0.1.28, rustc-hash 1.1.0, rustc_version 0.4.1, rustix 1.1.4, rustls 0.23.46, salsa 0.28.2, salsa-macro-rules 0.28.2, salsa-macros 0.28.2, scoped-tls 1.0.1, scopeguard 1.2.0, self_cell 1.3.0, serde-content 0.1.2, servo_arc 0.4.3, sha1 0.10.7, sha1dc 0.1.5, sha2 0.10.9, shellexpand 3.1.2, similar 2.7.0, similar 3.2.0, smallvec 1.15.2, smol_str 0.3.6, stable_deref_trait 1.2.1, stacker 0.1.25, static_assertions 1.1.0, strip-ansi-escapes 0.2.1, syn 1.0.109, tar 0.4.46, tempfile 3.27.0, text-size 1.1.1, thread_local 1.1.10, threadpool 1.8.1, tikv-jemalloc-sys 0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7, tikv-jemallocator 0.6.1, tinyvec 1.12.0, triomphe 0.1.16, typed-builder 0.21.2, typed-builder-macro 0.21.2, unic-char-property 0.9.0, unic-char-range 0.9.0, unic-common 0.9.0, unic-ucd 0.9.0, unic-ucd-age 0.9.0, unic-ucd-bidi 0.9.0, unic-ucd-block 0.9.0, unic-ucd-case 0.9.0, unic-ucd-category 0.9.0, unic-ucd-common 0.9.0, unic-ucd-hangul 0.9.0, unic-ucd-ident 0.9.0, unic-ucd-name 0.9.0, unic-ucd-name_aliases 0.9.0, unic-ucd-normal 0.9.0, unic-ucd-segment 0.9.0, unic-ucd-version 0.9.0, unicase 2.9.0, unicode-linebreak 0.1.5, unicode-normalization 0.1.25, unicode-segmentation 1.13.3, unicode-width 0.1.14, unicode-width 0.2.2, unicode-xid 0.2.6, unicode_names2 1.3.0, unicode_names2_generator 1.3.0, ureq 3.4.0, ureq-proto 0.6.1, url 2.5.8, utf8_iter 1.0.4, uuid 1.25.0, version_check 0.9.5, vlq 0.5.1, wasi 0.11.1+wasi-snapshot-preview1, wasip2 1.0.4+wasi-0.2.12, wasm-bindgen 0.2.127, wasm-bindgen-macro 0.2.127, wasm-bindgen-macro-support 0.2.127, wasm-bindgen-shared 0.2.127, wit-bindgen 0.57.1, xattr 1.6.1, xmlem 0.5.0, zeroize 1.9.0
 
 From https://github.com/TheDaemoness/ec4rs/blob/14bbca047324cedd5791b89f858eb5e17e6b0b3c/LICENSE.txt
 From https://github.com/aclysma/profiling/blob/740d74c82212f1f0584cfa5c6d884c5ab5367101/LICENSE-APACHE
@@ -1342,7 +1345,7 @@ AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### adler2 2.0.1, allocator-api2 0.2.21, anyhow 1.0.104, borsh 1.8.0, camino 1.2.5, content_inspector 0.2.4, countme 3.0.1, displaydoc 0.2.7, drop_bomb 0.1.5, dtoa 1.0.11, dyn-clone 1.0.20, etcetera 0.11.0, fastrand 2.5.0, gix 0.88.0, gix-actor 0.43.0, gix-attributes 0.36.0, gix-bitmap 0.5.0, gix-chunk 0.9.0, gix-command 0.11.0, gix-commitgraph 0.40.0, gix-config 0.61.0, gix-config-value 0.20.0, gix-date 0.17.0, gix-diff 0.68.0, gix-dir 0.30.0, gix-discover 0.56.0, gix-error 0.4.0, gix-features 0.50.0, gix-filter 0.35.0, gix-fs 0.23.0, gix-glob 0.28.0, gix-hash 0.27.0, gix-hashtable 0.17.0, gix-ignore 0.23.0, gix-index 0.56.0, gix-lock 25.0.0, gix-macros 0.2.0, gix-note 0.2.0, gix-object 0.65.0, gix-odb 0.85.0, gix-pack 0.75.0, gix-packetline 0.23.0, gix-path 0.13.0, gix-pathspec 0.21.0, gix-protocol 0.66.0, gix-quote 0.9.0, gix-ref 0.68.0, gix-refspec 0.46.0, gix-revision 0.50.0, gix-revwalk 0.36.0, gix-sec 0.15.0, gix-shallow 0.14.0, gix-status 0.35.0, gix-submodule 0.35.0, gix-tempfile 25.0.0, gix-trace 0.2.0, gix-transport 0.60.0, gix-traverse 0.62.0, gix-url 0.39.0, gix-utils 0.4.0, gix-validate 0.12.0, gix-worktree 0.57.0, gix-worktree-stream 0.37.0, gix-zlib 0.2.0, hermit-abi 0.1.19, hermit-abi 0.5.3, indoc 2.0.7, inventory 0.3.24, itoa 1.0.18, linux-raw-sys 0.12.1, lsp-server 0.7.9, once_cell 1.21.4, paste 1.0.15, pastey 0.1.1, pathdiff 0.2.3, pin-project-lite 0.2.17, portable-atomic 1.15.0, portable-atomic-util 0.2.8, prettyplease 0.2.37, proc-macro2 1.0.107, protox-parse 0.9.0, quote 1.0.47, ref-cast 1.0.27, ref-cast-impl 1.0.27, rowan 0.16.1, rustc-hash 1.1.0, rustc-hash 2.1.3, rustix 1.1.4, rustversion 1.0.23, salsa 0.28.2, salsa-macro-rules 0.28.2, salsa-macros 0.28.2, seahash 4.1.0, semver 1.0.28, seq-macro 0.3.6, serde 1.0.229, serde-content 0.1.2, serde_bytes 0.11.19, serde_core 1.0.229, serde_derive 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.151, serde_repr 0.1.21, serde_yaml 0.9.34+deprecated, servo_arc 0.4.3, smol_str 0.3.6, syn 1.0.109, syn 2.0.119, syn 3.0.4, text-size 1.1.1, thin-vec 0.2.19, thiserror 1.0.69, thiserror 2.0.20, thiserror-impl 1.0.69, thiserror-impl 2.0.20, tinyvec 1.12.0, typed-builder 0.21.2, typed-builder-macro 0.21.2, typed-path 0.12.3, typeid 1.0.3, unic-char-property 0.9.0, unic-char-range 0.9.0, unic-common 0.9.0, unic-ucd 0.9.0, unic-ucd-age 0.9.0, unic-ucd-bidi 0.9.0, unic-ucd-block 0.9.0, unic-ucd-case 0.9.0, unic-ucd-category 0.9.0, unic-ucd-common 0.9.0, unic-ucd-hangul 0.9.0, unic-ucd-ident 0.9.0, unic-ucd-name 0.9.0, unic-ucd-name_aliases 0.9.0, unic-ucd-normal 0.9.0, unic-ucd-segment 0.9.0, unic-ucd-version 0.9.0, unicode-id-start 1.4.0, unicode-ident 1.0.24, unsafe-libyaml 0.2.11, utf8-zero 0.8.1, wasi 0.11.1+wasi-snapshot-preview1, wasip2 1.0.4+wasi-0.2.12, winnow 0.5.40, winnow 0.7.15, winnow 1.0.4, wit-bindgen 0.57.1, zmij 1.0.23
+### adler2 2.0.1, allocator-api2 0.2.21, anyhow 1.0.104, borsh 1.8.0, camino 1.2.5, content_inspector 0.2.4, countme 3.0.1, displaydoc 0.2.7, drop_bomb 0.1.5, dtoa 1.0.11, dyn-clone 1.0.20, etcetera 0.11.0, fastrand 2.5.0, gix 0.90.0, gix-actor 0.44.1, gix-attributes 0.37.1, gix-bitmap 0.6.1, gix-chunk 0.10.1, gix-command 0.12.1, gix-commitgraph 0.42.0, gix-config 0.62.2, gix-config-value 0.21.1, gix-date 0.18.1, gix-diff 0.70.0, gix-dir 0.32.0, gix-discover 0.57.1, gix-error 0.5.2, gix-filter 0.36.1, gix-fs 0.24.1, gix-glob 0.29.1, gix-hash 0.28.1, gix-hashtable 0.18.1, gix-ignore 0.24.1, gix-index 0.58.0, gix-lock 26.0.1, gix-macros 0.2.0, gix-note 0.3.1, gix-object 0.66.1, gix-odb 0.87.0, gix-pack 0.77.0, gix-packetline 0.24.1, gix-parallel 0.50.1, gix-path 0.14.1, gix-pathspec 0.22.1, gix-protocol 0.68.0, gix-quote 0.10.1, gix-ref 0.69.1, gix-refspec 0.47.1, gix-revision 0.52.0, gix-revwalk 0.38.0, gix-sec 0.16.1, gix-shallow 0.15.1, gix-status 0.37.0, gix-submodule 0.36.1, gix-tempfile 26.0.1, gix-trace 0.3.1, gix-transport 0.62.0, gix-traverse 0.64.0, gix-url 0.40.1, gix-utils 0.5.2, gix-validate 0.13.1, gix-worktree 0.59.0, gix-worktree-stream 0.39.0, gix-zlib 0.4.0, hermit-abi 0.1.19, hermit-abi 0.5.3, indoc 2.0.7, inventory 0.3.24, itoa 1.0.18, linux-raw-sys 0.12.1, lsp-server 0.7.9, once_cell 1.21.4, paste 1.0.15, pastey 0.1.1, pathdiff 0.2.3, pin-project-lite 0.2.17, portable-atomic 1.15.0, portable-atomic-util 0.2.8, prettyplease 0.2.37, proc-macro2 1.0.107, protox-parse 0.9.0, quote 1.0.47, ref-cast 1.0.27, ref-cast-impl 1.0.27, rowan 0.16.1, rustc-hash 1.1.0, rustc-hash 2.1.3, rustix 1.1.4, rustversion 1.0.23, salsa 0.28.2, salsa-macro-rules 0.28.2, salsa-macros 0.28.2, seahash 4.1.0, semver 1.0.28, seq-macro 0.3.6, serde 1.0.229, serde-content 0.1.2, serde_bytes 0.11.19, serde_core 1.0.229, serde_derive 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.151, serde_repr 0.1.21, serde_yaml 0.9.34+deprecated, servo_arc 0.4.3, smol_str 0.3.6, syn 1.0.109, syn 2.0.119, syn 3.0.4, text-size 1.1.1, thin-vec 0.2.19, thiserror 1.0.69, thiserror 2.0.20, thiserror-impl 1.0.69, thiserror-impl 2.0.20, tinyvec 1.12.0, typed-builder 0.21.2, typed-builder-macro 0.21.2, typed-path 0.12.3, typed-path 0.13.0, typeid 1.0.3, unic-char-property 0.9.0, unic-char-range 0.9.0, unic-common 0.9.0, unic-ucd 0.9.0, unic-ucd-age 0.9.0, unic-ucd-bidi 0.9.0, unic-ucd-block 0.9.0, unic-ucd-case 0.9.0, unic-ucd-category 0.9.0, unic-ucd-common 0.9.0, unic-ucd-hangul 0.9.0, unic-ucd-ident 0.9.0, unic-ucd-name 0.9.0, unic-ucd-name_aliases 0.9.0, unic-ucd-normal 0.9.0, unic-ucd-segment 0.9.0, unic-ucd-version 0.9.0, unicode-id-start 1.4.0, unicode-ident 1.0.24, unsafe-libyaml 0.2.11, utf8-zero 0.8.1, wasi 0.11.1+wasi-snapshot-preview1, wasip2 1.0.4+wasi-0.2.12, winnow 0.5.40, winnow 0.7.15, winnow 1.0.4, wit-bindgen 0.57.1, zmij 1.0.23
 
 From https://github.com/open-i18n/rust-unic/blob/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT
 From https://gitlab.redox-os.org/redox-os/seahash/-/blob/74c02182146d1edd7c91a9e6eddefc7390682a70/LICENSE
@@ -1496,7 +1499,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### allocator-api2 0.2.21, anyhow 1.0.104, constant_time_eq 0.4.2, dtoa 1.0.11, dyn-clone 1.0.20, ecow 0.2.6, etcetera 0.11.0, gix 0.88.0, gix-actor 0.43.0, gix-attributes 0.36.0, gix-bitmap 0.5.0, gix-chunk 0.9.0, gix-command 0.11.0, gix-commitgraph 0.40.0, gix-config 0.61.0, gix-config-value 0.20.0, gix-date 0.17.0, gix-diff 0.68.0, gix-dir 0.30.0, gix-discover 0.56.0, gix-error 0.4.0, gix-features 0.50.0, gix-filter 0.35.0, gix-fs 0.23.0, gix-glob 0.28.0, gix-hash 0.27.0, gix-hashtable 0.17.0, gix-ignore 0.23.0, gix-index 0.56.0, gix-lock 25.0.0, gix-macros 0.2.0, gix-note 0.2.0, gix-object 0.65.0, gix-odb 0.85.0, gix-pack 0.75.0, gix-packetline 0.23.0, gix-path 0.13.0, gix-pathspec 0.21.0, gix-protocol 0.66.0, gix-quote 0.9.0, gix-ref 0.68.0, gix-refspec 0.46.0, gix-revision 0.50.0, gix-revwalk 0.36.0, gix-sec 0.15.0, gix-shallow 0.14.0, gix-status 0.35.0, gix-submodule 0.35.0, gix-tempfile 25.0.0, gix-trace 0.2.0, gix-transport 0.60.0, gix-traverse 0.62.0, gix-url 0.39.0, gix-utils 0.4.0, gix-validate 0.12.0, gix-worktree 0.57.0, gix-worktree-stream 0.37.0, gix-zlib 0.2.0, indoc 2.0.7, inventory 0.3.24, itoa 1.0.18, libc 0.2.189, lsp-server 0.7.9, mago-allocator 1.47.6, mago-bytes 1.47.6, mago-casing 1.47.6, mago-collector 1.47.6, mago-database 1.47.6, mago-extension 1.47.6, mago-formatter 1.47.6, mago-linter 1.47.6, mago-names 1.47.6, mago-php-version 1.47.6, mago-phpdoc-syntax 1.47.6, mago-reporting 1.47.6, mago-span 1.47.6, mago-syntax 1.47.6, mago-syntax-core 1.47.6, mago-text-edit 1.47.6, mago-word 1.47.6, miniz_oxide 0.8.9, os_str_bytes 6.6.1, paste 1.0.15, pastey 0.1.1, pep440_rs 0.7.3, pep508_rs 0.9.2, pin-project-lite 0.2.17, portable-atomic 1.15.0, portable-atomic-util 0.2.8, prettyplease 0.2.37, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, ref-cast-impl 1.0.27, rustc-hash 2.1.3, rustversion 1.0.23, ryu 1.0.23, ryu-js 1.0.3, semver 1.0.28, seq-macro 0.3.6, serde 1.0.229, serde_bytes 0.11.19, serde_core 1.0.229, serde_derive 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.151, serde_repr 0.1.21, serde_yaml 0.9.34+deprecated, simdutf8 0.1.5, syn 2.0.119, syn 3.0.4, thin-vec 0.2.19, thiserror 1.0.69, thiserror 2.0.20, thiserror-impl 1.0.69, thiserror-impl 2.0.20, typed-path 0.12.3, typeid 1.0.3, unicode-id-start 1.4.0, unicode-ident 1.0.24, unscanny 0.1.0, utf8-zero 0.8.1, utf8parse 0.2.2, vte 0.14.1
+### allocator-api2 0.2.21, anyhow 1.0.104, constant_time_eq 0.4.2, dtoa 1.0.11, dyn-clone 1.0.20, ecow 0.2.6, etcetera 0.11.0, gix 0.90.0, gix-actor 0.44.1, gix-attributes 0.37.1, gix-bitmap 0.6.1, gix-chunk 0.10.1, gix-command 0.12.1, gix-commitgraph 0.42.0, gix-config 0.62.2, gix-config-value 0.21.1, gix-date 0.18.1, gix-diff 0.70.0, gix-dir 0.32.0, gix-discover 0.57.1, gix-error 0.5.2, gix-filter 0.36.1, gix-fs 0.24.1, gix-glob 0.29.1, gix-hash 0.28.1, gix-hashtable 0.18.1, gix-ignore 0.24.1, gix-index 0.58.0, gix-lock 26.0.1, gix-macros 0.2.0, gix-note 0.3.1, gix-object 0.66.1, gix-odb 0.87.0, gix-pack 0.77.0, gix-packetline 0.24.1, gix-parallel 0.50.1, gix-path 0.14.1, gix-pathspec 0.22.1, gix-protocol 0.68.0, gix-quote 0.10.1, gix-ref 0.69.1, gix-refspec 0.47.1, gix-revision 0.52.0, gix-revwalk 0.38.0, gix-sec 0.16.1, gix-shallow 0.15.1, gix-status 0.37.0, gix-submodule 0.36.1, gix-tempfile 26.0.1, gix-trace 0.3.1, gix-transport 0.62.0, gix-traverse 0.64.0, gix-url 0.40.1, gix-utils 0.5.2, gix-validate 0.13.1, gix-worktree 0.59.0, gix-worktree-stream 0.39.0, gix-zlib 0.4.0, indoc 2.0.7, inventory 0.3.24, itoa 1.0.18, libc 0.2.189, lsp-server 0.7.9, mago-allocator 1.47.6, mago-bytes 1.47.6, mago-casing 1.47.6, mago-collector 1.47.6, mago-database 1.47.6, mago-extension 1.47.6, mago-formatter 1.47.6, mago-linter 1.47.6, mago-names 1.47.6, mago-php-version 1.47.6, mago-phpdoc-syntax 1.47.6, mago-reporting 1.47.6, mago-span 1.47.6, mago-syntax 1.47.6, mago-syntax-core 1.47.6, mago-text-edit 1.47.6, mago-word 1.47.6, miniz_oxide 0.8.9, os_str_bytes 6.6.1, paste 1.0.15, pastey 0.1.1, pep440_rs 0.7.3, pep508_rs 0.9.2, pin-project-lite 0.2.17, portable-atomic 1.15.0, portable-atomic-util 0.2.8, prettyplease 0.2.37, proc-macro2 1.0.107, quote 1.0.47, ref-cast 1.0.27, ref-cast-impl 1.0.27, rustc-hash 2.1.3, rustversion 1.0.23, ryu 1.0.23, ryu-js 1.0.3, semver 1.0.28, seq-macro 0.3.6, serde 1.0.229, serde_bytes 0.11.19, serde_core 1.0.229, serde_derive 1.0.229, serde_derive_internals 0.30.0, serde_json 1.0.151, serde_repr 0.1.21, serde_yaml 0.9.34+deprecated, simdutf8 0.1.5, syn 2.0.119, syn 3.0.4, thin-vec 0.2.19, thiserror 1.0.69, thiserror 2.0.20, thiserror-impl 1.0.69, thiserror-impl 2.0.20, typed-path 0.12.3, typed-path 0.13.0, typeid 1.0.3, unicode-id-start 1.4.0, unicode-ident 1.0.24, unscanny 0.1.0, utf8-zero 0.8.1, utf8parse 0.2.2, vte 0.14.1
 
 From https://github.com/carthage-software/mago/blob/ad48106b8d1dbf3140f3a4bd4d244a5e47c9e495/LICENSE-APACHE
 
@@ -9437,6 +9440,34 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
+### gix-trace 0.3.1
+
+```text
+The `gix-trace::forest` module is derived from tracing-forest 0.2.0
+(https://github.com/QnnOkabayashi/tracing-forest, commit
+86aead42ba9a72989e38ba4863d805f80b9ea1f1), licensed under the MIT license.
+
+Copyright (c) Quinn Okabayashi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
 ### hash32 0.3.1
 
 ```text
@@ -11883,6 +11914,32 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+```
+
+### nix 0.31.3
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2015 Carl Lerche + nix-rust Authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 ```
 
 ### nohash-hasher 0.2.0
@@ -20194,7 +20251,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### zip 8.6.0
+### zip 8.6.0, zip 9.1.3
 
 ```text
 The MIT License (MIT)
