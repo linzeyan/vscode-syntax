@@ -15,7 +15,7 @@
 // still answer that way; `make lens-probe` is what says that, and it is an
 // audit rather than a gate because it needs both servers installed.
 const { writeFileSync } = require("node:fs");
-const { basename, join, resolve } = require("node:path");
+const { basename, join } = require("node:path");
 
 /** One of each declaration the lens has an opinion about, and two it must not. */
 const PROTO = `syntax = "proto3";

@@ -20,9 +20,9 @@ import {
   fileKind,
   labelOf,
   numberBase,
+  placeLocally,
   TEXT_FORMATS,
   textFormatOf,
-  placeLocally,
   timestampEntries,
 } from "./toolboxOps";
 

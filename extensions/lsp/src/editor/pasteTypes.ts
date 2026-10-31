@@ -138,7 +138,10 @@ async function pasteCommand(typesOnly: boolean, wanted?: unknown) {
   const source = load().sourceOf(await vscode.env.clipboard.readText(), toml);
   if (!source) {
     void vscode.window.showWarningMessage(
-      say("The clipboard holds no JSON, YAML or TOML object or array.", "剪貼簿裡沒有 JSON、YAML 或 TOML 的物件或陣列。"),
+      say(
+        "The clipboard holds no JSON, YAML or TOML object or array.",
+        "剪貼簿裡沒有 JSON、YAML 或 TOML 的物件或陣列。",
+      ),
     );
     return;
   }

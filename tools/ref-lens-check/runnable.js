@@ -184,7 +184,7 @@ const GO_FIXTURES = [
     tests: [
       { line: "package thing", kind: "package" },
       { line: "func TestSigned(t *tt.T) {", name: "TestSigned", kind: "test" },
-      { line: 't.Run("case one", nil)', name: "TestSigned", sub: "case one", kind: "subtest" },
+      { line: "t.Run(\"case one\", nil)", name: "TestSigned", sub: "case one", kind: "subtest" },
       { line: "func BenchmarkSigned(b *tt.B) {}", name: "BenchmarkSigned", kind: "benchmark" },
       { line: "func FuzzSigned(f *tt.F) {}", name: "FuzzSigned", kind: "test" },
       { line: "func ExampleSigned() {", name: "ExampleSigned", kind: "test" },

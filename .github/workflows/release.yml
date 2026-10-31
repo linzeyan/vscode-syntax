@@ -131,16 +131,14 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: extensions/lsp/package.json
-      - name: Verify tag matches extension versions
+      - name: Verify tag matches extension version
         run: |
           BASE="${GITHUB_REF_NAME#v}"; BASE="${BASE%%-*}"
-          for f in extensions/lsp/package.json; do
-            v=$(node -p "require('./$f').version")
-            if [ "$v" != "$BASE" ]; then
-              echo "version mismatch: $f has $v, tag implies $BASE" >&2
-              exit 1
-            fi
-          done
+          v=$(node -p "require('./extensions/lsp/package.json').version")
+          if [ "$v" != "$BASE" ]; then
+            echo "version mismatch: extensions/lsp/package.json has $v, tag implies $BASE" >&2
+            exit 1
+          fi
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*

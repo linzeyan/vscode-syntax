@@ -29,7 +29,13 @@ test("a number's base is read off its prefix, or its digits when it has none", (
 // getting the offset wrong moves the answer by hours and still looks plausible.
 test("a time without an offset is placed in the editor's zone, an instant keeps its own", () => {
   const zone = process.env.TZ;
-  const reading = (seconds: number, zoned: boolean) => ({ label: "", zoned, seconds: String(seconds), nanos: 0, relative: false });
+  const reading = (seconds: number, zoned: boolean) => ({
+    label: "",
+    zoned,
+    seconds: String(seconds),
+    nanos: 0,
+    relative: false,
+  });
   const wall = Date.UTC(2026, 0, 2, 11, 4) / 1000;
   try {
     process.env.TZ = "Asia/Taipei";

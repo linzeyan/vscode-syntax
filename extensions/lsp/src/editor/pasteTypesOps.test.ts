@@ -1,8 +1,8 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { generate, sourceOf } from "./quicktype";
 import { LANGUAGE_TARGETS, looksLikeToml, mightBeData, placeGo } from "./pasteTypesOps";
+import { generate, sourceOf } from "./quicktype";
 import { TARGETS } from "./quicktype";
 
 const FILE = `package api
@@ -19,7 +19,8 @@ func existing() {}
 // package clause and imports are syntax errors, which is the one way this
 // feature can leave the user worse off than a plain paste.
 test("Go output loses its package clause and its imports join the file's", () => {
-  const output = `// header\n\npackage main\n\nimport "time"\n\nimport "encoding/json"\n\ntype TopLevel struct {\n\tAt time.Time\n}\n`;
+  const output =
+    `// header\n\npackage main\n\nimport "time"\n\nimport "encoding/json"\n\ntype TopLevel struct {\n\tAt time.Time\n}\n`;
   const placed = placeGo(output, FILE);
   assert.ok(!/^package /m.test(placed.body));
   assert.ok(!/^import /m.test(placed.body));

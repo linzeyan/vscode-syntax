@@ -43,6 +43,7 @@ import {
 import { registerMarp } from "./marp";
 import { methodLabel, methodsByType } from "./methods";
 import { registerPasteImage } from "./pasteImage";
+import { registerPasteTypes } from "./pasteTypes";
 import { registerPlantuml } from "./plantumlEditor";
 import { describe, EXPR_MARK, POSTFIX_LANGUAGES, postfixesFor, postfixTarget } from "./postfix";
 import { generatedFiles, goLinksFor, goServerMethod, protoPackage } from "./protobuf";
@@ -67,7 +68,6 @@ import { canHoldEntry, entryLine, entryPoints, findsEntryInText } from "./runnab
 import { colorSheet, parseStyle, scopesIn, styleText, withSyntaxColors } from "./scopes";
 import { registerSwaggerViewer } from "./swaggerViewer";
 import { registerTodoTree } from "./todoTree";
-import { registerPasteTypes } from "./pasteTypes";
 import { registerToolbox } from "./toolbox";
 import { drawsNothing, explain, findSuspects, label, Level, levelOf, Suspect, SUSPECTS } from "./unicode";
 
@@ -1932,7 +1932,8 @@ function runFromGutter(context: vscode.ExtensionContext, codeRunner: CodeManager
  */
 function goTestLenses(document: vscode.TextDocument): vscode.CodeLens[] {
   if (
-    document.languageId !== "go" || !document.fileName.endsWith("_test.go") || !vscode.extensions.getExtension(GOLANG_GO)
+    document.languageId !== "go" || !document.fileName.endsWith("_test.go")
+    || !vscode.extensions.getExtension(GOLANG_GO)
   ) {
     return [];
   }
