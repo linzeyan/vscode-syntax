@@ -197,7 +197,7 @@
         }
       ]
     },
-    "L:meta.template.svelte - meta.lang - (meta source)": {
+    "L:meta.template.svelte - meta.lang - (meta source | comment)": {
       "patterns": [
         {
           "begin": "(?<=>)\\s",
