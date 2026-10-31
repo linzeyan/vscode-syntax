@@ -56,6 +56,7 @@ publishes none is given its repository's, from the URL shown.
 - @apidevtools/swagger-parser 10.0.3 (MIT) — https://apitools.dev/swagger-parser/
 - @babel/code-frame 7.29.7 (MIT) — https://babel.dev/docs/en/next/babel-code-frame
 - @babel/helper-validator-identifier 7.29.7 (MIT) — https://github.com/babel/babel#readme
+- @babel/runtime 7.29.10 (MIT) — https://babel.dev/docs/en/next/babel-runtime
 - @babel/runtime 7.29.7 (MIT) — https://babel.dev/docs/en/next/babel-runtime
 - @braintree/sanitize-url 6.0.2 (MIT) — https://github.com/braintree/sanitize-url#readme
 - @braintree/sanitize-url 7.1.2 (MIT) — https://github.com/braintree/sanitize-url#readme
@@ -340,8 +341,7 @@ publishes none is given its repository's, from the URL shown.
 - dom-serializer 2.0.0 (MIT) — https://github.com/cheeriojs/dom-serializer#readme
 - domelementtype 2.3.0 (BSD-2-Clause) — https://github.com/fb55/domelementtype#readme
 - domhandler 5.0.3 (BSD-2-Clause) — https://github.com/fb55/domhandler#readme
-- dompurify 3.4.15 (MPL-2.0 OR Apache-2.0) — https://github.com/cure53/DOMPurify
-- dompurify 3.4.16 (MPL-2.0 OR Apache-2.0) — https://github.com/cure53/DOMPurify
+- dompurify 3.4.17 (MPL-2.0 OR Apache-2.0) — https://github.com/cure53/DOMPurify
 - domutils 3.2.2 (BSD-2-Clause) — https://github.com/fb55/domutils#readme
 - dunder-proto 1.0.1 (MIT) — https://github.com/es-shims/dunder-proto#readme
 - ee-first 1.1.1 (MIT) — https://github.com/jonathanong/ee-first#readme
@@ -465,9 +465,9 @@ publishes none is given its repository's, from the URL shown.
 - json-stringify-pretty-compact 4.0.0 (MIT) — https://github.com/lydell/json-stringify-pretty-compact#readme
 - json5 2.2.3 (MIT) — http://json5.org/
 - jsonc-parser 2.3.1 (MIT) — https://github.com/microsoft/node-jsonc-parser#readme
-- katex 0.16.45 (MIT) — https://katex.org
 - katex 0.16.47 (MIT) — https://katex.org
 - katex 0.17.0 (MIT) — https://katex.org
+- katex 0.18.2 (MIT) — https://katex.org
 - khroma 2.1.0 (MIT; from its license file) — https://github.com/fabiospampinato/khroma#readme
 - langium 3.3.1 (MIT) — https://langium.org
 - layout-base 1.0.2 (MIT) — https://github.com/iVis-at-Bilkent/layout-base#readme
@@ -487,7 +487,7 @@ publishes none is given its repository's, from the URL shown.
 - loose-envify 1.4.0 (MIT) — https://github.com/zertosh/loose-envify
 - lru-cache 7.18.3 (ISC) — https://github.com/isaacs/node-lru-cache#readme
 - luxon 3.7.2 (MIT) — https://github.com/moment/luxon#readme
-- markdown-it 14.3.2 (MIT) — https://github.com/markdown-it/markdown-it#readme
+- markdown-it 14.3.3 (MIT) — https://github.com/markdown-it/markdown-it#readme
 - markdown-it-container 4.0.0 (MIT) — https://github.com/markdown-it/markdown-it-container#readme
 - markdown-it-emoji 3.0.0 (MIT) — https://github.com/markdown-it/markdown-it-emoji#readme
 - markdown-it-front-matter 0.2.4 (MIT) — https://github.com/ParkSB/markdown-it-front-matter#readme
@@ -877,7 +877,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### @babel/code-frame 7.29.7, @babel/helper-validator-identifier 7.29.7, @babel/runtime 7.29.7
+### @babel/code-frame 7.29.7, @babel/helper-validator-identifier 7.29.7, @babel/runtime 7.29.10, @babel/runtime 7.29.7
 
 ```text
 MIT License
@@ -930,7 +930,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### @chevrotain/cst-dts-gen 11.0.3, @chevrotain/gast 11.0.3, @chevrotain/regexp-to-ast 11.0.3, @chevrotain/types 11.0.3, @chevrotain/types 11.1.2, @chevrotain/utils 11.0.3, b4a 1.9.0, bare-events 2.9.2, bare-fs 4.8.2, bare-path 3.1.2, bare-stream 2.13.4, bare-url 2.5.4, browser-fs-access 0.29.1, bson 4.7.2, chevrotain 11.0.3, chromium-bidi 14.0.0, dompurify 3.4.15, dompurify 3.4.16, events-universal 1.0.1, mathjax-full 3.2.2, mj-context-menu 0.6.1, swagger-ui-dist 5.30.3, text-decoder 1.2.7
+### @chevrotain/cst-dts-gen 11.0.3, @chevrotain/gast 11.0.3, @chevrotain/regexp-to-ast 11.0.3, @chevrotain/types 11.0.3, @chevrotain/types 11.1.2, @chevrotain/utils 11.0.3, b4a 1.9.0, bare-events 2.9.2, bare-fs 4.8.2, bare-path 3.1.2, bare-stream 2.13.4, bare-url 2.5.4, browser-fs-access 0.29.1, bson 4.7.2, chevrotain 11.0.3, chromium-bidi 14.0.0, dompurify 3.4.17, events-universal 1.0.1, mathjax-full 3.2.2, mj-context-menu 0.6.1, swagger-ui-dist 5.30.3, text-decoder 1.2.7
 
 From https://github.com/zorkow/context-menu/blob/2156b7db7cac02ca8451deb4ee6075d55b591d37/LICENSE
 
@@ -7529,7 +7529,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### dompurify 3.4.15, dompurify 3.4.16
+### dompurify 3.4.17
 
 ```text
 Mozilla Public License Version 2.0
@@ -10875,7 +10875,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### katex 0.16.45, katex 0.16.47, katex 0.17.0
+### katex 0.16.47, katex 0.17.0, katex 0.18.2
 
 ```text
 The MIT License (MIT)
@@ -11268,7 +11268,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### markdown-it 14.3.2
+### markdown-it 14.3.3
 
 ```text
 Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin.
