@@ -51,7 +51,8 @@
         "en": "Timestamp Converter",
         "zh": "時間戳轉換",
         "enHint": "Unix timestamps and date formats",
-        "zhHint": "Unix 時間戳與日期格式"
+        "zhHint": "Unix 時間戳與日期格式",
+        "input": true
       },
       {
         "id": "converter-ipv4",
