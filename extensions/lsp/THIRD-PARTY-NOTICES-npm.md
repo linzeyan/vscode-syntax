@@ -259,6 +259,7 @@ publishes none is given its repository's, from the URL shown.
 - command-line-args 5.0.2 (MIT) — https://github.com/75lb/command-line-args#readme
 - command-line-usage 5.0.5 (MIT) — https://github.com/75lb/command-line-usage#readme
 - commander 13.1.0 (MIT) — https://github.com/tj/commander.js#readme
+- commander 15.0.0 (MIT) — https://github.com/tj/commander.js#readme
 - commander 2.20.3 (MIT) — https://github.com/tj/commander.js#readme
 - commander 7.2.0 (MIT) — https://github.com/tj/commander.js#readme
 - commander 8.3.0 (MIT) — https://github.com/tj/commander.js#readme
@@ -467,7 +468,7 @@ publishes none is given its repository's, from the URL shown.
 - jsonc-parser 2.3.1 (MIT) — https://github.com/microsoft/node-jsonc-parser#readme
 - katex 0.16.47 (MIT) — https://katex.org
 - katex 0.17.0 (MIT) — https://katex.org
-- katex 0.18.2 (MIT) — https://katex.org
+- katex 0.19.1 (MIT) — https://katex.org
 - khroma 2.1.0 (MIT; from its license file) — https://github.com/fabiospampinato/khroma#readme
 - langium 3.3.1 (MIT) — https://langium.org
 - layout-base 1.0.2 (MIT) — https://github.com/iVis-at-Bilkent/layout-base#readme
@@ -6244,7 +6245,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### commander 13.1.0, commander 2.20.3, commander 7.2.0, commander 8.3.0, commander 9.5.0
+### commander 13.1.0, commander 15.0.0, commander 2.20.3, commander 7.2.0, commander 8.3.0, commander 9.5.0
 
 ```text
 (The MIT License)
@@ -10875,7 +10876,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### katex 0.16.47, katex 0.17.0, katex 0.18.2
+### katex 0.16.47, katex 0.17.0, katex 0.19.1
 
 ```text
 The MIT License (MIT)
