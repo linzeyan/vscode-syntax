@@ -330,26 +330,26 @@ include-hidden = false
 # The whole set, as of poly 0.20.0:
 #
 #   actionlint           1.7.12   PATH first, else downloaded
-#   arity                0.22.0   PATH first, else downloaded
-#   buf                  1.72.0   PATH first, else downloaded
+#   arity                0.29.0   PATH first, else downloaded
+#   buf                  1.75.0   PATH first, else downloaded
 #   cargo                system   from the project's toolchain, on PATH
 #   clang-format         system   from the project's toolchain, on PATH
 #   deadcode             -        whole-program analysis (`poly deadcode`)
-#   gofumpt              0.11.0   PATH first, else downloaded
-#   golangci-lint        2.13.2   PATH first, else downloaded
+#   gofumpt              0.12.0   PATH first, else downloaded
+#   golangci-lint        2.15.0   PATH first, else downloaded
 #   hadolint             2.15.1   off; set it to "on" and poly downloads it
 #   jsonnetfmt           0.22.0   PATH first, else downloaded
 #   knip                 -        whole-program analysis (`poly deadcode`)
-#   plantuml             1.2026.8 PATH first, else downloaded
+#   plantuml             1.2026.9 PATH first, else downloaded
 #   ruff                 -        compiled into poly; remove the entry
 #   selene               -        compiled into poly; remove the entry
 #   shellcheck           0.11.0   PATH first, else downloaded
-#   shfmt                3.13.1   PATH first, else downloaded
+#   shfmt                3.14.1   PATH first, else downloaded
 #   stylua               -        compiled into poly; remove the entry
 #   swift-format         system   from the project's toolchain, on PATH
 #   swiftlint            0.65.1   PATH first, else downloaded
 #   terraform            system   from the project's toolchain, on PATH
-#   tflint               0.64.0   PATH first, else downloaded
+#   tflint               0.65.0   PATH first, else downloaded
 #   typos                -        compiled into poly; remove the entry
 #   vulture              -        whole-program analysis (`poly deadcode`)
 #
