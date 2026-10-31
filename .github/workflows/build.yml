@@ -22,7 +22,7 @@ jobs:
           # poly building here is exactly why it's in the matrix.
           - { target: aarch64-pc-windows-msvc, os: windows-11-arm }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -63,7 +63,7 @@ jobs:
           bytes=$(wc -c < "$BIN")
           mb=$(( bytes / 1048576 ))
           echo "::notice title=binary size::${{ matrix.target }} ${mb}MB ($bytes bytes)"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: poly-${{ matrix.target }}
           path: |

@@ -67,7 +67,7 @@ jobs:
               vsce: win32-arm64,
             }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -78,10 +78,10 @@ jobs:
           # fresh, and cargo would ship its binary without relinking.
           key: ${{ matrix.target }}-${{ matrix.os }}
           cache-on-failure: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: extensions/lsp/package.json
       - name: Build
@@ -111,7 +111,7 @@ jobs:
           [ -f "$BIN.exe" ] && BIN="$BIN.exe"
           pnpm --dir extensions/lsp install --frozen-lockfile
           tools/package-lsp.sh ${{ matrix.vsce }} "$BIN"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.vsce }}
           path: |
@@ -124,11 +124,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: extensions/lsp/package.json
       - name: Verify tag matches extension version
@@ -139,7 +139,7 @@ jobs:
             echo "version mismatch: extensions/lsp/package.json has $v, tag implies $BASE" >&2
             exit 1
           fi
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: artifacts
@@ -188,15 +188,15 @@ jobs:
           cp dist/poly-linux-arm64 docker/poly-arm64
       # The runner is amd64 and the image runs `apt-get` and `poly --version`
       # inside each target platform, so the arm64 half needs emulation.
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/poly
           # `latest` only from a final tag: a pre-release must never become
@@ -205,7 +205,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64

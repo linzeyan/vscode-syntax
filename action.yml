@@ -148,7 +148,7 @@ runs:
     # After the binary is on PATH: the key includes the resolved version
     # because a poly upgrade can change which tool versions it wants.
     - if: inputs.cache == 'true'
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           ~/.cache/poly
