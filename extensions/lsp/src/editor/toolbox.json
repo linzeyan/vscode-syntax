@@ -170,6 +170,14 @@
         "zhHint": "以時間為準的一次性密碼"
       },
       {
+        "id": "generator-ssh",
+        "icon": "remote",
+        "en": "SSH Key",
+        "zh": "SSH 金鑰",
+        "enHint": "Ed25519 or RSA key pairs in OpenSSH format",
+        "zhHint": "OpenSSH 格式的 Ed25519 或 RSA 金鑰對"
+      },
+      {
         "id": "generator-qr",
         "icon": "symbol-namespace",
         "en": "QR Code",
