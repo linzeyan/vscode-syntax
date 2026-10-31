@@ -26,9 +26,16 @@ allowBuilds:
 # them in, so no upgrade of ours reaches them: speech-rule-engine (MathJax, in
 # Marp) pins xmldom, excalidraw pins nanoid 3, mermaid-to-excalidraw nanoid 4,
 # chevrotain (mermaid's parser) lodash-es. js-yaml's dependents ask for ^4.1.0
-# and would move on their own, but only when something re-resolves them. Each
-# is the newest of its line except nanoid 4, which has no fixed 4.x;
+# and would move on their own, but only when something re-resolves them. So do
+# undici (cheerio, in markmap), body-parser and qs (express), brace-expansion
+# (minimatch), source-map-js (postcss) and ip-address (socks). Each is the
+# newest of its line except nanoid 4, which has no fixed 4.x;
 # mermaid-to-excalidraw calls nothing but `nanoid()`, which 5.x keeps.
+#
+# basic-ftp crosses a major: get-uri, under puppeteer's proxy-agent, asks for
+# ^5 even at its latest, and no 5.x is fixed. 6.0's one break turns off
+# separate transfer hosts by default (FTP bounce protection); get-uri calls
+# only access, lastMod, list, downloadTo and close, which 6.x keeps.
 #
 # thrift is the one that crosses minors: parquets, Data Preview's reader, asks
 # for ^0.12.0 and has no release past it, and every thrift to 0.22.0 carries
@@ -37,9 +44,16 @@ allowBuilds:
 # unit tests read a parquet file through it.
 overrides:
   thrift: 0.24.0
-  serialize-javascript: ^7.1.0
+  serialize-javascript: ^7.1.4
   "@xmldom/xmldom@0.9": 0.9.12
   js-yaml@4: 4.3.2
   lodash-es@4: 4.18.1
   nanoid@3: 3.3.19
   nanoid@4: 5.1.16
+  undici@6: 6.29.1
+  body-parser@2: 2.4.0
+  qs@6: 6.17.1
+  brace-expansion@2: 2.1.7
+  source-map-js@1: 1.2.2
+  ip-address@10: 10.7.5
+  basic-ftp@5: 6.2.4

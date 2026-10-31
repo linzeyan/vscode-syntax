@@ -215,12 +215,12 @@ publishes none is given its repository's, from the URL shown.
 - bare-stream 2.13.4 (Apache-2.0) — https://github.com/holepunchto/bare-stream#readme
 - bare-url 2.5.4 (Apache-2.0) — https://github.com/holepunchto/bare-url
 - base64-js 1.5.1 (MIT) — https://github.com/beatgammit/base64-js
-- basic-ftp 5.3.1 (MIT) — https://github.com/patrickjuchli/basic-ftp#readme
+- basic-ftp 6.2.4 (MIT) — https://github.com/patrickjuchli/basic-ftp#readme
 - batch 0.6.1 (MIT) — https://github.com/visionmedia/batch#readme
 - binary-extensions 2.3.0 (MIT) — https://github.com/sindresorhus/binary-extensions#readme
-- body-parser 2.3.0 (MIT) — https://github.com/expressjs/body-parser#readme
+- body-parser 2.4.0 (MIT) — https://github.com/expressjs/body-parser#readme
 - boolbase 1.0.0 (ISC) — https://github.com/fb55/boolbase
-- brace-expansion 2.1.4 (MIT) — https://github.com/juliangruber/brace-expansion
+- brace-expansion 2.1.7 (MIT) — https://github.com/juliangruber/brace-expansion
 - braces 3.0.3 (MIT) — https://github.com/micromatch/braces
 - browser-fs-access 0.29.1 (Apache-2.0) — https://github.com/GoogleChromeLabs/browser-fs-access#readme
 - browser-or-node 1.3.0 (MIT) — https://github.com/flexdinesh/browser-or-node#readme
@@ -433,7 +433,7 @@ publishes none is given its repository's, from the URL shown.
 - int53 1.0.0 (BSD-3-Clause) — https://github.com/dannycoates/int53#readme
 - internmap 1.0.1 (ISC) — https://github.com/mbostock/internmap/
 - internmap 2.0.3 (ISC) — https://github.com/mbostock/internmap/
-- ip-address 10.7.2 (MIT) — https://github.com/beaugunderson/ip-address#readme
+- ip-address 10.7.5 (MIT) — https://github.com/beaugunderson/ip-address#readme
 - ipaddr.js 1.9.1 (MIT) — https://github.com/whitequark/ipaddr.js#readme
 - is-arrayish 0.2.1 (MIT) — https://github.com/qix-/node-is-arrayish#readme
 - is-binary-path 2.1.0 (MIT) — https://github.com/sindresorhus/is-binary-path#readme
@@ -616,7 +616,7 @@ publishes none is given its repository's, from the URL shown.
 - puppeteer-core 24.40.0 (Apache-2.0) — https://github.com/puppeteer/puppeteer/tree/main#readme
 - puppeteer-core 24.43.1 (Apache-2.0) — https://github.com/puppeteer/puppeteer/tree/main#readme
 - pwacompat 2.0.17 (Apache-2.0) — https://github.com/GoogleChrome/pwacompat
-- qs 6.16.0 (BSD-3-Clause) — https://github.com/ljharb/qs
+- qs 6.17.1 (BSD-3-Clause) — https://github.com/ljharb/qs
 - quicktype-core 26.0.0 (Apache-2.0) — https://github.com/glideapps/quicktype#readme
 - range-parser 1.3.0 (MIT) — https://github.com/jshttp/range-parser#readme
 - raphael 2.3.0 (MIT) — http://dmitrybaranovskiy.github.io/raphael/
@@ -663,7 +663,7 @@ publishes none is given its repository's, from the URL shown.
 - socks 2.8.10 (MIT) — https://github.com/JoshGlazebrook/socks/
 - socks-proxy-agent 8.0.5 (MIT) — https://github.com/TooTallNate/proxy-agents#readme
 - source-map 0.6.1 (BSD-3-Clause) — https://github.com/mozilla/source-map
-- source-map-js 1.2.1 (BSD-3-Clause) — https://github.com/7rulnik/source-map-js
+- source-map-js 1.2.2 (BSD-3-Clause) — https://github.com/7rulnik/source-map-js
 - space-separated-tokens 2.0.2 (MIT) — https://github.com/wooorm/space-separated-tokens#readme
 - speech-rule-engine 4.1.4 (Apache-2.0) — https://github.com/zorkow/speech-rule-engine
 - statuses 1.5.0 (MIT) — https://github.com/jshttp/statuses#readme
@@ -704,7 +704,7 @@ publishes none is given its repository's, from the URL shown.
 - typescript 5.9.3 (Apache-2.0) — https://www.typescriptlang.org/
 - typical 2.6.1 (MIT) — https://github.com/75lb/typical#readme
 - uc.micro 2.1.0 (MIT) — https://github.com/markdown-it/uc.micro#readme
-- undici 6.28.1 (MIT) — https://undici.nodejs.org
+- undici 6.29.1 (MIT) — https://undici.nodejs.org
 - undici-types 6.21.0 (MIT) — https://undici.nodejs.org
 - unicode-properties 1.4.1 (MIT) — https://github.com/devongovett/unicode-properties
 - unicode-trie 2.0.0 (MIT) — https://github.com/devongovett/unicode-trie
@@ -5220,7 +5220,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### basic-ftp 5.3.1
+### basic-ftp 6.2.4
 
 ```text
 Copyright (c) 2019 Patrick Juchli
@@ -5286,7 +5286,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### body-parser 2.3.0, type-is 2.1.0
+### body-parser 2.4.0, type-is 2.1.0
 
 ```text
 (The MIT License)
@@ -5334,7 +5334,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### brace-expansion 2.1.4
+### brace-expansion 2.1.7
 
 ```text
 MIT License
@@ -9953,7 +9953,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### ip-address 10.7.2
+### ip-address 10.7.5
 
 ```text
 Copyright (C) 2011 by Beau Gunderson
@@ -13197,7 +13197,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### qs 6.16.0
+### qs 6.17.1
 
 ```text
 BSD 3-Clause License
@@ -15477,7 +15477,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### source-map 0.6.1, source-map-js 1.2.1
+### source-map 0.6.1, source-map-js 1.2.2
 
 ```text
 Copyright (c) 2009-2011, Mozilla Foundation and contributors
@@ -16787,7 +16787,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### undici 6.28.1, undici-types 6.21.0
+### undici 6.29.1, undici-types 6.21.0
 
 ```text
 MIT License
