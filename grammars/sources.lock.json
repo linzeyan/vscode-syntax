@@ -6,7 +6,7 @@
     }
   },
   "microsoft/vscode": {
-    "sha": "b9f9426ef3716ef239ac55bc477330a5efd060c5",
+    "sha": "1306698e328e5e531f5e632301d30020aa994eff",
     "files": {
       "extensions/swift/syntaxes/swift.tmLanguage.json": "acd12f33c06092e1",
       "extensions/csharp/syntaxes/csharp.tmLanguage.json": "152d4586a2ddf518",
@@ -427,7 +427,7 @@
     }
   },
   "sveltejs/language-tools": {
-    "sha": "fda3f39950e71d3371fdc9ebc811c444b8714ad4",
+    "sha": "e980054bc66ecc0f6a5fd9b7e229baef3882fbf2",
     "files": {
       "packages/svelte-vscode/syntaxes/svelte.tmLanguage.src.yaml": "0c40ce3a54793da2"
     }
@@ -654,7 +654,7 @@
     }
   },
   "ocamllabs/vscode-ocaml-platform": {
-    "sha": "c8862c716bc9d148792d3edf19b111a087f87624",
+    "sha": "4f5c9477096b002a0440ff6c4eadf375e88664c3",
     "files": {
       "syntaxes/ocaml.json": "9feef32bae7a404b",
       "syntaxes/ocaml-markdown-codeblock.json": "d39e8739966911d3",
