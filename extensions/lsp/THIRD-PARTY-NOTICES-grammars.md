@@ -7,7 +7,7 @@ unmodified, and its line names the commit that is its Source Code Form.
 
 - https://github.com/dustypomerleau/rust-syntax (MIT) @ 88604ff85fd2
   files: rust.tmLanguage.json
-- https://github.com/microsoft/vscode (MIT) @ b9f9426ef371
+- https://github.com/microsoft/vscode (MIT) @ 1306698e328e
   files: asp-vb-net.tmLanguage.json, batchfile.tmLanguage.json, bibtex.tmLanguage.json, c.tmLanguage.json, clojure.tmLanguage.json, coffeescript.tmLanguage.json, cpp-grammar-bailout.tmLanguage.json, cpp.embedded.macro.tmLanguage.json, cpp.tmLanguage.json, csharp.tmLanguage.json, cshtml.tmLanguage.json, css.tmLanguage.json, cuda-cpp.tmLanguage.json, dart.tmLanguage.json, diff.tmLanguage.json, docker.tmLanguage.json, fsharp.tmLanguage.json, git-commit.tmLanguage.json, git-rebase.tmLanguage.json, go.tmLanguage.json, groovy.tmLanguage.json, handlebars.tmLanguage.json, hlsl.tmLanguage.json, html-derivative.tmLanguage.json, html.tmLanguage.json, ignore.tmLanguage.json, ini.tmLanguage.json, java.tmLanguage.json, javascript.regexp.tmLanguage.json, javascript.tmLanguage.json, javascriptreact.tmLanguage.json, jsdoc.js.injection.tmLanguage.json, jsdoc.ts.injection.tmLanguage.json, json.tmLanguage.json, jsonc.tmLanguage.json, jsonl.tmLanguage.json, julia.tmLanguage.json, latex.tmLanguage.json, less.tmLanguage.json, log.tmLanguage.json, lua.tmLanguage.json, make.tmLanguage.json, markdown-latex-combined.tmLanguage.json, markdown.tmLanguage.json, md-math-block.tmLanguage.json, md-math-fence.tmLanguage.json, md-math-inline.tmLanguage.json, md-math.tmLanguage.json, objective-c++.tmLanguage.json, objective-c.tmLanguage.json, perl.tmLanguage.json, perl6.tmLanguage.json, php-html.tmLanguage.json, php.tmLanguage.json, platform.tmLanguage.json, powershell.tmLanguage.json, prompt.tmLanguage.json, pug.tmLanguage.json, python.regexp.tmLanguage.json, python.tmLanguage.json, r.tmLanguage.json, rst.tmLanguage.json, ruby.tmLanguage.json, sassdoc.tmLanguage.json, scss.tmLanguage.json, shaderlab.tmLanguage.json, shell-unix-bash.tmLanguage.json, snippets.tmLanguage.json, sql.tmLanguage.json, swift.tmLanguage.json, tex.tmLanguage.json, typescript.tmLanguage.json, typescriptreact.tmLanguage.json, xml.tmLanguage.json, xsl.tmLanguage.json, yaml-1.0.tmLanguage.json, yaml-1.1.tmLanguage.json, yaml-1.2.tmLanguage.json, yaml-1.3.tmLanguage.json, yaml-embedded.tmLanguage.json, yaml.tmLanguage.json
 - https://github.com/hashicorp/syntax (MPL-2.0) @ 956f4991da90 — source https://github.com/hashicorp/syntax/tree/956f4991da9046c48ad0c97ecbf1422d4552d6ab (https://mozilla.org/MPL/2.0/)
   files: hcl.tmLanguage.json, terraform.tmLanguage.json
@@ -25,7 +25,7 @@ unmodified, and its line names the commit that is its Source Code Form.
   files: proto3.codeblock.json, proto3.tmLanguage.json
 - https://github.com/bpruitt-goddard/vscode-mermaid-syntax-highlight (MIT) @ unpinned
   files: mermaid.markdown.tmLanguage.json, mermaid.tmLanguage.json
-- https://github.com/sveltejs/language-tools (MIT) @ fda3f39950e7
+- https://github.com/sveltejs/language-tools (MIT) @ e980054bc66e
   files: svelte.tmLanguage.json
 - https://github.com/graphql/graphiql (MIT) @ eeaa50e4085a
   files: graphql.js.tmLanguage.json, graphql.markdown.codeblock.tmLanguage.json, graphql.python.tmLanguage.json, graphql.tmLanguage.json
@@ -55,7 +55,7 @@ unmodified, and its line names the commit that is its Source Code Form.
   files: erlang.tmLanguage.json
 - https://github.com/justusadam/language-haskell (BSD-3-Clause) @ 28d1986362cb
   files: cabal-markdown.tmLanguage.json, cabal.tmLanguage.json, haskell-markdown.tmLanguage.json, haskell.tmLanguage.json
-- https://github.com/ocamllabs/vscode-ocaml-platform (ISC) @ c8862c716bc9
+- https://github.com/ocamllabs/vscode-ocaml-platform (ISC) @ 4f5c9477096b
   files: dune-project.tmLanguage.json, dune.tmLanguage.json, ocaml-interface.tmLanguage.json, ocaml-markdown.tmLanguage.json, ocaml.tmLanguage.json, opam.tmLanguage.json
 - https://github.com/samuelcolvin/jinjahtml-vscode (MIT) @ d8daf5fd4394
   files: jinja-dockerfile.tmLanguage.json, jinja-html.tmLanguage.json, jinja-json.tmLanguage.json, jinja-nginx.tmLanguage.json, jinja-py.tmLanguage.json, jinja-shell.tmLanguage.json, jinja-sql.tmLanguage.json, jinja-toml.tmLanguage.json, jinja-yaml.tmLanguage.json, jinja.tmLanguage.json
@@ -106,7 +106,7 @@ SOFTWARE.
 
 ### microsoft/vscode
 
-From https://github.com/microsoft/vscode/blob/b9f9426ef3716ef239ac55bc477330a5efd060c5/LICENSE.txt
+From https://github.com/microsoft/vscode/blob/1306698e328e5e531f5e632301d30020aa994eff/LICENSE.txt
 
 ```text
 MIT License
@@ -132,7 +132,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-From https://github.com/microsoft/vscode/blob/b9f9426ef3716ef239ac55bc477330a5efd060c5/ThirdPartyNotices.txt
+From https://github.com/microsoft/vscode/blob/1306698e328e5e531f5e632301d30020aa994eff/ThirdPartyNotices.txt
 
 ```text
 NOTICES
@@ -4160,7 +4160,7 @@ SOFTWARE.
 
 ### sveltejs/language-tools
 
-From https://github.com/sveltejs/language-tools/blob/fda3f39950e71d3371fdc9ebc811c444b8714ad4/LICENSE
+From https://github.com/sveltejs/language-tools/blob/e980054bc66ecc0f6a5fd9b7e229baef3882fbf2/LICENSE
 
 ```text
 Copyright (c) 2020-Present [these people](https://github.com/sveltejs/language-tools/graphs/contributors)
@@ -9227,7 +9227,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### ocamllabs/vscode-ocaml-platform
 
-From https://github.com/ocamllabs/vscode-ocaml-platform/blob/c8862c716bc9d148792d3edf19b111a087f87624/LICENSE
+From https://github.com/ocamllabs/vscode-ocaml-platform/blob/4f5c9477096b002a0440ff6c4eadf375e88664c3/LICENSE
 
 ```text
 ISC License
