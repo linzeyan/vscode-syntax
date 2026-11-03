@@ -149,7 +149,8 @@ async function transformSelection(operation?: unknown, choice?: unknown) {
       for (const token of texts) {
         // header and payload arrive as JSON text; parsed, they read as part of
         // the document rather than as two escaped strings in it.
-        const { header, payload, ...rest } = load().jwt_decode(token.trim()) as Record<string, string>;
+        // No secret here, so the signature is shown but not checked.
+        const { header, payload, ...rest } = load().jwt_decode(token.trim(), "") as Record<string, string>;
         const content = JSON.stringify({ header: JSON.parse(header), payload: JSON.parse(payload), ...rest }, null, 2);
         await vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ language: "json", content }));
       }

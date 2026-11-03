@@ -356,8 +356,12 @@ def transform_source() -> Path:
 
 def collect_transform() -> tuple[str, list]:
     tag = json.loads(TRANSFORM_PIN.read_text())["tag"]
+    source = transform_source()
+    # The FIGlet fonts are compiled into the wasm (include_str!) but are not a
+    # crate, so cargo metadata never lists them; their terms ship beside them.
+    fonts = (source / "data" / "figlet" / "LICENSE").read_text().strip()
     return collect_crates(
-        transform_source(),
+        source,
         # The wasm is built for this target alone; the native-only crates
         # in the lock (test runners, their TLS stacks) are not in it.
         ["--filter-platform", "wasm32-unknown-unknown"],
@@ -373,6 +377,13 @@ def collect_transform() -> tuple[str, list]:
             "the term poly relies on is named inline. A crate poly takes under",
             "MPL-2.0 is used unmodified, and its line names the crates.io archive",
             "that is its Source Code Form.",
+            "",
+            "The wasm also embeds three FIGlet fonts for the ASCII Art tool",
+            "(BSD-3-Clause), from transform's `wasm_core/data/figlet/LICENSE`:",
+            "",
+            "```text",
+            *fonts.splitlines(),
+            "```",
         ],
     )
 

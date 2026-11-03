@@ -23,7 +23,7 @@ const glue = require("../../dist/transform/pkg/wasm_core.js") as {
   hash_content(input: string): unknown;
   url_encode(input: string): string;
   url_decode(input: string): string;
-  jwt_decode(token: string): unknown;
+  jwt_decode(token: string, secret: string): unknown;
   convert_number_base(base: string, value: string): unknown;
   read_timestamp(input: string, format: string, pattern: string): Reading;
   format_timestamp(seconds: string, nanos: number, offsetSeconds: number, patterns: string[]): Written;
