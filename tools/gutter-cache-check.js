@@ -228,7 +228,7 @@ const vscode = {
     showQuickPick: () => Promise.resolve(undefined),
     setStatusBarMessage: () => nothing,
     createStatusBarItem: () => ({ ...nothing, show() {}, hide() {} }),
-    // The "Poly Editor" log channel. Nothing here reads what it says.
+    // The "poly-editor" log channel. Nothing here reads what it says.
     createOutputChannel: () => ({
       ...nothing,
       trace() {},

@@ -39,7 +39,7 @@ export function executorFor(document: vscode.TextDocument, languageId?: string):
 
 export class CodeManager implements vscode.Disposable {
   // Made on first use rather than at activation, as upstream did: poly starts
-  // with every window, and an empty "Code Runner" in the Output list of
+  // with every window, and an empty "poly-code-runner" in the Output list of
   // someone who never turned it on is clutter they did not ask for.
   private _outputChannel: vscode.OutputChannel | undefined;
   private _terminal: vscode.Terminal | undefined;
@@ -375,7 +375,10 @@ export class CodeManager implements vscode.Disposable {
     // The output panel colours `[Running]` and `[Done]` by this language's
     // grammar, which upstream reached by claiming every output panel's MIME
     // type for its own.
-    const output = this._outputChannel ??= vscode.window.createOutputChannel("Code Runner", "poly-code-runner-output");
+    const output = this._outputChannel ??= vscode.window.createOutputChannel(
+      "poly-code-runner",
+      "poly-code-runner-output",
+    );
     const clearPreviousOutput = this._config.get<boolean>("clearPreviousOutput");
     if (clearPreviousOutput) {
       output.clear();

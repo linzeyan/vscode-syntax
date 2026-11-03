@@ -72,8 +72,8 @@ import { registerToolbox } from "./toolbox";
 import { drawsNothing, explain, findSuspects, label, Level, levelOf, Suspect, SUSPECTS } from "./unicode";
 
 /**
- * The editor features' own log, "Poly Editor" in the Output panel -- apart
- * from "Poly", which is the daemon's and too busy to find a lens decision in.
+ * The editor features' own log, "poly-editor" in the Output panel -- apart
+ * from "poly", which is the daemon's and too busy to find a lens decision in.
  *
  * There was none until 0.18.1: a lens that decided to draw nothing said so to
  * nobody, and an exception in one landed in the extension host's log where no
@@ -2448,7 +2448,7 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   tintIndentation(context);
   highlightUnicode(context);
   previewImages(context);
-  log = vscode.window.createOutputChannel("Poly Editor", { log: true });
+  log = vscode.window.createOutputChannel("poly-editor", { log: true });
   // Two providers draw lenses that navigate to a list of places, so the
   // command they share is registered here rather than inside either of them --
   // registering it twice throws, and registering it in one means the other

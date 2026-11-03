@@ -243,7 +243,7 @@ async function measure(side, executable, settings) {
   report.files = tree(dir);
   // The report channel, as the editor logged it: URLs, and the errors the
   // exports showed. Each side's own channel; the other one's stays empty.
-  const channel = side === "jebbs" ? "-PlantUML.log" : "-Poly PlantUML.log";
+  const channel = side === "jebbs" ? "-PlantUML.log" : "-poly-plantuml.log";
   const found = [];
   const walk = (at) => {
     for (const name of readdirSync(at)) {

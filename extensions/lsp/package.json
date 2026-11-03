@@ -2813,7 +2813,7 @@
         {
           "id": "poly-toolbox",
           "title": "%viewsContainer.polyToolbox.title%",
-          "icon": "$(tools)"
+          "icon": "media/toolbox.svg"
         }
       ]
     },

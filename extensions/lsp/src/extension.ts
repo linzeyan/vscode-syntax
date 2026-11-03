@@ -138,7 +138,7 @@ const MINIFIABLE = [
 ];
 
 let client: LanguageClient | undefined;
-/** The "Poly" channel itself, for lines below info; see `daemonLog`. */
+/** The "poly" channel itself, for lines below info; see `daemonLog`. */
 let polyLog: vscode.LogOutputChannel | undefined;
 let status: vscode.StatusBarItem | undefined;
 let formatToggle: vscode.StatusBarItem | undefined;
@@ -1145,7 +1145,7 @@ export async function activate(context: vscode.ExtensionContext) {
 const LEVELS = { Error: "error", Warn: "warn", Info: "info", Debug: "debug", Trace: "trace" } as const;
 
 /**
- * The daemon's "Poly" channel, as a `LogOutputChannel`: that is a file named
+ * The daemon's "poly" channel, as a `LogOutputChannel`: that is a file named
  * after it in the extension's own folder, the one "Developer: Open Extension
  * Logs Folder" opens, where a plain channel is a numbered file under
  * `output_logging_*` beside it that nobody finds -- and every line has a time.
@@ -1154,11 +1154,11 @@ const LEVELS = { Error: "error", Warn: "warn", Info: "info", Debug: "debug", Tra
  * comes in whatever chunks the pipe gives, and a log channel makes each chunk
  * an entry, so lines are put back together here; the client's own messages
  * carry a clock and a level in brackets, which become the entry's instead.
- * Owning the channel also keeps the client from opening a second "Poly" to
+ * Owning the channel also keeps the client from opening a second "poly" to
  * say the server exited after it disposed the first.
  */
 function daemonLog(context: vscode.ExtensionContext): vscode.OutputChannel {
-  const log = vscode.window.createOutputChannel("Poly", { log: true });
+  const log = vscode.window.createOutputChannel("poly", { log: true });
   polyLog = log;
   context.subscriptions.push(
     log,
@@ -1215,7 +1215,7 @@ function daemonLog(context: vscode.ExtensionContext): vscode.OutputChannel {
   };
 }
 
-/** A line in the "Poly" channel, from code that runs outside the client. */
+/** A line in the "poly" channel, from code that runs outside the client. */
 function logLine(line: string): void {
   client?.outputChannel.appendLine(line);
 }

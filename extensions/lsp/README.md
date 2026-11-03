@@ -502,7 +502,7 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 
 `Extract Variable`、`Inline Variable`、上／下一個變更檔與 `Revert Selected Changes and Save`
 的鍵若已被你裝的別的擴充綁走（例如 mushan.vscode-paste-image 的 `cmd+alt+v`、quicktype 的
-`cmd+alt+shift+v`、Rewrap 的 `alt+q`），poly 會讓出來，Poly Editor 輸出面板記一行讓給了誰；
+`cmd+alt+shift+v`、Rewrap 的 `alt+q`），poly 會讓出來，poly-editor 輸出面板記一行讓給了誰；
 命令面板照樣叫得到。要搶回來，在 `keybindings.json` 綁對應的 `poly.*` 命令。只有 web 版
 （沒有桌面版程式）的擴充 poly 看不到，照樣會被蓋過。
 
@@ -592,19 +592,19 @@ repo 的 git 設定裡的 `core.fsmonitor`。信任之後 poly 會重啟 daemon�
 
 ## Log
 
-兩個輸出面板：**Poly** 是 daemon 的（啟動、每次 lint／format），
-**Poly Editor** 是編輯器功能的（lens 為什麼沒畫之類）。要記多細，在輸出面板選好該面板後按右上的
+兩個輸出面板：**poly** 是 daemon 的（啟動、每次 lint／format），
+**poly-editor** 是編輯器功能的（lens 為什麼沒畫之類）。要記多細，在輸出面板選好該面板後按右上的
 齒輪（或 `Developer: Set Log Level`）選層級，即時生效，poly 沒有另外的設定：
 
 - **Info**（預設）：啟動、每次 lint、失敗。
-- **Debug**：Poly 面板每個請求一行，帶檔案路徑與編輯器顯示的 `行:欄`、回了什麼、花多久；開檔、
+- **Debug**：poly 面板每個請求一行，帶檔案路徑與編輯器顯示的 `行:欄`、回了什麼、花多久；開檔、
   存檔、關檔；每次送出的診斷逐筆列出 `行:欄 來源/規則`（前 10 筆）；format 沒有改動時說為什麼
   （`[format] exclude` 排除了、poly 不格式化這個語言、Format 開關關著）；每開關一個檔一行 daemon 握著
   什麼（RSS、文件數、各快取）。
 - **Trace**：再加上 daemon 收發的每則 LSP 訊息原文，每則截在 4 KB。
 
 兩者都寫到磁碟上，是 `Developer: Open Extension Logs Folder` 打開的資料夾裡
-`ricky.poly-lsp/` 底下的 `Poly.log` 與 `Poly Editor.log`，回報問題時附這兩個檔就夠了。WSL、SSH 的
+`ricky.poly-lsp/` 底下的 `poly.log` 與 `poly-editor.log`，回報問題時附這兩個檔就夠了。WSL、SSH 的
 遠端視窗裡 poly-lsp 跑在遠端，這兩個檔也在遠端的 `~/.vscode-server/data/logs/` 底下，不在本機；拿不到
 時從輸出面板匯出。
 

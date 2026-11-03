@@ -78,7 +78,7 @@ function start(context: vscode.ExtensionContext) {
     return;
   }
   extensionContext = context;
-  logger.initializeLogger(context, () => vscode.window.createOutputChannel("Markdown PDF (Poly)", { log: true }));
+  logger.initializeLogger(context, () => vscode.window.createOutputChannel("poly-markdown-pdf", { log: true }));
 }
 
 /** Outputs an environment snapshot and current settings to the channel, then reveals it. */

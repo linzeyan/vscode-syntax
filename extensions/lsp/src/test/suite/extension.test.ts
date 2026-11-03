@@ -2055,12 +2055,12 @@ suite("poly-lsp in a real editor", () => {
   // someone attaches to a report is the file in the extension's logs folder;
   // a plain channel put it in a numbered file elsewhere, and a log channel fed
   // the pipe's chunks as they come stamps some lines and runs others on.
-  test("the daemon's log is Poly.log in the extension's logs folder, a line to an entry", async () => {
+  test("the daemon's log is poly.log in the extension's logs folder, a line to an entry", async () => {
     const logs = process.env.POLY_E2E_LOGS;
     assert.ok(logs, "the test host was given no logs folder");
     const name = readdirSync(logs, { recursive: true, encoding: "utf8" })
-      .find((one) => one.endsWith(join(EXTENSION_ID, "Poly.log")));
-    assert.ok(name, `no ${EXTENSION_ID}/Poly.log under ${logs}`);
+      .find((one) => one.endsWith(join(EXTENSION_ID, "poly.log")));
+    assert.ok(name, `no ${EXTENSION_ID}/poly.log under ${logs}`);
     // The daemon times every request it answers.
     const stderr = /^\S+ \S+ \[info\] \[poly\] textDocument\/formatting [\d.]+ms$/m;
     const text = await eventually("a line of the daemon's stderr", () => {

@@ -234,7 +234,7 @@ export async function checkForUpdates(
   } catch (err) {
     // Network failures are routine (offline, rate limit): never toast on the
     // background path. Into poly's own log rather than console.warn, which
-    // lands in the extension host log where nobody looking at "Poly" finds it.
+    // lands in the extension host log where nobody looking at "poly" finds it.
     if (quiet) {
       log(`[update] check failed: ${err}`);
     } else {

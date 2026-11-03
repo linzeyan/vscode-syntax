@@ -1172,7 +1172,7 @@ export function registerPlantuml(
   poly: string,
 ): (source: string, env: unknown, line: number | undefined) => string | undefined {
   const renderer = new Renderer(poly);
-  const report = vscode.window.createOutputChannel("Poly PlantUML");
+  const report = vscode.window.createOutputChannel("poly-plantuml");
   const preview = new Preview(renderer, vscode.Uri.joinPath(context.extensionUri, "media", "plantuml"));
   const exporter = new Exporter(renderer, report);
   const fences = new Fences(renderer);

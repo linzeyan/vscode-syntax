@@ -40,7 +40,7 @@ pub(crate) const EXECUTE_COMMANDS: &[&str] = &[FORMAT_PATHS, MINIFY, EDITOR_CONF
 /// How much the daemon says on stderr, numbered as `vscode.LogLevel` is (0 is
 /// Off).
 ///
-/// The extension files each line under the "Poly" channel's level of the same
+/// The extension files each line under the "poly" channel's level of the same
 /// name, and that channel's own level -- the gear on the Output panel -- is the
 /// one switch: it arrives in `initializationOptions` and again as
 /// `poly/logLevel` whenever it moves. A setting of poly's own would be a second
@@ -939,7 +939,7 @@ impl Server {
                 self.publish(&uri, Vec::new())?;
                 self.log_memory("didClose");
             }
-            // The "Poly" channel's level moved; see `LOG_LEVEL`.
+            // The "poly" channel's level moved; see `LOG_LEVEL`.
             "poly/logLevel" => {
                 if let Some(level) = notification.params.get("level") {
                     set_log_level(level);
