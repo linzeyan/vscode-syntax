@@ -21,6 +21,8 @@ import { registerToolboxCommands } from "./toolboxCommands";
 import { textFormatOf } from "./toolboxOps";
 
 const ROOT = path.join(__dirname, "transform");
+// The tree's codicons as files, written by tools/toolbox-icons.js.
+const ICONS = path.join(__dirname, "toolbox-icons");
 const VIEW_TYPE = "poly.toolbox";
 
 interface Tool {
@@ -204,7 +206,10 @@ function show(tool: string, panel?: vscode.WebviewPanel, selection?: Selection) 
   }
   if (selection) selections.set(panel, selection);
   panel.title = label(entry);
-  panel.iconPath = vscode.Uri.file(path.join(ROOT, "favicon.svg"));
+  panel.iconPath = {
+    light: vscode.Uri.file(path.join(ICONS, `${entry.icon}-light.svg`)),
+    dark: vscode.Uri.file(path.join(ICONS, `${entry.icon}-dark.svg`)),
+  };
   panels.set(tool, panel);
   const shown = panel;
   const disposables = [

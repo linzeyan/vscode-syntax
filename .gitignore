@@ -41,6 +41,7 @@ extensions/lsp/dist/git-graph/
 extensions/lsp/dist/code-runner/
 extensions/lsp/dist/errorLens/
 extensions/lsp/dist/transform/
+extensions/lsp/dist/toolbox-icons/
 extensions/lsp/dist/transformEngine.js
 extensions/lsp/dist/quicktype.js
 extensions/lsp/.vscode-test/
