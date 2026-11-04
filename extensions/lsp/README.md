@@ -352,13 +352,16 @@ VSCode 自己的原始檔控制圖（Source Control Graph，MIT），顏色是�
   檔案；stash 不顯示。工具列顯示目前的路徑，按 ✕ 回到整個 repository。需要 git。
 - **Changes 分頁**：工具列的 `Graph`／`Changes` 切換。`Changes` 把目前路徑的歷史攤成一路往下捲的 patch，
   同 `git log -p -- <路徑>`（只看 HEAD；單一檔案跟著改名往前接），未提交的變更在最上面；每個 commit、
-  每個檔案可收合，右邊的按鈕開 diff，一個檔案超過 500 行的部分要開 diff 看。路徑旁的按鈕從 repository
+  每個檔案可收合，右邊的按鈕開 diff，一個檔案超過 500 行的部分要開 diff 看。`poly.gitHistory.diffViewer`
+  可改用 difftastic（依語法並排比對，只改排版的不算變更）或 delta（照你 git config 的 delta 設定）畫每個
+  檔案的 diff，兩者都要自己裝在擴充功能執行的機器上，沒裝時維持 git 的 diff 並註明原因。路徑旁的按鈕從 repository
   的檔案與資料夾挑一個；鏈結圖示的按鈕讓路徑跟著編輯器裡的檔案走（把面板拉到編輯器旁邊用），手動選了路徑就關掉。
   檔案總管的選取 VSCode 不讓 extension 讀，所以跟的是開著的檔案，資料夾要用右鍵或挑選。需要 git。
 - **圖**：點一下 commit 在它下面展開作者、日期、父 commit、訊息與變更的檔案（樹狀或清單），點檔案開 diff；
   上下鍵換到相鄰的 commit，`Esc` 收起。按住 `cmd`／`ctrl` 再點另一個 commit 是比較兩者。分支標籤雙擊即簽出。
-- **diff**：標題列的 ← →（`cmd+alt+a`／`cmd+alt+z`，Windows、Linux 是 `ctrl`）照清單的順序換到同一個 commit
-  的上／下一個檔案，不必回到圖；旁邊的 ↑ ↓（`shift+alt+f5`／`alt+f5`）是 VSCode 自己的上／下一個差異。
+- **diff**：標題列的 ← →（`alt+shift+[`／`alt+shift+]`）照清單的順序換到同一個 commit 的上／下一個檔案，
+  不必回到圖；`alt+[`／`alt+]` 是上／下一個差異，游標被捲出畫面時從畫面所在處接著找。唯讀的 diff 裡
+  不必按修飾鍵：`[`／`]` 換檔案，`p`／`n` 換差異。
 - **工具列**：只看某些分支、要不要顯示 remote 分支、搜尋（大小寫、正規表示式，`cmd+f`／`ctrl+f`）、擷取、
   管理 remote（新增、編輯、刪除、擷取並 prune），以及選項：tag、stash、未提交的變更要不要顯示，只沿第一個
   父 commit，排序照 commit 日期、作者日期或拓撲。選項按 repository 記住。`cmd+r` 重新整理，`cmd+h` 捲到
@@ -492,8 +495,10 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 | `Outdent List Item`                | `shift+tab`       | `shift+tab`                         | markdown 家族       |
 | `Extract Variable`                 | `cmd+alt+v`       | `ctrl+alt+v`                        | 編輯器有焦點        |
 | `Inline Variable`                  | `cmd+alt+shift+v` | `ctrl+alt+shift+v`                  | 編輯器有焦點        |
-| `Go to Next Changed File`          | `cmd+alt+z`       | `ctrl+alt+z`                        | 有 git、Git History |
-| `Go to Previous Changed File`      | `cmd+alt+a`       | `ctrl+alt+a`                        | 有 git、Git History |
+| `Go to Next Change`                | `alt+]`           | `alt+]`                             | 編輯器有焦點        |
+| `Go to Previous Change`            | `alt+[`           | `alt+[`                             | 編輯器有焦點        |
+| `Go to Next Changed File`          | `alt+shift+]`     | `alt+shift+]`                       | 有 git、Git History |
+| `Go to Previous Changed File`      | `alt+shift+[`     | `alt+shift+[`                       | 有 git、Git History |
 | `Revert Selected Changes and Save` | `alt+q`           | `alt+q`                             | 有 git、檔案        |
 | `Run Code`                         | `ctrl+alt+n`      | `ctrl+alt+n`                        | 開了 Code Runner    |
 | `Run Custom Command`               | `ctrl+alt+k`      | `ctrl+alt+k`                        | 開了 Code Runner    |
@@ -530,6 +535,7 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 | `poly.deadCodeCodeLens.enabled`    | `false`   | 每個 Go／TS／JS／Python 檔第一行上方一條 `analyze dead code`                          |
 | `poly.updateCheck.enabled`         | `true`    | 背景檢查新版，有就直接安裝                                                            |
 | `poly.updateCheck.intervalDays`    | `7`       | 檢查間隔，`0` 是每次啟動都查                                                          |
+| `poly.gitHistory.diffViewer`       | `builtin` | Git History 的 Changes 分頁用哪個 diff：`builtin`、`difftastic`（difft）或 `delta`    |
 | `poly.indentTint.enabled`          | `false`   | 縮排上色                                                                              |
 | `poly.imagePreview.enabled`        | `false`   | gutter 圖片縮圖                                                                       |
 | `poly.unicodeHighlight.enabled`    | `false`   | 不可見與冒充 ASCII 的字元（gremlins 的替代）                                          |

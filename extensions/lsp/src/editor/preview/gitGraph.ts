@@ -28,6 +28,7 @@ import {
   UNCOMMITTED,
   type ViewOptions,
 } from "../gitGraphProtocol";
+import { ansiLines, type AnsiStyle, type DifftView, type DiffViewer } from "../gitGraphViewers";
 import {
   graphColumnCount,
   renderSCMHistoryGraphPlaceholder,
@@ -97,6 +98,8 @@ interface State {
     error?: string;
   };
   waitingForPatches: boolean;
+  /** How the Changes tab draws a file's diff: `poly.gitHistory.diffViewer`. */
+  diffViewer: DiffViewer;
 }
 
 const state: State = {
@@ -111,6 +114,7 @@ const state: State = {
   tab: "graph",
   follow: false,
   waitingForPatches: false,
+  diffViewer: "builtin",
 };
 
 // ---------------------------------------------------------------- elements
@@ -925,6 +929,119 @@ function hunkLines(lines: string[]): HTMLElement {
   return body;
 }
 
+/** What the host answered for a file through difftastic or delta. */
+type Rendered =
+  | { viewer: "difftastic"; view: DifftView; error?: undefined }
+  | { viewer: "delta"; ansi: string; error?: undefined }
+  | { viewer: DiffViewer; error: string };
+
+/** Answers by file (`key` and path), kept so folding a file or a later page does not run the tool again. */
+const rendered = new Map<string, Rendered>();
+/** The body each asked-for file is drawn into, replaced when its answer comes. */
+const viewerBodies = new Map<string, { body: HTMLElement; file: PatchEntry; openDiff: () => void }>();
+const asked = new Set<string>();
+
+/**
+ * Asks for a file only as it comes near the screen: each answer is a process
+ * on the host, and a page of history is dozens of files.
+ */
+const nearScreen = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    const body = entry.target as HTMLElement;
+    nearScreen.unobserve(body);
+    const id = body.dataset.render!;
+    const shown = viewerBodies.get(id);
+    if (!shown || asked.has(id) || rendered.has(id)) continue;
+    asked.add(id);
+    post({ type: "render", id, file: shown.file, columns: columnsFor(body) });
+  }
+}, { rootMargin: "600px" });
+
+/** How many characters of the editor font fit across `node`, for delta's `--width`. */
+function columnsFor(node: HTMLElement): number {
+  const probe = el("span", { class: "measure" }, "0".repeat(100));
+  node.append(probe);
+  const width = probe.getBoundingClientRect().width / 100;
+  probe.remove();
+  return width > 0 ? Math.floor((node.clientWidth - 24) / width) : 120;
+}
+
+function difftBody(view: DifftView, openDiff: () => void): HTMLElement {
+  const body = el("div", { class: "hunks difft" });
+  const side = (line: DifftView["hunks"][number][number]["left"], kind: "del" | "add") => {
+    if (!line) return [el("span", { class: "ln" }), el("span", { class: "code empty" })];
+    const changed = line.runs.some(([, highlight]) => highlight);
+    const code = el("span", { class: `code${changed ? ` ${kind}` : ""}` });
+    for (const [text, highlight] of line.runs) {
+      code.append(highlight ? el("span", { class: `novel hl-${highlight}` }, text) : text);
+    }
+    return [el("span", { class: "ln" }, String(line.n)), code];
+  };
+  view.hunks.forEach((hunk, i) => {
+    if (i > 0) body.append(el("div", { class: "difft-gap", "aria-hidden": "true" }, "⋯"));
+    for (const row of hunk) {
+      body.append(el("div", { class: "drow" }, ...side(row.left, "del"), ...side(row.right, "add")));
+    }
+  });
+  if (view.hunks.length === 0) {
+    body.append(
+      el(
+        "p",
+        { class: "patch-note" },
+        `difftastic found no change to the ${view.language} syntax: only formatting or whitespace differs.`,
+      ),
+    );
+  }
+  if (view.omitted > 0) {
+    const rest = el("button", { class: "text-button" }, `${view.omitted} more rows — Open Changes`);
+    rest.addEventListener("click", openDiff);
+    body.append(el("div", { class: "patch-note" }, rest));
+  }
+  return body;
+}
+
+/** Styles go through the CSSOM: the page's CSP refuses `style` attributes. */
+function styled(text: string, style: AnsiStyle): Node {
+  if (Object.values(style).every((value) => value === undefined)) return document.createTextNode(text);
+  const span = el("span", {}, text);
+  const fg = style.inverse ? style.bg ?? "var(--vscode-editor-background)" : style.fg;
+  const bg = style.inverse ? style.fg ?? "var(--vscode-editor-foreground)" : style.bg;
+  if (fg) span.style.color = fg;
+  if (bg) span.style.background = bg;
+  if (style.bold) span.style.fontWeight = "bold";
+  if (style.dim) span.style.opacity = "0.6";
+  if (style.italic) span.style.fontStyle = "italic";
+  if (style.underline) span.style.textDecoration = "underline";
+  return span;
+}
+
+function deltaBody(ansi: string): HTMLElement {
+  const body = el("div", { class: "hunks delta" });
+  for (const line of ansiLines(ansi)) {
+    body.append(
+      el("div", { class: "aline" }, ...line.map(([text, style]) => styled(text, style)), line.length ? undefined : " "),
+    );
+  }
+  return body;
+}
+
+/**
+ * A file's diff through the chosen viewer: its answer once there is one, and
+ * git's diff until then -- or for good, with the reason, when the tool failed.
+ */
+function viewerBody(id: string, file: PatchEntry, openDiff: () => void): HTMLElement {
+  const answer = rendered.get(id);
+  if (answer && "view" in answer) return difftBody(answer.view, openDiff);
+  if (answer && "ansi" in answer) return deltaBody(answer.ansi);
+  const body = el("div", { class: "viewer-pending", "data-render": id });
+  if (answer?.error) body.append(el("div", { class: "viewer-error" }, icon("warning"), el("span", {}, answer.error)));
+  body.append(hunkLines(file.lines));
+  viewerBodies.set(id, { body, file, openDiff });
+  if (!answer) nearScreen.observe(body);
+  return body;
+}
+
 function filePatch(key: string, files: PatchEntry[], index: number): HTMLElement {
   const file = files[index];
   const id = `${key}\n${file.newPath}`;
@@ -982,7 +1099,11 @@ function filePatch(key: string, files: PatchEntry[], index: number): HTMLElement
     }
   });
   if (!open) return node;
-  if (file.lines.length > 0) {
+  // A binary file has nothing either tool could show; git's note says what there is.
+  const viewer = state.diffViewer !== "builtin" && file.additions !== null && file.lines.length > 0;
+  if (viewer) {
+    node.append(viewerBody(id, file, openDiff));
+  } else if (file.lines.length > 0) {
     node.append(hunkLines(file.lines));
   } else {
     node.append(el(
@@ -991,10 +1112,10 @@ function filePatch(key: string, files: PatchEntry[], index: number): HTMLElement
       file.additions === null ? "Binary file" : file.type === "R" ? "Renamed, content unchanged" : "Mode changed only",
     ));
   }
-  if (file.omitted > 0) {
+  if (file.omitted > 0 && !(viewer && rendered.get(id)?.viewer === "difftastic")) {
     const rest = el("button", { class: "text-button" }, `${file.omitted} more lines — Open Changes`);
     rest.addEventListener("click", openDiff);
-    node.append(el("div", { class: "patch-note" }, rest));
+    node.append(el("div", { class: "patch-note git-cut" }, rest));
   }
   return node;
 }
@@ -1079,7 +1200,10 @@ function renderChanges(from = 0): void {
   const patches = state.patches;
   morePatches?.disconnect();
   changesFooter.replaceChildren();
-  if (from === 0) changesList.replaceChildren();
+  if (from === 0) {
+    changesList.replaceChildren();
+    viewerBodies.clear();
+  }
   if (!patches) {
     changesList.append(el("div", { class: "notice" }, icon("loading"), el("span", {}, "Loading…")));
     return;
@@ -1513,6 +1637,15 @@ function arrange(): void {
 
 // ---------------------------------------------------------------- messages
 
+function forgetRendered(which: (id: string) => boolean): void {
+  for (const id of [...rendered.keys(), ...asked]) {
+    if (which(id)) {
+      rendered.delete(id);
+      asked.delete(id);
+    }
+  }
+}
+
 window.addEventListener("message", (event: MessageEvent) => {
   const message = event.data as { type: string; [key: string]: unknown };
   switch (message.type) {
@@ -1605,6 +1738,9 @@ window.addEventListener("message", (event: MessageEvent) => {
         renderChanges();
         return;
       }
+      state.diffViewer = message.diffViewer as DiffViewer;
+      // A commit's diff never changes; the uncommitted one does with every save.
+      if (skip === 0) forgetRendered((id) => id.startsWith(`${UNCOMMITTED}\n`));
       const page = {
         head: message.head as string,
         uncommitted: message.uncommitted as FilePatch[],
@@ -1630,6 +1766,28 @@ window.addEventListener("message", (event: MessageEvent) => {
       state.follow = message.on as boolean;
       arrange();
       return;
+    case "diffViewer":
+      state.diffViewer = message.viewer as DiffViewer;
+      forgetRendered(() => true);
+      if (state.tab === "changes" && state.patches) renderChanges();
+      return;
+    case "rendered": {
+      const id = message.id as string;
+      asked.delete(id);
+      // An answer from a viewer since switched away from is not this view's.
+      if (message.viewer !== state.diffViewer) return;
+      rendered.set(id, message as unknown as Rendered);
+      const shown = viewerBodies.get(id);
+      viewerBodies.delete(id);
+      if (shown?.body.isConnected) {
+        shown.body.replaceWith(viewerBody(id, shown.file, shown.openDiff));
+        // difftastic reads the whole file, so git's cut-off note no longer applies.
+        if (message.viewer === "difftastic" && !message.error) {
+          shown.body.parentElement?.querySelector(":scope > .git-cut")?.remove();
+        }
+      }
+      return;
+    }
     case "details":
     case "compare": {
       // Replies to requests since overtaken are dropped.

@@ -146,13 +146,14 @@
   Chrome、Edge 或 Firefox 匯出，和它一樣不另外下載。兩個都裝著時 poly 整個讓出。
 - **Git History**：取代 mhutchie.git-graph。按 status bar 的 Git History、原始檔控制標題列的按鈕（或
   `View Git History`），所有分支、tag 與 stash 畫成一張圖，未提交的變更在最上面。點 commit 在下面展開它的
-  訊息與變更的檔案，`cmd/ctrl` 加點另一個是比較兩者；開著的 diff 用標題列的 ← →（`cmd+alt+a`／`cmd+alt+z`）
-  換到同一個 commit 的上／下一個檔案；可搜尋、只看某些分支。commit、分支、tag、stash 與
+  訊息與變更的檔案，`cmd/ctrl` 加點另一個是比較兩者；開著的 diff 用標題列的 ← →
+  （`alt+shift+[`／`alt+shift+]`，唯讀的 diff 裡直接按 `[`／`]`）換到同一個 commit 的上／下一個
+  檔案，`p`／`n` 跳上／下一處變更；可搜尋、只看某些分支。commit、分支、tag、stash 與
   檔案的右鍵選單做簽出、merge、rebase、cherry-pick、reset、push、刪除等操作，remote 在工具列管理。
   檔案總管對檔案或資料夾按右鍵的 `View File History`／`View Folder History`（命令面板也有，作用在目前的檔案
   與它所在的資料夾）只列改過它的 commit，展開的 commit 只列它底下的檔案；工具列的 ✕ 回到整個 repository。
   `Changes` 分頁把同一個路徑的歷史攤成連續的 patch（同 `git log -p -- <路徑>`），可以挑檔案或資料夾，
-  或讓它跟著編輯器裡的檔案走。功能
+  或讓它跟著編輯器裡的檔案走；`poly.gitHistory.diffViewer` 可改用自己裝的 difftastic 或 delta 來畫。功能
   照它的行為做；圖的畫法移植自 VSCode 的原始檔控制圖（Source Control Graph，MIT），顏色是它的
   `scmGraph.*` 佈景主題色。沒有它的 `git-graph.*` 設定。兩個都裝著時 poly 讓出 status bar 與原始檔控制的按鈕。
   電腦上沒有 git 時改由 poly 讀 repository，圖、commit 細節、比較與 diff 照常，但只能看：會改動
@@ -230,10 +231,12 @@
   handler。認 protoc-gen-go 與 protoc-gen-go-grpc 的命名規則；生成檔不在 workspace 裡就不畫。
   `poly.protobufCodeLens.enabled` 可關。
 - **跨檔案 next／previous change ＋ `Poly: Revert Selected Changes and Save`**：
-  `cmd/ctrl+alt+z`／`cmd/ctrl+alt+a` 跳到上／下一個有改動的檔案並落在改動上，`alt+q`
-  還原游標所在的 hunk 並存檔。VSCode 內建的是「同一個檔案裡的下一處改動」，跨檔案那
-  一步沒有——而那是 review 一個 branch 時按最多次的一步。順序照路徑排，所以同一顆
-  按鍵按兩次一定走同一條路。別的擴充綁了同一組鍵（Rewrap 的 `alt+q`）時 poly 讓出來。
+  `alt+shift+]`／`alt+shift+[` 跳到下／上一個有改動的檔案並落在改動上，`alt+]`／`alt+[`
+  跳到同一個檔案（或 diff）裡的下／上一處改動，`alt+q` 還原游標所在的 hunk 並存檔。VSCode
+  內建的是「同一個檔案裡的下一處改動」，跨檔案那一步沒有——而那是 review 一個 branch
+  時按最多次的一步。順序照路徑排，所以同一顆按鍵按兩次一定走同一條路。游標被捲出畫面時，
+  下／上一處改動從畫面所在的位置接著找，不會跳回第一處。唯讀的 diff 裡 `n`／`p` 與
+  `]`／`[` 不必按修飾鍵。別的擴充綁了同一組鍵（Rewrap 的 `alt+q`）時 poly 讓出來。
 - **縮排上色**：每層縮排的空白塗底色，四色循環；**填不滿一層的空白另外標色**，那正是
   「縮排改到一半」的樣子。內建的 indent guides 畫線回答「block 從哪開始」，上色回答的
   是「我在第幾層」。只畫可見範圍，顏色走 theme color。

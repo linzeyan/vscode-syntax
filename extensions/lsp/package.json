@@ -2279,6 +2279,16 @@
         "icon": "$(arrow-left)"
       },
       {
+        "command": "poly.nextChange",
+        "title": "%command.nextChange.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "poly.previousChange",
+        "title": "%command.previousChange.title%",
+        "category": "%command.category%"
+      },
+      {
         "command": "poly.syntaxColors",
         "title": "%command.syntaxColors.title%",
         "category": "%command.category%"
@@ -3925,16 +3935,44 @@
         "when": "editorTextFocus && !editorReadonly && !editorTabMovesFocus && !editorHasSelection && !editorHasMultipleSelections && !suggestWidgetVisible && !inSnippetMode && !inlineSuggestionVisible && editorLangId =~ /^(markdown|prompt|instructions|chatagent|skill)$/"
       },
       {
+        "command": "poly.nextChange",
+        "key": "alt+]",
+        "when": "editorTextFocus && !inlineSuggestionVisible && !poly.yield.nextChange"
+      },
+      {
+        "command": "poly.previousChange",
+        "key": "alt+[",
+        "when": "editorTextFocus && !inlineSuggestionVisible && !poly.yield.previousChange"
+      },
+      {
         "command": "poly.nextChangedFile",
-        "key": "ctrl+alt+z",
-        "mac": "cmd+alt+z",
+        "key": "alt+shift+]",
         "when": "(config.git.enabled && !git.missing || poly.gitGraph.diff) && !poly.yield.nextChangedFile"
       },
       {
         "command": "poly.previousChangedFile",
-        "key": "ctrl+alt+a",
-        "mac": "cmd+alt+a",
+        "key": "alt+shift+[",
         "when": "(config.git.enabled && !git.missing || poly.gitGraph.diff) && !poly.yield.previousChangedFile"
+      },
+      {
+        "command": "poly.nextChange",
+        "key": "n",
+        "when": "editorTextFocus && editorReadonly && isInDiffEditor"
+      },
+      {
+        "command": "poly.previousChange",
+        "key": "p",
+        "when": "editorTextFocus && editorReadonly && isInDiffEditor"
+      },
+      {
+        "command": "poly.nextChangedFile",
+        "key": "]",
+        "when": "editorTextFocus && editorReadonly && poly.gitGraph.diff"
+      },
+      {
+        "command": "poly.previousChangedFile",
+        "key": "[",
+        "when": "editorTextFocus && editorReadonly && poly.gitGraph.diff"
       },
       {
         "command": "poly.revertAndSave",
@@ -4304,6 +4342,9 @@
             },
             "format": {
               "enabled": true
+            },
+            "gitHistory": {
+              "diffViewer": "builtin"
             },
             "imagePreview": {
               "enabled": false
@@ -5792,6 +5833,21 @@
                 "enabled": {
                   "type": "boolean",
                   "description": "%config.format.enabled.description%"
+                }
+              }
+            },
+            "gitHistory": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "diffViewer": {
+                  "type": "string",
+                  "enum": [
+                    "builtin",
+                    "difftastic",
+                    "delta"
+                  ],
+                  "markdownDescription": "%config.gitHistory.diffViewer.description%"
                 }
               }
             },

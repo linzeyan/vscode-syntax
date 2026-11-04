@@ -41,6 +41,8 @@ import {
   UNCOMMITTED,
   type ViewOptions,
 } from "./gitGraphProtocol";
+import { render, type RenderFile } from "./gitGraphRender";
+import type { DiffViewer } from "./gitGraphViewers";
 import { mayRun } from "./trust";
 
 const VIEW_TYPE = "poly.gitGraph";
@@ -50,6 +52,9 @@ const MORE = 100;
 const PAGE = 20;
 
 type Tab = "graph" | "changes";
+
+const diffViewer = (): DiffViewer =>
+  vscode.workspace.getConfiguration("poly").get<DiffViewer>("gitHistory.diffViewer", "builtin");
 
 /** As much of the built-in git extension's API as the panel uses. */
 interface Repository {
@@ -232,6 +237,7 @@ class GraphPanel {
   /** The last file shown in a text editor: focus on this page leaves no active editor to ask. */
   private lastFile = vscode.window.activeTextEditor?.document.uri;
   private stale = false;
+  private viewer = diffViewer();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private watching = new Map<string, vscode.Disposable>();
   private readonly disposables: vscode.Disposable[] = [];
@@ -269,6 +275,14 @@ class GraphPanel {
       api!.onDidOpenRepository(() => this.watch()),
       api!.onDidCloseRepository(() => this.watch()),
       vscode.window.onDidChangeActiveTextEditor((editor) => this.editorChanged(editor?.document.uri)),
+      // What the Changes tab has drawn with the old viewer, or delta in the
+      // old theme's colours, is drawn again.
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("poly") && diffViewer() !== this.viewer) this.postViewer();
+      }),
+      vscode.window.onDidChangeActiveColorTheme(() => {
+        if (this.viewer === "delta") this.postViewer();
+      }),
     );
     this.tab = context.workspaceState.get<Tab>("poly.gitGraph.tab", "graph");
     this.follow = context.workspaceState.get("poly.gitGraph.follow", false);
@@ -327,6 +341,25 @@ class GraphPanel {
 
   private post(message: unknown): Thenable<boolean> {
     return this.panel.webview.postMessage(message);
+  }
+
+  private postViewer(): void {
+    this.viewer = diffViewer();
+    void this.post({ type: "diffViewer", viewer: this.viewer });
+  }
+
+  /** One file of the Changes tab through the chosen viewer; the page shows git's diff until this answers. */
+  private async render(repo: string, id: string, file: RenderFile, columns: number): Promise<void> {
+    const viewer = this.viewer;
+    if (viewer === "builtin") return;
+    const kind = vscode.window.activeColorTheme.kind;
+    const dark = kind === vscode.ColorThemeKind.Dark || kind === vscode.ColorThemeKind.HighContrast;
+    try {
+      const rendered = await render(viewer, gitAt(repo), repo, file, columns, dark);
+      await this.post({ type: "rendered", id, ...rendered });
+    } catch (error) {
+      await this.post({ type: "rendered", id, viewer, error: String(error instanceof Error ? error.message : error) });
+    }
   }
 
   private views(): Record<string, ViewOptions> {
@@ -445,6 +478,7 @@ class GraphPanel {
         commits: page.commits,
         subjects: page.commits.map((commit) => md.renderInline(commit.subject)),
         more: page.more,
+        diffViewer: this.viewer,
       });
     } catch (error) {
       await this.post({ type: "patches", skip, error: String(error instanceof Error ? error.message : error) });
@@ -546,6 +580,9 @@ class GraphPanel {
         return;
       case "open":
         if (repo) await openListed(repo, message.files as Listed[], message.index as number);
+        return;
+      case "render":
+        if (repo) await this.render(repo, message.id as string, message.file as RenderFile, message.columns as number);
         return;
     }
   }

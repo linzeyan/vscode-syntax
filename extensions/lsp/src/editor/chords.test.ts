@@ -39,8 +39,10 @@ test("poly gives cmd+alt+v and cmd+alt+shift+v to the extensions installed for t
 });
 
 // Measured: with Rewrap installed, alt+q ran Revert and Save and the
-// uncommitted edit under the cursor was gone from disk.
-test("poly's git keys go to Rewrap and to Roo Code, which bind them too", () => {
+// uncommitted edit under the cursor was gone from disk. Previous Changed File
+// was cmd+alt+a, Roo Code's auto-approve toggle, and lost its key to it; the
+// bracket keys it moved to are clear of it.
+test("poly's git keys go to Rewrap, and no longer meet Roo Code's", () => {
   const others = [
     { id: "stkb.rewrap", bindings: [REWRAP] },
     { id: "RooVeterinaryInc.roo-cline", bindings: [ROO_CODE] },
@@ -48,10 +50,7 @@ test("poly's git keys go to Rewrap and to Roo Code, which bind them too", () => 
   for (const platform of ["darwin", "linux", "win32"]) {
     assert.deepEqual(
       [...yieldsTo(own, others, platform)],
-      [
-        ["poly.previousChangedFile", "RooVeterinaryInc.roo-cline"],
-        ["poly.revertAndSave", "stkb.rewrap"],
-      ],
+      [["poly.revertAndSave", "stkb.rewrap"]],
       platform,
     );
   }

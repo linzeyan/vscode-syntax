@@ -5,8 +5,7 @@
  * the ones that collide everywhere: `cmd+alt+v` is also
  * mushan.vscode-paste-image's paste-an-image, `cmd+alt+shift+v` quicktype's
  * paste-JSON-as-types, `alt+q` stkb.rewrap's rewrap -- where Revert and Save
- * would throw the edit away instead -- `cmd+alt+a` an auto-approve toggle
- * in several AI assistants, and `shift+alt+p` arjun.swagger-viewer's Preview
+ * would throw the edit away instead -- and `shift+alt+p` arjun.swagger-viewer's Preview
  * Swagger, which poly's copy of it would take. (Format Document is the other one, and keeps its
  * chord: it is the editor's own Format Document chord, which it stands in
  * for.) When two extensions bind one chord, VSCode ranks each binding by its
@@ -38,8 +37,10 @@ export interface Binding {
 export const YIELDING = [
   "poly.extractVariable",
   "poly.inlineVariable",
+  "poly.nextChange",
   "poly.nextChangedFile",
   "poly.pasteImage",
+  "poly.previousChange",
   "poly.previousChangedFile",
   "poly.plantumlPreview",
   "poly.revertAndSave",

@@ -1834,6 +1834,77 @@ suite("poly-lsp in a real editor", () => {
     }
   });
 
+  // VSCode's next change walks from the cursor, and scrolling leaves the
+  // cursor behind: scrolled halfway down a long diff, the built-in command
+  // jumps back to the first change. The reader is where the screen is.
+  test("next and previous change start from the screen once the cursor is scrolled off it", async () => {
+    const lines = Array.from({ length: 400 }, (_, i) => `line ${i}`);
+    const changed = lines.map((line, i) => [10, 200, 300].includes(i) ? `changed ${i}` : line);
+    const left = writeFile("walk-left.txt", `${lines.join("\n")}\n`);
+    const right = writeFile("walk-right.txt", `${changed.join("\n")}\n`);
+    await vscode.commands.executeCommand("vscode.diff", left, right, "walk");
+    const editor = await eventually(
+      "the diff's modified side",
+      () => vscode.window.visibleTextEditors.find((one) => one.document.uri.toString() === right.toString()),
+    );
+    const cursorAt = (line: number) => (editor.selection = new vscode.Selection(line, 0, line, 0));
+    const scrollTo = async (line: number) => {
+      editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
+      // Within a line or two: a narrow window shows the diff inline, and the
+      // deleted lines' view zones can shift where the top lands.
+      // What the walk needs is the line on screen and the cursor's line 0 off
+      // it; AtTop itself keeps a few lines of margin (measured: 195 → 190).
+      try {
+        await eventually(
+          `the diff scrolled to ${line}`,
+          () => {
+            const shown = editor.visibleRanges;
+            return (shown.some((range) => range.start.line <= line && range.end.line >= line)
+              && shown[0].start.line > 20) || undefined;
+          },
+          10_000,
+        );
+      } catch (error) {
+        const seen = editor.visibleRanges.map((range) => `${range.start.line}-${range.end.line}`).join(", ");
+        throw new Error(`${error}; visible: ${seen || "nothing"}, cursor ${editor.selection.active.line}`);
+      }
+    };
+    const landsOn = (line: number, what: string) =>
+      eventually(what, () => editor.selection.active.line === line || undefined, 5_000);
+    try {
+      // The diff is computed after it opens, and until then a walk does
+      // nothing; the built-in walk from the top proves it is ready.
+      await eventually("the diff to be computed", async () => {
+        cursorAt(0);
+        await vscode.commands.executeCommand("workbench.action.compareEditor.nextChange");
+        return editor.selection.active.line === 10 || undefined;
+      });
+
+      cursorAt(0);
+      await scrollTo(195);
+      await vscode.commands.executeCommand("poly.nextChange");
+      await landsOn(200, "next to be the change on screen, not the first one");
+
+      cursorAt(0);
+      await scrollTo(320);
+      await vscode.commands.executeCommand("poly.previousChange");
+      await landsOn(300, "previous to be the last change above the screen's bottom");
+
+      // A cursor on screen is where the reader is; VSCode's own walk stands.
+      await scrollTo(195);
+      cursorAt(200);
+      await vscode.commands.executeCommand("poly.nextChange");
+      await landsOn(300, "next from a cursor on screen to be the change after it");
+    } finally {
+      const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) =>
+        tab.input instanceof vscode.TabInputTextDiff && tab.input.modified.toString() === right.toString()
+      );
+      await vscode.window.tabGroups.close(tabs);
+      rmSync(left.fsPath, { force: true });
+      rmSync(right.fsPath, { force: true });
+    }
+  });
+
   // Run only in the launch that disables vscode.git (runTest.ts), which is how
   // a machine without git looks to Git History. What poly reads is held to git
   // by tools/git-embed-check.js; what only a host shows is the switch: the

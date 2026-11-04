@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 
 import { affects, setPoly } from "../settings";
 import { registerAutocorrect } from "./autocorrectEditor";
-import { nextChangedFile } from "./changes";
+import { changeAnchor, nextChangedFile } from "./changes";
 import type { Conversion } from "./chinese";
 import { Binding, YIELDING, yieldKey, yieldsTo } from "./chords";
 import { registerCodeRunner } from "./codeRunner";
@@ -2269,6 +2269,40 @@ async function stepChangedFile(direction: 1 | -1): Promise<void> {
 }
 
 /**
+ * VSCode's next/previous change -- the diff editor's, or the quick diff's in
+ * a file -- starting from the screen once the cursor has been scrolled off it
+ * (see `changeAnchor`).
+ */
+async function stepChange(direction: 1 | -1): Promise<void> {
+  const group = vscode.window.tabGroups.activeTabGroup;
+  const input = group.activeTab?.input;
+  const diff = input instanceof vscode.TabInputTextDiff ? input : undefined;
+  // The diff editor walks from its modified side's cursor whichever side has
+  // focus, so that side is the one to look at.
+  const sides = diff
+    ? vscode.window.visibleTextEditors.filter((one) => one.document.uri.toString() === diff.modified.toString())
+    : [];
+  // The same file can be open beside the diff; the one in the diff's group is meant.
+  const editor = diff
+    ? sides.find((one) => one.viewColumn === group.viewColumn) ?? sides[0]
+    : vscode.window.activeTextEditor;
+  if (editor) {
+    const line = changeAnchor(
+      editor.selection.active.line,
+      editor.visibleRanges.map((range) => [range.start.line, range.end.line] as const),
+      editor.document.lineCount,
+      direction,
+    );
+    if (line !== undefined) {
+      const at = new vscode.Position(line, 0);
+      editor.selection = new vscode.Selection(at, at);
+    }
+  }
+  const walk = diff ? "compareEditor" : "editor";
+  await vscode.commands.executeCommand(`workbench.action.${walk}.${direction === 1 ? "next" : "previous"}Change`);
+}
+
+/**
  * How many of the offered actions to have the provider resolve.
  *
  * `executeCodeActionProvider` hands back unresolved actions unless it is given
@@ -2566,6 +2600,8 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
     ],
     ["poly.nextChangedFile", () => stepChangedFile(1)],
     ["poly.previousChangedFile", () => stepChangedFile(-1)],
+    ["poly.nextChange", () => stepChange(1)],
+    ["poly.previousChange", () => stepChange(-1)],
     [
       "poly.revertAndSave",
       withEditor("Revert and Save", async () => {

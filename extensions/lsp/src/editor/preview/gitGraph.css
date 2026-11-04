@@ -1097,6 +1097,88 @@ tr.commit.selected td.graph > svg.graph > path:last-of-type {
   color: var(--vscode-descriptionForeground);
 }
 
+/* ------------------------------------------------------------ difftastic and delta */
+
+.measure {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+}
+
+.viewer-error {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 12px;
+  color: var(--vscode-editorWarning-foreground);
+}
+
+/* Side by side, as difftastic prints it: a line too long for its half wraps
+   rather than pushing the other half out of view. */
+.difft .drow {
+  display: grid;
+  grid-template-columns: 4.5ch minmax(0, 1fr) 4.5ch minmax(0, 1fr);
+}
+
+.difft .ln {
+  padding-right: 1ch;
+  color: var(--vscode-editorLineNumber-foreground);
+  text-align: right;
+  user-select: none;
+}
+
+.difft .code {
+  padding: 0 12px 0 1ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.difft .code.del {
+  background: var(--vscode-diffEditor-removedLineBackground, transparent);
+}
+
+.difft .code.add {
+  background: var(--vscode-diffEditor-insertedLineBackground, transparent);
+}
+
+.difft .code.empty {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 4px,
+    var(--vscode-diffEditor-diagonalFill) 4px 5px
+  );
+}
+
+.difft .del .novel {
+  background: var(--vscode-diffEditor-removedTextBackground);
+}
+
+.difft .add .novel {
+  background: var(--vscode-diffEditor-insertedTextBackground);
+}
+
+.difft .hl-keyword {
+  font-weight: bold;
+}
+
+.difft .hl-comment {
+  font-style: italic;
+}
+
+.difft-gap {
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-descriptionForeground);
+  text-align: center;
+  user-select: none;
+}
+
+.delta .aline {
+  min-width: max-content;
+  white-space: pre;
+}
+
 /* ------------------------------------------------------------ footer and notices */
 
 .footer {
