@@ -185,6 +185,12 @@ export function goPackageLine(text: string): number | undefined {
   return first?.text === "package" ? first.line : undefined;
 }
 
+/** The name the `package` clause gives, or undefined before there is one. */
+export function goPackageName(text: string): string | undefined {
+  const [clause, name] = tokenize(text, 2);
+  return clause?.text === "package" && name?.kind === "ident" ? name.text : undefined;
+}
+
 /** `name` is `prefix`, or `prefix` and then anything but a lower-case letter. */
 function hasPrefix(name: string, prefix: string): boolean {
   return name.startsWith(prefix) && !/^\p{Ll}/u.test(name.slice(prefix.length));

@@ -15,7 +15,7 @@ import type { FromSql, ToSql } from "./dbml";
 import { registerErrorLens } from "./errorLens";
 import { registerExcalidraw } from "./excalidrawEditor";
 import { registerGitGraph, stepHistoryDiff } from "./gitGraph";
-import { goPackageLine, goTests } from "./goTests";
+import { goPackageLine, goPackageName, goTests } from "./goTests";
 import { imageReferences } from "./images";
 import { indentSpans } from "./indent";
 import {
@@ -1642,10 +1642,16 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
         ? markdownHeadings(symbols)
         : symbols;
       // go test runs a test by name and nothing else refers to one, so its
-      // count is a permanent `no refs`. Helpers in the same file keep theirs:
-      // there an unused one is news.
-      const tests = new Set(goTests(document.fileName, document.getText()).map((test) => test.name));
-      const found = lensTargets(declared.filter((symbol) => !tests.has(symbol.name)), MAX_LENSES);
+      // count is a permanent `no refs`; so does the go tool a main package's
+      // `main`. Helpers in the same file keep theirs: there an unused one is
+      // news. A bare `main` is the function: gopls names a method
+      // `(T).main`, and package main may declare nothing else by that name.
+      const text = document.getText();
+      const runByName = new Set(goTests(document.fileName, text).map((test) => test.name));
+      if (document.languageId === "go" && goPackageName(text) === "main") {
+        runByName.add("main");
+      }
+      const found = lensTargets(declared.filter((symbol) => !runByName.has(symbol.name)), MAX_LENSES);
       const keys = declarationKeys(found.map((target) => target.symbol));
       const targets: Anchored[] = found.map((target, index) => ({
         ...target,

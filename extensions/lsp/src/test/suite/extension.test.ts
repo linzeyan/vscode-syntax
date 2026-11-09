@@ -1837,16 +1837,21 @@ suite("poly-lsp in a real editor", () => {
   // VSCode's next change walks from the cursor, and scrolling leaves the
   // cursor behind: scrolled halfway down a long diff, the built-in command
   // jumps back to the first change. The reader is where the screen is.
-  test("next and previous change start from the screen once the cursor is scrolled off it", async () => {
-    const lines = Array.from({ length: 400 }, (_, i) => `line ${i}`);
-    const changed = lines.map((line, i) => [10, 200, 300].includes(i) ? `changed ${i}` : line);
-    const left = writeFile("walk-left.txt", `${lines.join("\n")}\n`);
-    const right = writeFile("walk-right.txt", `${changed.join("\n")}\n`);
-    await vscode.commands.executeCommand("vscode.diff", left, right, "walk");
+  const WALK_LINES = Array.from({ length: 400 }, (_, i) => `line ${i}`);
+  const WALK_CHANGED = WALK_LINES.map((line, i) => [10, 200, 300].includes(i) ? `changed ${i}` : line);
+
+  /** Walks the open diff whose right side is `right`, from the screen and from the cursor. */
+  async function walksFromScreen(right: vscode.Uri): Promise<void> {
     const editor = await eventually(
       "the diff's modified side",
       () => vscode.window.visibleTextEditors.find((one) => one.document.uri.toString() === right.toString()),
-    );
+    ).catch((error) => {
+      // What poly compares to find the side: the tab's URI against each editor's.
+      const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+      const tab = input instanceof vscode.TabInputTextDiff ? input.modified.toString() : "no diff tab";
+      const shown = vscode.window.visibleTextEditors.map((one) => one.document.uri.toString()).join(" | ");
+      throw new Error(`${error}; wanted ${right}; tab ${tab}; editors ${shown}`);
+    });
     const cursorAt = (line: number) => (editor.selection = new vscode.Selection(line, 0, line, 0));
     const scrollTo = async (line: number) => {
       editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
@@ -1871,30 +1876,38 @@ suite("poly-lsp in a real editor", () => {
     };
     const landsOn = (line: number, what: string) =>
       eventually(what, () => editor.selection.active.line === line || undefined, 5_000);
+
+    // The diff is computed after it opens, and until then a walk does
+    // nothing; the built-in walk from the top proves it is ready.
+    await eventually("the diff to be computed", async () => {
+      cursorAt(0);
+      await vscode.commands.executeCommand("workbench.action.compareEditor.nextChange");
+      return editor.selection.active.line === 10 || undefined;
+    });
+
+    cursorAt(0);
+    await scrollTo(195);
+    await vscode.commands.executeCommand("poly.nextChange");
+    await landsOn(200, "next to be the change on screen, not the first one");
+
+    cursorAt(0);
+    await scrollTo(320);
+    await vscode.commands.executeCommand("poly.previousChange");
+    await landsOn(300, "previous to be the last change above the screen's bottom");
+
+    // A cursor on screen is where the reader is; VSCode's own walk stands.
+    await scrollTo(195);
+    cursorAt(200);
+    await vscode.commands.executeCommand("poly.nextChange");
+    await landsOn(300, "next from a cursor on screen to be the change after it");
+  }
+
+  test("next and previous change start from the screen once the cursor is scrolled off it", async () => {
+    const left = writeFile("walk-left.txt", `${WALK_LINES.join("\n")}\n`);
+    const right = writeFile("walk-right.txt", `${WALK_CHANGED.join("\n")}\n`);
+    await vscode.commands.executeCommand("vscode.diff", left, right, "walk");
     try {
-      // The diff is computed after it opens, and until then a walk does
-      // nothing; the built-in walk from the top proves it is ready.
-      await eventually("the diff to be computed", async () => {
-        cursorAt(0);
-        await vscode.commands.executeCommand("workbench.action.compareEditor.nextChange");
-        return editor.selection.active.line === 10 || undefined;
-      });
-
-      cursorAt(0);
-      await scrollTo(195);
-      await vscode.commands.executeCommand("poly.nextChange");
-      await landsOn(200, "next to be the change on screen, not the first one");
-
-      cursorAt(0);
-      await scrollTo(320);
-      await vscode.commands.executeCommand("poly.previousChange");
-      await landsOn(300, "previous to be the last change above the screen's bottom");
-
-      // A cursor on screen is where the reader is; VSCode's own walk stands.
-      await scrollTo(195);
-      cursorAt(200);
-      await vscode.commands.executeCommand("poly.nextChange");
-      await landsOn(300, "next from a cursor on screen to be the change after it");
+      await walksFromScreen(right);
     } finally {
       const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) =>
         tab.input instanceof vscode.TabInputTextDiff && tab.input.modified.toString() === right.toString()
@@ -1902,6 +1915,58 @@ suite("poly-lsp in a real editor", () => {
       await vscode.window.tabGroups.close(tabs);
       rmSync(left.fsPath, { force: true });
       rmSync(right.fsPath, { force: true });
+    }
+  });
+
+  // The same walk in a diff Git History opened, whose sides are poly-git:
+  // revisions. Reported on Windows 10: there the walk went back to the first
+  // change while a working-tree diff was fine.
+  test("in a Git History diff too, next change starts from the screen", async () => {
+    const repo = join(workspaceRoot(), "walk-repo");
+    rmSync(repo, { recursive: true, force: true });
+    mkdirSync(repo);
+    const git = (...args: string[]) =>
+      execFileSync("git", [
+        "-c",
+        "user.name=Ada",
+        "-c",
+        "user.email=ada@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ], {
+        cwd: repo,
+        encoding: "utf8",
+      }).trim();
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(repo, "walk.txt"), `${WALK_LINES.join("\n")}\n`);
+    git("add", "walk.txt");
+    git("commit", "-q", "-m", "First");
+    const first = git("rev-parse", "HEAD");
+    writeFileSync(join(repo, "walk.txt"), `${WALK_CHANGED.join("\n")}\n`);
+    git("commit", "-q", "-am", "Second");
+    const second = git("rev-parse", "HEAD");
+
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const host: typeof import("../../editor/gitGraphPanel") = require(
+      join(extension.extensionPath, "dist", "gitGraph.js"),
+    );
+    const right = vscode.Uri.file(join(repo, "walk.txt")).with({
+      scheme: "poly-git",
+      query: JSON.stringify({ repo, ref: second, path: "walk.txt" }),
+    });
+    try {
+      await host.openListed(repo, [
+        { oldPath: "walk.txt", newPath: "walk.txt", type: "M", additions: 3, deletions: 3, from: first, to: second },
+      ], 0);
+      await walksFromScreen(right);
+    } finally {
+      const diffs = vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) =>
+        tab.input instanceof vscode.TabInputTextDiff && tab.input.original.scheme === "poly-git"
+      );
+      // The repository stays: on Windows vscode.git still holds it open, and a
+      // throw from here would hide the walk's own result. The next run clears it.
+      await vscode.window.tabGroups.close(diffs);
     }
   });
 

@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { goPackageLine, goTests } from "./goTests";
+import { goPackageLine, goPackageName, goTests } from "./goTests";
 
 /** What `go test` would run in `body`, by name, in a test file. */
 const found = (body: string, imports = `import "testing"\n`): string[] =>
@@ -219,4 +219,13 @@ test("the package lens sits on the package clause, past any header comment", () 
   assert.equal(goPackageLine("// Copyright\n/* package fake */\n\npackage x\n"), 3);
   assert.equal(goPackageLine("package x\n"), 0);
   assert.equal(goPackageLine("func x() {}\n"), undefined);
+});
+
+test("the package name is read past comments, so a main package is told by its clause", () => {
+  // The references lens drops `main` only in package main; a comment or a
+  // half-typed clause must not make an ordinary package look like one.
+  assert.equal(goPackageName("// package main\npackage server\n"), "server");
+  assert.equal(goPackageName("/* doc */ package main\n\nfunc main() {}\n"), "main");
+  assert.equal(goPackageName("package\n"), undefined);
+  assert.equal(goPackageName("func main() {}\n"), undefined);
 });

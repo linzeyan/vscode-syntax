@@ -416,8 +416,9 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 - **引用與實作 CodeLens**（設定）：每個宣告一行 `11 refs`；interface 多一顆 `3 impls`，
   具體型別有滿足 interface 才多一顆 `1 interface`，方法寫在型別外面的語言（Go）再多一顆
   `4 methods`。Markdown 有人連結的標題也有一行，數的是整個 workspace 連到它的 `#錨點` 連結。
-  數字全部來自該語言已註冊的 provider，poly 只數與畫。Go 的測試函式沒有這一行：`go test`
-  照名字執行它、沒有人引用它，那裡永遠是 `no refs`；同一個 `_test.go` 裡的 helper 照樣有。
+  數字全部來自該語言已註冊的 provider，poly 只數與畫。Go 的測試函式和 `package main`
+  的 `func main` 沒有這一行：go 工具照名字執行它、沒有人引用它，那裡永遠是 `no refs`；同一個
+  檔案裡的 helper 照樣有。
   - `N refs`、`N impls`、`N methods` 點下去都一樣：只有一筆就直接跳過去，多筆開檔案總管裡的
     **References** 面板。那是 poly 自己的樹，
     每一列除了原始碼還帶**行號**與**它落在哪個符號裡**（`method Handle`、`func main`）——
