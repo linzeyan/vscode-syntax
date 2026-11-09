@@ -49,12 +49,12 @@ jobs:
             }
           - {
               target: aarch64-apple-darwin,
-              os: macos-14,
+              os: macos-latest,
               vsce: darwin-arm64,
               vsix: true,
             }
           # arm64 runner runs the x64 smoke test through Rosetta.
-          - { target: x86_64-apple-darwin, os: macos-14, vsce: darwin-x64 }
+          - { target: x86_64-apple-darwin, os: macos-latest, vsce: darwin-x64 }
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
