@@ -170,6 +170,15 @@
         "zhHint": "以時間為準的一次性密碼"
       },
       {
+        "id": "generator-cron",
+        "icon": "clockface",
+        "en": "Cron",
+        "zh": "Cron 排程",
+        "enHint": "Crontab schedules in words, their next runs, and a builder",
+        "zhHint": "crontab 排程的白話說明、下次執行時間與逐欄產生",
+        "input": true
+      },
+      {
         "id": "generator-ssh",
         "icon": "remote",
         "en": "SSH Key",
