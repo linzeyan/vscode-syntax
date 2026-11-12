@@ -2,7 +2,7 @@
   "name": "poly-lsp",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.21.5",
+  "version": "0.21.6",
   "publisher": "ricky",
   "license": "MIT",
   "icon": "./media/icon.png",
