@@ -33,9 +33,7 @@ pub const LANGUAGES: &[&str] = &["graphql", "nginx", "makefile", "shellscript"];
 /// `no refs` over YAML and CSS, which it leaves alone precisely because nothing
 /// answers for them.
 ///
-/// Definitions are Makefile and shell only, the two that were asked for. Shell
-/// gets nothing else: it has no outline here, so a reference lens would have no
-/// declarations to stand on.
+/// Definitions are Makefile and shell only, the two that were asked for.
 ///
 /// nginx's and Makefile's text is synchronised here as well. Neither is in the
 /// client's selector because poly formats neither, and joining that selector
@@ -52,7 +50,7 @@ pub fn registrations() -> serde_json::Value {
             .map(|language| serde_json::json!({"language": language, "scheme": "file"}))
             .collect()
     };
-    let outlined = selector(&["graphql", "nginx", "makefile"]);
+    let outlined = selector(&["graphql", "nginx", "makefile", "shellscript"]);
     let defined = selector(&["makefile", "shellscript"]);
     let synced = selector(&["nginx", "makefile"]);
     serde_json::json!([
@@ -250,19 +248,39 @@ impl Index {
     /// `open` are the documents of this language the editor has open; their
     /// buffers stand in for their files, so a name typed a moment ago is found
     /// and one deleted a moment ago is not.
+    ///
+    /// Shell is counted as `definition` resolves it, the other way round: a
+    /// use belongs to its own file's declaration when the file has one, and to
+    /// every declaration in the folder when it has none -- the script that
+    /// sources a library. Measured 2026-11-17, one folder of scripts defined
+    /// `step` in 23 files and `run` in 5; counted by name alone, each `step`
+    /// would have shown the calls of all 23. The other languages keep the plain
+    /// name: their names are global to whatever reads them.
     pub fn references(
         &mut self,
         language: &str,
         root: &Path,
         open: &[(Url, &str)],
-        wanted: (&str, &str),
+        (from, wanted): (&Url, (&str, &str)),
         include_declaration: bool,
     ) -> Vec<Location> {
-        self.find(language, root, open, |mention| {
-            mention.space == wanted.0
-                && mention.name == wanted.1
-                && (include_declaration || !mention.declares)
-        })
+        let files = self.by_file(language, root, open, |mention| {
+            mention.space == wanted.0 && mention.name == wanted.1
+        });
+        let declares = |here: &[(bool, Range)]| here.iter().any(|(declares, _)| *declares);
+        let own = language == "shellscript"
+            && files
+                .iter()
+                .any(|(uri, here)| uri == from && declares(here));
+        files
+            .into_iter()
+            .filter(|(uri, here)| !own || uri == from || !declares(here))
+            .flat_map(|(uri, here)| {
+                here.into_iter()
+                    .filter(|(declares, _)| include_declaration || !declares)
+                    .map(move |(_, range)| Location::new(uri.clone(), range))
+            })
+            .collect()
     }
 
     /// Where the name at `at` in `text` -- the document `uri` -- is declared.
@@ -315,6 +333,24 @@ impl Index {
         open: &[(Url, &str)],
         matches: impl Fn(&Mention) -> bool,
     ) -> Vec<Location> {
+        self.by_file(language, root, open, matches)
+            .into_iter()
+            .flat_map(|(uri, here)| {
+                here.into_iter()
+                    .map(move |(_, range)| Location::new(uri.clone(), range))
+            })
+            .collect()
+    }
+
+    /// The mentions `matches` keeps, grouped by the file they are in, each
+    /// with whether it declares. Files with none are left out.
+    fn by_file(
+        &mut self,
+        language: &str,
+        root: &Path,
+        open: &[(Url, &str)],
+        matches: impl Fn(&Mention) -> bool,
+    ) -> Vec<(Url, Vec<(bool, Range)>)> {
         let mut found = Vec::new();
         let mut covered = HashSet::new();
         for (uri, text) in open {
@@ -322,10 +358,13 @@ impl Index {
                 covered.insert(path);
             }
             let lines = Lines::new(text);
-            for mention in symbols::mentions(language, text) {
-                if matches(&mention) {
-                    found.push(Location::new(uri.clone(), lines.range(&mention.at)));
-                }
+            let here: Vec<(bool, Range)> = symbols::mentions(language, text)
+                .iter()
+                .filter(|mention| matches(mention))
+                .map(|mention| (mention.declares, lines.range(&mention.at)))
+                .collect();
+            if !here.is_empty() {
+                found.push((uri.clone(), here));
             }
         }
         for path in self.files_under(root, language) {
@@ -335,10 +374,14 @@ impl Index {
             let Ok(uri) = Url::from_file_path(&path) else {
                 continue;
             };
-            for (mention, range) in self.read(language, &path) {
-                if matches(mention) {
-                    found.push(Location::new(uri.clone(), *range));
-                }
+            let here: Vec<(bool, Range)> = self
+                .read(language, &path)
+                .iter()
+                .filter(|(mention, _)| matches(mention))
+                .map(|(mention, range)| (mention.declares, *range))
+                .collect();
+            if !here.is_empty() {
+                found.push((uri, here));
             }
         }
         found
@@ -470,7 +513,7 @@ mod tests {
             "graphql",
             &root,
             &[(post.clone(), unsaved)],
-            ("type", "User"),
+            (&post, ("type", "User")),
             true,
         );
         found.sort_by_key(|l| (l.uri.to_string(), l.range.start));
@@ -499,14 +542,75 @@ mod tests {
         let uses = index.references(
             "graphql",
             &root,
-            &[(post, unsaved)],
-            ("type", "User"),
+            &[(post.clone(), unsaved)],
+            (&post, ("type", "User")),
             false,
         );
         assert_eq!(
             uses.len(),
             3,
             "the declaration is left out when asked to be"
+        );
+    }
+
+    /// A shell function counts the calls Go to Definition would bring to it:
+    /// those in its own file, and those in a file that declares no function of
+    /// that name -- the script sourcing the library. Another script's own
+    /// `main` keeps its calls, which a match by name alone would have added to
+    /// every `main` in the folder.
+    #[test]
+    fn a_shell_function_counts_the_calls_that_resolve_to_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let file = |name: &str, text: &str| {
+            std::fs::write(root.join(name), text).unwrap();
+            Url::from_file_path(root.join(name)).unwrap()
+        };
+        let lib = file("lib.sh", "log() { echo \"$1\"; }\nmain() { log hi; }\n");
+        let run = file("run.sh", ". ./lib.sh\nmain() { log a; log b; }\nmain\n");
+        let other = file("other.sh", ". ./lib.sh\nlog c\nmain\nmain\n");
+        let mut index = Index::default();
+        let mut count = |from: &Url, name: &str| -> Vec<String> {
+            let mut found: Vec<String> = index
+                .references("shellscript", &root, &[], (from, ("function", name)), false)
+                .iter()
+                .map(|l| {
+                    let file = l.uri.path_segments().unwrap().next_back().unwrap();
+                    format!("{file}:{}", l.range.start.line)
+                })
+                .collect();
+            found.sort();
+            found
+        };
+        // Declared once, in the library: every call in the folder is its own.
+        assert_eq!(
+            count(&lib, "log"),
+            ["lib.sh:1", "other.sh:1", "run.sh:1", "run.sh:1"]
+        );
+        // run.sh's own main has run.sh's call. other.sh's two calls declare
+        // nothing, so they resolve to every main and count for both.
+        assert_eq!(
+            count(&run, "main"),
+            ["other.sh:2", "other.sh:3", "run.sh:2"]
+        );
+        assert_eq!(count(&lib, "main"), ["other.sh:2", "other.sh:3"]);
+        // Asked from a call in a file that declares none: every declaration's
+        // uses, as Go to Definition from there lists every declaration.
+        assert_eq!(
+            count(&other, "main"),
+            ["other.sh:2", "other.sh:3", "run.sh:2"]
+        );
+        // GraphQL is not scoped: names there are global.
+        let schema = file("a.graphql", "type User { id: ID }\n");
+        file(
+            "b.graphql",
+            "type User { id: ID }\ntype Post { by: User }\n",
+        );
+        assert_eq!(
+            index
+                .references("graphql", &root, &[], (&schema, ("type", "User")), false)
+                .len(),
+            1
         );
     }
 
@@ -541,7 +645,10 @@ mod tests {
             names.iter().map(|name| name.to_string()).collect()
         };
         for method in ["textDocument/documentSymbol", "textDocument/references"] {
-            assert_eq!(languages(method), set(&["graphql", "nginx", "makefile"]));
+            assert_eq!(
+                languages(method),
+                set(&["graphql", "nginx", "makefile", "shellscript"])
+            );
         }
         assert_eq!(
             languages("textDocument/definition"),

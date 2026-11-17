@@ -195,12 +195,14 @@
   `package main` 的 `func main` 沒有：go 工具照名字執行、沒有人引用，那裡永遠是 `no refs`；同檔的 helper 照樣有。只有一筆就直接跳過去，多筆開檔案總管裡的 **References** 面板——那是 poly 自己的樹，每一列除了
   原始碼還帶**行號**與
   **它落在哪個符號裡**（`method Handle`、`func main`），內建的 `references-view` 兩欄都沒有，
-  而別人的樹加不了欄位。數字來自該語言已註冊的 provider，poly 只數與畫。**GraphQL、nginx 與
-  Makefile** 沒有 server 答得出引用，由 poly 自己按名字算：GraphQL 的 type、fragment、directive；nginx 的
+  而別人的樹加不了欄位。數字來自該語言已註冊的 provider，poly 只數與畫。**GraphQL、nginx、
+  Makefile 與 shell** 沒有 server 答得出引用，由 poly 自己按名字算：GraphQL 的 type、fragment、directive；nginx 的
   `upstream`、`location @name`、`set`／`map` 等宣告的變數、`limit_req_zone` 之類的 zone、
   `log_format`；Makefile 的 target（`.PHONY` 與 prerequisites 算使用，`%.o` 這類 pattern 不算）
-  與變數（`$(X)`、`${X}`、`$(call x,…)` 算使用，`+=` 也算使用而不是宣告）。範圍是整個 workspace
-  folder，沒有 scope；同一份答案也給 outline 與 Find All References。數字存在 `$XDG_CACHE_HOME/poly/refs/`（預設 `~/.cache/poly/refs/`），重開視窗時先畫上次的
+  與變數（`$(X)`、`${X}`、`$(call x,…)` 算使用，`+=` 也算使用而不是宣告）；shell 的 function
+  （當命令呼叫算使用；變數沒有 lens）。範圍是整個 workspace folder，沒有 scope；shell 例外，
+  照跳到定義的規則反過來算：腳本自己定義了這個 function，它的呼叫只算自己的，沒定義的腳本
+  （`source` lib 的那種）才算進每一個定義——兩支腳本各有一個 `main` 時不會互相加總。同一份答案也給 outline 與 Find All References。數字存在 `$XDG_CACHE_HOME/poly/refs/`（預設 `~/.cache/poly/refs/`），重開視窗時先畫上次的
   數字、背景重新問過再更新。`poly.referencesCodeLens.enabled` 可關。
 - **Makefile 與 shell 跳到定義**：F12（Go to Definition）在 Makefile 跳到 target、變數、`define`，
   在 shell 跳到 function 與變數（`local`、`export`、`for`、`read`、`getopts` 給值的都算宣告）。先找
@@ -208,7 +210,7 @@
   取下方的。檔案裡沒宣告才找整個 workspace folder，`source` 進來的 lib 與 `include` 的 `.mk` 就是
   這樣找到的（只認 `.sh`／`.bash`／`.zsh`／`.ksh`／`.bats` 與 VSCode 認得的 Makefile 檔名）。只比對
   名字，不跟 `source`／`include` 的路徑。另外裝了 bash-language-server 的話，編輯器會把兩邊的答案
-  合在一起。
+  （跳到定義、引用、outline）合在一起。
 - **`run | debug` CodeLens**：程式進入點（Go 只算 `package main` 的 `main`；Rust／C／C++／Java 的 `main`、
   C# 的 `Main`、Python 的 `if __name__ == "__main__"`、shell 的 shebang）上方一行。`run` 存檔後像 Code Runner
   的 `Run Code` 那樣執行整個檔案，命令來自 `poly.codeRunner.*`（`go run .`／`cargo run`／選定的

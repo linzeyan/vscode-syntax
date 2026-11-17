@@ -19,7 +19,10 @@
 //! variables, upstreams and zones are global to the configuration too. make's
 //! targets and variables are global to the make run. Shell is the one that has
 //! scopes -- `local` -- and the definition lookup in poly-cli makes up for it
-//! with position rather than with a resolver.
+//! with position rather than with a resolver. Shell's outline and references
+//! followed on 2026-11-17: its functions, counted the way Go to Definition
+//! resolves them, so two scripts that each define `main` do not count each
+//! other's calls.
 
 use std::ops::Range;
 
@@ -66,8 +69,7 @@ pub struct Mention {
 /// Does poly read the names of `lang` itself?
 ///
 /// Which questions it then answers about them is poly-cli's registration, not
-/// this: shell has mentions but no outline, because only its definitions were
-/// asked for.
+/// this.
 pub fn applies(lang: &str) -> bool {
     matches!(lang, "graphql" | "nginx" | "makefile" | "shellscript")
 }
@@ -77,6 +79,7 @@ pub fn symbols(lang: &str, text: &str) -> Vec<Symbol> {
         "graphql" => graphql::symbols(text),
         "nginx" => nginx::scan(text).0,
         "makefile" => make::scan(text).0,
+        "shellscript" => shell::symbols(text),
         _ => Vec::new(),
     }
 }
@@ -742,8 +745,44 @@ mod make {
 }
 
 mod shell {
-    use super::{tree, Mention};
+    use super::{tree, Kind, Mention, Symbol};
+    use std::collections::HashSet;
     use tree_sitter::Node;
+
+    /// The script's functions, each listed once.
+    ///
+    /// Functions only. A variable is a name poly cannot scope: every function's
+    /// `local x` would be an entry of its own, and a lens over `NAME=world`
+    /// would count the `$NAME` of a function that declares its own. A function
+    /// defined twice -- in both branches of an `if` -- is listed at its first
+    /// definition, as make lists a target with two rules: two entries would be
+    /// two lenses showing the same count.
+    pub(super) fn symbols(text: &str) -> Vec<Symbol> {
+        let mut found = Vec::new();
+        let Some(tree) = tree::parse(tree_sitter_bash::LANGUAGE.into(), text) else {
+            return found;
+        };
+        let mut listed = HashSet::new();
+        tree::each(&tree, |node| {
+            if node.kind() != "function_definition" {
+                return;
+            }
+            let Some(name) = node.child_by_field_name("name") else {
+                return;
+            };
+            let spelled = text[name.byte_range()].to_string();
+            if listed.insert(spelled.clone()) {
+                found.push(Symbol {
+                    name: spelled,
+                    kind: Kind::Function,
+                    range: tree::span(node, text),
+                    selection: name.byte_range(),
+                    children: Vec::new(),
+                });
+            }
+        });
+        found
+    }
 
     fn identifier(word: &str) -> bool {
         let mut bytes = word.bytes();
@@ -1177,8 +1216,24 @@ main "$@"
                 "{variable}"
             );
         }
-        // Shell answers definitions only; it has no outline to give.
-        assert!(symbols("shellscript", SCRIPT).is_empty());
+    }
+
+    /// The outline is the functions, by their name, under both ways of writing
+    /// one -- `function main {` begins with a keyword, and the lens asks at the
+    /// name. Variables are left out: nothing here can tell one `local x` from
+    /// another function's.
+    #[test]
+    fn a_shell_outline_lists_each_function_once() {
+        let script = format!("{SCRIPT}if true; then greet() {{ :; }}; fi\n");
+        let outline = symbols("shellscript", &script);
+        let listed: Vec<(&str, Kind)> = outline.iter().map(|s| (s.name.as_str(), s.kind)).collect();
+        assert_eq!(
+            listed,
+            vec![("greet", Kind::Function), ("main", Kind::Function)]
+        );
+        assert_eq!(&script[outline[1].selection.clone()], "main");
+        assert!(script[outline[1].range.clone()].starts_with("function main {"));
+        assert!(script[outline[1].range.clone()].ends_with('}'));
     }
 
     #[test]

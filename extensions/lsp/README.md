@@ -69,7 +69,7 @@
 
 poly 只處理格式化與 lint。hover、跳到定義、補全、rename 等語言功能交給各語言自己的
 extension（Go、rust-analyzer、Python 等）。例外是幾個沒有 server 答得出的：GraphQL 與 nginx 的
-outline 與引用、Makefile 的 outline、引用與跳到定義、shell 的跳到定義，由 poly 按名字算。
+outline 與引用、Makefile 與 shell 的 outline、引用與跳到定義，由 poly 按名字算。
 
 ## 編輯器便利功能
 

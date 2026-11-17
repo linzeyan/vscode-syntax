@@ -1,5 +1,5 @@
-// The half poly's daemon answers for: GraphQL, nginx and Makefile references,
-// and Makefile and shell definitions.
+// The half poly's daemon answers for: GraphQL, nginx, Makefile and shell
+// references, and Makefile and shell definitions.
 //
 // Every other section asks a provider the editor or the suite brings. These
 // languages have none offline, so poly registers documentSymbol, references and
@@ -79,8 +79,8 @@ build:
 clean:
 \trm -f app
 `,
-  // Shell has definitions and nothing else, so these two must carry no lens:
-  // a reference provider here would draw one over every function.
+  // Only functions carry a lens; `NAME` and `who` are variables, which poly
+  // cannot scope and does not list.
   "lib.sh": `greet() {
   echo "hi $1"
 }
@@ -93,6 +93,14 @@ main() {
   local who=$NAME
   greet "$who"
 }
+main
+`,
+  // A second `main`, called twice. Counted by name alone, both mains would
+  // read `3 refs`; each script's own calls go to its own.
+  "other.sh": `function main {
+  echo other
+}
+main
 main
 `,
 };
@@ -158,8 +166,17 @@ const EXPECTED = {
     "build:": ["1 ref"],
     "clean:": ["1 ref"],
   },
-  "lib.sh": {},
-  "run.sh": {},
+  // `greet` is counted while run.sh, which calls it, is still unopened.
+  "lib.sh": {
+    "greet() {": ["1 ref"],
+  },
+  "run.sh": {
+    "main() {": ["1 ref"],
+  },
+  // Written with the keyword, so the lens must be asked at the name.
+  "other.sh": {
+    "function main {": ["2 refs"],
+  },
 };
 
 /** Written before the host launches, because the daemon walks the folder for them. */

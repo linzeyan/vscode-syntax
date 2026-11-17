@@ -771,7 +771,7 @@ impl Server {
             &language,
             &root,
             &open,
-            (space, &name),
+            (&uri, (space, &name)),
             params.context.include_declaration,
         );
         Response::new_ok(request.id, serde_json::json!(found))
