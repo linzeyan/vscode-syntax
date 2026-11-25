@@ -202,7 +202,7 @@
   與變數（`$(X)`、`${X}`、`$(call x,…)` 算使用，`+=` 也算使用而不是宣告）；shell 的 function
   （當命令呼叫算使用；變數沒有 lens）。範圍是整個 workspace folder，沒有 scope；shell 例外，
   照跳到定義的規則反過來算：腳本自己定義了這個 function，它的呼叫只算自己的，沒定義的腳本
-  （`source` lib 的那種）才算進每一個定義——兩支腳本各有一個 `main` 時不會互相加總。同一份答案也給 outline 與 Find All References。數字存在 `$XDG_CACHE_HOME/poly/refs/`（預設 `~/.cache/poly/refs/`），重開視窗時先畫上次的
+  （`source` lib 的那種）才算進每一個定義——兩支腳本各有一個 `main` 時不會互相加總。同一份答案也給 outline 與 Find All References。**YAML 的 anchor**（`&base`）也有一行，數的是同一份文件裡用到它的 alias（`*base`）。數字存在 `$XDG_CACHE_HOME/poly/refs/`（預設 `~/.cache/poly/refs/`），重開視窗時先畫上次的
   數字、背景重新問過再更新。`poly.referencesCodeLens.enabled` 可關。
 - **Makefile 與 shell 跳到定義**：F12（Go to Definition）在 Makefile 跳到 target、變數、`define`，
   在 shell 跳到 function 與變數（`local`、`export`、`for`、`read`、`getopts` 給值的都算宣告）。先找
@@ -211,6 +211,9 @@
   這樣找到的（只認 `.sh`／`.bash`／`.zsh`／`.ksh`／`.bats` 與 VSCode 認得的 Makefile 檔名）。只比對
   名字，不跟 `source`／`include` 的路徑。另外裝了 bash-language-server 的話，編輯器會把兩邊的答案
   （跳到定義、引用、outline）合在一起。
+- **YAML alias 跳到 anchor**：F12 在 `*base` 跳到它的 `&base`——同一份文件（`---` 之間）上方最近的
+  那個同名 anchor；Find All References 列出 anchor 與用到它的 alias。compose 檔與 GitHub workflow
+  一樣，檔案寫到一半、解析不過時也照常。
 - **`run | debug` CodeLens**：程式進入點（Go 只算 `package main` 的 `main`；Rust／C／C++／Java 的 `main`、
   C# 的 `Main`、Python 的 `if __name__ == "__main__"`、shell 的 shebang）上方一行。`run` 存檔後像 Code Runner
   的 `Run Code` 那樣執行整個檔案，命令來自 `poly.codeRunner.*`（`go run .`／`cargo run`／選定的

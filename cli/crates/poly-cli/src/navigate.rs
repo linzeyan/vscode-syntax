@@ -30,8 +30,8 @@ pub const LANGUAGES: &[&str] = &["graphql", "nginx", "makefile", "shellscript"];
 /// Dynamic and scoped by language, never a static capability: a static
 /// `referencesProvider` covers every language in the client's selector, and an
 /// empty answer is still an answer -- the reference lens would then draw
-/// `no refs` over YAML and CSS, which it leaves alone precisely because nothing
-/// answers for them.
+/// `no refs` over CSS, which it leaves alone precisely because nothing answers
+/// for it.
 ///
 /// Definitions are Makefile and shell only, the two that were asked for.
 ///

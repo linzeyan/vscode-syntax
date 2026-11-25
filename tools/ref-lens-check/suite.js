@@ -20,6 +20,7 @@ const { observeMarkdown } = require("./markdown");
 const { observeNavigate } = require("./navigate");
 const { observeProto } = require("./proto");
 const runnable = require("./runnable");
+const { observeYaml } = require("./yaml");
 
 /** Long enough for the TypeScript server to load the file, then give up. */
 const READY_MS = 60_000;
@@ -280,6 +281,7 @@ exports.run = async function run() {
   // And GraphQL, nginx, Makefile and shell, whose providers are poly's daemon.
   const navigate = await observeNavigate(lensesFor);
   const markdown = await observeMarkdown(lensesFor);
+  const yaml = await observeYaml(lensesFor);
 
   writeFileSync(
     process.env.POLY_LENS_OUT,
@@ -296,6 +298,7 @@ exports.run = async function run() {
           proto,
           navigate,
           markdown,
+          yaml,
         },
         null,
         2,

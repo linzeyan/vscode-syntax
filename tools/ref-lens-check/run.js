@@ -20,6 +20,7 @@ const markdown = require("./markdown");
 const navigate = require("./navigate");
 const proto = require("./proto");
 const runnable = require("./runnable");
+const yaml = require("./yaml");
 
 const ROOT = resolve(__dirname, "..", "..");
 const LSP = join(ROOT, "extensions", "lsp");
@@ -168,6 +169,7 @@ async function main() {
   const protoEnv = proto.writeFixture(WORKSPACE);
   const navigateEnv = navigate.writeFixture(WORKSPACE);
   const markdownEnv = markdown.writeFixture(WORKSPACE);
+  const yamlEnv = yaml.writeFixture(WORKSPACE);
 
   execFileSync("pnpm", ["run", "build"], { cwd: LSP, stdio: "inherit" });
 
@@ -185,6 +187,7 @@ async function main() {
       ...protoEnv,
       ...navigateEnv,
       ...markdownEnv,
+      ...yamlEnv,
     },
     ...(cachedVSCode() ? { vscodeExecutablePath: cachedVSCode() } : {}),
     launchArgs: [
@@ -297,6 +300,7 @@ async function main() {
   problems.push(...proto.checkProto(report.proto));
   problems.push(...navigate.checkNavigate(report.navigate));
   problems.push(...markdown.checkMarkdown(report.markdown));
+  problems.push(...yaml.checkYaml(report.yaml));
 
   console.log(
     `\nVSCode ${report.vscode}, ${report.lenses.length} lines carry a lens; `

@@ -285,6 +285,8 @@ const vscode = {
     registerCodeActionsProvider: () => nothing,
     registerHoverProvider: () => nothing,
     registerDocumentSymbolProvider: () => nothing,
+    registerDefinitionProvider: () => nothing,
+    registerReferenceProvider: () => nothing,
     registerSignatureHelpProvider: () => nothing,
     createDiagnosticCollection: () => ({ ...nothing, set() {}, delete() {}, clear() {} }),
   },

@@ -70,6 +70,7 @@ import { registerSwaggerViewer } from "./swaggerViewer";
 import { registerTodoTree } from "./todoTree";
 import { registerToolbox } from "./toolbox";
 import { drawsNothing, explain, findSuspects, label, Level, levelOf, Suspect, SUSPECTS } from "./unicode";
+import { AnchorMention, anchorMentions } from "./yamlAnchors";
 
 /**
  * The editor features' own log, "poly-editor" in the Output panel -- apart
@@ -287,6 +288,16 @@ const MARKDOWN_LANGUAGES = new Set([
   "chatagent",
   "skill",
 ]);
+
+/**
+ * The language ids that are YAML, whatever VSCode calls them.
+ *
+ * `dockercompose` is VSCode's own id for a compose file, and a compose file's
+ * `x-common: &common` is where anchors are written most.
+ * `github-actions-workflow` arrives with github.vscode-github-actions, which
+ * takes workflows away from the `yaml` id.
+ */
+const YAML_LANGUAGES = new Set(["yaml", "dockercompose", "github-actions-workflow"]);
 
 /**
  * The list dialect each language id speaks.
@@ -1474,6 +1485,103 @@ async function answersImplementations(
   return false;
 }
 
+/** Each YAML document's anchors as of one version of its text; see `anchorsIn`. */
+const anchorsRead = new WeakMap<vscode.TextDocument, { version: number; mentions: AnchorMention[] }>();
+
+/**
+ * A YAML document's anchors and aliases, read once per version of its text.
+ *
+ * Kept because the lens asks once per anchor on screen, and each of those is a
+ * reference query that would otherwise lex the whole file again.
+ */
+function anchorsIn(document: vscode.TextDocument): AnchorMention[] {
+  const read = anchorsRead.get(document);
+  if (read?.version === document.version) {
+    return read.mentions;
+  }
+  const mentions = anchorMentions(document.getText());
+  anchorsRead.set(document, { version: document.version, mentions });
+  return mentions;
+}
+
+function rangeOf(document: vscode.TextDocument, one: { start: number; end: number }): vscode.Range {
+  return new vscode.Range(document.positionAt(one.start), document.positionAt(one.end));
+}
+
+/**
+ * A YAML document's anchors, as the declarations the reference lens counts.
+ *
+ * Handed to the lens directly and never registered as an outline. An outline
+ * with anything in it is what sticky scroll follows -- `isModelValid` is
+ * `children.size > 0` in VSCode 1.139's workbench -- and a YAML file's sticky
+ * lines are its parent keys, read from indentation because nothing gives it an
+ * outline. One made of anchors would replace those with the anchored blocks,
+ * in exactly the files that have an anchor.
+ *
+ * Nor is anybody else's outline read for YAML: a YAML server lists keys, not
+ * anchors, and each one it reports in a counted kind would be drawn as a
+ * declaration nothing refers to.
+ *
+ * A Constant for the reason a markdown heading is one: counted, and asked
+ * nothing about implementations.
+ */
+function anchorSymbols(document: vscode.TextDocument): vscode.DocumentSymbol[] {
+  return anchorsIn(document)
+    .filter((one) => one.anchor === one.start)
+    .map((one) => {
+      const range = rangeOf(document, one);
+      return new vscode.DocumentSymbol(document.getText(range), "", vscode.SymbolKind.Constant, range, range);
+    });
+}
+
+/**
+ * Go to Definition from a YAML alias to its anchor, and Find All References
+ * for both; see `yamlAnchors.ts` for what is read and why here.
+ *
+ * Every scheme, an unsaved file included: the answer never leaves the
+ * document, so there is no folder to need.
+ */
+function navigateYamlAnchors(context: vscode.ExtensionContext): void {
+  const selector = [...YAML_LANGUAGES].map((language) => ({ language }));
+  const mentionAt = (document: vscode.TextDocument, position: vscode.Position) => {
+    const offset = document.offsetAt(position);
+    // The end included: that is where the cursor sits after typing the name.
+    return anchorsIn(document).find((one) => one.start <= offset && offset <= one.end);
+  };
+  context.subscriptions.push(
+    vscode.languages.registerDefinitionProvider(selector, {
+      // Asked on the anchor itself the answer is that anchor, which the editor
+      // takes as "already there" and shows the references instead.
+      provideDefinition(document, position): vscode.LocationLink[] {
+        const asked = mentionAt(document, position);
+        const anchor = asked && anchorsIn(document).find((one) => one.start === asked.anchor);
+        if (!asked || !anchor) {
+          return [];
+        }
+        // A link rather than a location, for its origin: the editor underlines
+        // the word under the pointer, and to it `*default-env` is two words
+        // and a `*`.
+        return [{
+          originSelectionRange: rangeOf(document, asked),
+          targetUri: document.uri,
+          targetRange: rangeOf(document, anchor),
+        }];
+      },
+    }),
+    vscode.languages.registerReferenceProvider(selector, {
+      provideReferences(document, position, { includeDeclaration }) {
+        const asked = mentionAt(document, position);
+        if (!asked) {
+          return [];
+        }
+        return anchorsIn(document)
+          .filter((one) => one.anchor === asked.anchor && (includeDeclaration || one.start !== one.anchor))
+          .map((one) => new vscode.Location(document.uri, rangeOf(document, one)));
+      },
+    }),
+  );
+}
+
 /**
  * `N refs` over every declaration and `N impls` over every interface, in every
  * language whose provider can answer.
@@ -1618,10 +1726,13 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
       }
       // A server may answer in either symbol shape and this reads only one of
       // them -- see `registerFlatProvider` in tools/ref-lens-check for why that
-      // is safe, and for the check that says it stays safe.
-      const symbols = await vscode.commands.executeCommand<
-        vscode.DocumentSymbol[]
-      >("vscode.executeDocumentSymbolProvider", document.uri);
+      // is safe, and for the check that says it stays safe. YAML's anchors are
+      // no outline's to give; see `anchorSymbols`.
+      const symbols = YAML_LANGUAGES.has(document.languageId)
+        ? anchorSymbols(document)
+        : await vscode.commands.executeCommand<
+          vscode.DocumentSymbol[]
+        >("vscode.executeDocumentSymbolProvider", document.uri);
       // Superseded by a newer version of the document while waiting. Every
       // question below would be about text that no longer exists, and each
       // one is a query some language server has to run to completion.
@@ -1661,7 +1772,7 @@ function countReferencesInGutter(context: vscode.ExtensionContext): void {
       // Before any lens is drawn, because a file full of `no refs` over a
       // language nothing can answer for is worse than no lens: it reads as an
       // answer. JSON never reaches here (its symbols are not the kinds this
-      // counts); CSS and YAML do, and this is what decides them.
+      // counts); CSS does, and this is what decides it.
       if (targets.length === 0) {
         return [];
       }
@@ -2499,6 +2610,7 @@ export function activate(context: vscode.ExtensionContext, poly: string) {
   );
   yieldChords(context);
   countReferencesInGutter(context);
+  navigateYamlAnchors(context);
   runFromGutter(context, registerCodeRunner(context));
   linkGeneratedGo(context);
   completePostfixes(context);

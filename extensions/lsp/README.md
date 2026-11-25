@@ -69,7 +69,8 @@
 
 poly 只處理格式化與 lint。hover、跳到定義、補全、rename 等語言功能交給各語言自己的
 extension（Go、rust-analyzer、Python 等）。例外是幾個沒有 server 答得出的：GraphQL 與 nginx 的
-outline 與引用、Makefile 與 shell 的 outline、引用與跳到定義，由 poly 按名字算。
+outline 與引用、Makefile 與 shell 的 outline、引用與跳到定義，由 poly 按名字算；YAML 的 alias
+（`*base`）跳到它的 anchor（`&base`）與 anchor 的引用，照 YAML 自己的規則算。
 
 ## 編輯器便利功能
 
@@ -416,6 +417,7 @@ $fullFileName`，用 Python extension 選的直譯器，沒有時用 `python3`�
 - **引用與實作 CodeLens**（設定）：每個宣告一行 `11 refs`；interface 多一顆 `3 impls`，
   具體型別有滿足 interface 才多一顆 `1 interface`，方法寫在型別外面的語言（Go）再多一顆
   `4 methods`。Markdown 有人連結的標題也有一行，數的是整個 workspace 連到它的 `#錨點` 連結。
+  YAML 的 anchor（`&base`）也有，數的是同一份文件裡用到它的 alias（`*base`）。
   數字全部來自該語言已註冊的 provider，poly 只數與畫。Go 的測試函式和 `package main`
   的 `func main` 沒有這一行：go 工具照名字執行它、沒有人引用它，那裡永遠是 `no refs`；同一個
   檔案裡的 helper 照樣有。

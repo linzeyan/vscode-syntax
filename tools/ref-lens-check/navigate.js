@@ -4,8 +4,8 @@
 // Every other section asks a provider the editor or the suite brings. These
 // languages have none offline, so poly registers documentSymbol, references and
 // definition for exactly them (cli/crates/poly-cli/src/navigate.rs) --
-// dynamically, so a YAML or CSS file never meets a reference provider that
-// cannot answer for it and gets `no refs` drawn over everything. That
+// dynamically, so a CSS file never meets a reference provider that cannot
+// answer for it and gets `no refs` drawn over everything. That
 // registration, the nginx and Makefile sync that comes with it, and an answer
 // that reaches a file nobody opened are what no Rust test can see: they are the
 // client's half.
