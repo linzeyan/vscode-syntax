@@ -88,10 +88,11 @@ pub fn rule_doc(source: &str, code: &str) -> Option<&'static str> {
             .get(code)
             .copied()
         }
-        // One namespace for every rule poly wrote, five tables behind it: the
+        // One namespace for every rule poly wrote, six tables behind it: the
         // codes are already prefixed by what they lint (`docker-`, `actions-`,
-        // `proto-`, `unicode-`), so a further engine adds a table here rather
-        // than a second source name the reader has to learn. `INLINE_RULES` is
+        // `proto-`, `unicode-`, `openapi-`), so a further engine adds a table
+        // here rather than a second source name the reader has to learn.
+        // `INLINE_RULES` is
         // poly-core's because the rule is poly-core's -- a suppression comment
         // is not a language's, and `unicode-` is here rather than there for the
         // opposite reason: it is not a language's either, but it is a linter.
@@ -109,7 +110,7 @@ pub fn rule_doc(source: &str, code: &str) -> Option<&'static str> {
 /// chosen at whichever of the 63 emit sites happens to construct it.
 ///
 /// A code with no row falls back to warning and cannot happen: the
-/// both-directions tests over the five tables hold them to the codes the
+/// both-directions tests over the six tables hold them to the codes the
 /// linters emit, so an unlisted rule fails a test rather than arriving here.
 pub fn rule_severity(code: &str) -> Severity {
     poly_rule(code).map_or(Severity::Warning, |(_, severity, _)| *severity)
@@ -121,6 +122,7 @@ fn poly_rule(code: &str) -> Option<&'static (&'static str, Severity, &'static st
         .chain(crate::workflow::RULES)
         .chain(crate::proto::RULES)
         .chain(crate::unicode::RULES)
+        .chain(crate::json_ref::RULES)
         .chain(poly_core::INLINE_RULES)
         .find(|(rule, _, _)| *rule == code)
 }
@@ -4610,6 +4612,7 @@ mod tests {
             .chain(crate::workflow::RULES)
             .chain(crate::proto::RULES)
             .chain(crate::unicode::RULES)
+            .chain(crate::json_ref::RULES)
             .chain(poly_core::INLINE_RULES)
             .map(|(code, _, _)| *code)
             .collect();

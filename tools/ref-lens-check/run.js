@@ -16,6 +16,7 @@ const { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = requ
 const { join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 
+const jsonref = require("./jsonref");
 const markdown = require("./markdown");
 const navigate = require("./navigate");
 const proto = require("./proto");
@@ -170,6 +171,7 @@ async function main() {
   const navigateEnv = navigate.writeFixture(WORKSPACE);
   const markdownEnv = markdown.writeFixture(WORKSPACE);
   const yamlEnv = yaml.writeFixture(WORKSPACE);
+  const jsonrefEnv = jsonref.writeFixture(WORKSPACE);
 
   execFileSync("pnpm", ["run", "build"], { cwd: LSP, stdio: "inherit" });
 
@@ -188,6 +190,7 @@ async function main() {
       ...navigateEnv,
       ...markdownEnv,
       ...yamlEnv,
+      ...jsonrefEnv,
     },
     ...(cachedVSCode() ? { vscodeExecutablePath: cachedVSCode() } : {}),
     launchArgs: [
@@ -301,6 +304,7 @@ async function main() {
   problems.push(...navigate.checkNavigate(report.navigate));
   problems.push(...markdown.checkMarkdown(report.markdown));
   problems.push(...yaml.checkYaml(report.yaml));
+  problems.push(...jsonref.checkJsonRef(report.jsonref));
 
   console.log(
     `\nVSCode ${report.vscode}, ${report.lenses.length} lines carry a lens; `

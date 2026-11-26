@@ -5080,6 +5080,7 @@ dependencies = [
  "malva",
  "markup_fmt",
  "minify-html",
+ "percent-encoding",
  "poly-core",
  "pretty_graphql",
  "pretty_yaml",

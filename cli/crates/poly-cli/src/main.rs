@@ -740,22 +740,26 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
 
     if !walked.is_empty() {
         init_thread_pool();
-        // Each file's findings, and whether a JSON Schema checked it. Which
-        // files a schema reaches is only known once a file is read -- the
-        // directive is a line in it -- so unlike the engine rows below, the
-        // schema row is counted here rather than derived.
-        let results: Vec<Result<(Vec<FileIssue>, bool)>> = walked
+        // Each file's findings, whether a JSON Schema checked it, and whether
+        // it is a spec whose references were followed. Which files a schema
+        // reaches is only known once a file is read -- the directive is a line
+        // in it -- and a spec is told from any other JSON or YAML by a key in
+        // it, so unlike the engine rows below, those two rows are counted here
+        // rather than derived.
+        let results: Vec<Result<(Vec<FileIssue>, bool, bool)>> = walked
             .par_iter()
             .map(|(path, config)| {
                 let mut found = poly_engines::lint::spell(path)?;
                 found.extend(poly_engines::lint::unicode(path)?);
                 let mut schema_checked = false;
+                let mut spec_checked = false;
                 if let Some(lang) = config.language(path) {
                     let linted = lint_engine(&lang, path).is_some();
                     let embeds = embedded_shellcheck.is_some()
                         && poly_engines::shell::hosts_shell(&lang, path);
                     let schema = poly_engines::schema::applies(&lang);
-                    if linted || embeds || schema {
+                    let refs = poly_engines::json_ref::applies(&lang);
+                    if linted || embeds || schema || refs {
                         let text = std::fs::read_to_string(path)
                             .with_context(|| format!("reading {}", path.display()))?;
                         if linted {
@@ -781,6 +785,12 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                                 schema_checked = true;
                             }
                         }
+                        if refs {
+                            if let Some(more) = poly_engines::json_ref::lint(&lang, path, &text) {
+                                found.extend(more);
+                                spec_checked = true;
+                            }
+                        }
                     }
                 }
                 let found = found
@@ -790,7 +800,7 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
                         issue,
                     })
                     .collect();
-                Ok((found, schema_checked))
+                Ok((found, schema_checked, spec_checked))
             })
             .collect();
         let mut broken = 0usize;
@@ -805,11 +815,13 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         // over the same tree is a row nobody can diff.
         let mut first_failure: Option<String> = None;
         let mut schema_files = 0usize;
+        let mut spec_files = 0usize;
         for result in results {
             match result {
-                Ok((found, schema_checked)) => {
+                Ok((found, schema_checked, spec_checked)) => {
                     issues.extend(found);
                     schema_files += usize::from(schema_checked);
+                    spec_files += usize::from(spec_checked);
                 }
                 Err(err) => {
                     broken += 1;
@@ -845,6 +857,11 @@ fn cmd_check(inv: &Invocation) -> Result<i32> {
         // every repository without one would be a line about nothing.
         if schema_files > 0 {
             coverage.record("schema", schema_files, coverage::Status::Ran);
+        }
+        // The same for specs, and named as the engines poly wrote are: the row
+        // is the prefix of the code its findings carry.
+        if spec_files > 0 {
+            coverage.record("poly/openapi", spec_files, coverage::Status::Ran);
         }
         // Not attributed to an engine: the failure is a file poly could not
         // read or a configuration none of them could load, and blaming ruff for

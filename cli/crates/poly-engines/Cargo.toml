@@ -33,6 +33,7 @@ mago-syntax.workspace = true
 malva.workspace = true
 markup_fmt.workspace = true
 minify-html.workspace = true
+percent-encoding.workspace = true
 poly-core = { path = "../poly-core" }
 pretty_graphql.workspace = true
 pretty_yaml.workspace = true

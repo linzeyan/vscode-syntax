@@ -47,6 +47,7 @@ broken-reference = [
   "poly/actions-invalid-id",
   "poly/actions-needs-cycle",
   "poly/actions-unknown-job-in-needs",
+  "poly/openapi-unresolved-ref",
   "rumdl/MD011",
   "rumdl/MD042",
   "rumdl/MD051",

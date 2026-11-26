@@ -214,6 +214,9 @@
 - **YAML alias 跳到 anchor**：F12 在 `*base` 跳到它的 `&base`——同一份文件（`---` 之間）上方最近的
   那個同名 anchor；Find All References 列出 anchor 與用到它的 alias。compose 檔與 GitHub workflow
   一樣，檔案寫到一半、解析不過時也照常。
+- **`$ref` 跳到它指的地方**：F12 在 JSON、YAML 的 `$ref` 字串上跳到它指的那個 key——同一個檔的
+  `#/components/schemas/Pet`、別的檔的 `./shared/owner.yaml#/Owner`，或整個檔（`shared/tag.json`）。
+  OpenAPI／Swagger 的 spec 與 JSON Schema 都一樣，被指的檔不必開著。網址與 `#name` 這種寫法不跟。
 - **`run | debug` CodeLens**：程式進入點（Go 只算 `package main` 的 `main`；Rust／C／C++／Java 的 `main`、
   C# 的 `Main`、Python 的 `if __name__ == "__main__"`、shell 的 shebang）上方一行。`run` 存檔後像 Code Runner
   的 `Run Code` 那樣執行整個檔案，命令來自 `poly.codeRunner.*`（`go run .`／`cargo run`／選定的
@@ -393,6 +396,13 @@
   其中 106 個是錯的檔（一個 `**/scenarios/*/*.yaml` 就把 104 個 QA fixture 當成資安工具的設
   定檔）；而對得對的那些，報出來的東西大多是 schema 比讀它的程式還嚴或還舊。XML 的
   XSD／DTD 不做；JSON 由 VSCode 內建的 JSON 支援驗證。
+- **OpenAPI／Swagger 的 `$ref` 指不到東西就報**（code 是 `poly/openapi-unresolved-ref`，類別
+  `broken-reference`，等級 error）。最上層寫了 `openapi: 3.x` 或 `swagger: "2.0"` 的 JSON、YAML
+  檔才檢查。同檔的 `#/…` 與別的檔（`./schemas/pet.yaml#/Pet`）都跟過去看，訊息說斷在哪一段，
+  有相近的名字就提示（`did you mean`）。不判斷的：網址、`#name`、要再經過一個 `$ref` 或 YAML
+  merge key 才到得了的路徑、讀不懂的目標檔；`example`／`default`／`enum`／`const` 底下的
+  `$ref` 是資料，不算引用。被引用的片段檔自己不是 spec，不單獨檢查；JSON Schema 檔也不檢查
+  （F12 照樣能跳）。`poly check` 的 coverage 只有在真的有 spec 被檢查時才多一列 `poly/openapi`。
 - **Markdown 的 lint 是 rumdl 的 7 條規則**，全部只報壞掉的東西：相對連結指向不存在的檔
   （MD057）、錨點不存在（MD051）、連結寫反 `(文字)[網址]`（MD011）、空連結（MD042）、
   參考式連結沒有定義（MD052）、標題跳級（MD001）、圖片沒有 alt（MD045）。code 長

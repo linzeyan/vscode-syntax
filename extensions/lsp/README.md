@@ -70,7 +70,9 @@
 poly 只處理格式化與 lint。hover、跳到定義、補全、rename 等語言功能交給各語言自己的
 extension（Go、rust-analyzer、Python 等）。例外是幾個沒有 server 答得出的：GraphQL 與 nginx 的
 outline 與引用、Makefile 與 shell 的 outline、引用與跳到定義，由 poly 按名字算；YAML 的 alias
-（`*base`）跳到它的 anchor（`&base`）與 anchor 的引用，照 YAML 自己的規則算。
+（`*base`）跳到它的 anchor（`&base`）與 anchor 的引用，照 YAML 自己的規則算；JSON 與 YAML 的
+`$ref`（OpenAPI、Swagger、JSON Schema）跳到它指的 key 或檔案，同檔的 `#/…` 與別的檔都跟，
+網址不跟。
 
 ## 編輯器便利功能
 
@@ -304,6 +306,7 @@ arjun.swagger-viewer 的替代：Swagger 2.0 與 OpenAPI 3.0／3.1 的 JSON、YA
 - **`Preview Swagger from URL`**：輸入網址，抓下來預覽。
 - **Swagger/OpenAPI Files**：檔案總管裡的清單，列出工作區裡的 spec（略過 `node_modules`），點一下就預覽。
 - **檢查**：JSON 檔照 Swagger 2.0 或 OpenAPI 3.0 的 schema 標出錯誤；YAML 檔要另外裝 redhat.vscode-yaml。
+  指不到東西的 `$ref`（`poly/openapi-unresolved-ref`）JSON、YAML 檔都標，同檔的 `#/…` 與別的檔都看。
 - **伺服器**：預覽是本機 `defaultHost`、`defaultPort` 上的頁面（被占用就往後找），嵌在分頁裡；
   `previewInBrowser` 改在瀏覽器開。status bar 的 Swagger Viewer 關掉伺服器，已開的預覽照樣更新。
 

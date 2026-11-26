@@ -128,6 +128,68 @@ fn a_checker_with_no_files_here_is_not_mentioned() {
     }
 }
 
+/// A spec's dangling `$ref` fails the run, and the row counts the specs --
+/// not every JSON and YAML file the walk passed on its way to them.
+///
+/// The row is how a reader tells "the references were followed and all of them
+/// lead somewhere" from "nothing here was a spec": a JSON Schema with the very
+/// same dangling pointer is not checked, and must not be counted as if it were.
+#[test]
+fn a_spec_has_its_references_followed_and_its_own_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("openapi.yaml"),
+        "openapi: 3.0.3\ninfo: {title: t, version: '1'}\npaths: {}\ncomponents:\n  schemas:\n    \
+         Pet: {type: object}\n    Owner:\n      $ref: '#/components/schemas/Pte'\n    \
+         Tag:\n      $ref: './tag.json#/definitions/Tag'\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("tag.json"),
+        r##"{"definitions": {"Tag": {"$ref": "#/definitions/Nope"}}}"##,
+    )
+    .unwrap();
+
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    assert_eq!(code, 1, "{stdout}\n{stderr}");
+    assert!(
+        stdout.contains(
+            "openapi.yaml:8:14: error [poly/openapi-unresolved-ref] `#/components/schemas/Pte` \
+             leads nowhere: `#/components/schemas` has no `Pte`, did you mean `Pet`?"
+        ),
+        "{stdout}"
+    );
+    // The reference into the file beside it resolves, and that file -- JSON
+    // with a `$ref`, and no spec -- is neither reported on nor counted.
+    assert_eq!(
+        stdout.matches("openapi-unresolved-ref").count(),
+        1,
+        "{stdout}"
+    );
+    let specs = row(&stderr, "poly/openapi");
+    assert!(
+        specs.contains("1 file") && specs.ends_with("ran"),
+        "{stderr}"
+    );
+
+    // Silenced like any other rule of poly's: on its line, by its code.
+    std::fs::write(
+        root.join("openapi.yaml"),
+        "openapi: 3.0.3\ncomponents:\n  schemas:\n    Owner:\n      \
+         $ref: '#/components/schemas/Pte' # poly: ignore poly/openapi-unresolved-ref\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = poly(root, &["check", "--compact", "."]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(row(&stderr, "poly/openapi").ends_with("ran"), "{stderr}");
+
+    // No spec, no row.
+    std::fs::remove_file(root.join("openapi.yaml")).unwrap();
+    let (_, _, stderr) = poly(root, &["check", "--compact", "."]);
+    assert!(!stderr.contains("poly/openapi"), "{stderr}");
+}
+
 /// A tool poly cannot find is a hole in the run, and `--strict` is the flag
 /// that calls a hole a failure. Off and absent are not holes: somebody chose
 /// those, and a project that has to pass `--strict` should not have to install

@@ -1,14 +1,17 @@
 //! Outline, references and definitions for the languages poly answers itself.
 //!
 //! The editor half of `poly_engines::symbols`, which says why these languages
-//! and why nothing more. This is the plumbing: which documents and
-//! which files on disk, and byte offsets turned into the editor's positions.
+//! and why nothing more, and of `poly_engines::json_ref`, which follows a
+//! `$ref`. This is the plumbing: which documents and which files on disk, and
+//! byte offsets turned into the editor's positions.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use lsp_types::{Location, Position, Range, Url};
+use lsp_types::{Location, LocationLink, Position, Range, Url};
+use poly_engines::json_ref::{self, Target};
 use poly_engines::symbols::{self, Kind, Mention, Symbol};
 
 /// How long a walk of the workspace is reused.
@@ -25,6 +28,23 @@ const WALK_REUSE: Duration = Duration::from_secs(5);
 /// it answers for each.
 pub const LANGUAGES: &[&str] = &["graphql", "nginx", "makefile", "shellscript"];
 
+/// The language ids a `$ref` is followed in, and the language poly reads each
+/// as.
+///
+/// The ids VS Code gives a spec or a schema. `dockercompose` and
+/// `github-actions-workflow` are YAML too and are left out: neither format has
+/// the keyword.
+pub const REF_LANGUAGES: &[(&str, &str)] = &[("json", "json"), ("jsonc", "json"), ("yaml", "yaml")];
+
+/// The language poly reads a document of this id as when following a `$ref`,
+/// or `None` for an id no `$ref` is followed in.
+pub fn ref_language(id: &str) -> Option<&'static str> {
+    REF_LANGUAGES
+        .iter()
+        .find(|(known, _)| *known == id)
+        .map(|(_, language)| *language)
+}
+
 /// The registrations that make the editor ask poly, sent once per session.
 ///
 /// Dynamic and scoped by language, never a static capability: a static
@@ -33,7 +53,10 @@ pub const LANGUAGES: &[&str] = &["graphql", "nginx", "makefile", "shellscript"];
 /// `no refs` over CSS, which it leaves alone precisely because nothing answers
 /// for it.
 ///
-/// Definitions are Makefile and shell only, the two that were asked for.
+/// Definitions are Makefile and shell, the two that were asked for by name,
+/// and JSON and YAML for the one thing in them poly follows: a `$ref`
+/// (`ref_definition`). Those three ids get no outline and no references from
+/// here, so the lens has nothing new to draw over them.
 ///
 /// nginx's and Makefile's text is synchronised here as well. Neither is in the
 /// client's selector because poly formats neither, and joining that selector
@@ -51,7 +74,9 @@ pub fn registrations() -> serde_json::Value {
             .collect()
     };
     let outlined = selector(&["graphql", "nginx", "makefile", "shellscript"]);
-    let defined = selector(&["makefile", "shellscript"]);
+    let mut defined = selector(&["makefile", "shellscript"]);
+    let followed: Vec<&str> = REF_LANGUAGES.iter().map(|(id, _)| *id).collect();
+    defined.extend(selector(&followed));
     let synced = selector(&["nginx", "makefile"]);
     serde_json::json!([
         {
@@ -215,6 +240,74 @@ pub fn mention_at(language: &str, text: &str, at: Position) -> Option<(&'static 
         .into_iter()
         .find(|mention| mention.at.start <= offset && offset <= mention.at.end)
         .map(|mention| (mention.space, mention.name))
+}
+
+/// Go to Definition on a `$ref`: the key its pointer names, in this document
+/// or in the file its path names. `null` anywhere else, and for a reference
+/// that leads nowhere or somewhere poly does not follow.
+///
+/// `read` is another file's text: the buffer when the editor has it open, so a
+/// component added a moment ago and not yet saved is found.
+///
+/// A link when the editor takes links, for its origin: the editor underlines
+/// the word under the pointer, and to it `#/components/schemas/Pet` is three
+/// words. The target is the whole entry and the selection its key, which is
+/// where the cursor lands.
+pub fn ref_definition(
+    language: &str,
+    (uri, text): (&Url, &str),
+    at: Position,
+    read: &dyn Fn(&Path) -> Option<String>,
+    links: bool,
+) -> serde_json::Value {
+    let Ok(path) = uri.to_file_path() else {
+        return serde_json::Value::Null;
+    };
+    // Each file read once: the offsets `follow` answers in are offsets into the
+    // text it parsed, and a file saved between two reads would turn them into
+    // positions in a different text.
+    let seen: RefCell<HashMap<PathBuf, Option<String>>> = RefCell::default();
+    let read_once = |path: &Path| {
+        seen.borrow_mut()
+            .entry(path.to_path_buf())
+            .or_insert_with(|| read(path))
+            .clone()
+    };
+    let lines = Lines::new(text);
+    let Some((
+        origin,
+        Target::Found {
+            path: file,
+            key,
+            value,
+        },
+    )) = json_ref::follow(language, &path, text, lines.offset(at), &read_once)
+    else {
+        return serde_json::Value::Null;
+    };
+    // The document itself is answered with the URI the editor asked in: its
+    // spelling of a drive letter is not the one a path turns back into.
+    let (target, there) = if std::path::absolute(&path).is_ok_and(|own| own == file) {
+        (uri.clone(), text.to_string())
+    } else {
+        match (Url::from_file_path(&file), read_once(&file)) {
+            (Ok(target), Some(there)) => (target, there),
+            _ => return serde_json::Value::Null,
+        }
+    };
+    let there = Lines::new(&there);
+    let name = key.unwrap_or(value.start..value.start);
+    let entry = name.start.min(value.start)..value.end.max(name.end);
+    if links {
+        serde_json::json!([LocationLink {
+            origin_selection_range: Some(lines.range(&origin)),
+            target_uri: target,
+            target_range: there.range(&entry),
+            target_selection_range: there.range(&name),
+        }])
+    } else {
+        serde_json::json!([Location::new(target, there.range(&name))])
+    }
 }
 
 /// The workspace folder `path` belongs to: the innermost one holding it, or
@@ -652,7 +745,7 @@ mod tests {
         }
         assert_eq!(
             languages("textDocument/definition"),
-            set(&["makefile", "shellscript"])
+            set(&["makefile", "shellscript", "json", "jsonc", "yaml"])
         );
         // Shell is in the client's selector already; the two that are not
         // need their text sent.
@@ -670,10 +763,103 @@ mod tests {
                 .unwrap()
             {
                 let language = selector["language"].as_str().unwrap();
+                // A `$ref`'s three ids are named for definitions and for
+                // nothing else: an outline or a reference provider there is
+                // the `no refs` over every key this registration is shaped to
+                // avoid.
+                if let Some(read_as) = ref_language(language) {
+                    assert_eq!(registration["method"], "textDocument/definition");
+                    assert!(json_ref::applies(read_as), "{language}");
+                    continue;
+                }
                 assert!(LANGUAGES.contains(&language), "{language}");
                 assert!(symbols::applies(language), "{language}");
             }
         }
+    }
+
+    /// A `$ref` lands on the key it names: in the document, at positions that
+    /// count UTF-16 units, and in the file beside it -- whose open buffer
+    /// stands in for what is on disk. An editor that takes links gets the
+    /// whole string as the origin; one that does not gets a plain location.
+    #[test]
+    fn a_ref_is_followed_to_the_key_it_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let spec = "\
+openapi: 3.0.3
+info: {title: \u{1F600}, x-pet: {$ref: '#/components/schemas/Pet'}}
+components:
+  schemas:
+    Pet: {type: object}
+    Owner:
+      $ref: owner.yaml#/Owner
+";
+        let uri = Url::from_file_path(root.join("openapi.yaml")).unwrap();
+        std::fs::write(root.join("owner.yaml"), "Owner:\n  type: string\n").unwrap();
+        let disk = |path: &Path| std::fs::read_to_string(path).ok();
+
+        // Inside the string, after a character that is two UTF-16 units.
+        let found = ref_definition("yaml", (&uri, spec), Position::new(1, 40), &disk, true);
+        assert_eq!(
+            found,
+            serde_json::json!([{
+                "originSelectionRange": {
+                    "start": {"line": 1, "character": 33},
+                    "end": {"line": 1, "character": 57},
+                },
+                "targetUri": uri,
+                "targetRange": {
+                    "start": {"line": 4, "character": 4},
+                    "end": {"line": 4, "character": 23},
+                },
+                "targetSelectionRange": {
+                    "start": {"line": 4, "character": 4},
+                    "end": {"line": 4, "character": 7},
+                },
+            }])
+        );
+        // Without link support: where the cursor would have landed.
+        let plain = ref_definition("yaml", (&uri, spec), Position::new(1, 40), &disk, false);
+        assert_eq!(
+            plain,
+            serde_json::json!([{
+                "uri": uri,
+                "range": {
+                    "start": {"line": 4, "character": 4},
+                    "end": {"line": 4, "character": 7},
+                },
+            }])
+        );
+
+        let owner = Url::from_file_path(root.join("owner.yaml")).unwrap();
+        let lands = |read: &dyn Fn(&Path) -> Option<String>| {
+            let found = ref_definition("yaml", (&uri, spec), Position::new(6, 15), read, true);
+            (
+                found[0]["targetUri"].clone(),
+                found[0]["targetSelectionRange"]["start"]["line"].clone(),
+            )
+        };
+        assert_eq!(
+            lands(&disk),
+            (serde_json::json!(owner), serde_json::json!(0))
+        );
+        // The same file open with two lines added above the key and not saved.
+        let unsaved = |path: &Path| {
+            path.ends_with("owner.yaml")
+                .then(|| "# moved\n\nOwner:\n  type: string\n".to_string())
+        };
+        assert_eq!(
+            lands(&unsaved),
+            (serde_json::json!(owner), serde_json::json!(2))
+        );
+
+        // Not on a reference, and on one that leads nowhere: nobody answered.
+        let off = ref_definition("yaml", (&uri, spec), Position::new(0, 3), &disk, true);
+        assert!(off.is_null());
+        let dangling = "a:\n  $ref: '#/nowhere'\n";
+        let nowhere = ref_definition("yaml", (&uri, dangling), Position::new(1, 12), &disk, true);
+        assert!(nowhere.is_null());
     }
 
     /// VS Code's own rules for its built-in `make` and `shellscript`, as far as

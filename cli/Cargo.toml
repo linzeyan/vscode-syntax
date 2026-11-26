@@ -148,6 +148,10 @@ markup_fmt = "0.27"
 # attributes and rewrite boolean attributes, none of which is "the same document
 # with what a machine does not read removed".
 minify-html = "0.18"
+# A `$ref`'s fragment back into the JSON Pointer it encodes: `%7Bid%7D` is
+# `{id}`. Already in the tree through url, which encodes with it and decodes
+# only paths.
+percent-encoding = "2"
 pretty_graphql = "0.2"
 pretty_yaml = "0.6"
 # The descriptor types protox-parse hands a parsed .proto back in. Named

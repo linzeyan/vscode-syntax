@@ -16,6 +16,7 @@ const { join } = require("node:path");
 const vscode = require("vscode");
 
 const { measure: measureCost } = require("./cost");
+const { observeJsonRef } = require("./jsonref");
 const { observeMarkdown } = require("./markdown");
 const { observeNavigate } = require("./navigate");
 const { observeProto } = require("./proto");
@@ -282,6 +283,8 @@ exports.run = async function run() {
   const navigate = await observeNavigate(lensesFor);
   const markdown = await observeMarkdown(lensesFor);
   const yaml = await observeYaml(lensesFor);
+  // And a `$ref`, which the daemon follows in JSON and YAML alike.
+  const jsonref = await observeJsonRef();
 
   writeFileSync(
     process.env.POLY_LENS_OUT,
@@ -299,6 +302,7 @@ exports.run = async function run() {
           navigate,
           markdown,
           yaml,
+          jsonref,
         },
         null,
         2,

@@ -810,7 +810,19 @@ fn unquote_single(text: &str) -> String {
         .strip_prefix('\'')
         .and_then(|rest| rest.strip_suffix('\''))
         .unwrap_or(text);
-    inner.replace("''", "'")
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => {
+                chars.next_if_eq(&'\'');
+                out.push('\'');
+            }
+            '\n' => fold_break(&mut out, 0, &mut chars),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// A double-quoted scalar with its escapes resolved.
@@ -818,28 +830,74 @@ fn unquote_single(text: &str) -> String {
 /// Only the escapes that appear in a workflow are resolved by name; anything
 /// else keeps the character after the backslash, which is right for `\\` and
 /// `\"` and harmless for the numeric escapes no workflow key uses.
+///
+/// A backslash at the end of a line is the one escape that is not a character:
+/// it continues the scalar on the next line with nothing in between. js-yaml
+/// writes every string too long for its line width that way, and 23 Azure
+/// specs in apis-guru's directory carry 2,071 `$ref`s split in the middle of a
+/// word by it.
 fn unquote_double(text: &str) -> String {
     let inner = text
         .strip_prefix('"')
         .and_then(|rest| rest.strip_suffix('"'))
         .unwrap_or(text);
     let mut out = String::with_capacity(inner.len());
-    let mut chars = inner.chars();
+    // Where what an escape produced ends: white space before this is the
+    // scalar's own, and no line break after it may trim it.
+    let mut kept = 0;
+    let mut chars = inner.chars().peekable();
     while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('t') => out.push('\t'),
-            Some('r') => out.push('\r'),
-            Some('0') => out.push('\0'),
-            Some(other) => out.push(other),
-            None => out.push('\\'),
+        match c {
+            '\\' => {
+                match chars.next() {
+                    Some('n') => out.push('\n'),
+                    Some('t') => out.push('\t'),
+                    Some('r') => out.push('\r'),
+                    Some('0') => out.push('\0'),
+                    Some('\n') => skip_indent(&mut chars),
+                    Some('\r') => {
+                        chars.next_if_eq(&'\n');
+                        skip_indent(&mut chars);
+                    }
+                    Some(other) => out.push(other),
+                    None => out.push('\\'),
+                }
+                kept = out.len();
+            }
+            '\n' => fold_break(&mut out, kept, &mut chars),
+            c => out.push(c),
         }
     }
     out
+}
+
+type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
+
+fn skip_indent(chars: &mut Chars) {
+    while chars.next_if(|c| matches!(c, ' ' | '\t')).is_some() {}
+}
+
+/// A line break inside a quoted scalar, folded the way YAML folds it (1.2.2
+/// §6.5): the white space on either side of it goes, and it reads as one space
+/// -- or, when blank lines follow it, as one line break for each of them.
+///
+/// `kept` is how much of `out` is not this fold's to trim.
+fn fold_break(out: &mut String, kept: usize, chars: &mut Chars) {
+    let trimmed = out[kept..].trim_end_matches([' ', '\t', '\r']).len();
+    out.truncate(kept + trimmed);
+    let mut blank = 0;
+    loop {
+        while chars.next_if(|c| matches!(c, ' ' | '\t' | '\r')).is_some() {}
+        if chars.next_if_eq(&'\n').is_none() {
+            break;
+        }
+        blank += 1;
+    }
+    if blank == 0 {
+        out.push(' ');
+    } else {
+        out.extend(std::iter::repeat_n('\n', blank));
+    }
 }
 
 // ── findings ───────────────────────────────────────────────────────────────
@@ -1931,7 +1989,7 @@ fn action_ref(text: &str, node: &Node, found: &mut Vec<Issue>) {
 /// Empty far more often than not, deliberately: a suggestion that is merely the
 /// nearest of a long list is worse than none, because a reader who follows it
 /// once and finds it wrong stops reading the rest of the message too.
-fn suggestion(name: &str, candidates: &[&str]) -> String {
+pub(crate) fn suggestion(name: &str, candidates: &[&str]) -> String {
     let lower = name.to_ascii_lowercase();
     candidates
         .iter()
@@ -3392,6 +3450,30 @@ jobs:
             "on: \"push\"\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: x\n",
             "actions-unknown-event"
         ));
+    }
+
+    /// A quoted scalar continued over several lines is still one string, and
+    /// which string is YAML's to say (1.2.2 §6.5, §7.3.1), not the line
+    /// breaks': compared as written it matches no name anywhere.
+    #[test]
+    fn a_quoted_scalar_over_several_lines_is_folded_as_yaml_folds_it() {
+        // An escaped break joins with nothing in between, indentation gone.
+        assert_eq!(
+            unquote_double("\"#/definitions/prope\\\n      rties/a\""),
+            "#/definitions/properties/a"
+        );
+        assert_eq!(unquote_double("\"a\\\r\n  b\""), "ab");
+        // A bare one is a space; each blank line after it is a line break.
+        assert_eq!(unquote_double("\"one  \n   two\""), "one two");
+        assert_eq!(unquote_double("\"one\n\n  \n  two\""), "one\n\ntwo");
+        assert_eq!(unquote_single("'it''s\n   one'"), "it's one");
+        // White space an escape wrote is the scalar's, and a doubled backslash
+        // before the break is a backslash, not a continuation.
+        assert_eq!(unquote_double("\"a\\t\n  b\""), "a\t b");
+        assert_eq!(unquote_double("\"a\\\\\n  b\""), "a\\ b");
+        // On one line nothing changes.
+        assert_eq!(unquote_double("\"a \\\"b\\\" \\n\""), "a \"b\" \n");
+        assert_eq!(unquote_single("'a ''b'' '"), "a 'b' ");
     }
 
     /// Every rule stops at a `${{ }}`.

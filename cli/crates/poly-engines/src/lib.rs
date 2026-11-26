@@ -3,6 +3,7 @@
 //!
 //! Returns `Ok(None)` when the input is already formatted.
 
+pub mod json_ref;
 pub mod lint;
 mod proto;
 mod reindent;

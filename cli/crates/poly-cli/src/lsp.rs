@@ -786,6 +786,13 @@ impl Server {
         };
         let at = params.text_document_position_params;
         let uri = at.text_document.uri;
+        if let Some(language) = self
+            .language_ids
+            .get(&uri)
+            .and_then(|id| crate::navigate::ref_language(id))
+        {
+            return Response::new_ok(request.id, self.ref_definition(language, &uri, at.position));
+        }
         let Some((language, text)) = self.navigated(&uri) else {
             return Response::new_ok(request.id, serde_json::Value::Null);
         };
@@ -800,6 +807,32 @@ impl Server {
             .navigation
             .definition(&language, &root, &open, (&uri, &text), at.position);
         Response::new_ok(request.id, serde_json::json!(found))
+    }
+
+    /// Where the `$ref` under the cursor leads, in a JSON or YAML document.
+    ///
+    /// Not through `navigated`: nothing is read out of these files by name, and
+    /// the answer is a path the reference spells out rather than a search of
+    /// the folder.
+    fn ref_definition(&self, language: &str, uri: &Url, at: Position) -> serde_json::Value {
+        let Some(text) = self.documents.get(uri) else {
+            return serde_json::Value::Null;
+        };
+        // Matched by path, not by URI: the editor's spelling of a file's URI
+        // is not the one a path turns into (`c%3A` for a drive letter).
+        let read = |path: &Path| {
+            self.documents
+                .iter()
+                .find(|(open, _)| open.to_file_path().is_ok_and(|open| open == path))
+                .map(|(_, text)| text.clone())
+                .or_else(|| std::fs::read_to_string(path).ok())
+        };
+        let links = self
+            .init_params
+            .pointer("/capabilities/textDocument/definition/linkSupport")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        crate::navigate::ref_definition(language, (uri, text), at, &read, links)
     }
 
     fn on_execute_command(&mut self, request: lsp_server::Request) -> Response {
@@ -1704,6 +1737,15 @@ fn lint_document(path: &Path, text: &str) -> Vec<lsp_types::Diagnostic> {
         Ok(found) => issues.extend(found.into_iter().flatten()),
         Err(e) => say!(WARN, "schema error {}: {e:#}", path.display()),
     }
+    // Beside the schema for the reason the schema is beside `lint_engine`: a
+    // spec is not a language, it is a JSON or YAML file with one key at the
+    // top. The spec itself from the buffer; the files its references name from
+    // disk, as `poly check` reads them.
+    issues.extend(
+        poly_engines::json_ref::lint(&lang, path, text)
+            .into_iter()
+            .flatten(),
+    );
     // Spelling is asked separately because it has no language to dispatch on,
     // and from disk rather than from the buffer: on stdin the document is
     // called `-`, so the per-type config keyed off the file name stops applying
@@ -2940,6 +2982,40 @@ mod tests {
             Some(lsp_types::DiagnosticSeverity::HINT)
         );
         assert_eq!(level(&found, "docker-apk-no-cache"), None);
+    }
+
+    /// A spec's references are followed in the editor as `poly check` follows
+    /// them, and from the buffer: the name mistyped a moment ago is underlined
+    /// though the file on disk still has it right.
+    #[test]
+    fn a_spec_reference_is_followed_in_the_editor_from_the_buffer() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("openapi.json");
+        let saved = r##"{"openapi": "3.0.3", "components": {"schemas": {"Pet": {}, "Owner": {"$ref": "#/components/schemas/Pet"}}}}"##;
+        std::fs::write(&file, saved).expect("write spec");
+        let code = |d: &lsp_types::Diagnostic| match &d.code {
+            Some(lsp_types::NumberOrString::String(code)) => code.clone(),
+            _ => String::new(),
+        };
+        assert!(lint_document(&file, saved)
+            .iter()
+            .all(|d| code(d) != "openapi-unresolved-ref"));
+
+        let typed = saved.replace("schemas/Pet\"", "schemas/Pte\"");
+        let found: Vec<_> = lint_document(&file, &typed)
+            .into_iter()
+            .filter(|d| code(d) == "openapi-unresolved-ref")
+            .collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].source.as_deref(), Some("poly"));
+        assert_eq!(
+            found[0].severity,
+            Some(lsp_types::DiagnosticSeverity::ERROR)
+        );
+        // The string between its quotes.
+        let at = typed.find("#/components").expect("the reference") as u32;
+        assert_eq!(found[0].range.start, Position::new(0, at));
+        assert_eq!(found[0].range.end, Position::new(0, at + 24));
     }
 
     /// `.proto` got nothing in the editor until now: `buf lint` ran only from
